@@ -16,7 +16,7 @@ LATTE_COLORS = [
     "#d20f39", "#179299", "#ea76cb", "#209fb5", "#7287fd"
 ]
 CHART_WIDTH = 1200 
-PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False} # Tắt cuộn và ẩn thanh công cụ
+PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
 def load_db():
@@ -89,16 +89,14 @@ def add_total_labels(fig, df, x_col, y_col):
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
 
-# Hàm tinh chỉnh Tooltip & Tắt zoom cho biểu đồ Plotly
 def format_plotly_fig(fig, is_pie=False):
-    fig.update_layout(dragmode=False) # Khóa kéo thả/zoom
+    fig.update_layout(dragmode=False)
     if is_pie:
         fig.update_traces(hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
     else:
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
     return fig
 
-# --- CALLBACK ĐIỀU HƯỚNG ---
 def change_period(key, step, options_list):
     curr_idx = options_list.index(st.session_state[key])
     new_idx = curr_idx + step
@@ -113,11 +111,19 @@ st.markdown(
     <style>
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
-    /* Ép biểu đồ Altair căn giữa trang */
-    [data-testid="stVegaLiteChart"] { 
-        display: flex !important; 
-        justify-content: center !important; 
-        width: 100% !important; 
+    .stVegaLiteChart { 
+        display: flex !important; justify-content: center !important; margin: 0 auto !important; 
+    }
+    .chart-container {
+        background-color: #ffffff;
+        border: 1px solid #e6e9ef;
+        border-radius: 12px;
+        padding: 40px;
+        display: flex;
+        justify-content: center;
+        margin: 20px auto;
+        width: fit-content;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.03);
     }
     
     div[data-testid="stButton"] button { width: 100%; }
@@ -254,11 +260,16 @@ with tabs[1]:
         m4.metric("Số lượng Dự án", f"{df['Dự án'].nunique()} Dự án")
 
         st.header("2. Xu hướng theo thời gian")
-        color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
-        trend_group = df.groupby(['Ngày', color_col_2])['Thời lượng (Phút)'].sum().reset_index()
+        r_col1, r_col2 = st.columns(2)
+        with r_col1:
+            time_col_2 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab2")
+        with r_col2:
+            color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
+        
+        trend_group = df.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
-        fig1 = px.bar(trend_group, x='Ngày', y='Số giờ', color=color_col_2, color_discrete_sequence=LATTE_COLORS)
-        fig1.update_layout(width=CHART_WIDTH, xaxis_title="Ngày", yaxis_title="Số giờ")
+        fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_sequence=LATTE_COLORS)
+        fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
         fig1 = format_plotly_fig(fig1)
         st.plotly_chart(fig1, use_container_width=False, config=PLOTLY_CONFIG)
 
@@ -270,7 +281,66 @@ with tabs[1]:
         fig2 = format_plotly_fig(fig2)
         st.plotly_chart(fig2, use_container_width=False, config=PLOTLY_CONFIG)
 
-        st.header("4. Bảng số liệu")
+        st.header("4. Biểu đồ lịch tổng quan")
+        min_date = df['Ngày'].min()
+        max_date = df['Ngày'].max() 
+        all_dates = pd.date_range(start=min_date, end=max_date)
+        cal_data = pd.DataFrame({'Ngày': all_dates})
+        cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='d')
+        
+        days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
+        cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(days_map)
+        cal_data['Ngày_str'] = cal_data['Ngày'].dt.date
+        
+        grp = df.groupby('Ngày')['Thời lượng (Phút)'].sum().reset_index()
+        cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
+        cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
+        
+        days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
+        
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
+            x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
+                    title='', 
+                    axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False,
+                                  labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
+            y=alt.Y('Thứ:O', sort=days_order, title='', scale=alt.Scale(domain=days_order), axis=alt.Axis(tickSize=0, domain=False)),
+            color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e6e9ef', '#40a02b']), legend=None),
+            tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
+        ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
+        st.altair_chart(chart, use_container_width=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        unique_dates = pd.to_datetime(df['Ngày'].unique()).sort_values()
+        if not unique_dates.empty:
+            total_days = len(unique_dates)
+            diffs = unique_dates.to_series().diff().dt.days
+            streak_id = (diffs > 1).cumsum()
+            streak_counts = streak_id.value_counts()
+            longest_streak = streak_counts.max()
+            db_max_date = pd.to_datetime(df['Ngày'].max())
+            current_streak = streak_counts[streak_id.iloc[-1]] if (db_max_date - unique_dates.max()).days <= 1 else 0
+        else:
+            total_days = longest_streak = current_streak = 0
+
+        st.markdown(f"""
+        <div style='display: flex; width: 100%; max-width: 900px; margin: 0 auto; justify-content: center; align-items: center; border: 1px solid #e6e9ef; border-radius: 8px; padding: 25px; margin-top: 15px; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.02);'>
+            <div style='flex: 1; text-align: center; border-right: 1px solid #dce0e8;'>
+                <h3 style='margin:0; color:#4c4f69; font-size: 28px; font-weight: 600;'>{total_days} ngày</h3>
+                <p style='margin:5px 0 0 0; color:#8c8fa1; font-size: 15px;'>Tổng cộng</p>
+            </div>
+            <div style='flex: 1; text-align: center; border-right: 1px solid #dce0e8;'>
+                <h3 style='margin:0; color:#4c4f69; font-size: 28px; font-weight: 600;'>{longest_streak} ngày</h3>
+                <p style='margin:5px 0 0 0; color:#8c8fa1; font-size: 15px;'>Chuỗi dài nhất</p>
+            </div>
+            <div style='flex: 1; text-align: center;'>
+                <h3 style='margin:0; color:#4c4f69; font-size: 28px; font-weight: 600;'>{current_streak} ngày</h3>
+                <p style='margin:5px 0 0 0; color:#8c8fa1; font-size: 15px;'>Chuỗi hiện tại</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.header("5. Bảng số liệu")
         view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
         st.dataframe(get_pivot_with_totals(df, time_col), width=CHART_WIDTH)
@@ -431,6 +501,7 @@ with tabs[4]:
         
         days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
         
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
@@ -440,8 +511,8 @@ with tabs[4]:
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e6e9ef', '#40a02b']), legend=None),
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
-        
         st.altair_chart(chart, use_container_width=False)
+        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df_g['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
