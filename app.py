@@ -113,20 +113,11 @@ st.markdown(
     <style>
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
-    /* Cấu trúc box trắng bo góc cho Biểu đồ lịch (Altair) */
-    .stVegaLiteChart { 
-        display: flex !important; justify-content: center !important; margin: 0 auto !important; 
-    }
-    .chart-container {
-        background-color: #ffffff;
-        border: 1px solid #e6e9ef;
-        border-radius: 12px;
-        padding: 40px; /* Căn lề đều 4 phía */
-        display: flex;
-        justify-content: center;
-        margin: 20px auto;
-        width: fit-content;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.03);
+    /* Ép biểu đồ Altair căn giữa trang */
+    [data-testid="stVegaLiteChart"] { 
+        display: flex !important; 
+        justify-content: center !important; 
+        width: 100% !important; 
     }
     
     div[data-testid="stButton"] button { width: 100%; }
@@ -295,7 +286,6 @@ with tabs[2]:
         if 'month_box' not in st.session_state or st.session_state.month_box not in months:
             st.session_state.month_box = months[-1]
             
-        # Căn giữa hoàn hảo bằng vertical_alignment (Yêu cầu Streamlit >= 1.30.0)
         c_prev, c_sel, c_next = st.columns([1, 2, 1], vertical_alignment="center")
         with c_prev:
             st.button("◀ Trước", key="btn_prev_m", on_click=change_period, args=('month_box', -1, months))
@@ -441,7 +431,6 @@ with tabs[4]:
         
         days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
         
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
@@ -449,12 +438,10 @@ with tabs[4]:
                                   labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
             y=alt.Y('Thứ:O', sort=days_order, title='', scale=alt.Scale(domain=days_order), axis=alt.Axis(tickSize=0, domain=False)),
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e6e9ef', '#40a02b']), legend=None),
-            # Tinh chỉnh Tooltip cho Altair hiển thị số gọn gàng 1 chữ số thập phân
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
         
         st.altair_chart(chart, use_container_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df_g['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
