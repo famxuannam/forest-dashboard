@@ -12,8 +12,16 @@ MAPPING_FILE = "mapping.csv"
 
 # Bảng màu Catppuccin Latte
 LATTE_COLORS = [
-    "#8839ef", "#1e66f5", "#40a02b", "#df8e1d", "#fe640b",
-    "#d20f39", "#179299", "#ea76cb", "#209fb5", "#7287fd"
+    "#8839ef", # Mauve
+    "#1e66f5", # Blue
+    "#40a02b", # Green
+    "#df8e1d", # Yellow
+    "#fe640b", # Peach
+    "#d20f39", # Red
+    "#179299", # Teal
+    "#ea76cb", # Pink
+    "#209fb5", # Sapphire
+    "#7287fd"  # Lavender
 ]
 CHART_WIDTH = 1200 
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False}
@@ -111,19 +119,12 @@ st.markdown(
     <style>
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
-    .stVegaLiteChart { 
-        display: flex !important; justify-content: center !important; margin: 0 auto !important; 
-    }
-    .chart-container {
-        background-color: #ffffff;
-        border: 1px solid #e6e9ef;
-        border-radius: 12px;
-        padding: 40px;
-        display: flex;
-        justify-content: center;
-        margin: 20px auto;
-        width: fit-content;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.03);
+    /* Ép biểu đồ Altair căn giữa trang */
+    [data-testid="stVegaLiteChart"] { 
+        display: flex !important; 
+        justify-content: center !important; 
+        width: 100% !important; 
+        margin: 20px auto !important;
     }
     
     div[data-testid="stButton"] button { width: 100%; }
@@ -298,7 +299,6 @@ with tabs[1]:
         
         days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
         
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
@@ -309,7 +309,6 @@ with tabs[1]:
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
         st.altair_chart(chart, use_container_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
@@ -501,7 +500,6 @@ with tabs[4]:
         
         days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
         
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
@@ -512,7 +510,6 @@ with tabs[4]:
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
         st.altair_chart(chart, use_container_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df_g['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
