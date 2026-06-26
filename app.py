@@ -105,12 +105,17 @@ def format_plotly_fig(fig, is_pie=False):
         font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f")
     )
     if is_pie:
-        fig.update_traces(hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
+        fig.update_traces(
+            hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>',
+            marker=dict(line=dict(color='#ffffff', width=2)) # Thêm viền trắng
+        )
     else:
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
+        fig.update_traces(
+            hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>',
+            marker=dict(line=dict(color='#ffffff', width=2)) # Thêm viền trắng cho Bar
+        )
     return fig
 
-# --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delta_avg=None, delta_avg_label=""):
     html = f"""
     <div class="glass-card" style="height: 100%;">
@@ -147,6 +152,32 @@ def render_top_3(df, col_name, title):
     """
     st.markdown(html, unsafe_allow_html=True)
 
+def render_month_picker(available_months, tab_id):
+    current_year = available_months[-1].split('-')[0]
+    months_in_year = [f"{current_year}-{str(m).zfill(2)}" for m in range(1, 13)]
+    
+    html_months = "<div class='glass-month-picker'><div class='year-header'>"
+    html_months += f"<button class='nav-year'>&lt;</button><h3>{current_year}</h3><button class='nav-year'>&gt;</button></div>"
+    html_months += "<div class='months-grid'>"
+    
+    tieng_viet_thang = ["Thg 1", "Thg 2", "Thg 3", "Thg 4", "Thg 5", "Thg 6", "Thg 7", "Thg 8", "Thg 9", "Thg 10", "Thg 11", "Thg 12"]
+    
+    current_month_str = st.session_state.get(f"{tab_id}_selected_month", available_months[-1])
+
+    for i, month_str in enumerate(months_in_year):
+        month_viet = tieng_viet_thang[i]
+        is_available = month_str in available_months
+        is_selected = month_str == current_month_str
+        
+        button_class = "available" if is_available else "disabled"
+        if is_selected: button_class += " selected"
+        
+        html_months += f"<button class='month-btn {button_class}' onclick='stMonthSelect(\"{tab_id}\", \"{month_str}\")'>{month_viet}</button>"
+    
+    html_months += "</div></div>"
+    st.markdown(html_months, unsafe_allow_html=True)
+    
+    return current_month_str
 
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Dashboard", layout="wide")
@@ -212,7 +243,58 @@ st.markdown(
     [data-testid="stVegaLiteChart"] { display: flex !important; justify-content: center !important; width: 100% !important; margin: 0 auto !important; }
     
     [data-testid="stMetric"] { display: none; }
+    
+    .glass-month-picker {
+        background: rgba(255, 255, 255, 0.65);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .glass-month-picker .year-header {
+        display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px;
+    }
+    .glass-month-picker .months-grid {
+        display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
+    }
+    .glass-month-picker .month-btn {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        padding: 8px 5px;
+        font-size: 14px; font-weight: 500; color: #1d1d1f;
+        cursor: pointer; transition: all 0.2s;
+    }
+    .glass-month-picker .month-btn.available:hover {
+        background-color: #e5e5ea;
+    }
+    .glass-month-picker .month-btn.selected {
+        background-color: #007aff; color: white; box-shadow: 0 2px 5px rgba(0,122,255,0.3);
+    }
+    .glass-month-picker .month-btn.disabled {
+        opacity: 0.4; cursor: not-allowed;
+    }
+    .glass-month-picker .nav-year {
+        background: none; border: none; font-size: 20px; cursor: pointer; color: #007aff;
+    }
+    
+    .picker-column {
+        width: fit-content; max-width: 350px; flex-shrink: 0;
+    }
+    .tab-content-with-picker {
+        display: flex; gap: 20px;
+    }
+    .data-area {
+        flex-grow: 1;
+    }
     </style>
+    
+    <script>
+    function stMonthSelect(tabId, monthStr) {
+        Streamlit.setComponentValue({[tabId + "_selected_month"]: monthStr});
+    }
+    </script>
     """,
     unsafe_allow_html=True
 )
@@ -346,10 +428,18 @@ with tab_thong_ke:
 # ==========================================
 with tab_thang:
     if not df.empty:
+        st.markdown("<div class='tab-content-with-picker'>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='picker-column'>", unsafe_allow_html=True)
         months = sorted(df['Tháng'].unique())
-        selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1, key="sel_thang")
+        selected_month = render_month_picker(months, "thang_picker")
+        st.markdown("</div>", unsafe_allow_html=True) # picker-column
+        
         df_m = df[df['Tháng'] == selected_month]
         
+        st.markdown("<div class='data-area'>", unsafe_allow_html=True)
+        
+        # Chỉ số so sánh
         avg_hrs_month = df.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
         avg_trees_month = df.groupby('Tháng').size().mean()
         
@@ -358,6 +448,7 @@ with tab_thang:
         prev_trees_month = len(df[df['Tháng'] == months[curr_idx - 1]]) if curr_idx > 0 else None
         
         if not df_m.empty:
+            st.header(f"Báo cáo Tháng: {selected_month}")
             st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
             curr_hrs = df_m['Thời lượng (Phút)'].sum() / 60
@@ -385,21 +476,17 @@ with tab_thang:
             t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
             fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_sequence=MAC_COLORS)
-            fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
+            fig_m.update_layout(xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
             fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ') 
             fig_m = format_plotly_fig(fig_m)
-            st.plotly_chart(fig_m, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_m, use_container_width=True, config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
             pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
             fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color_discrete_sequence=MAC_COLORS)
-            fig_p_m.update_layout(width=CHART_WIDTH)
             fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
-            st.plotly_chart(fig_p_m, use_container_width=False, config=PLOTLY_CONFIG)
-            
-            st.markdown("**Bảng chi tiết (Giờ):**")
-            st.dataframe(get_table_with_totals(df_m), width=CHART_WIDTH)
+            st.plotly_chart(fig_p_m, use_container_width=True, config=PLOTLY_CONFIG)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
             h_m = df_m.groupby(['Khung giờ', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
@@ -413,9 +500,12 @@ with tab_thang:
                 text=tot_hm['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
                 name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
             ))
-            fig_hm.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hm['Số giờ'].max() * 1.2]))
+            fig_hm.update_layout(xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hm['Số giờ'].max() * 1.2]))
             fig_hm = format_plotly_fig(fig_hm)
-            st.plotly_chart(fig_hm, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_hm, use_container_width=True, config=PLOTLY_CONFIG)
+            
+        st.markdown("</div>", unsafe_allow_html=True) # data-area
+        st.markdown("</div>", unsafe_allow_html=True) # tab-content-with-picker
 
 # ==========================================
 # TAB BÁO CÁO TUẦN
@@ -423,8 +513,18 @@ with tab_thang:
 with tab_tuan:
     if not df.empty:
         weeks = sorted(df['Tuần'].unique())
-        selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
+        
+        st.markdown("<div class='tab-content-with-picker'>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='picker-column'>", unsafe_allow_html=True)
+        weeks_viet = [f"Tuần {w.split('-W')[-1]} ({w.split('-')[0]})" for w in weeks]
+        # selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
+        # selected_week = render_glass_list_picker(weeks, weeks_viet, "tuan_picker")
+        selected_week = render_month_picker(weeks, "tuan_picker") # Tạm dùng month picker
+        st.markdown("</div>", unsafe_allow_html=True)
+        
         df_w = df[df['Tuần'] == selected_week]
+        st.markdown("<div class='data-area'>", unsafe_allow_html=True)
         
         avg_hrs_week = df.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
         avg_trees_week = df.groupby('Tuần').size().mean()
@@ -434,6 +534,7 @@ with tab_tuan:
         prev_trees_week = len(df[df['Tuần'] == weeks[curr_idx - 1]]) if curr_idx > 0 else None
         
         if not df_w.empty:
+            st.header(f"Báo cáo Tuần: {selected_week}")
             st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
             curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
@@ -461,21 +562,17 @@ with tab_tuan:
             t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
             fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_sequence=MAC_COLORS)
-            fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
+            fig_w.update_layout(xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
             fig_w = format_plotly_fig(fig_w)
-            st.plotly_chart(fig_w, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_w, use_container_width=True, config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
             pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
             fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color_discrete_sequence=MAC_COLORS)
-            fig_p_w.update_layout(width=CHART_WIDTH)
             fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
-            st.plotly_chart(fig_p_w, use_container_width=False, config=PLOTLY_CONFIG)
-            
-            st.markdown("**Bảng chi tiết (Giờ):**")
-            st.dataframe(get_table_with_totals(df_w), width=CHART_WIDTH)
+            st.plotly_chart(fig_p_w, use_container_width=True, config=PLOTLY_CONFIG)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
             h_w = df_w.groupby(['Khung giờ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
@@ -489,9 +586,12 @@ with tab_tuan:
                 text=tot_hw['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
                 name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
             ))
-            fig_hw.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hw['Số giờ'].max() * 1.2]))
+            fig_hw.update_layout(xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hw['Số giờ'].max() * 1.2]))
             fig_hw = format_plotly_fig(fig_hw)
-            st.plotly_chart(fig_hw, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_hw, use_container_width=True, config=PLOTLY_CONFIG)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
@@ -520,6 +620,7 @@ with tab_nhom:
         t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
         
         if time_col_5 == "Ngày":
+            # Bỏ smooth line
             fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
             fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
         else:
