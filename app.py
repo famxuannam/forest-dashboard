@@ -55,6 +55,7 @@ def prep_analysis_data():
     db['Thời gian bắt đầu'] = pd.to_datetime(db['Thời gian bắt đầu'], errors='coerce')
     db['Thời gian kết thúc'] = pd.to_datetime(db['Thời gian kết thúc'], errors='coerce')
     db['Ngày'] = db['Thời gian bắt đầu'].dt.date
+    # %U đếm tuần bắt đầu từ Chủ Nhật
     db['Tháng'] = db['Thời gian bắt đầu'].dt.strftime('%Y-%m')
     db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%Y-W%U')
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
@@ -97,12 +98,6 @@ def format_plotly_fig(fig, is_pie=False):
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
     return fig
 
-def change_period(key, step, options_list):
-    curr_idx = options_list.index(st.session_state[key])
-    new_idx = curr_idx + step
-    if 0 <= new_idx < len(options_list):
-        st.session_state[key] = options_list[new_idx]
-
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Bộ theo dõi thời gian", layout="wide")
 
@@ -119,12 +114,12 @@ st.markdown(
 
 st.title("Bảng theo dõi thời gian")
 
-# Đảo vị trí Thống kê chung lên đầu tiên để làm tab mặc định
 tab_thong_ke, tab_chuan_bi, tab_thang, tab_tuan, tab_nhom = st.tabs([
     "Thống kê chung", "Chuẩn bị dữ liệu", "Báo cáo tháng", "Báo cáo tuần", "Báo cáo theo nhóm"
 ])
 
 df = prep_analysis_data()
+DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
 # ==========================================
 # TAB THỐNG KÊ CHUNG (MẶC ĐỊNH)
@@ -133,10 +128,14 @@ with tab_thong_ke:
     if not df.empty:
         st.header("1. Tổng quan")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tổng thời gian", f"{df['Thời lượng (Phút)'].sum() / 60:.1f} giờ")
-        m2.metric("Số cây đã trồng", f"{len(df)} cây")
-        m3.metric("Số lượng nhóm", f"{df['Danh mục'].nunique()} nhóm")
-        m4.metric("Số lượng Dự án", f"{df['Dự án'].nunique()} Dự án")
+        total_hrs = df['Thời lượng (Phút)'].sum() / 60
+        total_trees = len(df)
+        num_days = df['Ngày'].nunique() or 1
+        
+        m1.metric("Tổng thời gian", f"{total_hrs:.1f} giờ")
+        m2.metric("Thời gian TB/ngày", f"{total_hrs/num_days:.1f} giờ")
+        m3.metric("Số cây đã trồng", f"{total_trees} cây")
+        m4.metric("Số cây TB/ngày", f"{total_trees/num_days:.1f} cây")
 
         st.header("2. Xu hướng theo thời gian")
         r_col1, r_col2 = st.columns(2)
@@ -165,7 +164,9 @@ with tab_thong_ke:
         max_date = df['Ngày'].max() 
         all_dates = pd.date_range(start=min_date, end=max_date)
         cal_data = pd.DataFrame({'Ngày': all_dates})
-        cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='d')
+        
+        # Đưa Chủ Nhật về ngày đầu tiên của tuần
+        cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta((cal_data['Ngày'].dt.dayofweek + 1) % 7, unit='d')
         
         days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
         cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(days_map)
@@ -175,14 +176,12 @@ with tab_thong_ke:
         cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
         cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
         
-        days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
-        
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
                     axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False,
                                   labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
-            y=alt.Y('Thứ:O', sort=days_order, title='', scale=alt.Scale(domain=days_order), axis=alt.Axis(tickSize=0, domain=False)),
+            y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False)),
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e6e9ef', '#40a02b']), legend=None),
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
@@ -318,8 +317,6 @@ with tab_chuan_bi:
         if st.button("Xác nhận Khôi phục"):
             if res_db: save_db(pd.read_csv(res_db))
             if res_map: save_mapping(pd.read_csv(res_map))
-            if 'month_box' in st.session_state: del st.session_state['month_box']
-            if 'week_box' in st.session_state: del st.session_state['week_box']
             st.success("Khôi phục hệ thống thành công!")
             time.sleep(1)
             st.rerun()
@@ -328,8 +325,6 @@ with tab_chuan_bi:
         if st.button("Xoá toàn bộ dữ liệu", type="primary"):
             if os.path.exists(DB_FILE): os.remove(DB_FILE)
             if os.path.exists(MAPPING_FILE): os.remove(MAPPING_FILE)
-            if 'month_box' in st.session_state: del st.session_state['month_box']
-            if 'week_box' in st.session_state: del st.session_state['week_box']
             st.success("Đã xoá toàn bộ dữ liệu cục bộ!")
             time.sleep(1)
             st.rerun()
@@ -340,26 +335,24 @@ with tab_chuan_bi:
 with tab_thang:
     if not df.empty:
         months = sorted(df['Tháng'].unique())
-        if 'month_box' not in st.session_state or st.session_state.month_box not in months:
-            st.session_state.month_box = months[-1]
-            
-        c_prev, c_sel, c_next = st.columns([1, 2, 1], vertical_alignment="center")
-        with c_prev:
-            st.button("◀ Trước", key="btn_prev_m", on_click=change_period, args=('month_box', -1, months))
-        with c_sel:
-            st.selectbox("Chọn Tháng", months, key="month_box", label_visibility="collapsed")
-        with c_next:
-            st.button("Sau ▶", key="btn_next_m", on_click=change_period, args=('month_box', 1, months))
-
-        df_m = df[df['Tháng'] == st.session_state.month_box]
+        selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1)
+        df_m = df[df['Tháng'] == selected_month]
+        
+        # Chỉ số trung bình của các tháng
+        avg_hrs_month = df.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
+        avg_trees_month = df.groupby('Tháng').size().mean()
         
         if not df_m.empty:
             st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Tổng thời gian", f"{df_m['Thời lượng (Phút)'].sum() / 60:.1f} giờ")
-            c2.metric("Số cây đã trồng", f"{len(df_m)} cây")
-            c3.metric("Số lượng nhóm", f"{df_m['Danh mục'].nunique()} nhóm")
-            c4.metric("Số lượng Dự án", f"{df_m['Dự án'].nunique()} Dự án")
+            curr_hrs = df_m['Thời lượng (Phút)'].sum() / 60
+            curr_trees = len(df_m)
+            num_days_m = df_m['Ngày'].nunique() or 1
+            
+            c1.metric("Tổng thời gian", f"{curr_hrs:.1f} giờ", f"{(curr_hrs - avg_hrs_month):.1f} giờ (vs TB)")
+            c2.metric("Thời gian TB/ngày", f"{curr_hrs/num_days_m:.1f} giờ")
+            c3.metric("Số cây đã trồng", f"{curr_trees} cây", f"{(curr_trees - avg_trees_month):.1f} cây (vs TB)")
+            c4.metric("Số cây TB/ngày", f"{curr_trees/num_days_m:.1f} cây")
             
             st.header("2. Xu hướng theo thời gian")
             color_col_3 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab3")
@@ -396,33 +389,30 @@ with tab_thang:
 with tab_tuan:
     if not df.empty:
         weeks = sorted(df['Tuần'].unique())
-        if 'week_box' not in st.session_state or st.session_state.week_box not in weeks:
-            st.session_state.week_box = weeks[-1]
-            
-        c_prev_w, c_sel_w, c_next_w = st.columns([1, 2, 1], vertical_alignment="center")
-        with c_prev_w:
-            st.button("◀ Trước", key="btn_prev_w", on_click=change_period, args=('week_box', -1, weeks))
-        with c_sel_w:
-            st.selectbox("Chọn Tuần", weeks, key="week_box", label_visibility="collapsed")
-        with c_next_w:
-            st.button("Sau ▶", key="btn_next_w", on_click=change_period, args=('week_box', 1, weeks))
-
-        df_w = df[df['Tuần'] == st.session_state.week_box]
+        selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1)
+        df_w = df[df['Tuần'] == selected_week]
+        
+        # Chỉ số trung bình của các tuần
+        avg_hrs_week = df.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
+        avg_trees_week = df.groupby('Tuần').size().mean()
         
         if not df_w.empty:
             st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Tổng thời gian", f"{df_w['Thời lượng (Phút)'].sum() / 60:.1f} giờ")
-            c2.metric("Số cây đã trồng", f"{len(df_w)} cây")
-            c3.metric("Số lượng nhóm", f"{df_w['Danh mục'].nunique()} nhóm")
-            c4.metric("Số lượng Dự án", f"{df_w['Dự án'].nunique()} Dự án")
+            curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
+            curr_trees_w = len(df_w)
+            num_days_w = df_w['Ngày'].nunique() or 1
+            
+            c1.metric("Tổng thời gian", f"{curr_hrs_w:.1f} giờ", f"{(curr_hrs_w - avg_hrs_week):.1f} giờ (vs TB)")
+            c2.metric("Thời gian TB/ngày", f"{curr_hrs_w/num_days_w:.1f} giờ")
+            c3.metric("Số cây đã trồng", f"{curr_trees_w} cây", f"{(curr_trees_w - avg_trees_week):.1f} cây (vs TB)")
+            c4.metric("Số cây TB/ngày", f"{curr_trees_w/num_days_w:.1f} cây")
             
             st.header("2. Xu hướng theo thời gian")
             color_col_4 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab4")
-            days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
             t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": days_order}, color_discrete_sequence=LATTE_COLORS)
+            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_sequence=LATTE_COLORS)
             fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
             fig_w = format_plotly_fig(fig_w)
@@ -458,9 +448,15 @@ with tab_nhom:
         df_g = df[(df['Danh mục'] == sel_grp) | (df['Dự án'] == sel_grp)]
         
         st.header("1. Tổng quan")
-        c1, c2 = st.columns(2)
-        c1.metric("Tổng thời gian", f"{df_g['Thời lượng (Phút)'].sum() / 60:.1f} giờ")
-        c2.metric("Số cây đã trồng", f"{len(df_g)} cây")
+        c1, c2, c3, c4 = st.columns(4)
+        curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
+        curr_trees_g = len(df_g)
+        num_days_g = df_g['Ngày'].nunique() or 1
+        
+        c1.metric("Tổng thời gian", f"{curr_hrs_g:.1f} giờ")
+        c2.metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f} giờ")
+        c3.metric("Số cây đã trồng", f"{curr_trees_g} cây")
+        c4.metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f} cây")
         
         st.header("2. Xu hướng theo thời gian")
         time_col_5 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab5")
@@ -477,7 +473,9 @@ with tab_nhom:
         max_date = df['Ngày'].max() 
         all_dates = pd.date_range(start=min_date, end=max_date)
         cal_data = pd.DataFrame({'Ngày': all_dates})
-        cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='d')
+        
+        # Đưa Chủ Nhật về đầu tuần
+        cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta((cal_data['Ngày'].dt.dayofweek + 1) % 7, unit='d')
         
         days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
         cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(days_map)
@@ -487,14 +485,12 @@ with tab_nhom:
         cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
         cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
         
-        days_order = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
-        
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', 
                     title='', 
                     axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False,
                                   labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
-            y=alt.Y('Thứ:O', sort=days_order, title='', scale=alt.Scale(domain=days_order), axis=alt.Axis(tickSize=0, domain=False)),
+            y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False)),
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e6e9ef', '#40a02b']), legend=None),
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
