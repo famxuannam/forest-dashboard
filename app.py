@@ -5,16 +5,12 @@ import time
 import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
-from datetime import datetime, timedelta
-import calendar
 
-# ==========================================
-# CẤU HÌNH HỆ THỐNG & BIẾN TOÀN CỤC
-# ==========================================
+# --- CẤU HÌNH ---
 DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 
-# Bảng màu phong cách Apple (Cupertino)
+# Bảng màu phong cách Apple / Latte sáng
 MAC_COLORS = [
     "#007aff", # Blue (Primary)
     "#34c759", # Green
@@ -29,11 +25,8 @@ MAC_COLORS = [
 ]
 CHART_WIDTH = 1200 
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False}
-DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
-# ==========================================
-# CÁC HÀM XỬ LÝ DỮ LIỆU CỐT LÕI
-# ==========================================
+# --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
 def load_db():
     if os.path.exists(DB_FILE):
         df = pd.read_csv(DB_FILE)
@@ -71,7 +64,7 @@ def prep_analysis_data():
     db['Thời gian kết thúc'] = pd.to_datetime(db['Thời gian kết thúc'], errors='coerce')
     db['Ngày'] = db['Thời gian bắt đầu'].dt.date
     db['Tháng'] = db['Thời gian bắt đầu'].dt.strftime('%Y-%m')
-    db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%Y-W%U') # %U: Tuần bắt đầu từ Chủ Nhật
+    db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%Y-W%U') # Bắt đầu Chủ Nhật
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
     
     tieng_viet_days = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
@@ -95,32 +88,7 @@ def get_table_with_totals(df):
     comb = comb.sort_values(by=['Danh mục', 'Dự án'])
     return comb.set_index(['Danh mục', 'Dự án'])[['Số giờ']]
 
-# ==========================================
-# CÁC HÀM VẼ BIỂU ĐỒ & UI COMPONENT
-# ==========================================
-def format_plotly_fig(fig, is_pie=False):
-    """Định dạng font chữ Apple và loại bỏ nền"""
-    fig.update_layout(
-        dragmode=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f"),
-        margin=dict(t=30, b=30, l=10, r=10)
-    )
-    if is_pie:
-        fig.update_traces(
-            hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>',
-            marker=dict(line=dict(color='#ffffff', width=0.5)) # Viền siêu mảnh 0.5px
-        )
-    else:
-        fig.update_traces(
-            hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>',
-            marker=dict(line=dict(color='#ffffff', width=0.5)) # Viền siêu mảnh 0.5px
-        )
-    return fig
-
 def add_total_labels(fig, df, x_col, y_col):
-    """Thêm text data label lên đỉnh cột"""
     totals = df.groupby(x_col)[y_col].sum().reset_index()
     fig.add_trace(go.Scatter(
         x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].round(1).astype(str),
@@ -129,26 +97,21 @@ def add_total_labels(fig, df, x_col, y_col):
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
 
-def add_week_dividers(fig, df, time_col):
-    """Thêm đường kẻ sọc ngăn cách các tuần (Chủ nhật)"""
-    if time_col == "Ngày":
-        unique_days = sorted(df['Ngày'].unique())
-        for d in unique_days:
-            if d.weekday() == 6: # 6 = Chủ nhật
-                fig.add_vline(x=d, line_width=1, line_color="rgba(0,0,0,0.2)", line_dash="solid")
-    return fig
-
-def add_average_line(fig, avg_value, label):
-    """Thêm đường trung bình cắt ngang biểu đồ"""
-    fig.add_hline(
-        y=avg_value, line_dash="dash", line_color="#ff3b30", line_width=1.5,
-        annotation_text=f" TB: {avg_value:.1f}h ", annotation_position="top left",
-        annotation_font_color="#ff3b30"
+def format_plotly_fig(fig, is_pie=False):
+    fig.update_layout(
+        dragmode=False,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f")
     )
+    if is_pie:
+        fig.update_traces(hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
+    else:
+        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
     return fig
 
+# --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delta_avg=None, delta_avg_label=""):
-    """Thẻ hiển thị chỉ số mang phong cách Glassmorphism"""
     html = f"""
     <div class="glass-card" style="height: 100%;">
         <p style="margin: 0; font-size: 13px; color: #86868b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
@@ -162,11 +125,11 @@ def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delt
         c2 = "#34c759" if delta_avg > 0 else "#ff3b30" if delta_avg < 0 else "#86868b"
         s2 = "+" if delta_avg > 0 else ""
         html += f"<p style='margin: 4px 0 0 0; font-size: 14px; font-weight: 500; color: {c2};'> {s2}{delta_avg:.1f} {delta_avg_label}</p>"
+    
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
 
 def render_top_3(df, col_name, title):
-    """Thẻ hiển thị danh sách Top 3"""
     if df.empty: 
         html_list = "<p style='color:#86868b; font-size: 14px;'>Không có dữ liệu</p>"
     else:
@@ -185,37 +148,35 @@ def render_top_3(df, col_name, title):
     st.markdown(html, unsafe_allow_html=True)
 
 
-# ==========================================
-# CẤU HÌNH GIAO DIỆN & CSS (MAC CUỘN)
-# ==========================================
+# --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Dashboard", layout="wide")
 
 st.markdown(
     """
     <style>
-    /* 1. Global Font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [class*="css"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
-    .stApp { background-color: #f5f5f7; }
+    .stApp {
+        background-color: #f5f5f7;
+    }
+    
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
-    /* 2. Glassmorphism Blocks */
     .glass-card {
         background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 12px;
+        border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
     
-    /* 3. Streamlit Default Overrides */
     h1, h2, h3 { color: #1d1d1f !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
     hr { border-color: rgba(0,0,0,0.08) !important; }
     
-    /* 4. Tùy chỉnh Nút bấm Primary */
     div[data-testid="stButton"] button[kind="primary"] {
         background-color: #007aff !important;
         color: white !important;
@@ -227,30 +188,20 @@ st.markdown(
         transition: all 0.2s ease !important;
     }
     div[data-testid="stButton"] button[kind="primary"]:hover {
-        transform: scale(0.98); opacity: 0.9;
+        transform: scale(0.98);
+        opacity: 0.9;
     }
     
-    /* 5. Nút bấm dạng Link (Dùng cho Pickers) */
-    .link-button-container div[data-testid="stButton"] button {
-        background: transparent !important;
-        border: none !important;
-        color: #1d1d1f !important;
-        font-weight: 400 !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        min-height: 0 !important;
-    }
-    .link-button-container div[data-testid="stButton"] button:hover {
+    div[data-testid="stButton"] button[kind="secondary"] {
+        background-color: white !important;
         color: #007aff !important;
-        text-decoration: none !important;
-        background-color: rgba(0,122,255,0.1) !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
+        border: 1px solid #d1d1d6 !important;
+        font-weight: 500 !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
     }
-    .link-button-container div[data-testid="stButton"] button:disabled {
-        color: #d1d1d6 !important;
-    }
-
-    /* 6. Form Inputs */
+    div[data-testid="stButton"] button { width: 100%; }
+    
     .stSelectbox > div > div, .stTextInput > div > div > input {
         border-radius: 8px !important;
         border: 1px solid #d1d1d6 !important;
@@ -258,12 +209,9 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
     
-    /* 7. Căn giữa Altair */
     [data-testid="stVegaLiteChart"] { display: flex !important; justify-content: center !important; width: 100% !important; margin: 0 auto !important; }
-    [data-testid="stMetric"] { display: none; }
     
-    /* Lịch Calendar CSS */
-    .cal-day-header { text-align: center; font-size: 12px; color: #86868b; font-weight: 600; margin-bottom: 5px; }
+    [data-testid="stMetric"] { display: none; }
     </style>
     """,
     unsafe_allow_html=True
@@ -271,15 +219,15 @@ st.markdown(
 
 st.title("Bảng theo dõi thời gian")
 
-# Sắp xếp Tabs theo yêu cầu
 tab_thong_ke, tab_thang, tab_tuan, tab_nhom, tab_chuan_bi = st.tabs([
     "Thống kê chung", "Báo cáo tháng", "Báo cáo tuần", "Báo cáo theo nhóm", "Chuẩn bị dữ liệu"
 ])
 
 df = prep_analysis_data()
+DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
 # ==========================================
-# TAB 1: THỐNG KÊ CHUNG
+# TAB THỐNG KÊ CHUNG
 # ==========================================
 with tab_thong_ke:
     if not df.empty:
@@ -302,9 +250,9 @@ with tab_thong_ke:
         st.header("2. Xu hướng theo thời gian")
         r_col1, r_col2 = st.columns(2)
         with r_col1:
-            time_col_2 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="tk_time")
+            time_col_2 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab2")
         with r_col2:
-            color_col_2 = st.radio("Phân loại biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="tk_group")
+            color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
         
         trend_group = df.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
@@ -312,27 +260,27 @@ with tab_thong_ke:
         
         if time_col_2 in ["Tuần", "Tháng"]:
             fig1 = add_total_labels(fig1, trend_group, time_col_2, 'Số giờ')
-        if time_col_2 == "Ngày":
-            fig1 = add_week_dividers(fig1, trend_group, time_col_2)
             
-        fig1.update_layout(xaxis_title=time_col_2, yaxis_title="Số giờ")
-        st.plotly_chart(format_plotly_fig(fig1), use_container_width=True, config=PLOTLY_CONFIG)
+        fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
+        fig1 = format_plotly_fig(fig1)
+        st.plotly_chart(fig1, use_container_width=False, config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
         hr_group = df.groupby(['Khung giờ', color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         hr_group['Số giờ'] = hr_group['Thời lượng (Phút)'] / 60
         fig2 = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col_2, color_discrete_sequence=MAC_COLORS)
         
-        # Line Tổng cộng (Màu xanh Apple, kèm Text)
+        # Đường line màu xanh kèm Data Label
         tot_hr = df.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
         tot_hr['Số giờ'] = tot_hr['Thời lượng (Phút)'] / 60
         fig2.add_trace(go.Scatter(
             x=tot_hr['Khung giờ'], y=tot_hr['Số giờ'], mode='lines+text', 
-            text=tot_hr['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#007aff", size=13),
-            name='Tổng cộng', line=dict(color="#007aff", width=2.5)
+            text=tot_hr['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+            name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
         ))
-        fig2.update_layout(xaxis_title="Khung giờ (0h - 23h)", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hr['Số giờ'].max() * 1.2]))
-        st.plotly_chart(format_plotly_fig(fig2), use_container_width=True, config=PLOTLY_CONFIG)
+        fig2.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ (0h - 23h)", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hr['Số giờ'].max() * 1.2]))
+        fig2 = format_plotly_fig(fig2)
+        st.plotly_chart(fig2, use_container_width=False, config=PLOTLY_CONFIG)
 
         st.header("4. Biểu đồ lịch tổng quan")
         min_date = df['Ngày'].min()
@@ -355,12 +303,11 @@ with tab_thong_ke:
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e5e5ea', '#34c759']), legend=None),
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=False)
         
-        # Tính Streak
         unique_dates = pd.to_datetime(df['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
-            total_days_streak = len(unique_dates)
+            total_days = len(unique_dates)
             diffs = unique_dates.to_series().diff().dt.days
             streak_id = (diffs > 1).cumsum()
             streak_counts = streak_id.value_counts()
@@ -368,12 +315,12 @@ with tab_thong_ke:
             db_max_date = pd.to_datetime(df['Ngày'].max())
             current_streak = streak_counts[streak_id.iloc[-1]] if (db_max_date - unique_dates.max()).days <= 1 else 0
         else:
-            total_days_streak = longest_streak = current_streak = 0
+            total_days = longest_streak = current_streak = 0
 
         st.markdown(f"""
-        <div class="glass-card" style='display: flex; width: 100%; max-width: 900px; margin: 20px auto; justify-content: center; align-items: center; padding: 25px;'>
+        <div class="glass-card" style='display: flex; width: 100%; max-width: 900px; margin: 0 auto; justify-content: center; align-items: center; padding: 25px;'>
             <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
-                <h3 style='margin:0; font-size: 32px;'>{total_days_streak} ngày</h3>
+                <h3 style='margin:0; font-size: 32px;'>{total_days} ngày</h3>
                 <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Tổng cộng</p>
             </div>
             <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
@@ -388,275 +335,200 @@ with tab_thong_ke:
         """, unsafe_allow_html=True)
 
         st.header("5. Bảng số liệu")
-        view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True, key="tk_view")
+        view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-        st.dataframe(get_pivot_with_totals(df, time_col), use_container_width=True)
+        st.dataframe(get_pivot_with_totals(df, time_col), width=CHART_WIDTH)
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
 # ==========================================
-# TAB 2: BÁO CÁO THÁNG
+# TAB BÁO CÁO THÁNG
 # ==========================================
 with tab_thang:
     if not df.empty:
-        all_months = sorted(df['Tháng'].unique())
-        if 'selected_month' not in st.session_state: st.session_state.selected_month = all_months[-1]
-        current_year = st.session_state.selected_month.split('-')[0]
+        months = sorted(df['Tháng'].unique())
+        selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1, key="sel_thang")
+        df_m = df[df['Tháng'] == selected_month]
         
-        # Lấy danh sách 12 tháng của năm hiện tại
-        months_in_year = [f"{current_year}-{str(m).zfill(2)}" for m in range(1, 13)]
-        tieng_viet_thang = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"]
+        avg_hrs_month = df.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
+        avg_trees_month = df.groupby('Tháng').size().mean()
         
-        st.markdown("<div class='glass-card link-button-container'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align:center; margin-bottom: 15px;'>Năm {current_year}</h3>", unsafe_allow_html=True)
-        m_cols = st.columns(12)
-        
-        for i, m_str in enumerate(months_in_year):
-            with m_cols[i]:
-                is_avail = m_str in all_months
-                if is_avail:
-                    # Dùng CSS hack để highlight nút đang chọn
-                    if m_str == st.session_state.selected_month:
-                        st.markdown("<div class='selected-link'>", unsafe_allow_html=True)
-                        st.button(tieng_viet_thang[i], key=f"btn_m_{i}", on_click=lambda m=m_str: st.session_state.update(selected_month=m))
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    else:
-                        st.button(tieng_viet_thang[i], key=f"btn_m_{i}", on_click=lambda m=m_str: st.session_state.update(selected_month=m))
-                else:
-                    st.button(tieng_viet_thang[i], key=f"btn_m_dis_{i}", disabled=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        df_m = df[df['Tháng'] == st.session_state.selected_month]
+        curr_idx = months.index(selected_month)
+        prev_hrs_month = df[df['Tháng'] == months[curr_idx - 1]]['Thời lượng (Phút)'].sum() / 60 if curr_idx > 0 else None
+        prev_trees_month = len(df[df['Tháng'] == months[curr_idx - 1]]) if curr_idx > 0 else None
         
         if not df_m.empty:
-            avg_hrs_m = df.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
-            avg_trees_m = df.groupby('Tháng').size().mean()
-            
-            curr_idx = all_months.index(st.session_state.selected_month)
-            prev_hrs_m = df[df['Tháng'] == all_months[curr_idx - 1]]['Thời lượng (Phút)'].sum() / 60 if curr_idx > 0 else None
-            prev_trees_m = len(df[df['Tháng'] == all_months[curr_idx - 1]]) if curr_idx > 0 else None
-            
             st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
-            c_hrs = df_m['Thời lượng (Phút)'].sum() / 60
-            c_trees = len(df_m)
-            n_days = df_m['Ngày'].nunique() or 1
+            curr_hrs = df_m['Thời lượng (Phút)'].sum() / 60
+            curr_trees = len(df_m)
+            num_days_m = df_m['Ngày'].nunique() or 1
             
-            d1_hr = (c_hrs - prev_hrs_m) if prev_hrs_m is not None else None
-            d2_hr = c_hrs - avg_hrs_m
-            d1_tr = (c_trees - prev_trees_m) if prev_trees_m is not None else None
-            d2_tr = c_trees - avg_trees_m
+            delta1_hr = (curr_hrs - prev_hrs_month) if prev_hrs_month is not None else None
+            delta2_hr = curr_hrs - avg_hrs_month
             
-            with c1: render_glass_metric("Tổng thời gian", f"{c_hrs:.1f}h", d1_hr, "h (vs Tháng trước)", d2_hr, "h (vs Trung bình)")
-            with c2: render_glass_metric("Thời gian TB/ngày", f"{c_hrs/n_days:.1f}h")
-            with c3: render_glass_metric("Số cây đã trồng", f"{c_trees}", d1_tr, "cây (vs Tháng trước)", d2_tr, "cây (vs Trung bình)")
-            with c4: render_glass_metric("Số cây TB/ngày", f"{c_trees/n_days:.1f}")
+            delta1_tr = (curr_trees - prev_trees_month) if prev_trees_month is not None else None
+            delta2_tr = curr_trees - avg_trees_month
+            
+            with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs:.1f}h", delta1_hr, "h (vs Tháng trước)", delta2_hr, "h (vs Trung bình)")
+            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs/num_days_m:.1f}h")
+            with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees}", delta1_tr, "cây (vs Tháng trước)", delta2_tr, "cây (vs Trung bình)")
+            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees/num_days_m:.1f}")
             
             st.write("")
             c_top1, c_top2 = st.columns(2)
-            with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục')
-            with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án')
+            with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục Tháng')
+            with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
             
             st.header("2. Xu hướng theo thời gian")
-            col_m = st.radio("Phân loại biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="m_rad")
-            t_m = df_m.groupby(['Ngày', col_m])['Thời lượng (Phút)'].sum().reset_index()
+            color_col_3 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab3")
+            t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
-            
-            fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=col_m, color_discrete_sequence=MAC_COLORS)
-            fig_m = add_week_dividers(fig_m, t_m, "Ngày")
-            
-            # Thêm Average Line
-            avg_per_day = c_hrs / n_days
-            fig_m = add_average_line(fig_m, avg_per_day, "TB")
-            
-            fig_m.update_layout(xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
-            st.plotly_chart(format_plotly_fig(fig_m), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_sequence=MAC_COLORS)
+            fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
+            fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ') 
+            fig_m = format_plotly_fig(fig_m)
+            st.plotly_chart(fig_m, use_container_width=False, config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
-            pc_m = df_m.groupby(col_m)['Thời lượng (Phút)'].sum().reset_index()
+            pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
             pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
-            fig_p_m = px.pie(pc_m, values='Số giờ', names=col_m, color_discrete_sequence=MAC_COLORS)
-            st.plotly_chart(format_plotly_fig(fig_p_m, is_pie=True), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color_discrete_sequence=MAC_COLORS)
+            fig_p_m.update_layout(width=CHART_WIDTH)
+            fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
+            st.plotly_chart(fig_p_m, use_container_width=False, config=PLOTLY_CONFIG)
+            
+            st.markdown("**Bảng chi tiết (Giờ):**")
+            st.dataframe(get_table_with_totals(df_m), width=CHART_WIDTH)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
-            h_m = df_m.groupby(['Khung giờ', col_m])['Thời lượng (Phút)'].sum().reset_index()
+            h_m = df_m.groupby(['Khung giờ', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             h_m['Số giờ'] = h_m['Thời lượng (Phút)'] / 60
-            fig_hm = px.bar(h_m, x='Khung giờ', y='Số giờ', color=col_m, color_discrete_sequence=MAC_COLORS)
+            fig_hm = px.bar(h_m, x='Khung giờ', y='Số giờ', color=color_col_3, color_discrete_sequence=MAC_COLORS)
             
             tot_hm = df_m.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
             tot_hm['Số giờ'] = tot_hm['Thời lượng (Phút)'] / 60
             fig_hm.add_trace(go.Scatter(
                 x=tot_hm['Khung giờ'], y=tot_hm['Số giờ'], mode='lines+text', 
-                text=tot_hm['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#007aff", size=13),
-                name='Tổng cộng', line=dict(color="#007aff", width=2.5)
+                text=tot_hm['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+                name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
             ))
-            fig_hm.update_layout(xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hm['Số giờ'].max() * 1.2]))
-            st.plotly_chart(format_plotly_fig(fig_hm), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_hm.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hm['Số giờ'].max() * 1.2]))
+            fig_hm = format_plotly_fig(fig_hm)
+            st.plotly_chart(fig_hm, use_container_width=False, config=PLOTLY_CONFIG)
 
 # ==========================================
-# TAB 3: BÁO CÁO TUẦN
+# TAB BÁO CÁO TUẦN
 # ==========================================
 with tab_tuan:
     if not df.empty:
-        all_weeks = sorted(df['Tuần'].unique())
-        all_dates = pd.to_datetime(df['Ngày'].unique()).date
+        weeks = sorted(df['Tuần'].unique())
+        selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
+        df_w = df[df['Tuần'] == selected_week]
         
-        if 'cal_month' not in st.session_state: 
-            st.session_state.cal_month = pd.to_datetime(all_dates[-1]).replace(day=1)
-        if 'selected_week' not in st.session_state: 
-            st.session_state.selected_week = all_weeks[-1]
-            
-        c_year, c_month = st.session_state.cal_month.year, st.session_state.cal_month.month
+        avg_hrs_week = df.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
+        avg_trees_week = df.groupby('Tuần').size().mean()
         
-        st.markdown("<div class='glass-card link-button-container'>", unsafe_allow_html=True)
-        # Nút điều hướng tháng lịch
-        nav1, nav2, nav3 = st.columns([1, 4, 1])
-        with nav1:
-            if st.button("◀", key="cal_prev"):
-                first_day = st.session_state.cal_month
-                st.session_state.cal_month = (first_day - timedelta(days=1)).replace(day=1)
-                st.rerun()
-        with nav2:
-            st.markdown(f"<h3 style='text-align:center; margin:0;'>Tháng {c_month} / {c_year}</h3>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; margin:0; color:#86868b; font-size:14px;'>Chọn một ngày để xem báo cáo tuần chứa ngày đó</p>", unsafe_allow_html=True)
-        with nav3:
-            if st.button("▶", key="cal_next"):
-                next_month = c_month % 12 + 1
-                next_year = c_year + (1 if c_month == 12 else 0)
-                st.session_state.cal_month = datetime(next_year, next_month, 1).date()
-                st.rerun()
-                
-        st.write("")
-        # Vẽ Lịch Grid
-        cal_matrix = calendar.monthcalendar(c_year, c_month)
-        
-        # Header thứ
-        days_header = st.columns(7)
-        for i, d in enumerate(["T2", "T3", "T4", "T5", "T6", "T7", "CN"]):
-            days_header[i].markdown(f"<div class='cal-day-header'>{d}</div>", unsafe_allow_html=True)
-            
-        for week in cal_matrix:
-            cols = st.columns(7)
-            for i, day in enumerate(week):
-                if day == 0:
-                    cols[i].write("")
-                else:
-                    curr_d = datetime(c_year, c_month, day).date()
-                    if curr_d in all_dates:
-                        # Find the week string for this date from the dataframe
-                        d_str = curr_d.strftime('%Y-%m-%d')
-                        w_str = df[df['Ngày'].astype(str) == d_str]['Tuần'].iloc[0]
-                        
-                        if w_str == st.session_state.selected_week:
-                            st.markdown("<div class='selected-link'>", unsafe_allow_html=True)
-                            cols[i].button(str(day), key=f"d_{c_month}_{day}", on_click=lambda w=w_str: st.session_state.update(selected_week=w))
-                            st.markdown("</div>", unsafe_allow_html=True)
-                        else:
-                            cols[i].button(str(day), key=f"d_{c_month}_{day}", on_click=lambda w=w_str: st.session_state.update(selected_week=w))
-                    else:
-                        cols[i].button(str(day), key=f"d_dis_{c_month}_{day}", disabled=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        df_w = df[df['Tuần'] == st.session_state.selected_week]
+        curr_idx = weeks.index(selected_week)
+        prev_hrs_week = df[df['Tuần'] == weeks[curr_idx - 1]]['Thời lượng (Phút)'].sum() / 60 if curr_idx > 0 else None
+        prev_trees_week = len(df[df['Tuần'] == weeks[curr_idx - 1]]) if curr_idx > 0 else None
         
         if not df_w.empty:
-            avg_hrs_w = df.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
-            avg_trees_w = df.groupby('Tuần').size().mean()
-            
-            curr_idx = all_weeks.index(st.session_state.selected_week)
-            prev_hrs_w = df[df['Tuần'] == all_weeks[curr_idx - 1]]['Thời lượng (Phút)'].sum() / 60 if curr_idx > 0 else None
-            prev_trees_w = len(df[df['Tuần'] == all_weeks[curr_idx - 1]]) if curr_idx > 0 else None
-            
-            st.header(f"Báo cáo Tuần {st.session_state.selected_week.split('-W')[-1]}")
+            st.header("1. Tổng quan")
             c1, c2, c3, c4 = st.columns(4)
-            c_hrs = df_w['Thời lượng (Phút)'].sum() / 60
-            c_trees = len(df_w)
-            n_days = df_w['Ngày'].nunique() or 1
+            curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
+            curr_trees_w = len(df_w)
+            num_days_w = df_w['Ngày'].nunique() or 1
             
-            d1_hr = (c_hrs - prev_hrs_w) if prev_hrs_w is not None else None
-            d2_hr = c_hrs - avg_hrs_w
-            d1_tr = (c_trees - prev_trees_w) if prev_trees_w is not None else None
-            d2_tr = c_trees - avg_trees_w
+            d1_hr_w = (curr_hrs_w - prev_hrs_week) if prev_hrs_week is not None else None
+            d2_hr_w = curr_hrs_w - avg_hrs_week
             
-            with c1: render_glass_metric("Tổng thời gian", f"{c_hrs:.1f}h", d1_hr, "h (vs Tuần trước)", d2_hr, "h (vs Trung bình)")
-            with c2: render_glass_metric("Thời gian TB/ngày", f"{c_hrs/n_days:.1f}h")
-            with c3: render_glass_metric("Số cây đã trồng", f"{c_trees}", d1_tr, "cây (vs Tuần trước)", d2_tr, "cây (vs Trung bình)")
-            with c4: render_glass_metric("Số cây TB/ngày", f"{c_trees/n_days:.1f}")
+            d1_tr_w = (curr_trees_w - prev_trees_week) if prev_trees_week is not None else None
+            d2_tr_w = curr_trees_w - avg_trees_week
+            
+            with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_w:.1f}h", d1_hr_w, "h (vs Tuần trước)", d2_hr_w, "h (vs Trung bình)")
+            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_w/num_days_w:.1f}h")
+            with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_w}", d1_tr_w, "cây (vs Tuần trước)", d2_tr_w, "cây (vs Trung bình)")
+            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_w/num_days_w:.1f}")
             
             st.write("")
             c_top1, c_top2 = st.columns(2)
-            with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục')
-            with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án')
+            with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
+            with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
             
             st.header("2. Xu hướng theo thời gian")
-            col_w = st.radio("Phân loại biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="w_rad")
-            t_w = df_w.groupby(['Thứ', col_w])['Thời lượng (Phút)'].sum().reset_index()
+            color_col_4 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab4")
+            t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-            
-            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=col_w, category_orders={"Thứ": DAYS_ORDER}, color_discrete_sequence=MAC_COLORS)
+            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_sequence=MAC_COLORS)
+            fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
-            fig_w = add_average_line(fig_w, c_hrs / 7, "TB") # Trung bình của 7 ngày trong tuần
-            
-            fig_w.update_layout(xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
-            st.plotly_chart(format_plotly_fig(fig_w), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_w = format_plotly_fig(fig_w)
+            st.plotly_chart(fig_w, use_container_width=False, config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
-            pc_w = df_w.groupby(col_w)['Thời lượng (Phút)'].sum().reset_index()
+            pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
             pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
-            fig_p_w = px.pie(pc_w, values='Số giờ', names=col_w, color_discrete_sequence=MAC_COLORS)
-            st.plotly_chart(format_plotly_fig(fig_p_w, is_pie=True), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color_discrete_sequence=MAC_COLORS)
+            fig_p_w.update_layout(width=CHART_WIDTH)
+            fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
+            st.plotly_chart(fig_p_w, use_container_width=False, config=PLOTLY_CONFIG)
+            
+            st.markdown("**Bảng chi tiết (Giờ):**")
+            st.dataframe(get_table_with_totals(df_w), width=CHART_WIDTH)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
-            h_w = df_w.groupby(['Khung giờ', col_w])['Thời lượng (Phút)'].sum().reset_index()
+            h_w = df_w.groupby(['Khung giờ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             h_w['Số giờ'] = h_w['Thời lượng (Phút)'] / 60
-            fig_hw = px.bar(h_w, x='Khung giờ', y='Số giờ', color=col_w, color_discrete_sequence=MAC_COLORS)
+            fig_hw = px.bar(h_w, x='Khung giờ', y='Số giờ', color=color_col_4, color_discrete_sequence=MAC_COLORS)
             
             tot_hw = df_w.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
             tot_hw['Số giờ'] = tot_hw['Thời lượng (Phút)'] / 60
             fig_hw.add_trace(go.Scatter(
                 x=tot_hw['Khung giờ'], y=tot_hw['Số giờ'], mode='lines+text', 
-                text=tot_hw['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#007aff", size=13),
-                name='Tổng cộng', line=dict(color="#007aff", width=2.5)
+                text=tot_hw['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+                name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
             ))
-            fig_hw.update_layout(xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hw['Số giờ'].max() * 1.2]))
-            st.plotly_chart(format_plotly_fig(fig_hw), use_container_width=True, config=PLOTLY_CONFIG)
+            fig_hw.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hw['Số giờ'].max() * 1.2]))
+            fig_hw = format_plotly_fig(fig_hw)
+            st.plotly_chart(fig_hw, use_container_width=False, config=PLOTLY_CONFIG)
 
 # ==========================================
-# TAB 4: BÁO CÁO THEO NHÓM
+# TAB BÁO CÁO THEO NHÓM
 # ==========================================
 with tab_nhom:
     if not df.empty:
-        groups = sorted(list(df['Danh mục'].unique()) + list(df['Dự án'].unique()))
-        sel_g = st.selectbox("Chọn Danh mục hoặc Dự án:", groups)
-        df_g = df[(df['Danh mục'] == sel_g) | (df['Dự án'] == sel_g)]
+        all_groups = list(df['Danh mục'].unique()) + list(df['Dự án'].unique())
+        sel_grp = st.selectbox("Chọn Danh mục hoặc Dự án:", list(set(all_groups)))
+        
+        df_g = df[(df['Danh mục'] == sel_grp) | (df['Dự án'] == sel_grp)]
         
         st.header("1. Tổng quan")
         c1, c2, c3, c4 = st.columns(4)
-        c_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
-        c_trees_g = len(df_g)
-        n_days_g = df_g['Ngày'].nunique() or 1
+        curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
+        curr_trees_g = len(df_g)
+        num_days_g = df_g['Ngày'].nunique() or 1
         
-        with c1: render_glass_metric("Tổng thời gian", f"{c_hrs_g:.1f}h")
-        with c2: render_glass_metric("Thời gian TB/ngày", f"{c_hrs_g/n_days_g:.1f}h")
-        with c3: render_glass_metric("Số cây đã trồng", f"{c_trees_g}")
-        with c4: render_glass_metric("Số cây TB/ngày", f"{c_trees_g/n_days_g:.1f}")
+        with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_g:.1f}h")
+        with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f}h")
+        with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_g}")
+        with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f}")
         
         st.header("2. Xu hướng theo thời gian")
-        mode_g = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="nhom_mode")
-        t_g = df_g.groupby(mode_g)['Thời lượng (Phút)'].sum().reset_index()
+        time_col_5 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab5")
+        t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
         t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
         
-        if mode_g == "Ngày":
-            # Line không có smooth (xiên thẳng)
-            fig_g = px.line(t_g, x=mode_g, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
-            fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)", line_shape='linear')
-            fig_g = add_week_dividers(fig_g, t_g, mode_g)
+        if time_col_5 == "Ngày":
+            fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
+            fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
         else:
-            fig_g = px.bar(t_g, x=mode_g, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
-            fig_g = add_total_labels(fig_g, t_g, mode_g, 'Số giờ')
+            fig_g = px.bar(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
+            fig_g = add_total_labels(fig_g, t_g, time_col_5, 'Số giờ')
             
-        fig_g.update_layout(xaxis_title=mode_g, yaxis_title="Số giờ")
-        st.plotly_chart(format_plotly_fig(fig_g), use_container_width=True, config=PLOTLY_CONFIG)
+        fig_g.update_layout(width=CHART_WIDTH, xaxis_title=time_col_5, yaxis_title="Số giờ")
+        fig_g = format_plotly_fig(fig_g)
+        st.plotly_chart(fig_g, use_container_width=False, config=PLOTLY_CONFIG)
         
         st.header("3. Biểu đồ lịch")
         min_date = df_g['Ngày'].min()
@@ -679,39 +551,40 @@ with tab_nhom:
             color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e5e5ea', '#34c759']), legend=None),
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=False)
         
         unique_dates = pd.to_datetime(df_g['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
-            t_days_g = len(unique_dates)
+            total_days = len(unique_dates)
             diffs = unique_dates.to_series().diff().dt.days
             streak_id = (diffs > 1).cumsum()
-            s_counts = streak_id.value_counts()
-            l_streak_g = s_counts.max()
+            streak_counts = streak_id.value_counts()
+            longest_streak = streak_counts.max()
             db_max_date = pd.to_datetime(df['Ngày'].max())
-            c_streak_g = s_counts[streak_id.iloc[-1]] if (db_max_date - unique_dates.max()).days <= 1 else 0
+            proj_max_date = unique_dates.max()
+            current_streak = streak_counts[streak_id.iloc[-1]] if (db_max_date - proj_max_date).days <= 1 else 0
         else:
-            t_days_g = l_streak_g = c_streak_g = 0
+            total_days = longest_streak = current_streak = 0
 
         st.markdown(f"""
-        <div class="glass-card" style='display: flex; width: 100%; max-width: 900px; margin: 20px auto; justify-content: center; align-items: center; padding: 25px;'>
+        <div class="glass-card" style='display: flex; width: 100%; max-width: 900px; margin: 0 auto; justify-content: center; align-items: center; padding: 25px;'>
             <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
-                <h3 style='margin:0; font-size: 32px;'>{t_days_g} ngày</h3>
+                <h3 style='margin:0; font-size: 32px;'>{total_days} ngày</h3>
                 <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Tổng cộng</p>
             </div>
             <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
-                <h3 style='margin:0; font-size: 32px;'>{l_streak_g} ngày</h3>
+                <h3 style='margin:0; font-size: 32px;'>{longest_streak} ngày</h3>
                 <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Chuỗi dài nhất</p>
             </div>
             <div style='flex: 1; text-align: center;'>
-                <h3 style='margin:0; font-size: 32px;'>{c_streak_g} ngày</h3>
+                <h3 style='margin:0; font-size: 32px;'>{current_streak} ngày</h3>
                 <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Chuỗi hiện tại</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 5: CHUẨN BỊ DỮ LIỆU
+# TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
 with tab_chuan_bi:
     st.header("1. Tải lên từ Forest")
