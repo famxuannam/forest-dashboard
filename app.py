@@ -154,19 +154,16 @@ st.set_page_config(page_title="Forest Dashboard", layout="wide")
 st.markdown(
     """
     <style>
-    /* 1. Global Font & Background */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [class*="css"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
     .stApp {
-        background-color: #f5f5f7; /* Nền xám nhạt đặc trưng của Apple */
+        background-color: #f5f5f7;
     }
     
-    /* 2. Layout Container */
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
-    /* 3. Glassmorphism Components */
     .glass-card {
         background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(20px);
@@ -176,24 +173,10 @@ st.markdown(
         padding: 20px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
-    .chart-container {
-        background: rgba(255, 255, 255, 0.65);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 16px;
-        padding: 30px;
-        display: flex;
-        justify-content: center;
-        margin: 20px auto;
-        width: fit-content;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-    }
     
-    /* 4. Streamlit Default Overrides */
     h1, h2, h3 { color: #1d1d1f !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
     hr { border-color: rgba(0,0,0,0.08) !important; }
     
-    /* Nút bấm Primary phong cách macOS */
     div[data-testid="stButton"] button[kind="primary"] {
         background-color: #007aff !important;
         color: white !important;
@@ -209,7 +192,6 @@ st.markdown(
         opacity: 0.9;
     }
     
-    /* Nút bấm Secondary */
     div[data-testid="stButton"] button[kind="secondary"] {
         background-color: white !important;
         color: #007aff !important;
@@ -220,7 +202,6 @@ st.markdown(
     }
     div[data-testid="stButton"] button { width: 100%; }
     
-    /* Dropdown / Input bo góc mềm mại */
     .stSelectbox > div > div, .stTextInput > div > div > input {
         border-radius: 8px !important;
         border: 1px solid #d1d1d6 !important;
@@ -228,10 +209,8 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
     
-    /* Căn giữa Altair Chart */
     [data-testid="stVegaLiteChart"] { display: flex !important; justify-content: center !important; width: 100% !important; margin: 0 auto !important; }
     
-    /* Ẩn metric mặc định vì đã dùng custom HTML */
     [data-testid="stMetric"] { display: none; }
     </style>
     """,
@@ -279,7 +258,6 @@ with tab_thong_ke:
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
         fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_sequence=MAC_COLORS)
         
-        # Thêm nhãn nếu xem theo Tuần/Tháng
         if time_col_2 in ["Tuần", "Tháng"]:
             fig1 = add_total_labels(fig1, trend_group, time_col_2, 'Số giờ')
             
@@ -292,12 +270,15 @@ with tab_thong_ke:
         hr_group['Số giờ'] = hr_group['Thời lượng (Phút)'] / 60
         fig2 = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col_2, color_discrete_sequence=MAC_COLORS)
         
-        # Thêm đường smooth line tổng
+        # Đường line màu xanh kèm Data Label
         tot_hr = df.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
         tot_hr['Số giờ'] = tot_hr['Thời lượng (Phút)'] / 60
-        fig2.add_trace(go.Scatter(x=tot_hr['Khung giờ'], y=tot_hr['Số giờ'], mode='lines', line_shape='spline', name='Tổng cộng', line=dict(color='#1d1d1f', width=2.5)))
-        
-        fig2.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ (0h - 23h)", yaxis_title="Số giờ")
+        fig2.add_trace(go.Scatter(
+            x=tot_hr['Khung giờ'], y=tot_hr['Số giờ'], mode='lines+text', 
+            text=tot_hr['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+            name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
+        ))
+        fig2.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ (0h - 23h)", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hr['Số giờ'].max() * 1.2]))
         fig2 = format_plotly_fig(fig2)
         st.plotly_chart(fig2, use_container_width=False, config=PLOTLY_CONFIG)
 
@@ -316,7 +297,6 @@ with tab_thong_ke:
         cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
         cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
         
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='', axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False, labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
             y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False)),
@@ -324,7 +304,6 @@ with tab_thong_ke:
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
         st.altair_chart(chart, use_container_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
@@ -427,12 +406,14 @@ with tab_thang:
             h_m['Số giờ'] = h_m['Thời lượng (Phút)'] / 60
             fig_hm = px.bar(h_m, x='Khung giờ', y='Số giờ', color=color_col_3, color_discrete_sequence=MAC_COLORS)
             
-            # Smooth line
             tot_hm = df_m.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
             tot_hm['Số giờ'] = tot_hm['Thời lượng (Phút)'] / 60
-            fig_hm.add_trace(go.Scatter(x=tot_hm['Khung giờ'], y=tot_hm['Số giờ'], mode='lines', line_shape='spline', name='Tổng cộng', line=dict(color='#1d1d1f', width=2.5)))
-            
-            fig_hm.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ")
+            fig_hm.add_trace(go.Scatter(
+                x=tot_hm['Khung giờ'], y=tot_hm['Số giờ'], mode='lines+text', 
+                text=tot_hm['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+                name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
+            ))
+            fig_hm.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hm['Số giờ'].max() * 1.2]))
             fig_hm = format_plotly_fig(fig_hm)
             st.plotly_chart(fig_hm, use_container_width=False, config=PLOTLY_CONFIG)
 
@@ -501,12 +482,14 @@ with tab_tuan:
             h_w['Số giờ'] = h_w['Thời lượng (Phút)'] / 60
             fig_hw = px.bar(h_w, x='Khung giờ', y='Số giờ', color=color_col_4, color_discrete_sequence=MAC_COLORS)
             
-            # Smooth line
             tot_hw = df_w.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
             tot_hw['Số giờ'] = tot_hw['Thời lượng (Phút)'] / 60
-            fig_hw.add_trace(go.Scatter(x=tot_hw['Khung giờ'], y=tot_hw['Số giờ'], mode='lines', line_shape='spline', name='Tổng cộng', line=dict(color='#1d1d1f', width=2.5)))
-            
-            fig_hw.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ")
+            fig_hw.add_trace(go.Scatter(
+                x=tot_hw['Khung giờ'], y=tot_hw['Số giờ'], mode='lines+text', 
+                text=tot_hw['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
+                name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
+            ))
+            fig_hw.update_layout(width=CHART_WIDTH, xaxis_title="Khung giờ", yaxis_title="Số giờ", yaxis=dict(range=[0, tot_hw['Số giờ'].max() * 1.2]))
             fig_hw = format_plotly_fig(fig_hw)
             st.plotly_chart(fig_hw, use_container_width=False, config=PLOTLY_CONFIG)
 
@@ -536,9 +519,8 @@ with tab_nhom:
         t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
         t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
         
-        # Nếu là biểu đồ Ngày -> Vẽ dạng Line mượt, ngược lại Bar có Label
         if time_col_5 == "Ngày":
-            fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]], line_shape='spline')
+            fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
             fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
         else:
             fig_g = px.bar(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
@@ -563,7 +545,6 @@ with tab_nhom:
         cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
         cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
         
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
             x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='', axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False, labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
             y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False)),
@@ -571,7 +552,6 @@ with tab_nhom:
             tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
         ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
         st.altair_chart(chart, use_container_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         unique_dates = pd.to_datetime(df_g['Ngày'].unique()).sort_values()
         if not unique_dates.empty:
@@ -604,7 +584,7 @@ with tab_nhom:
         """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB CHUẨN BỊ DỮ LIỆU (CUỐI CÙNG)
+# TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
 with tab_chuan_bi:
     st.header("1. Tải lên từ Forest")
