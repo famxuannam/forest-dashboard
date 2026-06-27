@@ -26,7 +26,7 @@ MAC_COLORS = [
     "#a2845e"  # Brown
 ]
 CHART_WIDTH = 1120
-PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False}
+PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_data
@@ -87,12 +87,29 @@ def add_total_labels(fig, df, x_col, y_col):
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
 
+def add_week_dividers(fig, dates):
+    """Kẻ đường nét đứt giữa Chủ Nhật và Thứ Hai (ranh giới tuần) cho biểu đồ theo ngày."""
+    s = pd.to_datetime(pd.Series(list(dates)), errors='coerce').dropna()
+    if s.empty:
+        return fig
+    dmin, dmax = s.min().normalize(), s.max().normalize()
+    first_mon = dmin + pd.Timedelta(days=(0 - dmin.dayofweek) % 7)  # Thứ Hai đầu tiên
+    d = first_mon
+    while d <= dmax + pd.Timedelta(days=1):
+        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color="rgba(0,0,0,0.18)")
+        d += pd.Timedelta(days=7)
+    fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
+    return fig
+
 def format_plotly_fig(fig, is_pie=False):
     fig.update_layout(
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f")
+        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f"),
+        # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
+        margin=dict(t=10)
     )
     if is_pie:
         fig.update_traces(hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
@@ -153,7 +170,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     y_max = tot['Số giờ'].max() if not tot.empty else 1
     fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Số giờ", yaxis=dict(range=[0, y_max * 1.2]))
     fig = format_plotly_fig(fig)
-    st.plotly_chart(fig, width='content', config=PLOTLY_CONFIG)
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 def render_calendar_streak(scope_df, full_df):
@@ -170,13 +187,23 @@ def render_calendar_streak(scope_df, full_df):
     grp = scope_df.groupby('Ngày')['Thời lượng (Phút)'].sum().reset_index()
     cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
     cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
+    cal_data['day'] = cal_data['Ngày_x'].dt.day if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str']).dt.day
 
-    chart = alt.Chart(cal_data).mark_rect(cornerRadius=3).encode(
-        x=alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='', axis=alt.Axis(format='%b', labelAngle=0, orient='top', tickSize=0, domain=False, labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? timeFormat(datum.value, '%b') : ''")),
-        y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False)),
-        color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e5e5ea', '#34c759']), legend=None),
+    vmax_cal = float(cal_data['Số giờ'].max()) or 1.0
+    enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
+                  axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
+                                labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? 'Th' + (month(datum.value)+1) : ''"))
+    enc_y = alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False))
+    base = alt.Chart(cal_data).encode(x=enc_x, y=enc_y)
+    rect = base.mark_rect(cornerRadius=3).encode(
+        color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, vmax_cal], range=['#e5e5ea', '#34c759']), legend=None),
         tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
-    ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
+    )
+    text = base.mark_text(baseline='middle', fontSize=10).encode(
+        text='day:Q',
+        color=alt.condition(f"datum['Số giờ'] > {vmax_cal * 0.55}", alt.value('#ffffff'), alt.value('#a7a7ac'))
+    )
+    chart = (rect + text).properties(width=alt.Step(34), height=alt.Step(34)).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
     unique_dates = pd.to_datetime(scope_df['Ngày'].dropna().unique())
@@ -215,7 +242,7 @@ DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid rgba(0,0,0,0.06); background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.04); }
 .dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
-.dtbl th, .dtbl td { padding:7px 14px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:#ffffff; z-index:1; }
 .dtbl thead th.lbl { z-index:3; background:#f5f5f7; }
@@ -422,6 +449,33 @@ st.markdown(
     }
 
     [data-testid="stMetric"] { display: none; }
+
+    /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
+    @media (max-width: 640px) {
+        h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
+        h2, [data-testid="stHeading"] h2 { font-size: 1.35rem !important; }
+        h3 { font-size: 1.1rem !important; }
+        .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
+
+        /* Thẻ gọn lại, bớt khoảng trống thừa (height:auto để không bị kéo giãn khi xếp dọc) */
+        .glass-card { padding: 14px !important; height: auto !important; }
+        .glass-card h3 { font-size: 26px !important; margin: 4px 0 !important; }
+        /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao */
+        [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
+
+        /* Biểu đồ: bớt đệm để rộng hơn */
+        [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
+        /* Lịch (Vega) rộng -> cho cuộn ngang trong thẻ thay vì tràn */
+        [data-testid="stVegaLiteChart"] { overflow-x: auto !important; justify-content: flex-start !important; }
+
+        /* Bảng số liệu: chữ nhỏ & đệm sát để chứa nhiều cột hơn */
+        .dtbl th, .dtbl td { padding: 3px 6px !important; font-size: 11px !important; }
+        .dtbl-wrap { max-height: 70vh !important; }
+
+        /* Thẻ streak: xếp dọc cho dễ đọc */
+        .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
+        .glass-card[style*="display: flex"] > div { border-right: none !important; }
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -473,14 +527,18 @@ with tab_thong_ke:
         
         trend_group = df.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
+        if time_col_2 == "Ngày":
+            trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
         fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_map=COLOR_MAP)
-        
+
         if time_col_2 in ["Tuần", "Tháng"]:
             fig1 = add_total_labels(fig1, trend_group, time_col_2, 'Số giờ')
-            
+        else:
+            fig1 = add_week_dividers(fig1, trend_group['Ngày'])
+
         fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
         fig1 = format_plotly_fig(fig1)
-        st.plotly_chart(fig1, width='content', config=PLOTLY_CONFIG)
+        st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
         render_hourly_chart(df, color_col_2, x_title="Khung giờ (0h - 23h)")
@@ -563,11 +621,13 @@ with tab_thang:
             color_col_3 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab3")
             t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
+            t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
             fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_map=COLOR_MAP)
             fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
-            fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ') 
+            fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ')
+            fig_m = add_week_dividers(fig_m, t_m['Ngày'])
             fig_m = format_plotly_fig(fig_m)
-            st.plotly_chart(fig_m, width='content', config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
@@ -575,7 +635,7 @@ with tab_thang:
             fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
             fig_p_m.update_layout(width=CHART_WIDTH)
             fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
-            st.plotly_chart(fig_p_m, width='content', config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
             
             st.header("4. Bảng chi tiết (Giờ)")
             render_detail_table(df_m)
@@ -655,7 +715,7 @@ with tab_tuan:
             fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
             fig_w = format_plotly_fig(fig_w)
-            st.plotly_chart(fig_w, width='content', config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
@@ -663,7 +723,7 @@ with tab_tuan:
             fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
             fig_p_w.update_layout(width=CHART_WIDTH)
             fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
-            st.plotly_chart(fig_p_w, width='content', config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
             
             st.header("4. Bảng chi tiết (Giờ)")
             render_detail_table(df_w)
@@ -698,15 +758,17 @@ with tab_nhom:
         t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
         
         if time_col_5 == "Ngày":
+            t_g['Ngày'] = pd.to_datetime(t_g['Ngày'])
             fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
             fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
+            fig_g = add_week_dividers(fig_g, t_g['Ngày'])
         else:
             fig_g = px.bar(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
             fig_g = add_total_labels(fig_g, t_g, time_col_5, 'Số giờ')
             
         fig_g.update_layout(width=CHART_WIDTH, xaxis_title=time_col_5, yaxis_title="Số giờ")
         fig_g = format_plotly_fig(fig_g)
-        st.plotly_chart(fig_g, width='content', config=PLOTLY_CONFIG)
+        st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
         
         st.header("3. Biểu đồ lịch")
         render_calendar_streak(df_g, df)
