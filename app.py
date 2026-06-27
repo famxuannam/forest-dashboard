@@ -193,9 +193,13 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
 
 
 def render_calendar_streak(scope_df, full_df):
-    min_date = scope_df['Ngày'].min()
-    max_date = full_df['Ngày'].max()
-    all_dates = pd.date_range(start=min_date, end=max_date)
+    min_date = pd.Timestamp(scope_df['Ngày'].min())
+    max_date = pd.Timestamp(full_df['Ngày'].max())
+    # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
+    # tránh ô trắng lẻ ở tuần đầu/cuối -> nền đồng nhất như kiểu GitHub.
+    start = min_date - pd.Timedelta(days=(min_date.dayofweek + 1) % 7)
+    end = max_date + pd.Timedelta(days=6 - (max_date.dayofweek + 1) % 7)
+    all_dates = pd.date_range(start=start, end=end)
     cal_data = pd.DataFrame({'Ngày': all_dates})
 
     cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta((cal_data['Ngày'].dt.dayofweek + 1) % 7, unit='D')
