@@ -379,8 +379,11 @@ def render_week_agenda(scope_df):
                         legend=alt.Legend(orient='top', title='')),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Dự án:N', title='Dự án'),
                  alt.Tooltip('Giờ BĐ:N', title='Bắt đầu'), alt.Tooltip('Giờ KT:N', title='Kết thúc')],
-    ).properties(height=420).configure_view(strokeWidth=0)
-    st.altair_chart(chart, width='stretch')
+    ).properties(height=560).configure_view(strokeWidth=0)
+    # Thu hẹp & căn giữa: đặt biểu đồ trong cột giữa (trên mobile các cột xếp dọc -> full width)
+    _, cc, _ = st.columns([1, 2, 1])
+    with cc:
+        st.altair_chart(chart, width="stretch")
 
 
 DTBL_CSS = """
@@ -489,6 +492,49 @@ def render_detail_table(scope_df):
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+
+def render_period_table(df, time_col):
+    """Bảng theo kỳ cho MỘT nhóm/dự án: mỗi kỳ (Tuần/Tháng) là một dòng,
+    các cột Số giờ (tô heat) / Số cây / Số ngày, kèm dòng Tổng."""
+    if df.empty:
+        return
+    g = df.groupby(time_col)
+    hrs = g['Thời lượng (Phút)'].sum() / 60
+    trees = g.size()
+    days = g['Ngày'].nunique()
+    periods = sorted(hrs.index)
+    vmax = float(hrs.max()) if len(hrs) else 0.0
+
+    def plabel(key):
+        key = str(key)
+        if 'W' in key:                       # '2026-W14' -> 'W14'
+            return 'W' + key.split('W')[-1]
+        parts = key.split('-')               # '2026-05'  -> 'Th5'
+        return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
+
+    rows_html = ''
+    for p in periods:
+        rows_html += '<tr class="prow">'
+        rows_html += f'<td class="lbl">{plabel(p)}</td>'
+        rows_html += _heat_cell(float(hrs[p]), vmax)
+        rows_html += f'<td>{int(trees[p])}</td>'
+        rows_html += f'<td>{int(days[p])}</td>'
+        rows_html += '</tr>'
+    rows_html += '<tr class="cat">'
+    rows_html += '<td class="lbl">Tổng</td>'
+    rows_html += _heat_cell(float(hrs.sum()), 0, "tot")
+    rows_html += f'<td class="tot">{int(trees.sum())}</td>'
+    rows_html += f'<td class="tot">{int(df["Ngày"].nunique())}</td>'
+    rows_html += '</tr>'
+
+    period_name = 'Tuần' if time_col == 'Tuần' else 'Tháng'
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">{period_name}</th><th>Số giờ</th><th>Số cây</th><th>Số ngày</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -767,7 +813,10 @@ if nav == "Thống kê chung":
             c_top1, c_top2 = st.columns(2)
             with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục')
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án')
-        with st.expander("2. Xu hướng theo thời gian", expanded=True):
+        with st.expander("2. Biểu đồ lịch tổng quan", expanded=True):
+            df_cal = range_radio(df, key="range_cal")
+            render_calendar_streak(df_cal, df_cal, streak_df=df)
+        with st.expander("3. Xu hướng theo thời gian", expanded=True):
             o1, o2, o3 = st.columns([5, 3, 2])
             with o1:
                 _rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend")
@@ -794,14 +843,11 @@ if nav == "Thống kê chung":
             fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
             fig1 = format_plotly_fig(fig1)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
-        with st.expander("3. Xu hướng làm việc theo khung giờ", expanded=True):
-            st.caption(f"Theo khoảng thời gian đã chọn ở mục 2: {_rl}")
+        with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
+            st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
             render_hourly_chart(df_trend, color_col_2, x_title="Khung giờ (0h - 23h)")
-        with st.expander("4. Biểu đồ lịch tổng quan", expanded=True):
-            df_cal = range_radio(df, key="range_cal")
-            render_calendar_streak(df_cal, df_cal, streak_df=df)
         with st.expander("5. Bảng số liệu", expanded=True):
-            st.caption(f"Theo khoảng thời gian đã chọn ở mục 2: {_rl}")
+            st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
             view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
             view_opt = view_opt or "Tuần"
             time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
@@ -873,9 +919,16 @@ elif nav == "Báo cáo tháng":
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục Tháng')
                 with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
-            with st.expander("2. Xu hướng theo thời gian", expanded=True):
+            with st.expander("2. Phân bổ thời gian", expanded=True):
                 color_col_3 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab3")
                 color_col_3 = color_col_3 or "Danh mục"
+                pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
+                pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
+                fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
+                fig_p_m.update_layout(width=CHART_WIDTH)
+                fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
+                st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
+            with st.expander("3. Xu hướng theo thời gian", expanded=True):
                 t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
@@ -885,17 +938,10 @@ elif nav == "Báo cáo tháng":
                 fig_m = add_week_dividers(fig_m, t_m['Ngày'])
                 fig_m = format_plotly_fig(fig_m)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Phân bổ thời gian", expanded=True):
-                pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
-                pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
-                fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
-                fig_p_m.update_layout(width=CHART_WIDTH)
-                fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
-                st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Bảng số liệu", expanded=True):
-                render_detail_table(df_m)
-            with st.expander("5. Xu hướng làm việc theo khung giờ", expanded=True):
+            with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
+            with st.expander("5. Bảng số liệu", expanded=True):
+                render_detail_table(df_m)
 # ==========================================
 # TAB BÁO CÁO TUẦN
 # ==========================================
@@ -960,9 +1006,16 @@ elif nav == "Báo cáo tuần":
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
                 with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
-            with st.expander("2. Xu hướng theo thời gian", expanded=True):
+            with st.expander("2. Phân bổ thời gian", expanded=True):
                 color_col_4 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab4")
                 color_col_4 = color_col_4 or "Danh mục"
+                pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
+                pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
+                fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
+                fig_p_w.update_layout(width=CHART_WIDTH)
+                fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
+                st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
+            with st.expander("3. Xu hướng theo thời gian", expanded=True):
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
                 fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_map=COLOR_MAP)
@@ -970,20 +1023,13 @@ elif nav == "Báo cáo tuần":
                 fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
                 fig_w = format_plotly_fig(fig_w)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Phân bổ thời gian", expanded=True):
-                pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
-                pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
-                fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
-                fig_p_w.update_layout(width=CHART_WIDTH)
-                fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
-                st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Bảng số liệu", expanded=True):
-                render_detail_table(df_w)
-            with st.expander("5. Xu hướng làm việc theo khung giờ", expanded=True):
+            with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
-            with st.expander("6. Lịch trồng cây theo giờ", expanded=True):
+            with st.expander("5. Lịch trồng cây theo giờ", expanded=True):
                 st.caption("Mỗi thanh là một phiên trồng cây, theo thứ trong tuần và khung giờ.")
                 render_week_agenda(df_w)
+            with st.expander("6. Bảng số liệu", expanded=True):
+                render_detail_table(df_w)
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
 # ==========================================
@@ -1042,7 +1088,10 @@ elif nav == "Báo cáo theo nhóm":
                 ],
                 sections=_grp_sections,
             )
-        with st.expander("2. Xu hướng theo thời gian", expanded=True):
+        with st.expander("2. Biểu đồ lịch", expanded=True):
+            df_g_cal = range_radio(df_g, key="range_grp_cal")
+            render_calendar_streak(df_g_cal, df_g_cal, streak_df=df_g)
+        with st.expander("3. Xu hướng theo thời gian", expanded=True):
             time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
             time_col_5 = time_col_5 or "Ngày"
             t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
@@ -1060,9 +1109,10 @@ elif nav == "Báo cáo theo nhóm":
             fig_g.update_layout(width=CHART_WIDTH, xaxis_title=time_col_5, yaxis_title="Số giờ")
             fig_g = format_plotly_fig(fig_g)
             st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
-        with st.expander("3. Biểu đồ lịch", expanded=True):
-            df_g_cal = range_radio(df_g, key="range_grp_cal")
-            render_calendar_streak(df_g_cal, df_g_cal, streak_df=df_g)
+        with st.expander("4. Bảng số liệu", expanded=True):
+            grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key="view_grp")
+            grp_view = grp_view or "Tháng"
+            render_period_table(df_g, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 # ==========================================
 # TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
