@@ -462,8 +462,10 @@ st.set_page_config(page_title="Forest Dashboard", page_icon=":material/forest:",
 st.markdown(
     """
     <style>
-    html, body, [class*="st-emotion"] {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    /* Đặt font trên html/body để kế thừa xuống; KHÔNG đặt !important rộng
+       lên mọi phần tử để tránh đè font của icon Material (Material Symbols). */
+    html, body, .stApp {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .stApp {
         background-color: #f5f5f7;
