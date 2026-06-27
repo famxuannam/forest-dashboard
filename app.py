@@ -121,7 +121,10 @@ def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
     if pd.isna(ts):
         return "—"
-    secs = (pd.Timestamp.now() - pd.Timestamp(ts)).total_seconds()
+    ts = pd.Timestamp(ts)
+    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware) hoặc không
+    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now()
+    secs = (now - ts).total_seconds()
     if secs < 60:
         return "vừa xong"
     days = int(secs // 86400)
