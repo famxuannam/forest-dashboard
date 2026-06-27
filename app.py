@@ -127,10 +127,10 @@ def filter_by_range(df_all, label):
     cutoff = (pd.Timestamp(df_all['Ngày'].max()) - pd.Timedelta(days=days - 1)).date()
     return df_all[df_all['Ngày'] >= cutoff]
 
-def range_radio(df_all, key, label="Khoảng thời gian:"):
-    """Radio chọn khoảng thời gian, trả về df đã lọc."""
-    rl = st.radio(label, list(RANGE_OPTS.keys()), index=1, horizontal=True, key=key)
-    return filter_by_range(df_all, rl)
+def range_radio(df_all, key, label="Khoảng thời gian"):
+    """Segmented control chọn khoảng thời gian, trả về df đã lọc."""
+    rl = st.segmented_control(label, list(RANGE_OPTS.keys()), default="90 ngày", key=key)
+    return filter_by_range(df_all, rl or "90 ngày")
 
 def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
@@ -629,7 +629,8 @@ if nav == "Thống kê chung":
         render_calendar_streak(df_cal, df_cal)
 
         st.header("5. Bảng số liệu")
-        view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
+        view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
+        view_opt = view_opt or "Tuần"
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
         render_data_table(df_trend, time_col)
     else:
@@ -700,7 +701,8 @@ elif nav == "Báo cáo tháng":
             with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
             
             st.header("2. Xu hướng theo thời gian")
-            color_col_3 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab3")
+            color_col_3 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab3")
+            color_col_3 = color_col_3 or "Danh mục"
             t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
             t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
@@ -790,7 +792,8 @@ elif nav == "Báo cáo tuần":
             with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
             
             st.header("2. Xu hướng theo thời gian")
-            color_col_4 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab4")
+            color_col_4 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab4")
+            color_col_4 = color_col_4 or "Danh mục"
             t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
             fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_map=COLOR_MAP)
@@ -854,7 +857,8 @@ elif nav == "Báo cáo theo nhóm":
         with e3: render_glass_metric("Số ngày có hoạt động", f"{df_g['Ngày'].nunique()}")
 
         st.header("2. Xu hướng theo thời gian")
-        time_col_5 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab5")
+        time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
+        time_col_5 = time_col_5 or "Ngày"
         t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
         t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
         
