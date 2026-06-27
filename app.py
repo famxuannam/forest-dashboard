@@ -511,7 +511,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Bảng theo dõi thời gian")
+st.title("Forest Dashboard")
 
 # Điều hướng dạng menu hamburger (sidebar), kèm icon cho từng trang
 NAV = {
