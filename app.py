@@ -575,7 +575,7 @@ st.markdown(
 )
 
 st.markdown(
-    "<h1 style='text-align:center; margin:0 0 0.35em 0; letter-spacing:-0.6px;'>Bảng theo dõi thời gian</h1>",
+    "<h1 style='text-align:center; margin:0 0 0.35em 0; letter-spacing:-0.6px;'>Forest Dashboard</h1>",
     unsafe_allow_html=True,
 )
 
