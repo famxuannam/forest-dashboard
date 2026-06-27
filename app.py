@@ -193,33 +193,49 @@ def format_relative(ts):
     return f"{mins} phút trước"
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
-def _sub(text):
-    """Nhãn nhóm nhỏ (chữ hoa xám) để gom các thẻ số liệu."""
-    st.markdown(
-        f"<p style='margin:16px 0 2px 0; font-size:13px; color:#86868b; font-weight:600;"
-        f" text-transform:uppercase; letter-spacing:0.5px;'>{text}</p>",
-        unsafe_allow_html=True,
-    )
-
 def _fmt_delta(d):
     """Số nguyên thì bỏ phần thập phân (+5), số lẻ thì giữ 1 chữ số (+1.9)."""
     return f"{d:+.0f}" if abs(d - round(d)) < 1e-9 else f"{d:+.1f}"
 
-def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delta_avg=None, delta_avg_label=""):
-    html = f"""
-    <div class="glass-card" style="height: 100%;">
-        <p style="margin: 0; font-size: 13px; color: #86868b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
-        <h3 style="margin: 8px 0; font-size: 32px; color: #1d1d1f; font-weight: 600; letter-spacing: -0.5px;">{value}</h3>
-    """
-    if delta_prev is not None:
-        c1 = "#34c759" if delta_prev > 0 else "#ff3b30" if delta_prev < 0 else "#86868b"
-        html += f"<p style='margin: 0; font-size: 14px; font-weight: 500; color: {c1};'> {_fmt_delta(delta_prev)} {delta_prev_label}</p>"
-    if delta_avg is not None:
-        c2 = "#34c759" if delta_avg > 0 else "#ff3b30" if delta_avg < 0 else "#86868b"
-        html += f"<p style='margin: 4px 0 0 0; font-size: 14px; font-weight: 500; color: {c2};'> {_fmt_delta(delta_avg)} {delta_avg_label}</p>"
 
-    html += "</div>"
-    st.markdown(html, unsafe_allow_html=True)
+def _delta_t(delta, label):
+    """Trả về (chuỗi, màu) cho một delta, hoặc None nếu không có."""
+    if delta is None:
+        return None
+    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
+    return (f"{_fmt_delta(delta)} {label}", c)
+
+
+def render_stat_panel(hero_items, sections=None):
+    """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
+
+    hero_items: list dict {label, value, deltas?: [(text, color)]}
+    sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]}
+    Toàn bộ HTML viết sát lề trái để Streamlit không hiểu nhầm là code block.
+    """
+    h = "<div class='glass-card stat-panel' style='padding:20px;'><div class='sp-hero'>"
+    for it in hero_items:
+        h += f"<div class='sp-hi'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
+        for txt, col in it.get('deltas', []) or []:
+            h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
+        h += "</div>"
+    h += "</div>"
+    for sec in (sections or []):
+        chips = sec.get('chips') or []
+        if not chips:
+            continue
+        h += f"<div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
+        for c in chips:
+            cls = "chip tw" if c.get('hl') else "chip"
+            h += f"<span class='{cls}'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span>"
+            if c.get('delta'):
+                dt, dc = c['delta']
+                h += f"<span class='cd' style='color:{dc};'>{dt}</span>"
+            h += "</span>"
+        h += "</div>"
+    h += "</div>"
+    st.markdown(h, unsafe_allow_html=True)
+
 
 def render_top_3(df, col_name, title):
     if df.empty: 
@@ -580,6 +596,24 @@ st.markdown(
 
     [data-testid="stMetric"] { display: none; }
 
+    /* ===== Bảng tổng quan gọn (hero + chip) ===== */
+    .stat-panel .sp-hero { display: flex; flex-wrap: wrap; }
+    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid rgba(0,0,0,0.07); }
+    .stat-panel .sp-hi:first-child { padding-left: 2px; }
+    .stat-panel .sp-hi:last-child { border-right: none; }
+    .stat-panel .sp-l { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: #1d1d1f; }
+    .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
+    .stat-panel .sp-sub { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px 2px; }
+    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: #f0f1f4; }
+    .stat-panel .chip .ck { color: #86868b; }
+    .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
+    .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
+    .stat-panel .chip.tw { background: rgba(0,122,255,0.10); }
+    .stat-panel .chip.tw .ck { color: #0067d6; }
+    .stat-panel .chip.tw .cv { color: #007aff; }
+
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
         border: none !important;
@@ -610,7 +644,11 @@ st.markdown(
     [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; }
 
     /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
-    [data-testid="stButtonGroup"] { justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
+    [data-testid="stButtonGroup"] { margin-bottom: 10px; }
+    /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
+       Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
+    .st-key-nav { width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
     /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
     [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
@@ -627,8 +665,13 @@ st.markdown(
         /* Thẻ gọn lại, bớt khoảng trống thừa (height:auto để không bị kéo giãn khi xếp dọc) */
         .glass-card { padding: 14px !important; height: auto !important; }
         .glass-card h3 { font-size: 26px !important; margin: 4px 0 !important; }
-        /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao */
+        /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao và tạo khoảng cách giữa các ô */
         [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
+        [data-testid="stColumn"] { margin-bottom: 12px !important; }
+
+        /* Bảng tổng quan gọn: hero xếp 2 cột, bỏ vạch ngăn dọc */
+        .stat-panel .sp-hi { border-right: none !important; min-width: 45% !important; padding: 6px 8px !important; }
+        .stat-panel .sp-v { font-size: 26px !important; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
@@ -658,7 +701,7 @@ NAV = {
     "Thống kê chung": ":material/bar_chart:",
     "Báo cáo tháng": ":material/calendar_month:",
     "Báo cáo tuần": ":material/calendar_view_week:",
-    "Báo cáo theo nhóm": ":material/folder:",
+    "Báo cáo theo nhóm": ":material/category:",
     "Chuẩn bị dữ liệu": ":material/settings:",
 }
 
@@ -707,11 +750,18 @@ if nav == "Thống kê chung":
             total_trees = len(df)
             num_days = df['Ngày'].nunique() or 1
 
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: render_glass_metric("Tổng thời gian", f"{total_hrs:.1f}h")
-            with c2: render_glass_metric("Thời gian TB/ngày", f"{total_hrs/num_days:.1f}h")
-            with c3: render_glass_metric("Số cây đã trồng", f"{total_trees}")
-            with c4: render_glass_metric("Số cây TB/ngày", f"{total_trees/num_days:.1f}")
+            render_stat_panel(
+                hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{total_hrs:.1f}h"},
+                    {"label": "Số cây đã trồng", "value": f"{total_trees}"},
+                ],
+                sections=[
+                    {"label": "Trung bình", "chips": [
+                        {"k": "Thời gian / ngày", "v": f"{total_hrs/num_days:.1f}h"},
+                        {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                    ]},
+                ],
+            )
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
@@ -795,7 +845,6 @@ elif nav == "Báo cáo tháng":
         
         if not df_m.empty:
             with st.expander("1. Tổng quan", expanded=True):
-                c1, c2, c3, c4 = st.columns(4)
                 curr_hrs = df_m['Thời lượng (Phút)'].sum() / 60
                 curr_trees = len(df_m)
                 num_days_m = df_m['Ngày'].nunique() or 1
@@ -813,10 +862,12 @@ elif nav == "Báo cáo tháng":
                 delta1_trd = (curr_trees_day - prev_trees_day_month) if prev_trees_day_month is not None else None
                 delta2_trd = (curr_trees_day - avg_trees_day_month) if avg_trees_day_month is not None else None
 
-                with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs:.1f}h", delta1_hr, "h (vs Tháng trước)", delta2_hr, "h (vs Trung bình)")
-                with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_day:.1f}h", delta1_hrd, "h (vs Tháng trước)", delta2_hrd, "h (vs Trung bình)")
-                with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees}", delta1_tr, "cây (vs Tháng trước)", delta2_tr, "cây (vs Trung bình)")
-                with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_day:.1f}", delta1_trd, "cây (vs Tháng trước)", delta2_trd, "cây (vs Trung bình)")
+                render_stat_panel(hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, "h vs Tháng trước"), _delta_t(delta2_hr, "h vs Trung bình")] if d]},
+                    {"label": "Thời gian TB/ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, "h vs Tháng trước"), _delta_t(delta2_hrd, "h vs Trung bình")] if d]},
+                    {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, "cây vs Tháng trước"), _delta_t(delta2_tr, "cây vs Trung bình")] if d]},
+                    {"label": "Số cây TB/ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
+                ])
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
@@ -881,7 +932,6 @@ elif nav == "Báo cáo tuần":
         
         if not df_w.empty:
             with st.expander("1. Tổng quan", expanded=True):
-                c1, c2, c3, c4 = st.columns(4)
                 curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
                 curr_trees_w = len(df_w)
                 num_days_w = df_w['Ngày'].nunique() or 1
@@ -899,10 +949,12 @@ elif nav == "Báo cáo tuần":
                 d1_trd_w = (curr_trees_day_w - prev_trees_day_week) if prev_trees_day_week is not None else None
                 d2_trd_w = (curr_trees_day_w - avg_trees_day_week) if avg_trees_day_week is not None else None
 
-                with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_w:.1f}h", d1_hr_w, "h (vs Tuần trước)", d2_hr_w, "h (vs Trung bình)")
-                with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_day_w:.1f}h", d1_hrd_w, "h (vs Tuần trước)", d2_hrd_w, "h (vs Trung bình)")
-                with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_w}", d1_tr_w, "cây (vs Tuần trước)", d2_tr_w, "cây (vs Trung bình)")
-                with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_day_w:.1f}", d1_trd_w, "cây (vs Tuần trước)", d2_trd_w, "cây (vs Trung bình)")
+                render_stat_panel(hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, "h vs Tuần trước"), _delta_t(d2_hr_w, "h vs Trung bình")] if d]},
+                    {"label": "Thời gian TB/ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, "h vs Tuần trước"), _delta_t(d2_hrd_w, "h vs Trung bình")] if d]},
+                    {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, "cây vs Tuần trước"), _delta_t(d2_tr_w, "cây vs Trung bình")] if d]},
+                    {"label": "Số cây TB/ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
+                ])
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
@@ -959,32 +1011,37 @@ elif nav == "Báo cáo theo nhóm":
             num_days_g = df_g['Ngày'].nunique() or 1
             num_weeks_g = df_g['Tuần'].nunique() or 1
 
-            _sub("Tổng")
-            t1, t2 = st.columns(2)
-            with t1: render_glass_metric("Tổng thời gian", f"{curr_hrs_g:.1f}h")
-            with t2: render_glass_metric("Số cây đã trồng", f"{curr_trees_g}")
+            first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
+            last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
 
-            _sub("Trung bình")
-            a1, a2, a3, a4 = st.columns(4)
-            with a1: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f}h")
-            with a2: render_glass_metric("Thời gian TB/tuần", f"{curr_hrs_g/num_weeks_g:.1f}h")
-            with a3: render_glass_metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f}")
-            with a4: render_glass_metric("Số cây TB/tuần", f"{curr_trees_g/num_weeks_g:.1f}")
+            _grp_sections = [
+                {"label": "Trung bình", "chips": [
+                    {"k": "TG / ngày", "v": f"{curr_hrs_g/num_days_g:.1f}h"},
+                    {"k": "TG / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
+                    {"k": "Cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
+                    {"k": "Cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
+                ]},
+                {"label": "Mốc thời gian", "chips": [
+                    {"k": "Ngày đầu tiên", "v": first_day},
+                    {"k": "Ngày gần nhất", "v": last_day},
+                    {"k": "Số ngày hoạt động", "v": f"{df_g['Ngày'].nunique()}"},
+                ]},
+            ]
 
             df_g_thisweek = df_g[df_g['Tuần'] == date.today().strftime('%G-W%V')]
             if not df_g_thisweek.empty:
-                _sub("Tuần này")
-                w1, w2 = st.columns(2)
-                with w1: render_glass_metric("Thời gian tuần này", f"{df_g_thisweek['Thời lượng (Phút)'].sum()/60:.1f}h")
-                with w2: render_glass_metric("Số cây tuần này", f"{len(df_g_thisweek)}")
+                _grp_sections.append({"label": "Tuần này", "chips": [
+                    {"k": "Thời gian", "v": f"{df_g_thisweek['Thời lượng (Phút)'].sum()/60:.1f}h", "hl": True},
+                    {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
+                ]})
 
-            _sub("Mốc thời gian")
-            m1, m2, m3 = st.columns(3)
-            first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
-            last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
-            with m1: render_glass_metric("Ngày đầu tiên", first_day)
-            with m2: render_glass_metric("Ngày gần nhất", last_day)
-            with m3: render_glass_metric("Số ngày có hoạt động", f"{df_g['Ngày'].nunique()}")
+            render_stat_panel(
+                hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{curr_hrs_g:.1f}h"},
+                    {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
+                ],
+                sections=_grp_sections,
+            )
         with st.expander("2. Xu hướng theo thời gian", expanded=True):
             time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
             time_col_5 = time_col_5 or "Ngày"
