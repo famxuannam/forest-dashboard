@@ -119,14 +119,18 @@ def format_plotly_fig(fig, is_pie=False):
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
 
-def range_radio(df_all, key, label="Khoảng thời gian:"):
-    """Radio chọn khoảng thời gian, trả về df đã lọc (mốc tính từ ngày mới nhất)."""
-    rl = st.radio(label, list(RANGE_OPTS.keys()), index=1, horizontal=True, key=key)
-    days = RANGE_OPTS[rl]
+def filter_by_range(df_all, label):
+    """Lọc df theo nhãn khoảng thời gian (mốc tính từ ngày mới nhất)."""
+    days = RANGE_OPTS.get(label)
     if days is None or df_all.empty:
         return df_all
     cutoff = (pd.Timestamp(df_all['Ngày'].max()) - pd.Timedelta(days=days - 1)).date()
     return df_all[df_all['Ngày'] >= cutoff]
+
+def range_radio(df_all, key, label="Khoảng thời gian:"):
+    """Radio chọn khoảng thời gian, trả về df đã lọc."""
+    rl = st.radio(label, list(RANGE_OPTS.keys()), index=1, horizontal=True, key=key)
+    return filter_by_range(df_all, rl)
 
 def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
@@ -590,12 +594,17 @@ if nav == "Thống kê chung":
         with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án')
 
         st.header("2. Xu hướng theo thời gian")
-        df_trend = range_radio(df, key="range_trend")
-        r_col1, r_col2 = st.columns(2)
-        with r_col1:
-            time_col_2 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab2")
-        with r_col2:
-            color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
+        o1, o2, o3 = st.columns([5, 3, 2])
+        with o1:
+            _rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend")
+        with o2:
+            time_col_2 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab2")
+        with o3:
+            color_col_2 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab2")
+        _rl = _rl or "90 ngày"
+        time_col_2 = time_col_2 or "Ngày"
+        color_col_2 = color_col_2 or "Danh mục"
+        df_trend = filter_by_range(df, _rl)
 
         trend_group = df_trend.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
