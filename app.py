@@ -170,7 +170,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     y_max = tot['Số giờ'].max() if not tot.empty else 1
     fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Số giờ", yaxis=dict(range=[0, y_max * 1.2]))
     fig = format_plotly_fig(fig)
-    st.plotly_chart(fig, use_container_width=False, config=PLOTLY_CONFIG)
+    st.plotly_chart(fig, width='content', config=PLOTLY_CONFIG)
 
 
 def render_calendar_streak(scope_df, full_df):
@@ -194,7 +194,7 @@ def render_calendar_streak(scope_df, full_df):
         color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, cal_data['Số giờ'].max() if cal_data['Số giờ'].max() > 0 else 1], range=['#e5e5ea', '#34c759']), legend=None),
         tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
     ).properties(width=alt.Step(40), height=alt.Step(40)).configure_view(strokeWidth=0)
-    st.altair_chart(chart, use_container_width=False)
+    st.altair_chart(chart, width='content')
 
     unique_dates = pd.to_datetime(scope_df['Ngày'].dropna().unique())
     unique_dates = unique_dates.sort_values()
@@ -343,7 +343,7 @@ with tab_thong_ke:
             
         fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
         fig1 = format_plotly_fig(fig1)
-        st.plotly_chart(fig1, use_container_width=False, config=PLOTLY_CONFIG)
+        st.plotly_chart(fig1, width='content', config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
         render_hourly_chart(df, color_col_2, x_title="Khung giờ (0h - 23h)")
@@ -367,8 +367,12 @@ with tab_thang:
         selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1, key="sel_thang")
         df_m = df[df['Tháng'] == selected_month]
         
-        avg_hrs_month = df.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
-        avg_trees_month = df.groupby('Tháng').size().mean()
+        df_other_months = df[df['Tháng'] != selected_month]
+        if df_other_months['Tháng'].nunique() > 0:
+            avg_hrs_month = df_other_months.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
+            avg_trees_month = df_other_months.groupby('Tháng').size().mean()
+        else:
+            avg_hrs_month = avg_trees_month = None
         
         y, m = map(int, selected_month.split('-'))
         prev_month_key = f"{y - 1:04d}-12" if m == 1 else f"{y:04d}-{m - 1:02d}"
@@ -384,10 +388,10 @@ with tab_thang:
             num_days_m = df_m['Ngày'].nunique() or 1
             
             delta1_hr = (curr_hrs - prev_hrs_month) if prev_hrs_month is not None else None
-            delta2_hr = curr_hrs - avg_hrs_month
-            
+            delta2_hr = (curr_hrs - avg_hrs_month) if avg_hrs_month is not None else None
+
             delta1_tr = (curr_trees - prev_trees_month) if prev_trees_month is not None else None
-            delta2_tr = curr_trees - avg_trees_month
+            delta2_tr = (curr_trees - avg_trees_month) if avg_trees_month is not None else None
             
             with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs:.1f}h", delta1_hr, "h (vs Tháng trước)", delta2_hr, "h (vs Trung bình)")
             with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs/num_days_m:.1f}h")
@@ -407,7 +411,7 @@ with tab_thang:
             fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
             fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ') 
             fig_m = format_plotly_fig(fig_m)
-            st.plotly_chart(fig_m, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_m, width='content', config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
@@ -415,7 +419,7 @@ with tab_thang:
             fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color_discrete_sequence=MAC_COLORS)
             fig_p_m.update_layout(width=CHART_WIDTH)
             fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
-            st.plotly_chart(fig_p_m, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_p_m, width='content', config=PLOTLY_CONFIG)
             
             st.markdown("**Bảng chi tiết (Giờ):**")
             st.dataframe(get_table_with_totals(df_m), width=CHART_WIDTH)
@@ -432,8 +436,12 @@ with tab_tuan:
         selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
         df_w = df[df['Tuần'] == selected_week]
         
-        avg_hrs_week = df.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
-        avg_trees_week = df.groupby('Tuần').size().mean()
+        df_other_weeks = df[df['Tuần'] != selected_week]
+        if df_other_weeks['Tuần'].nunique() > 0:
+            avg_hrs_week = df_other_weeks.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
+            avg_trees_week = df_other_weeks.groupby('Tuần').size().mean()
+        else:
+            avg_hrs_week = avg_trees_week = None
         
         week_anchor = df_w['Thời gian bắt đầu'].min()
         prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%Y-W%U') if pd.notna(week_anchor) else None
@@ -449,10 +457,10 @@ with tab_tuan:
             num_days_w = df_w['Ngày'].nunique() or 1
             
             d1_hr_w = (curr_hrs_w - prev_hrs_week) if prev_hrs_week is not None else None
-            d2_hr_w = curr_hrs_w - avg_hrs_week
-            
+            d2_hr_w = (curr_hrs_w - avg_hrs_week) if avg_hrs_week is not None else None
+
             d1_tr_w = (curr_trees_w - prev_trees_week) if prev_trees_week is not None else None
-            d2_tr_w = curr_trees_w - avg_trees_week
+            d2_tr_w = (curr_trees_w - avg_trees_week) if avg_trees_week is not None else None
             
             with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_w:.1f}h", d1_hr_w, "h (vs Tuần trước)", d2_hr_w, "h (vs Trung bình)")
             with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_w/num_days_w:.1f}h")
@@ -472,7 +480,7 @@ with tab_tuan:
             fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
             fig_w = format_plotly_fig(fig_w)
-            st.plotly_chart(fig_w, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_w, width='content', config=PLOTLY_CONFIG)
             
             st.header("3. Phân bổ thời gian")
             pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
@@ -480,7 +488,7 @@ with tab_tuan:
             fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color_discrete_sequence=MAC_COLORS)
             fig_p_w.update_layout(width=CHART_WIDTH)
             fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
-            st.plotly_chart(fig_p_w, use_container_width=False, config=PLOTLY_CONFIG)
+            st.plotly_chart(fig_p_w, width='content', config=PLOTLY_CONFIG)
             
             st.markdown("**Bảng chi tiết (Giờ):**")
             st.dataframe(get_table_with_totals(df_w), width=CHART_WIDTH)
@@ -523,7 +531,7 @@ with tab_nhom:
             
         fig_g.update_layout(width=CHART_WIDTH, xaxis_title=time_col_5, yaxis_title="Số giờ")
         fig_g = format_plotly_fig(fig_g)
-        st.plotly_chart(fig_g, use_container_width=False, config=PLOTLY_CONFIG)
+        st.plotly_chart(fig_g, width='content', config=PLOTLY_CONFIG)
         
         st.header("3. Biểu đồ lịch")
         render_calendar_streak(df_g, df)
@@ -598,7 +606,7 @@ with tab_chuan_bi:
         if not mapping_df.empty:
             display_map = mapping_df.sort_values(by='Danh mục').reset_index(drop=True)
             display_map.index = display_map.index + 1
-            st.dataframe(display_map, use_container_width=True)
+            st.dataframe(display_map, width='stretch')
 
     st.divider()
     st.header("3. Dữ liệu làm việc hiện tại")
@@ -608,7 +616,7 @@ with tab_chuan_bi:
         disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
         if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
         disp_db.index = disp_db.index + 1
-        st.dataframe(disp_db, use_container_width=True)
+        st.dataframe(disp_db, width='stretch')
     
     st.divider()
     st.header("4. Quản lý hệ thống")

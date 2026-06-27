@@ -1,4 +1,4 @@
-streamlit
-pandas
-plotly
-altair
+streamlit>=1.58,<2
+pandas>=2.2,<4
+plotly>=6,<7
+altair>=5,<7
