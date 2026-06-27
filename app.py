@@ -117,6 +117,17 @@ def format_plotly_fig(fig, is_pie=False):
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
     return fig
 
+RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
+
+def range_radio(df_all, key, label="Khoảng thời gian:"):
+    """Radio chọn khoảng thời gian, trả về df đã lọc (mốc tính từ ngày mới nhất)."""
+    rl = st.radio(label, list(RANGE_OPTS.keys()), index=1, horizontal=True, key=key)
+    days = RANGE_OPTS[rl]
+    if days is None or df_all.empty:
+        return df_all
+    cutoff = (pd.Timestamp(df_all['Ngày'].max()) - pd.Timedelta(days=days - 1)).date()
+    return df_all[df_all['Ngày'] >= cutoff]
+
 def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
     if pd.isna(ts):
@@ -578,27 +589,15 @@ if nav == "Thống kê chung":
         with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục')
         with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án')
 
-        st.write("")
-        _range_opts = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
-        _rl = st.selectbox(
-            "Khoảng thời gian hiển thị (cho biểu đồ · lịch · bảng — không ảnh hưởng Tổng quan):",
-            list(_range_opts.keys()), index=1, key="range_tab1",
-        )
-        _days = _range_opts[_rl]
-        if _days is None:
-            df_view = df
-        else:
-            _cutoff = (pd.Timestamp(df['Ngày'].max()) - pd.Timedelta(days=_days - 1)).date()
-            df_view = df[df['Ngày'] >= _cutoff]
-
         st.header("2. Xu hướng theo thời gian")
+        df_trend = range_radio(df, key="range_trend")
         r_col1, r_col2 = st.columns(2)
         with r_col1:
             time_col_2 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab2")
         with r_col2:
             color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
-        
-        trend_group = df_view.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
+
+        trend_group = df_trend.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
         if time_col_2 == "Ngày":
             trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
@@ -614,15 +613,16 @@ if nav == "Thống kê chung":
         st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
-        render_hourly_chart(df_view, color_col_2, x_title="Khung giờ (0h - 23h)")
+        render_hourly_chart(df_trend, color_col_2, x_title="Khung giờ (0h - 23h)")
 
         st.header("4. Biểu đồ lịch tổng quan")
-        render_calendar_streak(df_view, df_view)
+        df_cal = range_radio(df, key="range_cal")
+        render_calendar_streak(df_cal, df_cal)
 
         st.header("5. Bảng số liệu")
         view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-        render_data_table(df_view, time_col)
+        render_data_table(df_trend, time_col)
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
