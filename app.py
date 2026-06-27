@@ -6,7 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
 from html import escape as html_escape
-from datetime import date
+from datetime import date, timedelta
 
 # --- CẤU HÌNH ---
 DB_FILE = "database.csv"
@@ -131,6 +131,39 @@ def range_radio(df_all, key, label="Khoảng thời gian"):
     """Segmented control chọn khoảng thời gian, trả về df đã lọc."""
     rl = st.segmented_control(label, list(RANGE_OPTS.keys()), default="90 ngày", key=key)
     return filter_by_range(df_all, rl or "90 ngày")
+
+def fmt_month(m):
+    y, mm = m.split('-')
+    return f"Tháng {int(mm)}/{y}"
+
+def fmt_week(w):
+    y, wk = int(w[:4]), int(w.split('W')[1])
+    mon = date.fromisocalendar(y, wk, 1)
+    sun = mon + timedelta(days=6)
+    return f"{mon:%d/%m} – {sun:%d/%m/%Y}"
+
+def period_stepper(periods, key, fmt):
+    """Chọn kỳ bằng nút lùi/tiến (icon Material) + selectbox để nhảy nhanh. Trả về kỳ đã chọn."""
+    pk = f"{key}_pick"
+    if pk not in st.session_state or st.session_state[pk] not in periods:
+        st.session_state[pk] = periods[-1]
+    cur_i = periods.index(st.session_state[pk])
+
+    def _step(delta):
+        i = periods.index(st.session_state[pk]) if st.session_state[pk] in periods else len(periods) - 1
+        st.session_state[pk] = periods[max(0, min(len(periods) - 1, i + delta))]
+
+    with st.container(key=f"stepper_{key}"):
+        cprev, cmid, cnext = st.columns([1, 8, 1], vertical_alignment="center")
+        with cprev:
+            st.button("", icon=":material/chevron_left:", key=f"{key}_prev", on_click=_step, args=(-1,),
+                      disabled=cur_i == 0, use_container_width=True)
+        with cmid:
+            st.selectbox("Kỳ", periods, key=pk, label_visibility="collapsed", format_func=fmt)
+        with cnext:
+            st.button("", icon=":material/chevron_right:", key=f"{key}_next", on_click=_step, args=(1,),
+                      disabled=cur_i == len(periods) - 1, use_container_width=True)
+    return st.session_state[pk]
 
 def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
@@ -495,6 +528,10 @@ st.markdown(
     /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
     [data-testid="stButtonGroup"] { justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
 
+    /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
+    [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
+    [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
@@ -642,7 +679,7 @@ if nav == "Thống kê chung":
 elif nav == "Báo cáo tháng":
     if not df.empty:
         months = sorted(df['Tháng'].unique())
-        selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1, key="sel_thang")
+        selected_month = period_stepper(months, key="month", fmt=fmt_month)
         df_m = df[df['Tháng'] == selected_month]
         
         df_other_months = df[df['Tháng'] != selected_month]
@@ -733,7 +770,7 @@ elif nav == "Báo cáo tháng":
 elif nav == "Báo cáo tuần":
     if not df.empty:
         weeks = sorted(df['Tuần'].unique())
-        selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
+        selected_week = period_stepper(weeks, key="week", fmt=fmt_week)
         df_w = df[df['Tuần'] == selected_week]
         
         df_other_weeks = df[df['Tuần'] != selected_week]
