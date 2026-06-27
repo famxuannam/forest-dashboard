@@ -203,7 +203,11 @@ def render_calendar_streak(scope_df, full_df):
         text='day:Q',
         color=alt.condition(f"datum['Số giờ'] > {vmax_cal * 0.55}", alt.value('#ffffff'), alt.value('#a7a7ac'))
     )
-    chart = (rect + text).properties(width=alt.Step(34), height=alt.Step(34)).configure_view(strokeWidth=0)
+    chart = (rect + text).properties(
+        width=alt.Step(34), height=alt.Step(34),
+        # padding phải bù cho vùng nhãn thứ bên trái -> lưới căn giữa trong thẻ
+        padding={"left": 0, "right": 64, "top": 5, "bottom": 5}
+    ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
     unique_dates = pd.to_datetime(scope_df['Ngày'].dropna().unique())
@@ -450,6 +454,23 @@ st.markdown(
 
     [data-testid="stMetric"] { display: none; }
 
+    /* Menu điều hướng (sidebar / hamburger) trông như danh sách trang */
+    section[data-testid="stSidebar"] [role="radiogroup"] { gap: 2px; }
+    section[data-testid="stSidebar"] [role="radiogroup"] label {
+        padding: 9px 12px !important;
+        border-radius: 10px;
+        margin: 0 !important;
+        transition: background 0.15s ease;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: rgba(0,0,0,0.04); }
+    /* Ẩn nút tròn của radio để giống menu */
+    section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child { display: none !important; }
+    /* Trang đang chọn: nền xanh nhạt, chữ xanh */
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background: rgba(0,122,255,0.1) !important;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p { color: #007aff !important; font-weight: 600 !important; }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
@@ -483,9 +504,14 @@ st.markdown(
 
 st.title("Bảng theo dõi thời gian")
 
-tab_thong_ke, tab_thang, tab_tuan, tab_nhom, tab_chuan_bi = st.tabs([
-    "Thống kê chung", "Báo cáo tháng", "Báo cáo tuần", "Báo cáo theo nhóm", "Chuẩn bị dữ liệu"
-])
+# Điều hướng dạng menu hamburger (sidebar), kèm icon cho từng trang
+NAV = {
+    "Thống kê chung": ":material/bar_chart:",
+    "Báo cáo tháng": ":material/calendar_month:",
+    "Báo cáo tuần": ":material/calendar_view_week:",
+    "Báo cáo theo nhóm": ":material/folder:",
+    "Chuẩn bị dữ liệu": ":material/download:",
+}
 
 df = prep_analysis_data()
 DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
@@ -497,10 +523,18 @@ if not df.empty:
 else:
     COLOR_MAP = {}
 
+with st.sidebar:
+    st.markdown("## 🌳 Forest Dashboard")
+    nav = st.radio(
+        "Điều hướng", list(NAV.keys()),
+        format_func=lambda x: f"{NAV[x]} {x}",
+        label_visibility="collapsed", key="nav",
+    )
+
 # ==========================================
-# TAB THỐNG KÊ CHUNG
+# TRANG: THỐNG KÊ CHUNG
 # ==========================================
-with tab_thong_ke:
+if nav == "Thống kê chung":
     if not df.empty:
         st.header("1. Tổng quan")
         total_hrs = df['Thời lượng (Phút)'].sum() / 60
@@ -556,7 +590,7 @@ with tab_thong_ke:
 # ==========================================
 # TAB BÁO CÁO THÁNG
 # ==========================================
-with tab_thang:
+elif nav == "Báo cáo tháng":
     if not df.empty:
         months = sorted(df['Tháng'].unique())
         selected_month = st.selectbox("Chọn Tháng", months, index=len(months)-1, key="sel_thang")
@@ -646,7 +680,7 @@ with tab_thang:
 # ==========================================
 # TAB BÁO CÁO TUẦN
 # ==========================================
-with tab_tuan:
+elif nav == "Báo cáo tuần":
     if not df.empty:
         weeks = sorted(df['Tuần'].unique())
         selected_week = st.selectbox("Chọn Tuần", weeks, index=len(weeks)-1, key="sel_tuan")
@@ -734,7 +768,7 @@ with tab_tuan:
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
 # ==========================================
-with tab_nhom:
+elif nav == "Báo cáo theo nhóm":
     if not df.empty:
         all_groups = sorted(set(list(df['Danh mục'].unique()) + list(df['Dự án'].unique())))
         sel_grp = st.selectbox("Chọn Danh mục hoặc Dự án:", all_groups)
@@ -776,7 +810,7 @@ with tab_nhom:
 # ==========================================
 # TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
-with tab_chuan_bi:
+elif nav == "Chuẩn bị dữ liệu":
     st.header("1. Tải lên từ Forest")
     forest_file = st.file_uploader("Tải lên file CSV từ máy tính", type=["csv"], key="forest")
     if forest_file:
