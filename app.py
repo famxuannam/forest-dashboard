@@ -809,10 +809,21 @@ elif nav == "Báo cáo tuần":
 # ==========================================
 elif nav == "Báo cáo theo nhóm":
     if not df.empty:
-        all_groups = sorted(set(list(df['Danh mục'].unique()) + list(df['Dự án'].unique())))
-        sel_grp = st.selectbox("Chọn Danh mục hoặc Dự án:", all_groups)
-        
-        df_g = df[(df['Danh mục'] == sel_grp) | (df['Dự án'] == sel_grp)]
+        # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
+        proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Danh mục'].first()
+        _opts, _labels = [], {}
+        for _c in sorted(df['Danh mục'].dropna().unique()):
+            _projs = sorted(proj_to_cat[proj_to_cat == _c].index.tolist())
+            if _projs == [_c]:  # dự án chưa gán nhóm (nhóm trùng tên dự án) -> coi như một dự án độc lập
+                _o = ("proj", _c); _opts.append(_o); _labels[_o] = f"{_c}  ·  Dự án"
+            else:
+                _oc = ("cat", _c); _opts.append(_oc); _labels[_oc] = f"{_c}  ·  Nhóm"
+                for _p in _projs:
+                    _op = ("proj", _p); _opts.append(_op); _labels[_op] = f" {_p}  ·  Dự án"
+
+        sel = st.selectbox("Chọn Nhóm hoặc Dự án:", _opts, format_func=lambda o: _labels[o], key="grp_sel")
+        _kind, sel_grp = sel
+        df_g = df[df['Danh mục'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
         
         st.header("1. Tổng quan")
         c1, c2, c3, c4 = st.columns(4)
@@ -824,7 +835,15 @@ elif nav == "Báo cáo theo nhóm":
         with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f}h")
         with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_g}")
         with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f}")
-        
+
+        st.write("")
+        e1, e2, e3 = st.columns(3)
+        first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
+        last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
+        with e1: render_glass_metric("Ngày đầu tiên", first_day)
+        with e2: render_glass_metric("Ngày gần nhất", last_day)
+        with e3: render_glass_metric("Số ngày có hoạt động", f"{df_g['Ngày'].nunique()}")
+
         st.header("2. Xu hướng theo thời gian")
         time_col_5 = st.radio("Cơ sở dữ liệu biểu đồ:", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="time_tab5")
         t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
