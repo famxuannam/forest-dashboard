@@ -117,6 +117,22 @@ def format_plotly_fig(fig, is_pie=False):
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
     return fig
 
+def format_relative(ts):
+    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
+    if pd.isna(ts):
+        return "—"
+    secs = (pd.Timestamp.now() - pd.Timestamp(ts)).total_seconds()
+    if secs < 60:
+        return "vừa xong"
+    days = int(secs // 86400)
+    hours = int((secs % 86400) // 3600)
+    mins = int((secs % 3600) // 60)
+    if days > 0:
+        return f"{days} ngày {hours} giờ trước"
+    if hours > 0:
+        return f"{hours} giờ {mins} phút trước"
+    return f"{mins} phút trước"
+
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delta_avg=None, delta_avg_label=""):
     html = f"""
@@ -454,22 +470,8 @@ st.markdown(
 
     [data-testid="stMetric"] { display: none; }
 
-    /* Menu điều hướng (sidebar / hamburger) trông như danh sách trang */
-    section[data-testid="stSidebar"] [role="radiogroup"] { gap: 2px; }
-    section[data-testid="stSidebar"] [role="radiogroup"] label {
-        padding: 9px 12px !important;
-        border-radius: 10px;
-        margin: 0 !important;
-        transition: background 0.15s ease;
-    }
-    section[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: rgba(0,0,0,0.04); }
-    /* Ẩn nút tròn của radio để giống menu */
-    section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child { display: none !important; }
-    /* Trang đang chọn: nền xanh nhạt, chữ xanh */
-    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-        background: rgba(0,122,255,0.1) !important;
-    }
-    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p { color: #007aff !important; font-weight: 600 !important; }
+    /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
+    [data-testid="stButtonGroup"] { justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
 
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
@@ -523,13 +525,14 @@ if not df.empty:
 else:
     COLOR_MAP = {}
 
-with st.sidebar:
-    st.markdown("## 🌳 Forest Dashboard")
-    nav = st.radio(
-        "Điều hướng", list(NAV.keys()),
-        format_func=lambda x: f"{NAV[x]} {x}",
-        label_visibility="collapsed", key="nav",
-    )
+# Thanh chọn trang luôn hiển thị ngay dưới tiêu đề (kiểu iOS segmented control)
+nav = st.segmented_control(
+    "Trang", list(NAV.keys()),
+    format_func=lambda x: f"{NAV[x]} {x}",
+    default="Thống kê chung", key="nav", label_visibility="collapsed",
+)
+if not nav:
+    nav = "Thống kê chung"
 
 # ==========================================
 # TRANG: THỐNG KÊ CHUNG
@@ -537,10 +540,24 @@ with st.sidebar:
 if nav == "Thống kê chung":
     if not df.empty:
         st.header("1. Tổng quan")
+
+        last_dt = df['Thời gian kết thúc'].max()
+        if pd.notna(last_dt):
+            abs_str = pd.Timestamp(last_dt).strftime('%H:%M · %d/%m/%Y')
+            st.markdown(
+                f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+                f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
+                f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>🕒 Cập nhật gần nhất</span>"
+                f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{format_relative(last_dt)}</span>"
+                f"<span style='font-size:13px;color:#86868b;'>({abs_str})</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
         total_hrs = df['Thời lượng (Phút)'].sum() / 60
         total_trees = len(df)
         num_days = df['Ngày'].nunique() or 1
-        
+
         c1, c2, c3, c4 = st.columns(4)
         with c1: render_glass_metric("Tổng thời gian", f"{total_hrs:.1f}h")
         with c2: render_glass_metric("Thời gian TB/ngày", f"{total_hrs/num_days:.1f}h")
