@@ -25,7 +25,7 @@ MAC_COLORS = [
     "#32ade6", # Cyan
     "#a2845e"  # Brown
 ]
-CHART_WIDTH = 1200 
+CHART_WIDTH = 1120
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
@@ -141,7 +141,7 @@ def render_top_3(df, col_name, title):
 def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     hr_group = scope_df.groupby(['Khung giờ', color_col])['Thời lượng (Phút)'].sum().reset_index()
     hr_group['Số giờ'] = hr_group['Thời lượng (Phút)'] / 60
-    fig = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col, color_discrete_sequence=MAC_COLORS)
+    fig = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP)
 
     tot = scope_df.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
     tot['Số giờ'] = tot['Thời lượng (Phút)'] / 60
@@ -409,8 +409,18 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
     
-    [data-testid="stVegaLiteChart"] { display: flex !important; justify-content: center !important; width: 100% !important; margin: 0 auto !important; }
-    
+    [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    }
+
     [data-testid="stMetric"] { display: none; }
     </style>
     """,
@@ -426,6 +436,13 @@ tab_thong_ke, tab_thang, tab_tuan, tab_nhom, tab_chuan_bi = st.tabs([
 df = prep_analysis_data()
 DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
+# Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab
+if not df.empty:
+    _all_names = sorted(set(df['Danh mục'].dropna().unique()) | set(df['Dự án'].dropna().unique()))
+    COLOR_MAP = {name: MAC_COLORS[i % len(MAC_COLORS)] for i, name in enumerate(_all_names)}
+else:
+    COLOR_MAP = {}
+
 # ==========================================
 # TAB THỐNG KÊ CHUNG
 # ==========================================
@@ -439,7 +456,7 @@ with tab_thong_ke:
         c1, c2, c3, c4 = st.columns(4)
         with c1: render_glass_metric("Tổng thời gian", f"{total_hrs:.1f}h")
         with c2: render_glass_metric("Thời gian TB/ngày", f"{total_hrs/num_days:.1f}h")
-        with c3: render_glass_metric("Tổng số cây", f"{total_trees}")
+        with c3: render_glass_metric("Số cây đã trồng", f"{total_trees}")
         with c4: render_glass_metric("Số cây TB/ngày", f"{total_trees/num_days:.1f}")
         
         st.write("")
@@ -456,7 +473,7 @@ with tab_thong_ke:
         
         trend_group = df.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
-        fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_sequence=MAC_COLORS)
+        fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_map=COLOR_MAP)
         
         if time_col_2 in ["Tuần", "Tháng"]:
             fig1 = add_total_labels(fig1, trend_group, time_col_2, 'Số giờ')
@@ -527,7 +544,7 @@ with tab_thang:
             color_col_3 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab3")
             t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
             t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
-            fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_sequence=MAC_COLORS)
+            fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_map=COLOR_MAP)
             fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
             fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ') 
             fig_m = format_plotly_fig(fig_m)
@@ -536,15 +553,15 @@ with tab_thang:
             st.header("3. Phân bổ thời gian")
             pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
             pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
-            fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color_discrete_sequence=MAC_COLORS)
+            fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
             fig_p_m.update_layout(width=CHART_WIDTH)
             fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
             st.plotly_chart(fig_p_m, width='content', config=PLOTLY_CONFIG)
             
-            st.markdown("**Bảng chi tiết (Giờ):**")
+            st.header("4. Bảng chi tiết (Giờ)")
             render_detail_table(df_m)
             
-            st.header("4. Xu hướng làm việc theo khung giờ")
+            st.header("5. Xu hướng làm việc theo khung giờ")
             render_hourly_chart(df_m, color_col_3)
 
 # ==========================================
@@ -596,7 +613,7 @@ with tab_tuan:
             color_col_4 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab4")
             t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
             t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_sequence=MAC_COLORS)
+            fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_map=COLOR_MAP)
             fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
             fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
             fig_w = format_plotly_fig(fig_w)
@@ -605,15 +622,15 @@ with tab_tuan:
             st.header("3. Phân bổ thời gian")
             pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
             pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
-            fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color_discrete_sequence=MAC_COLORS)
+            fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
             fig_p_w.update_layout(width=CHART_WIDTH)
             fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
             st.plotly_chart(fig_p_w, width='content', config=PLOTLY_CONFIG)
             
-            st.markdown("**Bảng chi tiết (Giờ):**")
+            st.header("4. Bảng chi tiết (Giờ)")
             render_detail_table(df_w)
             
-            st.header("4. Xu hướng làm việc theo khung giờ")
+            st.header("5. Xu hướng làm việc theo khung giờ")
             render_hourly_chart(df_w, color_col_4)
 
 # ==========================================
