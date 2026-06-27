@@ -185,6 +185,10 @@ def format_relative(ts):
     return f"{mins} phút trước"
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
+def _fmt_delta(d):
+    """Số nguyên thì bỏ phần thập phân (+5), số lẻ thì giữ 1 chữ số (+1.9)."""
+    return f"{d:+.0f}" if abs(d - round(d)) < 1e-9 else f"{d:+.1f}"
+
 def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delta_avg=None, delta_avg_label=""):
     html = f"""
     <div class="glass-card" style="height: 100%;">
@@ -193,13 +197,11 @@ def render_glass_metric(title, value, delta_prev=None, delta_prev_label="", delt
     """
     if delta_prev is not None:
         c1 = "#34c759" if delta_prev > 0 else "#ff3b30" if delta_prev < 0 else "#86868b"
-        s1 = "+" if delta_prev > 0 else ""
-        html += f"<p style='margin: 0; font-size: 14px; font-weight: 500; color: {c1};'> {s1}{delta_prev:.1f} {delta_prev_label}</p>"
+        html += f"<p style='margin: 0; font-size: 14px; font-weight: 500; color: {c1};'> {_fmt_delta(delta_prev)} {delta_prev_label}</p>"
     if delta_avg is not None:
         c2 = "#34c759" if delta_avg > 0 else "#ff3b30" if delta_avg < 0 else "#86868b"
-        s2 = "+" if delta_avg > 0 else ""
-        html += f"<p style='margin: 4px 0 0 0; font-size: 14px; font-weight: 500; color: {c2};'> {s2}{delta_avg:.1f} {delta_avg_label}</p>"
-    
+        html += f"<p style='margin: 4px 0 0 0; font-size: 14px; font-weight: 500; color: {c2};'> {_fmt_delta(delta_avg)} {delta_avg_label}</p>"
+
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
 
@@ -240,7 +242,11 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
-def render_calendar_streak(scope_df, full_df):
+def render_calendar_streak(scope_df, full_df, streak_df=None):
+    # Lưới lịch theo scope_df (có thể đã lọc khoảng), nhưng chuỗi (streak) tính
+    # trên streak_df = toàn bộ lịch sử để không bị giới hạn bởi cửa sổ hiển thị.
+    if streak_df is None:
+        streak_df = scope_df
     min_date = pd.Timestamp(scope_df['Ngày'].min())
     max_date = pd.Timestamp(full_df['Ngày'].max())
     # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
@@ -281,7 +287,7 @@ def render_calendar_streak(scope_df, full_df):
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
-    unique_dates = pd.to_datetime(scope_df['Ngày'].dropna().unique())
+    unique_dates = pd.to_datetime(streak_df['Ngày'].dropna().unique())
     unique_dates = unique_dates.sort_values()
     today = pd.Timestamp(date.today())
     if len(unique_dates) > 0:
@@ -456,8 +462,7 @@ st.set_page_config(page_title="Forest Dashboard", page_icon=":material/forest:",
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"] {
+    html, body, [class*="st-emotion"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
     .stApp {
@@ -659,13 +664,15 @@ if nav == "Thống kê chung":
         st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
+        st.caption(f"Theo khoảng thời gian đã chọn ở mục 2: {_rl}")
         render_hourly_chart(df_trend, color_col_2, x_title="Khung giờ (0h - 23h)")
 
         st.header("4. Biểu đồ lịch tổng quan")
         df_cal = range_radio(df, key="range_cal")
-        render_calendar_streak(df_cal, df_cal)
+        render_calendar_streak(df_cal, df_cal, streak_df=df)
 
         st.header("5. Bảng số liệu")
+        st.caption(f"Theo khoảng thời gian đã chọn ở mục 2: {_rl}")
         view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
         view_opt = view_opt or "Tuần"
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
@@ -868,7 +875,7 @@ elif nav == "Báo cáo theo nhóm":
             else:
                 _oc = ("cat", _c); _opts.append(_oc); _labels[_oc] = f"{_c}  ·  Nhóm"
                 for _p in _projs:
-                    _op = ("proj", _p); _opts.append(_op); _labels[_op] = f" {_p}  ·  Dự án"
+                    _op = ("proj", _p); _opts.append(_op); _labels[_op] = f"   {_p}  ·  Dự án"
 
         sel = st.selectbox("Chọn Nhóm hoặc Dự án:", _opts, format_func=lambda o: _labels[o], key="grp_sel")
         _kind, sel_grp = sel
@@ -913,7 +920,8 @@ elif nav == "Báo cáo theo nhóm":
         st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
         
         st.header("3. Biểu đồ lịch")
-        render_calendar_streak(df_g, df)
+        df_g_cal = range_radio(df_g, key="range_grp_cal")
+        render_calendar_streak(df_g_cal, df_g_cal, streak_df=df_g)
 
 # ==========================================
 # TAB CHUẨN BỊ DỮ LIỆU
