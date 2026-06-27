@@ -578,6 +578,19 @@ if nav == "Thống kê chung":
         with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục')
         with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án')
 
+        st.write("")
+        _range_opts = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
+        _rl = st.selectbox(
+            "Khoảng thời gian hiển thị (cho biểu đồ · lịch · bảng — không ảnh hưởng Tổng quan):",
+            list(_range_opts.keys()), index=1, key="range_tab1",
+        )
+        _days = _range_opts[_rl]
+        if _days is None:
+            df_view = df
+        else:
+            _cutoff = (pd.Timestamp(df['Ngày'].max()) - pd.Timedelta(days=_days - 1)).date()
+            df_view = df[df['Ngày'] >= _cutoff]
+
         st.header("2. Xu hướng theo thời gian")
         r_col1, r_col2 = st.columns(2)
         with r_col1:
@@ -585,7 +598,7 @@ if nav == "Thống kê chung":
         with r_col2:
             color_col_2 = st.radio("Phân loại dữ liệu biểu đồ theo:", ["Danh mục", "Dự án"], horizontal=True, key="rad_tab2")
         
-        trend_group = df.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
+        trend_group = df_view.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
         trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
         if time_col_2 == "Ngày":
             trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
@@ -601,15 +614,15 @@ if nav == "Thống kê chung":
         st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
 
         st.header("3. Xu hướng làm việc theo khung giờ")
-        render_hourly_chart(df, color_col_2, x_title="Khung giờ (0h - 23h)")
+        render_hourly_chart(df_view, color_col_2, x_title="Khung giờ (0h - 23h)")
 
         st.header("4. Biểu đồ lịch tổng quan")
-        render_calendar_streak(df, df)
+        render_calendar_streak(df_view, df_view)
 
         st.header("5. Bảng số liệu")
         view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-        render_data_table(df, time_col)
+        render_data_table(df_view, time_col)
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
