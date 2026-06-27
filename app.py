@@ -506,16 +506,28 @@ with tab_thang:
         
         df_other_months = df[df['Tháng'] != selected_month]
         if df_other_months['Tháng'].nunique() > 0:
-            avg_hrs_month = df_other_months.groupby('Tháng')['Thời lượng (Phút)'].sum().mean() / 60
-            avg_trees_month = df_other_months.groupby('Tháng').size().mean()
+            g_om = df_other_months.groupby('Tháng')
+            hrs_om = g_om['Thời lượng (Phút)'].sum() / 60
+            trees_om = g_om.size()
+            days_om = g_om['Ngày'].nunique()
+            avg_hrs_month = hrs_om.mean()
+            avg_trees_month = trees_om.mean()
+            avg_hrs_day_month = (hrs_om / days_om).mean()
+            avg_trees_day_month = (trees_om / days_om).mean()
         else:
-            avg_hrs_month = avg_trees_month = None
-        
+            avg_hrs_month = avg_trees_month = avg_hrs_day_month = avg_trees_day_month = None
+
         y, m = map(int, selected_month.split('-'))
         prev_month_key = f"{y - 1:04d}-12" if m == 1 else f"{y:04d}-{m - 1:02d}"
         df_prev_month = df[df['Tháng'] == prev_month_key]
-        prev_hrs_month = df_prev_month['Thời lượng (Phút)'].sum() / 60 if not df_prev_month.empty else None
-        prev_trees_month = len(df_prev_month) if not df_prev_month.empty else None
+        if not df_prev_month.empty:
+            prev_hrs_month = df_prev_month['Thời lượng (Phút)'].sum() / 60
+            prev_trees_month = len(df_prev_month)
+            prev_days_month = df_prev_month['Ngày'].nunique() or 1
+            prev_hrs_day_month = prev_hrs_month / prev_days_month
+            prev_trees_day_month = prev_trees_month / prev_days_month
+        else:
+            prev_hrs_month = prev_trees_month = prev_hrs_day_month = prev_trees_day_month = None
         
         if not df_m.empty:
             st.header("1. Tổng quan")
@@ -524,16 +536,23 @@ with tab_thang:
             curr_trees = len(df_m)
             num_days_m = df_m['Ngày'].nunique() or 1
             
+            curr_hrs_day = curr_hrs / num_days_m
+            curr_trees_day = curr_trees / num_days_m
+
             delta1_hr = (curr_hrs - prev_hrs_month) if prev_hrs_month is not None else None
             delta2_hr = (curr_hrs - avg_hrs_month) if avg_hrs_month is not None else None
+            delta1_hrd = (curr_hrs_day - prev_hrs_day_month) if prev_hrs_day_month is not None else None
+            delta2_hrd = (curr_hrs_day - avg_hrs_day_month) if avg_hrs_day_month is not None else None
 
             delta1_tr = (curr_trees - prev_trees_month) if prev_trees_month is not None else None
             delta2_tr = (curr_trees - avg_trees_month) if avg_trees_month is not None else None
-            
+            delta1_trd = (curr_trees_day - prev_trees_day_month) if prev_trees_day_month is not None else None
+            delta2_trd = (curr_trees_day - avg_trees_day_month) if avg_trees_day_month is not None else None
+
             with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs:.1f}h", delta1_hr, "h (vs Tháng trước)", delta2_hr, "h (vs Trung bình)")
-            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs/num_days_m:.1f}h")
+            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_day:.1f}h", delta1_hrd, "h (vs Tháng trước)", delta2_hrd, "h (vs Trung bình)")
             with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees}", delta1_tr, "cây (vs Tháng trước)", delta2_tr, "cây (vs Trung bình)")
-            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees/num_days_m:.1f}")
+            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_day:.1f}", delta1_trd, "cây (vs Tháng trước)", delta2_trd, "cây (vs Trung bình)")
             
             st.write("")
             c_top1, c_top2 = st.columns(2)
@@ -575,16 +594,28 @@ with tab_tuan:
         
         df_other_weeks = df[df['Tuần'] != selected_week]
         if df_other_weeks['Tuần'].nunique() > 0:
-            avg_hrs_week = df_other_weeks.groupby('Tuần')['Thời lượng (Phút)'].sum().mean() / 60
-            avg_trees_week = df_other_weeks.groupby('Tuần').size().mean()
+            g_ow = df_other_weeks.groupby('Tuần')
+            hrs_ow = g_ow['Thời lượng (Phút)'].sum() / 60
+            trees_ow = g_ow.size()
+            days_ow = g_ow['Ngày'].nunique()
+            avg_hrs_week = hrs_ow.mean()
+            avg_trees_week = trees_ow.mean()
+            avg_hrs_day_week = (hrs_ow / days_ow).mean()
+            avg_trees_day_week = (trees_ow / days_ow).mean()
         else:
-            avg_hrs_week = avg_trees_week = None
-        
+            avg_hrs_week = avg_trees_week = avg_hrs_day_week = avg_trees_day_week = None
+
         week_anchor = df_w['Thời gian bắt đầu'].min()
         prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%Y-W%U') if pd.notna(week_anchor) else None
         df_prev_week = df[df['Tuần'] == prev_week_key]
-        prev_hrs_week = df_prev_week['Thời lượng (Phút)'].sum() / 60 if not df_prev_week.empty else None
-        prev_trees_week = len(df_prev_week) if not df_prev_week.empty else None
+        if not df_prev_week.empty:
+            prev_hrs_week = df_prev_week['Thời lượng (Phút)'].sum() / 60
+            prev_trees_week = len(df_prev_week)
+            prev_days_week = df_prev_week['Ngày'].nunique() or 1
+            prev_hrs_day_week = prev_hrs_week / prev_days_week
+            prev_trees_day_week = prev_trees_week / prev_days_week
+        else:
+            prev_hrs_week = prev_trees_week = prev_hrs_day_week = prev_trees_day_week = None
         
         if not df_w.empty:
             st.header("1. Tổng quan")
@@ -593,16 +624,23 @@ with tab_tuan:
             curr_trees_w = len(df_w)
             num_days_w = df_w['Ngày'].nunique() or 1
             
+            curr_hrs_day_w = curr_hrs_w / num_days_w
+            curr_trees_day_w = curr_trees_w / num_days_w
+
             d1_hr_w = (curr_hrs_w - prev_hrs_week) if prev_hrs_week is not None else None
             d2_hr_w = (curr_hrs_w - avg_hrs_week) if avg_hrs_week is not None else None
+            d1_hrd_w = (curr_hrs_day_w - prev_hrs_day_week) if prev_hrs_day_week is not None else None
+            d2_hrd_w = (curr_hrs_day_w - avg_hrs_day_week) if avg_hrs_day_week is not None else None
 
             d1_tr_w = (curr_trees_w - prev_trees_week) if prev_trees_week is not None else None
             d2_tr_w = (curr_trees_w - avg_trees_week) if avg_trees_week is not None else None
-            
+            d1_trd_w = (curr_trees_day_w - prev_trees_day_week) if prev_trees_day_week is not None else None
+            d2_trd_w = (curr_trees_day_w - avg_trees_day_week) if avg_trees_day_week is not None else None
+
             with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_w:.1f}h", d1_hr_w, "h (vs Tuần trước)", d2_hr_w, "h (vs Trung bình)")
-            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_w/num_days_w:.1f}h")
+            with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_day_w:.1f}h", d1_hrd_w, "h (vs Tuần trước)", d2_hrd_w, "h (vs Trung bình)")
             with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_w}", d1_tr_w, "cây (vs Tuần trước)", d2_tr_w, "cây (vs Trung bình)")
-            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_w/num_days_w:.1f}")
+            with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_day_w:.1f}", d1_trd_w, "cây (vs Tuần trước)", d2_trd_w, "cây (vs Trung bình)")
             
             st.write("")
             c_top1, c_top2 = st.columns(2)
