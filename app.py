@@ -226,6 +226,9 @@ DTBL_CSS = """
 .dtbl td.zero { color:#cfcfd4; }
 .dtbl td.tot { border-left:1px solid rgba(0,0,0,0.08); font-weight:600; color:#1d1d1f; }
 .dtbl tr.proj td.tot { font-weight:500; color:#6e6e73; }
+.dtbl th.txt, .dtbl td.txt { text-align:left; }
+.dtbl tr.prow td { color:#3a3a3c; font-weight:400; border-top:1px solid rgba(0,0,0,0.05); }
+.dtbl tr.prow td.lbl { color:#aeaeb2; font-weight:500; }
 </style>
 """
 
@@ -318,6 +321,34 @@ def render_detail_table(scope_df):
       <table class="dtbl">
         <thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
         <tbody>{rows_html}</tbody>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_plain_table(df, num_cols=()):
+    """Bảng liệt kê đơn giản (quy tắc, log) cùng phong cách: cột chữ căn trái, cột số căn phải."""
+    if df.empty:
+        return
+    cols = list(df.columns)
+    head = f'<th class="lbl">{html_escape(str(df.index.name or "#"))}</th>'
+    for c in cols:
+        cls = '' if c in num_cols else ' class="txt"'
+        head += f'<th{cls}>{html_escape(str(c))}</th>'
+    body = ''
+    for i, row in df.iterrows():
+        body += '<tr class="prow">'
+        body += f'<td class="lbl">{html_escape(str(i))}</td>'
+        for c in cols:
+            cls = 'num' if c in num_cols else 'txt'
+            body += f'<td class="{cls}">{html_escape(str(row[c]))}</td>'
+        body += '</tr>'
+
+    st.markdown(DTBL_CSS + f"""
+    <div class="dtbl-wrap">
+      <table class="dtbl">
+        <thead><tr>{head}</tr></thead>
+        <tbody>{body}</tbody>
       </table>
     </div>
     """, unsafe_allow_html=True)
@@ -701,7 +732,7 @@ with tab_chuan_bi:
         if not mapping_df.empty:
             display_map = mapping_df.sort_values(by='Danh mục').reset_index(drop=True)
             display_map.index = display_map.index + 1
-            st.dataframe(display_map, width='stretch')
+            render_plain_table(display_map)
 
     st.divider()
     st.header("3. Dữ liệu làm việc hiện tại")
@@ -710,8 +741,9 @@ with tab_chuan_bi:
         disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
         disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
         if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
+        disp_db = disp_db.reset_index(drop=True)
         disp_db.index = disp_db.index + 1
-        st.dataframe(disp_db, width='stretch')
+        render_plain_table(disp_db, num_cols={'Thời lượng (Phút)'})
     
     st.divider()
     st.header("4. Quản lý hệ thống")
