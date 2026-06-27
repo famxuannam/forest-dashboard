@@ -232,9 +232,10 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     tot = scope_df.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
     tot['Số giờ'] = tot['Thời lượng (Phút)'] / 60
     fig.add_trace(go.Scatter(
-        x=tot['Khung giờ'], y=tot['Số giờ'], mode='lines+text',
-        text=tot['Số giờ'].round(1).astype(str), textposition='top center', textfont=dict(color="#1d1d1f", size=13),
-        name='Tổng cộng', line=dict(color=MAC_COLORS[0], width=2.5)
+        x=tot['Khung giờ'], y=tot['Số giờ'], mode='lines+markers',
+        line=dict(color=MAC_COLORS[0], width=2, shape='spline'),
+        marker=dict(size=5, color=MAC_COLORS[0]),
+        name='Tổng cộng'
     ))
     y_max = tot['Số giờ'].max() if not tot.empty else 1
     fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Số giờ", yaxis=dict(range=[0, y_max * 1.2]))
@@ -271,14 +272,17 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
                                 labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? 'Th' + (month(datum.value)+1) : ''"))
     enc_y = alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False))
+    cal_tooltip = [alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'),
+                   alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
     base = alt.Chart(cal_data).encode(x=enc_x, y=enc_y)
     rect = base.mark_rect(cornerRadius=3).encode(
         color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, vmax_cal], range=['#e5e5ea', '#34c759']), legend=None),
-        tooltip=[alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'), alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
+        tooltip=cal_tooltip
     )
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        color=alt.condition(f"datum['Số giờ'] > {vmax_cal * 0.55}", alt.value('#ffffff'), alt.value('#a7a7ac'))
+        color=alt.condition(f"datum['Số giờ'] > {vmax_cal * 0.55}", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
@@ -570,7 +574,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Forest Dashboard")
+st.markdown(
+    "<h1 style='text-align:center; margin:0 0 0.35em 0; letter-spacing:-0.6px;'>Forest Dashboard</h1>",
+    unsafe_allow_html=True,
+)
 
 # Điều hướng dạng menu hamburger (sidebar), kèm icon cho từng trang
 NAV = {
@@ -578,7 +585,7 @@ NAV = {
     "Báo cáo tháng": ":material/calendar_month:",
     "Báo cáo tuần": ":material/calendar_view_week:",
     "Báo cáo theo nhóm": ":material/folder:",
-    "Chuẩn bị dữ liệu": ":material/download:",
+    "Chuẩn bị dữ liệu": ":material/settings:",
 }
 
 df = prep_analysis_data()
@@ -767,7 +774,7 @@ elif nav == "Báo cáo tháng":
             fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
             st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
             
-            st.header("4. Bảng chi tiết (Giờ)")
+            st.header("4. Bảng số liệu")
             render_detail_table(df_m)
             
             st.header("5. Xu hướng làm việc theo khung giờ")
@@ -856,7 +863,7 @@ elif nav == "Báo cáo tuần":
             fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
             st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
             
-            st.header("4. Bảng chi tiết (Giờ)")
+            st.header("4. Bảng số liệu")
             render_detail_table(df_w)
             
             st.header("5. Xu hướng làm việc theo khung giờ")
