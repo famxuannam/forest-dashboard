@@ -71,7 +71,7 @@ def prep_analysis_data():
     db['Thời gian kết thúc'] = pd.to_datetime(db['Thời gian kết thúc'], errors='coerce')
     db['Ngày'] = db['Thời gian bắt đầu'].dt.date
     db['Tháng'] = db['Thời gian bắt đầu'].dt.strftime('%Y-%m')
-    db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%Y-W%U') # Bắt đầu Chủ Nhật
+    db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%G-W%V') # Tuần ISO, bắt đầu Thứ Hai
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
     
     tieng_viet_days = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
@@ -197,12 +197,12 @@ def render_calendar_streak(scope_df, full_df):
     max_date = pd.Timestamp(full_df['Ngày'].max())
     # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
     # tránh ô trắng lẻ ở tuần đầu/cuối -> nền đồng nhất như kiểu GitHub.
-    start = min_date - pd.Timedelta(days=(min_date.dayofweek + 1) % 7)
-    end = max_date + pd.Timedelta(days=6 - (max_date.dayofweek + 1) % 7)
+    start = min_date - pd.Timedelta(days=min_date.dayofweek)
+    end = max_date + pd.Timedelta(days=6 - max_date.dayofweek)
     all_dates = pd.date_range(start=start, end=end)
     cal_data = pd.DataFrame({'Ngày': all_dates})
 
-    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta((cal_data['Ngày'].dt.dayofweek + 1) % 7, unit='D')
+    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
     days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
     cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(days_map)
     cal_data['Ngày_str'] = cal_data['Ngày'].dt.date
@@ -523,7 +523,7 @@ NAV = {
 }
 
 df = prep_analysis_data()
-DAYS_ORDER = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
+DAYS_ORDER = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
 
 # Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab
 if not df.empty:
@@ -726,7 +726,7 @@ elif nav == "Báo cáo tuần":
             avg_hrs_week = avg_trees_week = avg_hrs_day_week = avg_trees_day_week = None
 
         week_anchor = df_w['Thời gian bắt đầu'].min()
-        prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%Y-W%U') if pd.notna(week_anchor) else None
+        prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
         df_prev_week = df[df['Tuần'] == prev_week_key]
         if not df_prev_week.empty:
             prev_hrs_week = df_prev_week['Thời lượng (Phút)'].sum() / 60
