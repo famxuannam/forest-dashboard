@@ -451,7 +451,7 @@ def render_plain_table(df, num_cols=()):
 
 
 # --- GIAO DIỆN CHÍNH ---
-st.set_page_config(page_title="Forest Dashboard", layout="wide")
+st.set_page_config(page_title="Forest Dashboard", page_icon=":material/forest:", layout="wide")
 
 st.markdown(
     """
