@@ -284,13 +284,11 @@ def render_data_table(df, time_col):
             rows_html += '</tr>'
 
     st.markdown(DTBL_CSS + f"""
-    <div class="dtbl-wrap">
-      <table class="dtbl">
-        <thead><tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr></thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
 
 
 def render_detail_table(scope_df):
@@ -317,13 +315,11 @@ def render_detail_table(scope_df):
             rows_html += '</tr>'
 
     st.markdown(DTBL_CSS + f"""
-    <div class="dtbl-wrap">
-      <table class="dtbl">
-        <thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
 
 
 def render_plain_table(df, num_cols=()):
@@ -345,13 +341,11 @@ def render_plain_table(df, num_cols=()):
         body += '</tr>'
 
     st.markdown(DTBL_CSS + f"""
-    <div class="dtbl-wrap">
-      <table class="dtbl">
-        <thead><tr>{head}</tr></thead>
-        <tbody>{body}</tbody>
-      </table>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr>{head}</tr></thead>
+<tbody>{body}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
 
 
 # --- GIAO DIỆN CHÍNH ---
