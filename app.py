@@ -78,23 +78,6 @@ def prep_analysis_data():
     db['Thứ'] = db['Thời gian bắt đầu'].dt.day_name().map(tieng_viet_days)
     return db
 
-def get_pivot_with_totals(df, time_col):
-    cat_tot = df.groupby(['Danh mục', time_col])['Thời lượng (Phút)'].sum().reset_index()
-    cat_tot['Dự án'] = ' TỔNG NHÓM'
-    proj_tot = df.groupby(['Danh mục', 'Dự án', time_col])['Thời lượng (Phút)'].sum().reset_index()
-    comb = pd.concat([cat_tot, proj_tot])
-    pivot = comb.groupby(['Danh mục', 'Dự án', time_col])['Thời lượng (Phút)'].sum().unstack(fill_value=0)
-    return (pivot / 60).round(1)
-
-def get_table_with_totals(df):
-    cat_tot = df.groupby('Danh mục')['Thời lượng (Phút)'].sum().reset_index()
-    cat_tot['Dự án'] = ' TỔNG NHÓM'
-    proj_tot = df.groupby(['Danh mục', 'Dự án'])['Thời lượng (Phút)'].sum().reset_index()
-    comb = pd.concat([cat_tot, proj_tot])
-    comb['Số giờ'] = (comb['Thời lượng (Phút)'] / 60).round(1)
-    comb = comb.sort_values(by=['Danh mục', 'Dự án'])
-    return comb.set_index(['Danh mục', 'Dự án'])[['Số giờ']]
-
 def add_total_labels(fig, df, x_col, y_col):
     totals = df.groupby(x_col)[y_col].sum().reset_index()
     fig.add_trace(go.Scatter(
@@ -228,6 +211,149 @@ def render_calendar_streak(scope_df, full_df):
     """, unsafe_allow_html=True)
 
 
+DTBL_CSS = """
+<style>
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid rgba(0,0,0,0.06); background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.04); }
+.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
+.dtbl th, .dtbl td { padding:7px 14px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
+.dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:#ffffff; z-index:1; }
+.dtbl thead th.lbl { z-index:3; background:#f5f5f7; }
+.dtbl tr.cat td { font-weight:700; color:#1d1d1f; border-top:1px solid rgba(0,0,0,0.07); }
+.dtbl tr.cat td.lbl { background:#ffffff; }
+.dtbl tr.proj td { color:#6e6e73; }
+.dtbl tr.proj td.lbl { padding-left:34px; color:#86868b; font-weight:400; }
+.dtbl td.zero { color:#cfcfd4; }
+.dtbl td.tot { border-left:1px solid rgba(0,0,0,0.08); font-weight:600; color:#1d1d1f; }
+.dtbl tr.proj td.tot { font-weight:500; color:#6e6e73; }
+.dtbl th.txt, .dtbl td.txt { text-align:left; }
+.dtbl tr.prow td { color:#3a3a3c; font-weight:400; border-top:1px solid rgba(0,0,0,0.05); }
+.dtbl tr.prow td.lbl { color:#aeaeb2; font-weight:500; }
+</style>
+"""
+
+
+def _heat_cell(v, ref, extra_cls=""):
+    """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền xanh theo tỉ lệ v/ref."""
+    cls = extra_cls.strip()
+    if v < 0.05:
+        return f'<td class="{(cls + " zero").strip()}">·</td>'
+    a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
+    bg = f'background:rgba(52,199,89,{a:.2f});' if a > 0.02 else ''
+    cls_attr = f' class="{cls}"' if cls else ''
+    return f'<td{cls_attr} style="{bg}">{v:.1f}</td>'
+
+
+def render_data_table(df, time_col):
+    if df.empty:
+        return
+    cols = sorted(df[time_col].unique())
+    proj = (df.groupby(['Danh mục', 'Dự án', time_col])['Thời lượng (Phút)'].sum()
+              .unstack(fill_value=0).reindex(columns=cols, fill_value=0)) / 60
+    cat = (df.groupby(['Danh mục', time_col])['Thời lượng (Phút)'].sum()
+             .unstack(fill_value=0).reindex(columns=cols, fill_value=0)) / 60
+    # Thang heat riêng cho dòng Danh mục và dòng Dự án để cả hai đều thấy gradient
+    vmax_proj = float(proj.values.max()) if proj.size else 0.0
+    vmax_cat = float(cat.values.max()) if cat.size else 0.0
+
+    def col_label(key):
+        key = str(key)
+        if 'W' in key:                       # '2026-W14' -> 'W14'
+            return 'W' + key.split('W')[-1]
+        parts = key.split('-')               # '2026-05'  -> 'Th5'
+        return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
+
+    head = ''.join(f'<th>{col_label(c)}</th>' for c in cols)
+    rows_html = ''
+    for c in sorted(cat.index):
+        c_vals = cat.loc[c]
+        c_total = float(c_vals.sum())
+        rows_html += '<tr class="cat">'
+        rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        rows_html += ''.join(_heat_cell(float(c_vals[col]), vmax_cat) for col in cols)
+        rows_html += _heat_cell(c_total, 0, "tot")   # cột Tổng không tô heat cho gọn
+        rows_html += '</tr>'
+
+        sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
+        for idx, row in sub.iterrows():
+            p_total = float(row.sum())
+            rows_html += '<tr class="proj">'
+            rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            rows_html += ''.join(_heat_cell(float(row[col]), vmax_proj) for col in cols)
+            rows_html += _heat_cell(p_total, 0, "tot")
+            rows_html += '</tr>'
+
+    st.markdown(DTBL_CSS + f"""
+    <div class="dtbl-wrap">
+      <table class="dtbl">
+        <thead><tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr></thead>
+        <tbody>{rows_html}</tbody>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_detail_table(scope_df):
+    """Bảng chi tiết một kỳ (Tháng/Tuần): mỗi Danh mục/Dự án một số giờ tổng."""
+    if scope_df.empty:
+        return
+    cat = scope_df.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
+    proj = scope_df.groupby(['Danh mục', 'Dự án'])['Thời lượng (Phút)'].sum() / 60
+    vmax_cat = float(cat.max()) if len(cat) else 0.0
+    vmax_proj = float(proj.max()) if len(proj) else 0.0
+
+    rows_html = ''
+    for c in sorted(cat.index):
+        rows_html += '<tr class="cat">'
+        rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        rows_html += _heat_cell(float(cat.loc[c]), vmax_cat)
+        rows_html += '</tr>'
+
+        sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
+        for idx, v in sub.items():
+            rows_html += '<tr class="proj">'
+            rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            rows_html += _heat_cell(float(v), vmax_proj)
+            rows_html += '</tr>'
+
+    st.markdown(DTBL_CSS + f"""
+    <div class="dtbl-wrap">
+      <table class="dtbl">
+        <thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
+        <tbody>{rows_html}</tbody>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_plain_table(df, num_cols=()):
+    """Bảng liệt kê đơn giản (quy tắc, log) cùng phong cách: cột chữ căn trái, cột số căn phải."""
+    if df.empty:
+        return
+    cols = list(df.columns)
+    head = f'<th class="lbl">{html_escape(str(df.index.name or "#"))}</th>'
+    for c in cols:
+        cls = '' if c in num_cols else ' class="txt"'
+        head += f'<th{cls}>{html_escape(str(c))}</th>'
+    body = ''
+    for i, row in df.iterrows():
+        body += '<tr class="prow">'
+        body += f'<td class="lbl">{html_escape(str(i))}</td>'
+        for c in cols:
+            cls = 'num' if c in num_cols else 'txt'
+            body += f'<td class="{cls}">{html_escape(str(row[c]))}</td>'
+        body += '</tr>'
+
+    st.markdown(DTBL_CSS + f"""
+    <div class="dtbl-wrap">
+      <table class="dtbl">
+        <thead><tr>{head}</tr></thead>
+        <tbody>{body}</tbody>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Dashboard", layout="wide")
 
@@ -354,7 +480,7 @@ with tab_thong_ke:
         st.header("5. Bảng số liệu")
         view_opt = st.radio("Xem theo:", ["Tuần", "Tháng"], horizontal=True)
         time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-        st.dataframe(get_pivot_with_totals(df, time_col), width=CHART_WIDTH)
+        render_data_table(df, time_col)
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
@@ -422,7 +548,7 @@ with tab_thang:
             st.plotly_chart(fig_p_m, width='content', config=PLOTLY_CONFIG)
             
             st.markdown("**Bảng chi tiết (Giờ):**")
-            st.dataframe(get_table_with_totals(df_m), width=CHART_WIDTH)
+            render_detail_table(df_m)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
             render_hourly_chart(df_m, color_col_3)
@@ -491,7 +617,7 @@ with tab_tuan:
             st.plotly_chart(fig_p_w, width='content', config=PLOTLY_CONFIG)
             
             st.markdown("**Bảng chi tiết (Giờ):**")
-            st.dataframe(get_table_with_totals(df_w), width=CHART_WIDTH)
+            render_detail_table(df_w)
             
             st.header("4. Xu hướng làm việc theo khung giờ")
             render_hourly_chart(df_w, color_col_4)
@@ -606,7 +732,7 @@ with tab_chuan_bi:
         if not mapping_df.empty:
             display_map = mapping_df.sort_values(by='Danh mục').reset_index(drop=True)
             display_map.index = display_map.index + 1
-            st.dataframe(display_map, width='stretch')
+            render_plain_table(display_map)
 
     st.divider()
     st.header("3. Dữ liệu làm việc hiện tại")
@@ -615,8 +741,9 @@ with tab_chuan_bi:
         disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
         disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
         if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
+        disp_db = disp_db.reset_index(drop=True)
         disp_db.index = disp_db.index + 1
-        st.dataframe(disp_db, width='stretch')
+        render_plain_table(disp_db, num_cols={'Thời lượng (Phút)'})
     
     st.divider()
     st.header("4. Quản lý hệ thống")
