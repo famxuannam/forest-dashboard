@@ -142,19 +142,23 @@ def fmt_week(w):
     sun = mon + timedelta(days=6)
     return f"{mon:%d/%m} – {sun:%d/%m/%Y}"
 
-def period_stepper(periods, key, fmt):
-    """Chọn kỳ bằng nút lùi/tiến (icon Material) + selectbox để nhảy nhanh. Trả về kỳ đã chọn."""
+def period_stepper(periods, key, fmt, current=None):
+    """Chọn kỳ: nút lùi/tiến + selectbox nhảy nhanh + nút về kỳ hiện tại (icon Material)."""
     pk = f"{key}_pick"
     if pk not in st.session_state or st.session_state[pk] not in periods:
         st.session_state[pk] = periods[-1]
     cur_i = periods.index(st.session_state[pk])
+    today_target = current if current in periods else periods[-1]
 
     def _step(delta):
         i = periods.index(st.session_state[pk]) if st.session_state[pk] in periods else len(periods) - 1
         st.session_state[pk] = periods[max(0, min(len(periods) - 1, i + delta))]
 
+    def _today():
+        st.session_state[pk] = today_target
+
     with st.container(key=f"stepper_{key}"):
-        cprev, cmid, cnext = st.columns([1, 8, 1], vertical_alignment="center")
+        cprev, cmid, cnext, ctoday = st.columns([1, 7, 1, 1], vertical_alignment="center")
         with cprev:
             st.button("", icon=":material/chevron_left:", key=f"{key}_prev", on_click=_step, args=(-1,),
                       disabled=cur_i == 0, use_container_width=True)
@@ -163,6 +167,10 @@ def period_stepper(periods, key, fmt):
         with cnext:
             st.button("", icon=":material/chevron_right:", key=f"{key}_next", on_click=_step, args=(1,),
                       disabled=cur_i == len(periods) - 1, use_container_width=True)
+        with ctoday:
+            st.button("", icon=":material/today:", key=f"{key}_today", on_click=_today,
+                      help="Về kỳ hiện tại", disabled=st.session_state[pk] == today_target,
+                      use_container_width=True)
     return st.session_state[pk]
 
 def format_relative(ts):
@@ -185,6 +193,14 @@ def format_relative(ts):
     return f"{mins} phút trước"
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
+def _sub(text):
+    """Nhãn nhóm nhỏ (chữ hoa xám) để gom các thẻ số liệu."""
+    st.markdown(
+        f"<p style='margin:16px 0 2px 0; font-size:13px; color:#86868b; font-weight:600;"
+        f" text-transform:uppercase; letter-spacing:0.5px;'>{text}</p>",
+        unsafe_allow_html=True,
+    )
+
 def _fmt_delta(d):
     """Số nguyên thì bỏ phần thập phân (+5), số lẻ thì giữ 1 chữ số (+1.9)."""
     return f"{d:+.0f}" if abs(d - round(d)) < 1e-9 else f"{d:+.1f}"
@@ -321,6 +337,34 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def render_week_agenda(scope_df):
+    """Lịch tuần theo giờ: trục ngang = thứ, trục dọc = giờ 0-24, mỗi phiên là một thanh."""
+    if scope_df.empty:
+        return
+    ag = scope_df.dropna(subset=['Thời gian bắt đầu', 'Thời gian kết thúc']).copy()
+    if ag.empty:
+        return
+    ag['Bắt đầu (giờ)'] = ag['Thời gian bắt đầu'].dt.hour + ag['Thời gian bắt đầu'].dt.minute / 60
+    ag['Kết thúc (giờ)'] = ag['Thời gian kết thúc'].dt.hour + ag['Thời gian kết thúc'].dt.minute / 60
+    ag.loc[ag['Kết thúc (giờ)'] <= ag['Bắt đầu (giờ)'], 'Kết thúc (giờ)'] = 24.0  # phiên qua nửa đêm -> kẹp 24h
+    ag['Giờ BĐ'] = ag['Thời gian bắt đầu'].dt.strftime('%H:%M')
+    ag['Giờ KT'] = ag['Thời gian kết thúc'].dt.strftime('%H:%M')
+
+    cats = [c for c in COLOR_MAP if c in set(ag['Danh mục'])]
+    chart = alt.Chart(ag).mark_bar(cornerRadius=3, opacity=0.92).encode(
+        x=alt.X('Thứ:N', sort=DAYS_ORDER, title='',
+                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False)),
+        y=alt.Y('Bắt đầu (giờ):Q', scale=alt.Scale(domain=[0, 24], reverse=True), title='Giờ',
+                axis=alt.Axis(values=list(range(0, 25, 2)), format='d')),
+        y2='Kết thúc (giờ):Q',
+        color=alt.Color('Danh mục:N', scale=alt.Scale(domain=cats, range=[COLOR_MAP[c] for c in cats]),
+                        legend=alt.Legend(orient='top', title='')),
+        tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Dự án:N', title='Dự án'),
+                 alt.Tooltip('Giờ BĐ:N', title='Bắt đầu'), alt.Tooltip('Giờ KT:N', title='Kết thúc')],
+    ).properties(height=420).configure_view(strokeWidth=0)
+    st.altair_chart(chart, width='stretch')
 
 
 DTBL_CSS = """
@@ -695,7 +739,7 @@ if nav == "Thống kê chung":
 elif nav == "Báo cáo tháng":
     if not df.empty:
         months = sorted(df['Tháng'].unique())
-        selected_month = period_stepper(months, key="month", fmt=fmt_month)
+        selected_month = period_stepper(months, key="month", fmt=fmt_month, current=date.today().strftime('%Y-%m'))
         df_m = df[df['Tháng'] == selected_month]
         
         df_other_months = df[df['Tháng'] != selected_month]
@@ -786,7 +830,7 @@ elif nav == "Báo cáo tháng":
 elif nav == "Báo cáo tuần":
     if not df.empty:
         weeks = sorted(df['Tuần'].unique())
-        selected_week = period_stepper(weeks, key="week", fmt=fmt_week)
+        selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=date.today().strftime('%G-W%V'))
         df_w = df[df['Tuần'] == selected_week]
         
         df_other_weeks = df[df['Tuần'] != selected_week]
@@ -869,6 +913,10 @@ elif nav == "Báo cáo tuần":
             st.header("5. Xu hướng làm việc theo khung giờ")
             render_hourly_chart(df_w, color_col_4)
 
+            st.header("6. Lịch trồng cây theo giờ")
+            st.caption("Mỗi thanh là một phiên trồng cây, theo thứ trong tuần và khung giờ.")
+            render_week_agenda(df_w)
+
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
 # ==========================================
@@ -891,23 +939,37 @@ elif nav == "Báo cáo theo nhóm":
         df_g = df[df['Danh mục'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
         
         st.header("1. Tổng quan")
-        c1, c2, c3, c4 = st.columns(4)
         curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
         curr_trees_g = len(df_g)
         num_days_g = df_g['Ngày'].nunique() or 1
-        
-        with c1: render_glass_metric("Tổng thời gian", f"{curr_hrs_g:.1f}h")
-        with c2: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f}h")
-        with c3: render_glass_metric("Số cây đã trồng", f"{curr_trees_g}")
-        with c4: render_glass_metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f}")
+        num_weeks_g = df_g['Tuần'].nunique() or 1
 
-        st.write("")
-        e1, e2, e3 = st.columns(3)
+        _sub("Tổng")
+        t1, t2 = st.columns(2)
+        with t1: render_glass_metric("Tổng thời gian", f"{curr_hrs_g:.1f}h")
+        with t2: render_glass_metric("Số cây đã trồng", f"{curr_trees_g}")
+
+        _sub("Trung bình")
+        a1, a2, a3, a4 = st.columns(4)
+        with a1: render_glass_metric("Thời gian TB/ngày", f"{curr_hrs_g/num_days_g:.1f}h")
+        with a2: render_glass_metric("Thời gian TB/tuần", f"{curr_hrs_g/num_weeks_g:.1f}h")
+        with a3: render_glass_metric("Số cây TB/ngày", f"{curr_trees_g/num_days_g:.1f}")
+        with a4: render_glass_metric("Số cây TB/tuần", f"{curr_trees_g/num_weeks_g:.1f}")
+
+        df_g_thisweek = df_g[df_g['Tuần'] == date.today().strftime('%G-W%V')]
+        if not df_g_thisweek.empty:
+            _sub("Tuần này")
+            w1, w2 = st.columns(2)
+            with w1: render_glass_metric("Thời gian tuần này", f"{df_g_thisweek['Thời lượng (Phút)'].sum()/60:.1f}h")
+            with w2: render_glass_metric("Số cây tuần này", f"{len(df_g_thisweek)}")
+
+        _sub("Mốc thời gian")
+        m1, m2, m3 = st.columns(3)
         first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
         last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
-        with e1: render_glass_metric("Ngày đầu tiên", first_day)
-        with e2: render_glass_metric("Ngày gần nhất", last_day)
-        with e3: render_glass_metric("Số ngày có hoạt động", f"{df_g['Ngày'].nunique()}")
+        with m1: render_glass_metric("Ngày đầu tiên", first_day)
+        with m2: render_glass_metric("Ngày gần nhất", last_day)
+        with m3: render_glass_metric("Số ngày có hoạt động", f"{df_g['Ngày'].nunique()}")
 
         st.header("2. Xu hướng theo thời gian")
         time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
