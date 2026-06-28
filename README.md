@@ -78,14 +78,14 @@ gần nhất).
 
 Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
 
-- **Trong mục Tổng quan** — một **thanh phân bố** chia phiên thành 4 nhóm **Ngắn** (< 25′) /
-  **Trung bình** (25–50′) / **Dài** (50–90′) / **Rất Dài** (≥ 90′), kèm tỉ lệ % và số phiên
-  mỗi nhóm. Các mốc 25 / 50 / 90 neo theo **Pomodoro** (1 pomodoro = 25 phút tập trung) và
-  ngưỡng deep-work ~90 phút.
+- **Trong mục Tổng quan** — một **thanh phân bố** chia phiên thành 5 nhóm **Tối thiểu** (= 10′,
+  mức sàn của Forest) / **Ngắn** (< 25′) / **Trung bình** (25–50′) / **Dài** (50–90′) / **Rất
+  Dài** (≥ 90′), kèm tỉ lệ % và số phiên mỗi nhóm. Các mốc 25 / 50 / 90 neo theo **Pomodoro**
+  (1 pomodoro = 25 phút tập trung) và ngưỡng deep-work ~90 phút.
 - **Mục “Phân bố độ dài phiên”** (ngay sau Tổng quan) — một **biểu đồ histogram** đếm số phiên
   theo từng khoảng 5 phút, từ **10 phút** (mức tối thiểu của Forest) đến 60, phần dài hơn gộp
   vào **≥ 60′**. Histogram cho thấy đúng *hình dạng* thói quen của bạn (ví dụ phần lớn phiên
-  dồn ở 10–15 phút) mà thanh 4-nhóm không thể hiện được. Trên biểu đồ, **đường chấm** là các
+  dồn ở 10–15 phút) mà các nhóm cố định không thể hiện được. Trên biểu đồ, **đường chấm** là các
   mốc 25 / 50 / 90′, **đường gạch** là độ dài trung bình mỗi phiên.
 
 ### Các biểu đồ
