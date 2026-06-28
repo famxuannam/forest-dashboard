@@ -13,6 +13,10 @@ from datetime import date, timedelta
 DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 
+# Tên thứ tiếng Việt (dùng chung mọi nơi)
+VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
+           "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
+
 # Bảng màu phong cách Apple / Latte sáng
 MAC_COLORS = [
     "#007aff", # Blue (Primary)
@@ -98,8 +102,7 @@ def prep_analysis_data():
     db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%G-W%V') # Tuần ISO, bắt đầu Thứ Hai
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
     
-    tieng_viet_days = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
-    db['Thứ'] = db['Thời gian bắt đầu'].dt.day_name().map(tieng_viet_days)
+    db['Thứ'] = db['Thời gian bắt đầu'].dt.day_name().map(VN_DAYS)
     return db
 
 def add_total_labels(fig, df, x_col, y_col):
@@ -342,27 +345,27 @@ def _buoi_of(h):
     return "Khuya"
 
 
-def _session_hour_dist(scope_df, color_col):
-    """Trải thời lượng MỖI phiên ra các khung giờ mà nó thực sự đi qua (thay vì dồn
-    hết vào giờ bắt đầu). Trả về DataFrame (Khung giờ, color_col, giờ)."""
+def _explode_session_hours(scope_df, key_col):
+    """Trải thời lượng MỖI phiên ra các khung giờ nó thực sự đi qua (thay vì dồn hết
+    vào giờ bắt đầu). Trả về DataFrame (key_col, Khung giờ, giờ)."""
     out = []
-    for s, e, c in zip(scope_df['Thời gian bắt đầu'], scope_df['Thời gian kết thúc'], scope_df[color_col]):
+    for s, e, k in zip(scope_df['Thời gian bắt đầu'], scope_df['Thời gian kết thúc'], scope_df[key_col]):
         if pd.isna(s) or pd.isna(e) or e <= s:
             continue
         cur = s
         while cur < e:
             nxt = cur.floor('h') + pd.Timedelta(hours=1)
             seg_end = e if e < nxt else nxt
-            out.append((int(cur.hour), c, (seg_end - cur).total_seconds() / 3600.0))
+            out.append((k, int(cur.hour), (seg_end - cur).total_seconds() / 3600.0))
             cur = seg_end
-    return pd.DataFrame(out, columns=['Khung giờ', color_col, 'giờ'])
+    return pd.DataFrame(out, columns=[key_col, 'Khung giờ', 'giờ'])
 
 
 def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     if scope_df.empty:
         return
     num_days = scope_df['Ngày'].nunique() or 1
-    dist = _session_hour_dist(scope_df, color_col)
+    dist = _explode_session_hours(scope_df, color_col)
     if dist.empty:
         return
     dist['giờ'] = dist['giờ'] / num_days  # trung bình mỗi ngày có hoạt động
@@ -417,33 +420,16 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
         )
 
 
-def _dayhour_dist(scope_df):
-    """Trải thời lượng mỗi phiên ra (thứ, khung giờ). Thứ lấy theo thời điểm bắt đầu phiên."""
-    out = []
-    for s, e, wd in zip(scope_df['Thời gian bắt đầu'], scope_df['Thời gian kết thúc'], scope_df['Thứ']):
-        if pd.isna(s) or pd.isna(e) or e <= s:
-            continue
-        cur = s
-        while cur < e:
-            nxt = cur.floor('h') + pd.Timedelta(hours=1)
-            seg_end = e if e < nxt else nxt
-            out.append((wd, int(cur.hour), (seg_end - cur).total_seconds() / 3600.0))
-            cur = seg_end
-    return pd.DataFrame(out, columns=['Thứ', 'Khung giờ', 'giờ'])
-
-
 def render_dayhour_heatmap(scope_df):
     """Bản đồ nhiệt 7 thứ × 24 giờ: ô càng đậm = trung bình giờ/ngày ở khung giờ đó
     của thứ đó càng cao -> nhận ra 'tập trung tốt nhất vào sáng thứ mấy'."""
     if scope_df.empty:
         return
-    d = _dayhour_dist(scope_df)
+    d = _explode_session_hours(scope_df, 'Thứ')
     if d.empty:
         return
-    days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
-                "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
     span = pd.date_range(pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max()))
-    wd_count = pd.Series(span.day_name()).map(days_map).value_counts()
+    wd_count = pd.Series(span.day_name()).map(VN_DAYS).value_counts()
 
     grp = d.groupby(['Thứ', 'Khung giờ'])['giờ'].sum()
     full = pd.MultiIndex.from_product([DAYS_ORDER, range(24)], names=['Thứ', 'Khung giờ'])
@@ -499,9 +485,7 @@ def _weekday_avg(scope_df):
     if scope_df.empty:
         return pd.Series(dtype=float)
     mn, mx = pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max())
-    days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
-                "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
-    wd_count = pd.Series(pd.date_range(mn, mx).day_name()).map(days_map).value_counts()
+    wd_count = pd.Series(pd.date_range(mn, mx).day_name()).map(VN_DAYS).value_counts()
     by = scope_df.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
     return (by / wd_count).reindex(DAYS_ORDER).dropna()
 
@@ -518,8 +502,7 @@ def render_calendar_grid(scope_df, full_df):
     cal_data = pd.DataFrame({'Ngày': all_dates})
 
     cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
-    days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5", "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
-    cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(days_map)
+    cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(VN_DAYS)
     cal_data['Ngày_str'] = cal_data['Ngày'].dt.date
 
     grp = scope_df.groupby('Ngày')['Thời lượng (Phút)'].sum().reset_index()
@@ -1345,23 +1328,25 @@ elif nav == "Báo cáo theo nhóm":
             df_g_cal = range_radio(df_g, key="range_grp_cal")
             render_calendar_grid(df_g_cal, df_g_cal)
         with st.expander("3. Xu hướng theo thời gian", expanded=True):
-            time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
+            g1, g2, g3 = st.columns([5, 3, 2])
+            with g1:
+                _rlg = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend_grp")
+            with g2:
+                time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
+            with g3:
+                color_col_5 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Dự án", key="rad_tab5")
+            _rlg = _rlg or "90 ngày"
             time_col_5 = time_col_5 or "Ngày"
-            t_g = df_g.groupby(time_col_5)['Thời lượng (Phút)'].sum().reset_index()
-            t_g['Số giờ'] = t_g['Thời lượng (Phút)'] / 60
+            color_col_5 = color_col_5 or "Dự án"
+            df_g_trend = filter_by_range(df_g, _rlg)
 
+            tg = df_g_trend.groupby([time_col_5, color_col_5])['Thời lượng (Phút)'].sum().reset_index()
+            tg['Số giờ'] = tg['Thời lượng (Phút)'] / 60
             if time_col_5 == "Ngày":
-                t_g['Ngày'] = pd.to_datetime(t_g['Ngày'])
-                fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
-                fig_g.update_traces(name='Theo ngày', fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
-                fig_g = add_week_dividers(fig_g, t_g['Ngày'])
-                fig_g = add_ma_overlay(fig_g, df_g, 7)
-            else:
-                fig_g = px.bar(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
-                fig_g = add_total_labels(fig_g, t_g, time_col_5, 'Số giờ')
-
-            fig_g.update_layout(width=CHART_WIDTH, xaxis_title=time_col_5, yaxis_title="Số giờ")
-            fig_g = format_plotly_fig(fig_g)
+                tg['Ngày'] = pd.to_datetime(tg['Ngày'])
+            fig_g = render_trend_fig(tg, time_col_5, color_col_5,
+                                     ma_df=df_g_trend if time_col_5 == "Ngày" else None)
+            fig_g.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
         with st.expander("4. Bảng số liệu", expanded=True):
             grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key="view_grp")
