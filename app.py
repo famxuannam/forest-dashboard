@@ -339,16 +339,21 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
         name='Tổng cộng'
     ))
 
-    # Dải nền theo buổi để dễ đọc "sáng/chiều/tối/khuya"
-    for name, x0, x1, col in BUOI_BANDS:
-        fig.add_vrect(x0=x0 - 0.5, x1=x1 - 0.5, fillcolor=col, opacity=1, layer="below", line_width=0,
+    # Dải nền theo buổi để dễ đọc "sáng/chiều/tối/khuya".
+    # Chừa lề hai bên (PAD) để cột giờ 0 và giờ 23 không bị khung biểu đồ che.
+    PAD = 0.7
+    _last = len(BUOI_BANDS) - 1
+    for i, (name, x0, x1, col) in enumerate(BUOI_BANDS):
+        lo = -PAD if i == 0 else x0 - 0.5
+        hi = 23 + PAD if i == _last else x1 - 0.5
+        fig.add_vrect(x0=lo, x1=hi, fillcolor=col, opacity=1, layer="below", line_width=0,
                       annotation_text=name.strip(), annotation_position="top left",
                       annotation=dict(font_size=11, font_color="#9a9aa0"))
 
     y_max = float(tot.max()) or 1.0
     fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
                       yaxis=dict(range=[0, y_max * 1.28]),
-                      xaxis=dict(range=[-0.5, 23.5], dtick=2))
+                      xaxis=dict(range=[-PAD, 23 + PAD], dtick=2))
     fig = format_plotly_fig(fig)
     fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.2f} h/ngày<extra></extra>')
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
