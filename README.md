@@ -79,8 +79,9 @@ gần nhất).
 Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
 
 - **Trong mục Tổng quan** — một **thanh phân bố** chia phiên thành 5 nhóm **Tối thiểu** (= 10′,
-  mức sàn của Forest) / **Ngắn** (< 25′) / **Trung bình** (25–50′) / **Dài** (50–90′) / **Rất
-  Dài** (≥ 90′), kèm tỉ lệ % và số phiên mỗi nhóm. Các mốc 25 / 50 / 90 neo theo **Pomodoro**
+  mức sàn của Forest) / **Ngắn** (< 25′) / **Trung bình** (25–<50′) / **Dài** (50–<90′) /
+  **Rất Dài** (≥ 90′), kèm tỉ lệ % và số phiên mỗi nhóm. Ranh giới là *nửa mở*: phiên đúng
+  25′ thuộc Trung bình, đúng 50′ thuộc Dài, đúng 90′ thuộc Rất Dài. Các mốc 25 / 50 / 90 neo theo **Pomodoro**
   (1 pomodoro = 25 phút tập trung) và ngưỡng deep-work ~90 phút.
 - **Mục “Phân bố độ dài phiên”** (ngay trước Bảng số liệu) — một **biểu đồ histogram** đếm số phiên
   theo từng khoảng 5 phút, từ **10 phút** (mức tối thiểu của Forest) đến 60, phần dài hơn gộp

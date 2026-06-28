@@ -376,8 +376,8 @@ def render_top_3(df, col_name, title, week_key=None):
 SESSION_BUCKETS = [
     ("Tối thiểu", "= 10′",  0,   11,    "#dce9fb"),
     ("Ngắn",      "< 25′",  11,  25,    "#a9ccf4"),
-    ("Trung bình","25–50′", 25,  50,    "#7fb5ff"),
-    ("Dài",       "50–90′", 50,  90,    "#2f86ec"),
+    ("Trung bình","25–<50′",25,  50,    "#7fb5ff"),
+    ("Dài",       "50–<90′",50,  90,    "#2f86ec"),
     ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
 ]
 LEN_THRESHOLDS = (25, 50, 90)  # mốc tham chiếu trên histogram
