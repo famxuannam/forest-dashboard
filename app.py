@@ -649,15 +649,33 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 
     done = t[t['Trạng thái'] == 'Đã xong']
     reading = t[t['Trạng thái'] == 'Đang đọc']
-    parts = [f"**{len(t)}** cuốn · tổng **{t['Tổng giờ'].sum():.1f}h**"]
+
+    # Số liệu đầu mục: panel thẻ giống "Tổng quan"
+    _secs = []
     if len(done):
+        _secs.append({"label": "Đã xong", "chips": [
+            {"k": "Số cuốn", "v": f"{len(done)}"},
+            {"k": "TB giờ/cuốn", "v": f"{done['Tổng giờ'].mean():.1f}h"},
+            {"k": "TB ngày/cuốn", "v": f"{done['Số ngày'].mean():.0f}"},
+        ]})
         top = done.loc[done['Tổng giờ'].idxmax()]
-        parts.append(f"đã xong **{len(done)}** (TB **{done['Tổng giờ'].mean():.1f}h/cuốn**, "
-                     f"**{done['Số ngày'].mean():.0f} ngày/cuốn**)")
-        parts.append(f"ngốn nhiều giờ nhất: **{top['Cuốn sách']}** ({top['Tổng giờ']:.1f}h)")
+        fast = done.loc[done['Số ngày'].idxmin()]
+        _secs.append({"label": "Nổi bật", "chips": [
+            {"k": "Nhiều giờ nhất", "v": f"{top['Cuốn sách']} ({top['Tổng giờ']:.1f}h)"},
+            {"k": "Đọc nhanh nhất", "v": f"{fast['Cuốn sách']} ({int(fast['Số ngày'])} ngày)"},
+        ]})
     if len(reading):
-        parts.append("đang đọc: **" + "**, **".join(reading['Cuốn sách']) + "**")
-    st.markdown(" · ".join(parts))
+        _secs.append({"label": "Đang đọc", "chips": [
+            {"k": r['Cuốn sách'], "v": f"{r['Tổng giờ']:.1f}h", "hl": True}
+            for _, r in reading.iterrows()
+        ]})
+    render_stat_panel(
+        hero_items=[
+            {"label": "Số cuốn", "value": f"{len(t)}"},
+            {"label": "Tổng giờ", "value": f"{t['Tổng giờ'].sum():.1f}h"},
+        ],
+        sections=_secs,
+    )
 
     tl = t.copy()
     tl['end'] = pd.to_datetime(tl['Gần nhất']) + pd.Timedelta(days=1)
@@ -671,10 +689,27 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
                       legend=dict(orientation='h', y=1.15, x=0))
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
-    disp = t.copy()
-    disp['Bắt đầu'] = pd.to_datetime(disp['Bắt đầu']).dt.strftime('%d/%m/%Y')
-    disp['Gần nhất'] = pd.to_datetime(disp['Gần nhất']).dt.strftime('%d/%m/%Y')
-    st.dataframe(disp, width='stretch', hide_index=True)
+    # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu"
+    vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
+    rows_html = ''
+    for _, r in t.iterrows():
+        s_col = '#007aff' if r['Trạng thái'] == 'Đang đọc' else '#86868b'
+        start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
+        last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
+        rows_html += '<tr class="prow">'
+        rows_html += f'<td class="lbl">{html_escape(str(r["Cuốn sách"]))}</td>'
+        rows_html += f'<td>{start_s}</td><td>{last_s}</td>'
+        rows_html += f'<td>{int(r["Số ngày"])}</td><td>{int(r["Ngày đọc"])}</td>'
+        rows_html += _heat_cell(float(r['Tổng giờ']), vmax_h)
+        rows_html += f'<td>{int(r["Số phiên"])}</td><td>{r["Giờ/tuần"]:.1f}</td>'
+        rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
+        rows_html += '</tr>'
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Cuốn sách</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>Ngày đọc</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th class="txt">Trạng thái</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
     st.caption("“Đang đọc” = có phiên trong ~2 tuần gần nhất; “Đã xong” = lâu hơn (suy ra tự động). "
                "“Số ngày” = khoảng từ phiên đầu tới phiên gần nhất; “Giờ/tuần” tính trên khoảng đó.")
 
