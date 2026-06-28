@@ -129,33 +129,21 @@ def add_ma_overlay(fig, scope_df, window=7):
     return fig
 
 
-def render_trend_fig(grouped, time_col, color_col, view, ma_df=None, cat_order=None, x_title=None):
-    """Biểu đồ xu hướng theo Kiểu xem: Cột chồng / Tỉ trọng % / Đường.
+def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
+    """Biểu đồ xu hướng dạng cột chồng theo thời gian.
     grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
-    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày ở chế độ Cột chồng.
+    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày.
     cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
-    is_day = time_col == "Ngày"
     co = {time_col: cat_order} if cat_order else None
-    if view == "Đường":
-        fig = px.line(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
-    else:
-        fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
-        if view == "Tỉ trọng %":
-            fig.update_layout(barnorm='percent')  # barnorm là thuộc tính layout, không phải tham số của px.bar
-
-    if is_day:
+    fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
+    if time_col == "Ngày":
         fig = add_week_dividers(fig, grouped[time_col])
-        if view == "Cột chồng" and ma_df is not None:
+        if ma_df is not None:
             fig = add_ma_overlay(fig, ma_df, 7)
-    elif view == "Cột chồng":
+    else:
         fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
-
-    ytitle = "Tỉ trọng (%)" if view == "Tỉ trọng %" else "Số giờ"
-    fig.update_layout(xaxis_title=x_title or time_col, yaxis_title=ytitle)
-    fig = format_plotly_fig(fig)
-    if view == "Tỉ trọng %":
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f}%<extra></extra>')
-    return fig
+    fig.update_layout(xaxis_title=x_title or time_col, yaxis_title="Số giờ")
+    return format_plotly_fig(fig)
 
 def add_week_dividers(fig, dates):
     """Kẻ đường nét đứt giữa Chủ Nhật và Thứ Hai (ranh giới tuần) cho biểu đồ theo ngày."""
@@ -778,7 +766,7 @@ def render_plain_table(df, num_cols=()):
 
 
 # --- GIAO DIỆN CHÍNH ---
-st.set_page_config(page_title="Forest Dashboard", page_icon=":material/forest:", layout="wide")
+st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
 st.markdown(
     """
@@ -1078,30 +1066,28 @@ if nav == "Thống kê chung":
             _rl = _rl or "90 ngày"
             time_col_2 = time_col_2 or "Ngày"
             color_col_2 = color_col_2 or "Danh mục"
-            view_2 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend2")
-            view_2 = view_2 or "Cột chồng"
             df_trend = filter_by_range(df, _rl)
 
             trend_group = df_trend.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
             trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
             if time_col_2 == "Ngày":
                 trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
-            fig1 = render_trend_fig(trend_group, time_col_2, color_col_2, view_2,
+            fig1 = render_trend_fig(trend_group, time_col_2, color_col_2,
                                     ma_df=df_trend if time_col_2 == "Ngày" else None)
             fig1.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
         with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
-            st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
-            render_hourly_chart(df_trend, color_col_2, x_title="Khung giờ (0h - 23h)")
+            df_hour = range_radio(df, key="range_hour")
+            render_hourly_chart(df_hour, color_col_2, x_title="Khung giờ (0h - 23h)")
         with st.expander("5. Giờ tập trung theo thứ", expanded=True):
-            st.caption(f"Trung bình giờ/ngày theo thứ × khung giờ — theo khoảng đã chọn ở mục 3: {_rl}")
-            render_dayhour_heatmap(df_trend)
+            df_heat = range_radio(df, key="range_heat")
+            render_dayhour_heatmap(df_heat)
         with st.expander("6. Bảng số liệu", expanded=True):
-            st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
+            df_tbl = range_radio(df, key="range_table")
             view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
             view_opt = view_opt or "Tuần"
             time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-            render_data_table(df_trend, time_col)
+            render_data_table(df_tbl, time_col)
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
@@ -1179,12 +1165,10 @@ elif nav == "Báo cáo tháng":
                 fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
                 st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("3. Xu hướng theo thời gian", expanded=True):
-                view_3 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend3")
-                view_3 = view_3 or "Cột chồng"
                 t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
-                fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, view_3, ma_df=df_m, x_title="Ngày trong tháng")
+                fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
                 fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
@@ -1267,11 +1251,9 @@ elif nav == "Báo cáo tuần":
                 fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
                 st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("3. Xu hướng theo thời gian", expanded=True):
-                view_4 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend4")
-                view_4 = view_4 or "Cột chồng"
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-                fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, view_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
+                fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
                 fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
