@@ -83,6 +83,33 @@ def save_mapping(df):
     df.to_csv(MAPPING_FILE, index=False)
     st.cache_data.clear()
 
+
+def parse_forest_csv(uploaded):
+    """Đọc & chuẩn hoá CSV xuất từ Forest. Trả về (df_sạch, stats, missing_cols).
+    stats gồm: raw (tổng dòng), failed (phiên thất bại), unset (unset/rỗng), valid (hợp lệ)."""
+    df = pd.read_csv(uploaded).rename(columns={
+        'Tag': 'Dự án', 'Project': 'Dự án',
+        'Start Time': 'Thời gian bắt đầu', 'End Time': 'Thời gian kết thúc'})
+    stats = {'raw': len(df), 'failed': 0, 'unset': 0, 'valid': 0}
+    if 'Is Success' in df.columns:
+        stats['failed'] = int((df['Is Success'] != True).sum())
+        df = df[df['Is Success'] == True]
+    missing = [c for c in ['Dự án', 'Thời gian bắt đầu', 'Thời gian kết thúc'] if c not in df.columns]
+    if missing:
+        return None, stats, missing
+    df = df.dropna(subset=['Dự án'])
+    df['Thời gian bắt đầu'] = pd.to_datetime(df['Thời gian bắt đầu'], errors='coerce')
+    df['Thời gian kết thúc'] = pd.to_datetime(df['Thời gian kết thúc'], errors='coerce')
+    df = df.dropna(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'])
+    _n = len(df)
+    df = df[~df['Dự án'].astype(str).str.strip().str.lower().isin(['unset', ''])]
+    stats['unset'] = _n - len(df)
+    df['Thời lượng (Phút)'] = ((df['Thời gian kết thúc'] - df['Thời gian bắt đầu']).dt.total_seconds() / 60).round().astype(int)
+    df = df[['Thời gian bắt đầu', 'Thời gian kết thúc', 'Dự án', 'Thời lượng (Phút)']]
+    stats['valid'] = len(df)
+    return df, stats, []
+
+
 @st.cache_data
 def prep_analysis_data():
     db = load_db().copy()
@@ -1357,37 +1384,38 @@ elif nav == "Báo cáo theo nhóm":
 # ==========================================
 elif nav == "Chuẩn bị dữ liệu":
     with st.expander("1. Tải lên từ Forest", expanded=True):
+        _msg = st.session_state.pop('import_msg', None)
+        if _msg:
+            st.success(_msg)
+        st.caption("Dùng file CSV xuất từ app Forest — cần các cột Tag/Project, Start Time, End Time, Is Success.")
         forest_file = st.file_uploader("Tải lên file CSV từ máy tính", type=["csv"], key="forest")
         if forest_file:
-            if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
-                new_data = pd.read_csv(forest_file)
-                if 'Tag' in new_data.columns: new_data.rename(columns={'Tag': 'Dự án'}, inplace=True)
-                if 'Project' in new_data.columns: new_data.rename(columns={'Project': 'Dự án'}, inplace=True)
-                if 'Start Time' in new_data.columns: new_data.rename(columns={'Start Time': 'Thời gian bắt đầu'}, inplace=True)
-                if 'End Time' in new_data.columns: new_data.rename(columns={'End Time': 'Thời gian kết thúc'}, inplace=True)
-                if 'Is Success' in new_data.columns: new_data = new_data[new_data['Is Success'] == True]
-                required = ['Dự án', 'Thời gian bắt đầu', 'Thời gian kết thúc']
-                missing = [c for c in required if c not in new_data.columns]
-                if not missing:
-                    new_data = new_data.dropna(subset=['Dự án'])
-                    new_data['Thời gian bắt đầu'] = pd.to_datetime(new_data['Thời gian bắt đầu'], errors='coerce')
-                    new_data['Thời gian kết thúc'] = pd.to_datetime(new_data['Thời gian kết thúc'], errors='coerce')
-                    new_data['Thời lượng (Phút)'] = ((new_data['Thời gian kết thúc'] - new_data['Thời gian bắt đầu']).dt.total_seconds() / 60).round().astype(int)
-                    cols = ['Thời gian bắt đầu', 'Thời gian kết thúc', 'Dự án', 'Thời lượng (Phút)']
-                    new_data = new_data[[c for c in cols if c in new_data.columns]]
+            df_new, stats, missing = parse_forest_csv(forest_file)
+            if missing:
+                st.error("File thiếu cột: " + ", ".join(missing) + ". Hãy dùng CSV xuất từ Forest (Tag/Project, Start Time, End Time, Is Success).")
+            elif df_new.empty:
+                st.warning("Không tìm thấy phiên hợp lệ nào trong file.")
+            else:
+                st.caption(f"Đọc được **{stats['valid']}** phiên hợp lệ — bỏ {stats['failed']} phiên thất bại, "
+                           f"{stats['unset']} phiên unset/rỗng. Xem trước:")
+                preview = df_new.head(8).copy()
+                preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
+                preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
+                st.dataframe(preview, width='stretch', hide_index=True)
+                if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
                     db = load_db()
-                    combined_db = pd.concat([db, new_data])
-                    combined_db = combined_db.dropna(subset=['Dự án'])
-                    combined_db = combined_db[~combined_db['Dự án'].astype(str).str.strip().str.lower().isin(['unset', ''])]
-                    combined_db['Thời gian bắt đầu'] = combined_db['Thời gian bắt đầu'].astype(str)
-                    combined_db['Thời gian kết thúc'] = combined_db['Thời gian kết thúc'].astype(str)
-                    combined_db = combined_db.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-                    save_db(combined_db)
-                    st.success("Đã cập nhật dữ liệu thành công!")
-                    time.sleep(0.5)
+                    before = len(db)
+                    rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
+                    combined = pd.concat([db, df_new])
+                    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].astype(str)
+                    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].astype(str)
+                    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
+                    added = len(combined) - before
+                    save_db(combined)
+                    st.session_state['import_msg'] = (
+                        f"Đã thêm {added} phiên mới (bỏ {stats['valid'] - added} trùng, "
+                        f"{stats['failed']} thất bại, {stats['unset']} unset){rng if added else ''}.")
                     st.rerun()
-                else:
-                    st.error("File không hợp lệ. Thiếu cột: " + ", ".join(missing) + ". Hãy dùng file CSV xuất từ Forest (Tag/Project, Start Time, End Time).")
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
