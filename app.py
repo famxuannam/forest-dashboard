@@ -1083,8 +1083,11 @@ if nav == "Thống kê chung":
             df_heat = range_radio(df, key="range_heat")
             render_dayhour_heatmap(df_heat)
         with st.expander("6. Bảng số liệu", expanded=True):
-            df_tbl = range_radio(df, key="range_table")
-            view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
+            cc1, cc2 = st.columns([5, 2])
+            with cc1:
+                df_tbl = range_radio(df, key="range_table")
+            with cc2:
+                view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
             view_opt = view_opt or "Tuần"
             time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
             render_data_table(df_tbl, time_col)
