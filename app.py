@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import os
+import io
 import time
+import zipfile
 import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
@@ -1474,36 +1476,54 @@ elif nav == "Chuẩn bị dữ liệu":
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
-            st.caption("Tải về để lưu trữ; tên file kèm ngày để dễ phân biệt.")
+            st.caption("Một file .zip gồm cả dữ liệu, phân loại và danh sách đã xoá; tên kèm ngày để dễ phân biệt.")
             if os.path.exists(DB_FILE):
-                with open(DB_FILE, "rb") as f:
-                    st.download_button("Tải file Dữ liệu", f, f"forest_data_{_today}.csv", "text/csv")
-            if os.path.exists(MAPPING_FILE):
-                with open(MAPPING_FILE, "rb") as f:
-                    st.download_button("Tải file Phân loại", f, f"forest_phanloai_{_today}.csv", "text/csv")
+                _buf = io.BytesIO()
+                with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
+                    for _fn in [DB_FILE, MAPPING_FILE, DELETED_FILE]:
+                        if os.path.exists(_fn):
+                            _z.write(_fn, arcname=os.path.basename(_fn))
+                st.download_button("Tải bản sao lưu", _buf.getvalue(),
+                                   f"forest_backup_{_today}.zip", "application/zip")
+            else:
+                st.caption("Chưa có dữ liệu để sao lưu.")
         with c2:
             st.subheader("Khôi phục")
-            res_db = st.file_uploader("Tải lên file Dữ liệu", type=["csv"], key="r_db")
-            res_map = st.file_uploader("Tải lên file Phân loại", type=["csv"], key="r_map")
-            if res_db is not None:
+            res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
+            ok_zip = False
+            if res is not None:
                 try:
-                    res_db.seek(0); _pdb = pd.read_csv(res_db); res_db.seek(0)
-                    _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
-                    _rng = f" · {_dt.min():%d/%m/%Y} – {_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
-                    st.caption(f"File Dữ liệu: **{len(_pdb)}** phiên{_rng}")
+                    res.seek(0)
+                    with zipfile.ZipFile(res) as _z:
+                        names = set(_z.namelist())
+                        parts = []
+                        if DB_FILE in names:
+                            _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
+                            _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
+                            _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                            parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
+                        if MAPPING_FILE in names:
+                            parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
+                        if DELETED_FILE in names:
+                            parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
+                    if parts:
+                        ok_zip = True
+                        st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
+                    else:
+                        st.caption("File .zip không chứa dữ liệu hợp lệ.")
                 except Exception:
-                    st.caption("Không đọc được file Dữ liệu — kiểm tra lại file.")
-            if res_map is not None:
-                try:
-                    res_map.seek(0); _pm = pd.read_csv(res_map); res_map.seek(0)
-                    st.caption(f"File Phân loại: **{len(_pm)}** dự án")
-                except Exception:
-                    st.caption("Không đọc được file Phân loại — kiểm tra lại file.")
-            if res_db is not None or res_map is not None:
-                st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung các file trên.")
-            if st.button("Xác nhận Khôi phục", type="primary", disabled=(res_db is None and res_map is None)):
-                if res_db is not None: res_db.seek(0); save_db(pd.read_csv(res_db))
-                if res_map is not None: res_map.seek(0); save_mapping(pd.read_csv(res_map))
+                    st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
+            if ok_zip:
+                st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
+            if st.button("Xác nhận Khôi phục", type="primary", disabled=not ok_zip):
+                res.seek(0)
+                with zipfile.ZipFile(res) as _z:
+                    names = set(_z.namelist())
+                    if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
+                    if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
+                    if DELETED_FILE in names:
+                        with open(DELETED_FILE, "wb") as _f: _f.write(_z.read(DELETED_FILE))
+                st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
                 st.rerun()
