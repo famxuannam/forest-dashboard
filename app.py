@@ -372,45 +372,57 @@ def render_top_3(df, col_name, title, week_key=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
-# Phân nhóm độ dài phiên: tên cố định + mốc mặc định (người dùng tự chỉnh được)
-SESSION_BUCKET_NAMES = ["Ngắn", "Trung bình", "Dài", "Rất Dài"]
-DEFAULT_LEN_THRESHOLDS = (25, 50, 90)
+# Phân nhóm độ dài phiên (phút): tên, khoảng hiển thị, [lo, hi), màu — mốc cố định
+SESSION_BUCKETS = [
+    ("Ngắn",      "< 25′",  0,   25,    "#cfe3ff"),
+    ("Trung bình","25–50′", 25,  50,    "#7fb5ff"),
+    ("Dài",       "50–90′", 50,  90,    "#2f86ec"),
+    ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
+]
+LEN_THRESHOLDS = (25, 50, 90)  # mốc tham chiếu trên histogram
 
 def _avg_session_min(df):
     """Độ dài bình quân mỗi phiên (phút); 0 nếu chưa có phiên."""
     n = len(df)
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
-def _parse_len_thresholds(raw):
-    """Đọc '25, 50, 90' -> ([25,50,90], True). Sai định dạng -> (mặc định, False)."""
-    try:
-        vals = [int(round(float(x))) for x in raw.replace('/', ',').split(',') if x.strip()]
-        vals = [v for v in vals if v > 0]
-        if len(vals) == 3 and vals[0] < vals[1] < vals[2]:
-            return vals, True
-    except Exception:
-        pass
-    return list(DEFAULT_LEN_THRESHOLDS), False
-
-def render_session_length(df):
-    """Histogram độ dài phiên (bin 5 phút) + mốc chia nhóm tự chỉnh + tóm tắt 4 nhóm."""
+def render_session_bar(df):
+    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan."""
     n = len(df)
     if n == 0:
         return
-    d = df['Thời lượng (Phút)'].astype(float)
-
+    d = df['Thời lượng (Phút)']
+    counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
+    seg = ""
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+        if not c:
+            continue
+        pct = c / n * 100
+        lbl = f"{pct:.0f}%" if pct >= 9 else ""
+        fg = "#fff" if col in ("#2f86ec", "#0a52c4") else "#1d1d1f"
+        seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
+                f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
+    legend = ""
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:#1d1d1f;'>"
+                   f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
+                   f"{name} <span style='color:#86868b;'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
-        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;"
-        "letter-spacing:0.5px;margin:18px 0 0;'>Phân bố độ dài phiên</div>",
+        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
+        f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
+        f"<div style='margin-top:12px;'>{legend}</div>"
+        "</div>",
         unsafe_allow_html=True,
     )
-    raw = st.text_input(
-        "Mốc chia nhóm (phút)", value="25, 50, 90", key="len_thr",
-        help="Ba mốc tăng dần, cách nhau bởi dấu phẩy — chia phiên thành Ngắn / Trung bình / Dài / Rất Dài.",
-    )
-    thr, ok = _parse_len_thresholds(raw)
 
-    # Histogram: bin 5 phút từ 10 (mức tối thiểu của Forest) đến 60, phần dài hơn gộp vào '≥ 60'
+def render_session_histogram(df):
+    """Histogram độ dài phiên (bin 5 phút, từ 10′) + đường mốc 25/50/90 và đường trung bình."""
+    n = len(df)
+    if n == 0:
+        st.info("Chưa có phiên nào trong phạm vi này.")
+        return
+    d = df['Thời lượng (Phút)'].astype(float)
     start, top, step = 10, 60, 5
     edges = list(range(start, top + 1, step))
     counts = [int(((d >= edges[i]) & (d < edges[i + 1])).sum()) for i in range(len(edges) - 1)]
@@ -423,7 +435,7 @@ def render_session_length(df):
         x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
         customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
     ))
-    for t in thr:
+    for t in LEN_THRESHOLDS:
         if start < t <= top:
             fig.add_vline(x=t, line=dict(color='#0a52c4', width=1.5, dash='dot'))
     avg = d.mean()
@@ -432,7 +444,7 @@ def render_session_length(df):
                       annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
                       annotation_font=dict(size=12, color='#1d1d1f'))
     fig.update_layout(
-        height=240, margin=dict(l=10, r=10, t=22, b=10), bargap=0.06, showlegend=False,
+        height=300, margin=dict(l=10, r=10, t=24, b=10), bargap=0.06, showlegend=False,
         xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
                    tickvals=[10, 20, 30, 40, 50, 60],
                    ticktext=['10', '20', '30', '40', '50', '60+'],
@@ -441,15 +453,8 @@ def render_session_length(df):
         plot_bgcolor='white', paper_bgcolor='white',
     )
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
-    t1, t2, t3 = thr
-    cnt = [int((d < t1).sum()), int(((d >= t1) & (d < t2)).sum()),
-           int(((d >= t2) & (d < t3)).sum()), int((d >= t3).sum())]
-    rngs = [f"< {t1}′", f"{t1}–{t2}′", f"{t2}–{t3}′", f"≥ {t3}′"]
-    summary = " · ".join(f"**{nm}** ({rg}): {c}" for nm, rg, c in zip(SESSION_BUCKET_NAMES, rngs, cnt))
-    if not ok:
-        st.caption("Mốc không hợp lệ (cần 3 số tăng dần) — đang dùng mặc định 25, 50, 90.")
-    st.caption("Đường chấm = mốc chia nhóm · đường gạch = trung bình. " + summary)
+    st.caption("Mỗi cột = số phiên trong khoảng 5 phút (bắt đầu từ 10′ — mức tối thiểu của Forest). "
+               "Đường chấm = mốc nhóm 25 / 50 / 90′ · đường gạch = trung bình.")
 
 
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
@@ -1128,17 +1133,19 @@ if nav == "Thống kê chung":
                 sections=_sections,
                 footer=_footer,
             )
-            render_session_length(df)
+            render_session_bar(df)
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
             _wk_now = date.today().strftime('%G-W%V')
             with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
-        with st.expander("2. Biểu đồ lịch", expanded=True):
+        with st.expander("2. Phân bố độ dài phiên", expanded=True):
+            render_session_histogram(df)
+        with st.expander("3. Biểu đồ lịch", expanded=True):
             df_cal = range_radio(df, key="range_cal")
             render_calendar_grid(df_cal, df_cal)
-        with st.expander("3. Xu hướng theo thời gian", expanded=True):
+        with st.expander("4. Xu hướng theo thời gian", expanded=True):
             o1, o2, o3 = st.columns([5, 3, 2])
             with o1:
                 _rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend")
@@ -1159,13 +1166,13 @@ if nav == "Thống kê chung":
                                     ma_df=df_trend if time_col_2 == "Ngày" else None)
             fig1.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
-        with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
+        with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=True):
             df_hour = range_radio(df, key="range_hour")
             render_hourly_chart(df_hour, color_col_2)
-        with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+        with st.expander("6. Giờ tập trung theo thứ", expanded=True):
             df_heat = range_radio(df, key="range_heat")
             render_dayhour_heatmap(df_heat)
-        with st.expander("6. Bảng số liệu", expanded=True):
+        with st.expander("7. Bảng số liệu", expanded=True):
             cc1, cc2 = st.columns([5, 2])
             with cc1:
                 df_tbl = range_radio(df, key="range_table")
@@ -1243,13 +1250,15 @@ elif nav == "Báo cáo tháng":
                     {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
                     {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, "phút vs Tháng trước"), _delta_t(delta2_ms, "phút vs Trung bình")] if d]},
                 ])
-                render_session_length(df_m)
+                render_session_bar(df_m)
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục Tháng')
                 with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
-            with st.expander("2. Phân bổ thời gian", expanded=True):
+            with st.expander("2. Phân bố độ dài phiên", expanded=True):
+                render_session_histogram(df_m)
+            with st.expander("3. Phân bổ thời gian", expanded=True):
                 color_col_3 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab3")
                 color_col_3 = color_col_3 or "Danh mục"
                 pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
@@ -1258,18 +1267,18 @@ elif nav == "Báo cáo tháng":
                 fig_p_m.update_layout(width=CHART_WIDTH)
                 fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
                 st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Xu hướng theo thời gian", expanded=True):
+            with st.expander("4. Xu hướng theo thời gian", expanded=True):
                 t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
                 fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
                 fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
-            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_m)
-            with st.expander("6. Bảng số liệu", expanded=True):
+            with st.expander("7. Bảng số liệu", expanded=True):
                 render_detail_table(df_m)
 # ==========================================
 # TAB BÁO CÁO TUẦN
@@ -1337,13 +1346,15 @@ elif nav == "Báo cáo tuần":
                     {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
                     {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, "phút vs Tuần trước"), _delta_t(d2_ms_w, "phút vs Trung bình")] if d]},
                 ])
-                render_session_length(df_w)
+                render_session_bar(df_w)
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
                 with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
-            with st.expander("2. Phân bổ thời gian", expanded=True):
+            with st.expander("2. Phân bố độ dài phiên", expanded=True):
+                render_session_histogram(df_w)
+            with st.expander("3. Phân bổ thời gian", expanded=True):
                 color_col_4 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab4")
                 color_col_4 = color_col_4 or "Danh mục"
                 pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
@@ -1352,17 +1363,17 @@ elif nav == "Báo cáo tuần":
                 fig_p_w.update_layout(width=CHART_WIDTH)
                 fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
                 st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Xu hướng theo thời gian", expanded=True):
+            with st.expander("4. Xu hướng theo thời gian", expanded=True):
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
                 fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
                 fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
-            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_w)
-            with st.expander("6. Bảng số liệu", expanded=True):
+            with st.expander("7. Bảng số liệu", expanded=True):
                 render_detail_table(df_w)
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
@@ -1441,11 +1452,13 @@ elif nav == "Báo cáo theo nhóm":
                 sections=_grp_sections,
                 footer=_footer_g,
             )
-            render_session_length(df_g)
-        with st.expander("2. Biểu đồ lịch", expanded=True):
+            render_session_bar(df_g)
+        with st.expander("2. Phân bố độ dài phiên", expanded=True):
+            render_session_histogram(df_g)
+        with st.expander("3. Biểu đồ lịch", expanded=True):
             df_g_cal = range_radio(df_g, key="range_grp_cal")
             render_calendar_grid(df_g_cal, df_g_cal)
-        with st.expander("3. Xu hướng theo thời gian", expanded=True):
+        with st.expander("4. Xu hướng theo thời gian", expanded=True):
             g1, g2, g3 = st.columns([5, 3, 2])
             with g1:
                 _rlg = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend_grp")
@@ -1466,7 +1479,7 @@ elif nav == "Báo cáo theo nhóm":
                                      ma_df=df_g_trend if time_col_5 == "Ngày" else None)
             fig_g.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
-        with st.expander("4. Bảng số liệu", expanded=True):
+        with st.expander("5. Bảng số liệu", expanded=True):
             grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key="view_grp")
             grp_view = grp_view or "Tháng"
             render_period_table(df_g, 'Tuần' if grp_view == "Tuần" else 'Tháng')
