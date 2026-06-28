@@ -111,6 +111,52 @@ def add_total_labels(fig, df, x_col, y_col):
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
 
+
+def add_ma_overlay(fig, scope_df, window=7):
+    """Phủ đường trung bình động (theo ngày dương lịch, kể cả ngày trống) của
+    tổng giờ/ngày -> cắt nhiễu, cho thấy đang lên hay xuống."""
+    if scope_df.empty:
+        return fig
+    daily = scope_df.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
+    daily.index = pd.to_datetime(daily.index)
+    daily = daily.reindex(pd.date_range(daily.index.min(), daily.index.max()), fill_value=0.0)
+    ma = daily.rolling(window, min_periods=1).mean()
+    fig.add_trace(go.Scatter(
+        x=list(ma.index), y=list(ma.values), mode='lines',
+        line=dict(color='#1d1d1f', width=2.5, dash='dot'),
+        name=f'TB động {window} ngày'
+    ))
+    return fig
+
+
+def render_trend_fig(grouped, time_col, color_col, view, ma_df=None, cat_order=None, x_title=None):
+    """Biểu đồ xu hướng theo Kiểu xem: Cột chồng / Tỉ trọng % / Đường.
+    grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
+    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày ở chế độ Cột chồng.
+    cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
+    is_day = time_col == "Ngày"
+    co = {time_col: cat_order} if cat_order else None
+    if view == "Đường":
+        fig = px.line(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
+    else:
+        fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
+        if view == "Tỉ trọng %":
+            fig.update_layout(barnorm='percent')  # barnorm là thuộc tính layout, không phải tham số của px.bar
+
+    if is_day:
+        fig = add_week_dividers(fig, grouped[time_col])
+        if view == "Cột chồng" and ma_df is not None:
+            fig = add_ma_overlay(fig, ma_df, 7)
+    elif view == "Cột chồng":
+        fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
+
+    ytitle = "Tỉ trọng (%)" if view == "Tỉ trọng %" else "Số giờ"
+    fig.update_layout(xaxis_title=x_title or time_col, yaxis_title=ytitle)
+    fig = format_plotly_fig(fig)
+    if view == "Tỉ trọng %":
+        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f}%<extra></extra>')
+    return fig
+
 def add_week_dividers(fig, dates):
     """Kẻ đường nét đứt giữa Chủ Nhật và Thứ Hai (ranh giới tuần) cho biểu đồ theo ngày."""
     s = pd.to_datetime(pd.Series(list(dates)), errors='coerce').dropna()
@@ -1009,21 +1055,17 @@ if nav == "Thống kê chung":
             _rl = _rl or "90 ngày"
             time_col_2 = time_col_2 or "Ngày"
             color_col_2 = color_col_2 or "Danh mục"
+            view_2 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend2")
+            view_2 = view_2 or "Cột chồng"
             df_trend = filter_by_range(df, _rl)
 
             trend_group = df_trend.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
             trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
             if time_col_2 == "Ngày":
                 trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
-            fig1 = px.bar(trend_group, x=time_col_2, y='Số giờ', color=color_col_2, color_discrete_map=COLOR_MAP)
-
-            if time_col_2 in ["Tuần", "Tháng"]:
-                fig1 = add_total_labels(fig1, trend_group, time_col_2, 'Số giờ')
-            else:
-                fig1 = add_week_dividers(fig1, trend_group['Ngày'])
-
-            fig1.update_layout(width=CHART_WIDTH, xaxis_title=time_col_2, yaxis_title="Số giờ")
-            fig1 = format_plotly_fig(fig1)
+            fig1 = render_trend_fig(trend_group, time_col_2, color_col_2, view_2,
+                                    ma_df=df_trend if time_col_2 == "Ngày" else None)
+            fig1.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
         with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
             st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
@@ -1114,14 +1156,13 @@ elif nav == "Báo cáo tháng":
                 fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
                 st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("3. Xu hướng theo thời gian", expanded=True):
+                view_3 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend3")
+                view_3 = view_3 or "Cột chồng"
                 t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
-                fig_m = px.bar(t_m, x='Ngày', y='Số giờ', color=color_col_3, color_discrete_map=COLOR_MAP)
-                fig_m.update_layout(width=CHART_WIDTH, xaxis_title="Ngày trong tháng", yaxis_title="Số giờ")
-                fig_m = add_total_labels(fig_m, t_m, 'Ngày', 'Số giờ')
-                fig_m = add_week_dividers(fig_m, t_m['Ngày'])
-                fig_m = format_plotly_fig(fig_m)
+                fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, view_3, ma_df=df_m, x_title="Ngày trong tháng")
+                fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
@@ -1203,12 +1244,12 @@ elif nav == "Báo cáo tuần":
                 fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
                 st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("3. Xu hướng theo thời gian", expanded=True):
+                view_4 = st.segmented_control("Kiểu xem", ["Cột chồng", "Tỉ trọng %", "Đường"], default="Cột chồng", key="view_trend4")
+                view_4 = view_4 or "Cột chồng"
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-                fig_w = px.bar(t_w, x='Thứ', y='Số giờ', color=color_col_4, category_orders={"Thứ": DAYS_ORDER}, color_discrete_map=COLOR_MAP)
-                fig_w.update_layout(width=CHART_WIDTH, xaxis_title="Thứ trong tuần", yaxis_title="Số giờ")
-                fig_w = add_total_labels(fig_w, t_w, 'Thứ', 'Số giờ')
-                fig_w = format_plotly_fig(fig_w)
+                fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, view_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
+                fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
@@ -1304,8 +1345,9 @@ elif nav == "Báo cáo theo nhóm":
             if time_col_5 == "Ngày":
                 t_g['Ngày'] = pd.to_datetime(t_g['Ngày'])
                 fig_g = px.line(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
-                fig_g.update_traces(fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
+                fig_g.update_traces(name='Theo ngày', fill='tozeroy', fillcolor="rgba(0,122,255,0.1)")
                 fig_g = add_week_dividers(fig_g, t_g['Ngày'])
+                fig_g = add_ma_overlay(fig_g, df_g, 7)
             else:
                 fig_g = px.bar(t_g, x=time_col_5, y='Số giờ', color_discrete_sequence=[MAC_COLORS[0]])
                 fig_g = add_total_labels(fig_g, t_g, time_col_5, 'Số giờ')
