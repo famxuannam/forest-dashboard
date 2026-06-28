@@ -378,6 +378,50 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
         )
 
 
+def _dayhour_dist(scope_df):
+    """Trải thời lượng mỗi phiên ra (thứ, khung giờ). Thứ lấy theo thời điểm bắt đầu phiên."""
+    out = []
+    for s, e, wd in zip(scope_df['Thời gian bắt đầu'], scope_df['Thời gian kết thúc'], scope_df['Thứ']):
+        if pd.isna(s) or pd.isna(e) or e <= s:
+            continue
+        cur = s
+        while cur < e:
+            nxt = cur.floor('h') + pd.Timedelta(hours=1)
+            seg_end = e if e < nxt else nxt
+            out.append((wd, int(cur.hour), (seg_end - cur).total_seconds() / 3600.0))
+            cur = seg_end
+    return pd.DataFrame(out, columns=['Thứ', 'Khung giờ', 'giờ'])
+
+
+def render_dayhour_heatmap(scope_df):
+    """Bản đồ nhiệt 7 thứ × 24 giờ: ô càng đậm = trung bình giờ/ngày ở khung giờ đó
+    của thứ đó càng cao -> nhận ra 'tập trung tốt nhất vào sáng thứ mấy'."""
+    if scope_df.empty:
+        return
+    d = _dayhour_dist(scope_df)
+    if d.empty:
+        return
+    days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
+                "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
+    span = pd.date_range(pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max()))
+    wd_count = pd.Series(span.day_name()).map(days_map).value_counts()
+
+    grp = d.groupby(['Thứ', 'Khung giờ'])['giờ'].sum()
+    full = pd.MultiIndex.from_product([DAYS_ORDER, range(24)], names=['Thứ', 'Khung giờ'])
+    cell = grp.reindex(full, fill_value=0.0).reset_index(name='giờ')
+    cell['TB'] = cell.apply(lambda r: r['giờ'] / max(int(wd_count.get(r['Thứ'], 1)), 1), axis=1)
+
+    chart = alt.Chart(cell).mark_rect(cornerRadius=2).encode(
+        x=alt.X('Khung giờ:O', title='Khung giờ (0h - 23h)',
+                axis=alt.Axis(labelAngle=0, values=list(range(0, 24, 2)), tickSize=0, domain=False)),
+        y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', axis=alt.Axis(tickSize=0, domain=False)),
+        color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
+        tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
+                 alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
+    ).properties(height=alt.Step(26)).configure_view(strokeWidth=0)
+    st.altair_chart(chart, width='stretch')
+
+
 def render_calendar_streak(scope_df, full_df, streak_df=None):
     # Lưới lịch theo scope_df (có thể đã lọc khoảng), nhưng chuỗi (streak) tính
     # trên streak_df = toàn bộ lịch sử để không bị giới hạn bởi cửa sổ hiển thị.
@@ -505,37 +549,6 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         + wd_html + metrics_html + nudge_html + "</div>",
         unsafe_allow_html=True,
     )
-
-
-def render_week_agenda(scope_df):
-    """Lịch tuần theo giờ: trục ngang = thứ, trục dọc = giờ 0-24, mỗi phiên là một thanh."""
-    if scope_df.empty:
-        return
-    ag = scope_df.dropna(subset=['Thời gian bắt đầu', 'Thời gian kết thúc']).copy()
-    if ag.empty:
-        return
-    ag['Bắt đầu (giờ)'] = ag['Thời gian bắt đầu'].dt.hour + ag['Thời gian bắt đầu'].dt.minute / 60
-    ag['Kết thúc (giờ)'] = ag['Thời gian kết thúc'].dt.hour + ag['Thời gian kết thúc'].dt.minute / 60
-    ag.loc[ag['Kết thúc (giờ)'] <= ag['Bắt đầu (giờ)'], 'Kết thúc (giờ)'] = 24.0  # phiên qua nửa đêm -> kẹp 24h
-    ag['Giờ BĐ'] = ag['Thời gian bắt đầu'].dt.strftime('%H:%M')
-    ag['Giờ KT'] = ag['Thời gian kết thúc'].dt.strftime('%H:%M')
-
-    cats = [c for c in COLOR_MAP if c in set(ag['Danh mục'])]
-    chart = alt.Chart(ag).mark_bar(cornerRadius=3, opacity=0.92).encode(
-        x=alt.X('Thứ:N', sort=DAYS_ORDER, title='',
-                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False)),
-        y=alt.Y('Bắt đầu (giờ):Q', scale=alt.Scale(domain=[0, 24], reverse=True), title='Giờ',
-                axis=alt.Axis(values=list(range(0, 25, 2)), format='d')),
-        y2='Kết thúc (giờ):Q',
-        color=alt.Color('Danh mục:N', scale=alt.Scale(domain=cats, range=[COLOR_MAP[c] for c in cats]),
-                        legend=alt.Legend(orient='top', title='')),
-        tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Dự án:N', title='Dự án'),
-                 alt.Tooltip('Giờ BĐ:N', title='Bắt đầu'), alt.Tooltip('Giờ KT:N', title='Kết thúc')],
-    ).properties(height=560).configure_view(strokeWidth=0)
-    # Thu hẹp & căn giữa: đặt biểu đồ trong cột giữa (trên mobile các cột xếp dọc -> full width)
-    _, cc, _ = st.columns([1, 2, 1])
-    with cc:
-        st.altair_chart(chart, width="stretch")
 
 
 DTBL_CSS = """
@@ -1004,7 +1017,10 @@ if nav == "Thống kê chung":
         with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
             st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
             render_hourly_chart(df_trend, color_col_2, x_title="Khung giờ (0h - 23h)")
-        with st.expander("5. Bảng số liệu", expanded=True):
+        with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+            st.caption(f"Trung bình giờ/ngày theo thứ × khung giờ — theo khoảng đã chọn ở mục 3: {_rl}")
+            render_dayhour_heatmap(df_trend)
+        with st.expander("6. Bảng số liệu", expanded=True):
             st.caption(f"Theo khoảng thời gian đã chọn ở mục 3: {_rl}")
             view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
             view_opt = view_opt or "Tuần"
@@ -1098,7 +1114,9 @@ elif nav == "Báo cáo tháng":
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
-            with st.expander("5. Bảng số liệu", expanded=True):
+            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+                render_dayhour_heatmap(df_m)
+            with st.expander("6. Bảng số liệu", expanded=True):
                 render_detail_table(df_m)
 # ==========================================
 # TAB BÁO CÁO TUẦN
@@ -1183,9 +1201,8 @@ elif nav == "Báo cáo tuần":
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
-            with st.expander("5. Lịch trồng cây theo giờ", expanded=True):
-                st.caption("Mỗi thanh là một phiên trồng cây, theo thứ trong tuần và khung giờ.")
-                render_week_agenda(df_w)
+            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+                render_dayhour_heatmap(df_w)
             with st.expander("6. Bảng số liệu", expanded=True):
                 render_detail_table(df_w)
 # ==========================================
