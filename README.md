@@ -76,18 +76,20 @@ gần nhất).
 
 ### Phân bố độ dài phiên
 
-Ngay dưới panel Tổng quan (ở cả 4 tab) có một **thanh phân bố** chia các phiên thành **4
-nhóm theo độ dài**, kèm tỉ lệ % và số phiên mỗi nhóm. Các mốc được neo theo phương pháp
-**Pomodoro** (1 pomodoro = 25 phút tập trung) và ngưỡng deep-work ~90 phút:
+Ngay dưới panel Tổng quan (ở cả 4 tab) có một **biểu đồ histogram** đếm số phiên theo từng
+khoảng 5 phút — từ **10 phút** (mức tối thiểu của Forest) đến 60, phần dài hơn gộp vào
+**≥ 60′**. Histogram cho thấy đúng *hình dạng* thói quen của bạn, kể cả khi các phiên dồn hết
+về một vùng (ví dụ hầu hết 10–15 phút) mà cách chia nhóm cố định không phản ánh được. Đường
+**gạch** trên biểu đồ là độ dài trung bình mỗi phiên.
 
-| Nhóm | Khoảng | Ý nghĩa |
-|------|--------|---------|
-| **Ngắn** | < 25 phút | chưa trọn 1 pomodoro (phiên bị ngắt hoặc việc nhỏ) |
-| **Trung bình** | 25–50 phút | 1–2 pomodoro — vùng tập trung chuẩn |
-| **Dài** | 50–90 phút | nhiều pomodoro liên tục — deep work |
-| **Rất Dài** | ≥ 90 phút | vượt ngưỡng tập trung tự nhiên — phiên rất sâu |
+Bên trên có ô **“Mốc chia nhóm (phút)”** để bạn **tự đặt 3 mốc** (mặc định `25, 50, 90`),
+chia phiên thành 4 nhóm **Ngắn / Trung bình / Dài / Rất Dài**. Các mốc hiện lên biểu đồ dưới
+dạng **đường chấm**, và dòng tóm tắt bên dưới đếm số phiên mỗi nhóm theo đúng mốc bạn chọn.
+Nếu phần lớn phiên của bạn ngắn, hãy hạ mốc xuống (ví dụ `15, 20, 30`) để 4 nhóm phân hoá rõ hơn.
 
-> Phiên đúng 25 phút được xếp vào **Trung bình** (vì nó chính là trọn 1 pomodoro).
+> Bộ mốc mặc định `25, 50, 90` neo theo **Pomodoro** (1 pomodoro = 25 phút tập trung) và
+> ngưỡng deep-work ~90 phút — phù hợp khi phiên của bạn đủ dài; còn nếu bạn hay làm phiên
+> ngắn, cứ chỉnh mốc cho khớp dữ liệu của mình.
 
 ### Các biểu đồ
 
