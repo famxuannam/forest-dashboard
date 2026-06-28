@@ -4,7 +4,7 @@ Bảng điều khiển (dashboard) trực quan hoá dữ liệu tập trung từ
 giúp bạn nhìn lại mình đã dành thời gian cho việc gì, vào lúc nào, đều đặn ra sao.
 
 Ứng dụng đọc file CSV bạn xuất ra từ Forest, tự phân tích và hiển thị thành các biểu đồ,
-bảng số liệu theo nhiều góc nhìn (tổng quan, theo tháng, theo tuần, theo nhóm).
+bảng số liệu theo nhiều góc nhìn (tổng quan, theo tháng, theo tuần, theo dự án).
 Giao diện theo phong cách iOS/macOS: tối giản, dùng thẻ kính mờ và tông xanh `#007aff`.
 
 ---
@@ -50,7 +50,7 @@ Hiểu 4 khái niệm này là dùng được toàn bộ ứng dụng:
 - **Số cây đã trồng** — tổng số phiên (số cây).
 - **Thời gian / ngày** — trung bình số giờ mỗi *ngày có hoạt động*.
 - **Số cây / ngày** — trung bình số phiên mỗi *ngày có hoạt động*.
-- **Thời gian / tuần**, **Số cây / tuần** *(tab Báo cáo theo nhóm)* — trung bình theo
+- **Thời gian / tuần**, **Số cây / tuần** *(tab Báo cáo theo dự án)* — trung bình theo
   số *tuần có hoạt động*.
 - **Thời gian / phiên** — độ dài bình quân của mỗi phiên (tổng thời gian ÷ số phiên), tính
   bằng **phút**. Phản ánh *độ sâu* mỗi lần tập trung: bạn làm nhiều phiên ngắn hay ít phiên
@@ -68,7 +68,7 @@ Hiểu 4 khái niệm này là dùng được toàn bộ ứng dụng:
 Ở **Thống kê chung / Báo cáo tháng / Báo cáo tuần**, phần Tổng quan còn có **Top 3 Danh
 mục / Dự án** — ba nhóm hoặc dự án bạn dành nhiều giờ nhất trong kỳ.
 
-Ở **Báo cáo theo nhóm**, phần Tổng quan gom mọi chỉ số của nhóm/dự án đang chọn thành các
+Ở **Báo cáo theo dự án**, phần Tổng quan gom mọi chỉ số của nhóm/dự án đang chọn thành các
 nhóm gọn (mỗi nhóm một hàng): **Trung bình** (giờ & cây theo ngày/tuần), **Tuần này** (nổi
 bật màu xanh, chỉ hiện khi tuần này có hoạt động), **Chuỗi ngày** (tổng / dài nhất / hiện
 tại), **Theo thứ** (thứ mạnh nhất & yếu nhất), và **Mốc thời gian** (ngày đầu tiên, ngày
@@ -82,7 +82,7 @@ Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
   mức sàn của Forest) / **Ngắn** (< 25′) / **Trung bình** (25–50′) / **Dài** (50–90′) / **Rất
   Dài** (≥ 90′), kèm tỉ lệ % và số phiên mỗi nhóm. Các mốc 25 / 50 / 90 neo theo **Pomodoro**
   (1 pomodoro = 25 phút tập trung) và ngưỡng deep-work ~90 phút.
-- **Mục “Phân bố độ dài phiên”** (ngay sau Tổng quan) — một **biểu đồ histogram** đếm số phiên
+- **Mục “Phân bố độ dài phiên”** (ngay trước Bảng số liệu) — một **biểu đồ histogram** đếm số phiên
   theo từng khoảng 5 phút, từ **10 phút** (mức tối thiểu của Forest) đến 60, phần dài hơn gộp
   vào **≥ 60′**. Histogram cho thấy đúng *hình dạng* thói quen của bạn (ví dụ phần lớn phiên
   dồn ở 10–15 phút) mà các nhóm cố định không thể hiện được. Trên biểu đồ, **đường chấm** là các
@@ -115,7 +115,7 @@ Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
   60%) so với kỳ liền trước — giúp phát hiện nhóm/dự án đang bị bỏ bê.
 - Ở **Báo cáo tháng / tuần**: bảng **chi tiết** từng Danh mục/Dự án trong kỳ, kèm cột **Tỉ
   trọng** (% thời gian trên tổng kỳ).
-- Ở **Báo cáo theo nhóm**: vì chỉ xem một nhóm/dự án nên bảng được tối ưu thành dạng
+- Ở **Báo cáo theo dự án**: vì chỉ xem một nhóm/dự án nên bảng được tối ưu thành dạng
   **theo kỳ** — mỗi dòng là một Tuần/Tháng với *Số giờ*, *Số cây*, *Số ngày*, kèm dòng **Tổng**.
 
 ### Bộ lọc & điều hướng dùng chung
@@ -137,26 +137,26 @@ Thanh điều hướng nằm ngay dưới tiêu đề, gồm 5 trang:
 ### 1. 📊 Thống kê chung
 Cái nhìn tổng thể toàn bộ dữ liệu.
 1. **Tổng quan** — các thẻ số liệu chính + cập nhật gần nhất + thanh phân bố độ dài phiên + Top 3.
-2. **Phân bố độ dài phiên** — histogram độ dài phiên (xem mục trên).
-3. **Biểu đồ lịch** — lịch nhiệt + chuỗi ngày.
-4. **Xu hướng theo thời gian** — chọn khoảng thời gian, cách gộp và cách phân loại (kèm
+2. **Biểu đồ lịch** — lịch nhiệt + chuỗi ngày.
+3. **Xu hướng theo thời gian** — chọn khoảng thời gian, cách gộp và cách phân loại (kèm
    đường TB động 7 ngày khi xem theo ngày).
-5. **Xu hướng tập trung theo khung giờ** — bạn tập trung mạnh vào giờ nào.
-6. **Giờ tập trung theo thứ** — bản đồ nhiệt 7 thứ × 24 giờ.
+4. **Xu hướng tập trung theo khung giờ** — bạn tập trung mạnh vào giờ nào.
+5. **Giờ tập trung theo thứ** — bản đồ nhiệt 7 thứ × 24 giờ.
+6. **Phân bố độ dài phiên** — histogram độ dài phiên (xem mục trên).
 7. **Bảng số liệu** — ma trận Danh mục/Dự án theo Tuần hoặc Tháng.
 
 ### 2. 🗓️ Báo cáo tháng
 Phân tích sâu **một tháng cụ thể** (chọn ở thanh điều hướng kỳ): Tổng quan (kèm so sánh) →
-Phân bố độ dài phiên → Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo
-khung giờ → Giờ tập trung theo thứ → Bảng số liệu.
+Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo khung giờ → Giờ tập
+trung theo thứ → Phân bố độ dài phiên → Bảng số liệu.
 
 ### 3. 🗓️ Báo cáo tuần
 Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**.
 
-### 4. 🗂️ Báo cáo theo nhóm
+### 4. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
 Trong danh sách, mỗi lựa chọn được ghi rõ *“· Nhóm”* hay *“· Dự án”*, dự án con thụt vào
-dưới nhóm cha. Gồm: Tổng quan → Phân bố độ dài phiên → Biểu đồ lịch → Xu hướng theo thời gian → Bảng số liệu.
+dưới nhóm cha. Gồm: Tổng quan → Biểu đồ lịch → Xu hướng theo thời gian → Phân bố độ dài phiên → Bảng số liệu.
 
 ### 5. ⚙️ Chuẩn bị dữ liệu
 Nơi bạn nạp và quản lý dữ liệu:
