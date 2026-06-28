@@ -230,11 +230,12 @@ def _delta_t(delta, label):
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
-def render_stat_panel(hero_items, sections=None):
+def render_stat_panel(hero_items, sections=None, footer=None):
     """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
 
     hero_items: list dict {label, value, deltas?: [(text, color)]}
     sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]}
+    footer:     (text, bg, fg) -> dòng nhắn nằm cuối thẻ (vd lời nhắc chuỗi)
     Toàn bộ HTML viết sát lề trái để Streamlit không hiểu nhầm là code block.
     """
     h = "<div class='glass-card stat-panel' style='padding:20px;'><div class='sp-hero'>"
@@ -257,6 +258,10 @@ def render_stat_panel(hero_items, sections=None):
                 h += f"<span class='cd' style='color:{dc};'>{dt}</span>"
             h += "</span>"
         h += "</div>"
+    if footer:
+        f_txt, f_bg, f_fg = footer
+        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.07);text-align:center;'>"
+              f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
     h += "</div>"
     st.markdown(h, unsafe_allow_html=True)
 
@@ -422,11 +427,53 @@ def render_dayhour_heatmap(scope_df):
     st.altair_chart(chart, width='stretch')
 
 
-def render_calendar_streak(scope_df, full_df, streak_df=None):
-    # Lưới lịch theo scope_df (có thể đã lọc khoảng), nhưng chuỗi (streak) tính
-    # trên streak_df = toàn bộ lịch sử để không bị giới hạn bởi cửa sổ hiển thị.
-    if streak_df is None:
-        streak_df = scope_df
+def _streak_stats(streak_df):
+    """Số liệu chuỗi ngày trên toàn lịch sử: tổng số ngày có hoạt động, chuỗi
+    dài nhất, chuỗi hiện tại (còn hiệu lực nếu lần gần nhất là hôm nay/hôm qua),
+    và gap = số ngày kể từ lần gần nhất."""
+    u = pd.Series(pd.to_datetime(streak_df['Ngày'].dropna().unique())).sort_values().reset_index(drop=True)
+    if len(u) == 0:
+        return {"total": 0, "longest": 0, "current": 0, "gap": None}
+    sid = (u.diff().dt.days > 1).cumsum()
+    counts = sid.value_counts()
+    gap = int((pd.Timestamp(date.today()) - u.max()).days)
+    current = int(counts[sid.iloc[-1]]) if gap <= 1 else 0
+    return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
+
+
+NUDGE_TONES = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
+               "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
+               "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}
+
+
+def _streak_nudge(s):
+    """Lời nhắc chuỗi theo trạng thái -> (text, tone) hoặc None (chỉ theo dõi)."""
+    if not s["total"] or s["gap"] is None:
+        return None
+    gap, cur, lon = s["gap"], s["current"], s["longest"]
+    if gap == 0 and cur >= lon:
+        return (f"Bạn đang giữ chuỗi {cur} ngày — dài nhất từ trước tới nay. Giữ vững nhé!", "good")
+    if gap == 0:
+        return (f"Đang có chuỗi {cur} ngày. Còn {lon - cur + 1} ngày nữa là chạm kỷ lục {lon} ngày.", "good")
+    if gap == 1:
+        return (f"Chuỗi {cur} ngày đang treo — hôm nay chưa có hoạt động. Trồng một cây để giữ mạch!", "warn")
+    return (f"Chuỗi gần nhất đã dừng {gap} ngày. Hôm nay là lúc tốt để bắt đầu lại.", "neutral")
+
+
+def _weekday_avg(scope_df):
+    """Trung bình giờ mỗi ngày theo thứ (tính cả ngày trống) trên span của scope_df."""
+    if scope_df.empty:
+        return pd.Series(dtype=float)
+    mn, mx = pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max())
+    days_map = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
+                "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
+    wd_count = pd.Series(pd.date_range(mn, mx).day_name()).map(days_map).value_counts()
+    by = scope_df.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
+    return (by / wd_count).reindex(DAYS_ORDER).dropna()
+
+
+def render_calendar_grid(scope_df, full_df):
+    """Chỉ vẽ lưới lịch nhiệt kiểu GitHub (không kèm số liệu chuỗi)."""
     min_date = pd.Timestamp(scope_df['Ngày'].min())
     max_date = pd.Timestamp(full_df['Ngày'].max())
     # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
@@ -480,11 +527,15 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
-    # ----- Gom tổng kết theo thứ + số liệu chuỗi + lời nhắc vào CÙNG MỘT thẻ -----
-    # 1) Tổng kết theo thứ (trung bình mỗi ngày, tính cả ngày trống)
-    _dt = cal_data['Ngày_x'] if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str'])
-    _mask = (_dt >= min_date) & (_dt <= max_date)
-    by_wd = cal_data[_mask].groupby('Thứ')['Số giờ'].mean().reindex(DAYS_ORDER).dropna()
+
+def render_calendar_streak(scope_df, full_df, streak_df=None):
+    """Lưới lịch + thẻ gộp (tổng kết theo thứ, số liệu chuỗi, lời nhắc).
+    Dùng cho tab Báo cáo theo nhóm; ở Thống kê chung các số liệu này đã đưa lên Tổng quan."""
+    if streak_df is None:
+        streak_df = scope_df
+    render_calendar_grid(scope_df, full_df)
+
+    by_wd = _weekday_avg(scope_df)
     wd_html = ""
     if len(by_wd) and by_wd.max() > 0:
         _stg, _wk = by_wd.idxmax(), by_wd.idxmin()
@@ -495,20 +546,7 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
             f" · yếu nhất: <b style='color:#1d1d1f;'>{_wk}</b> ({by_wd[_wk]:.1f}h/ngày)</div>"
         )
 
-    # 2) Số liệu chuỗi (streak) tính trên toàn lịch sử
-    unique_dates = pd.to_datetime(streak_df['Ngày'].dropna().unique())
-    unique_dates = unique_dates.sort_values()
-    today = pd.Timestamp(date.today())
-    if len(unique_dates) > 0:
-        total_days = len(unique_dates)
-        diffs = unique_dates.to_series().diff().dt.days
-        streak_id = (diffs > 1).cumsum()
-        streak_counts = streak_id.value_counts()
-        longest_streak = streak_counts.max()
-        # Chuỗi hiện tại: chỉ còn hiệu lực nếu lần gần nhất là hôm nay hoặc hôm qua
-        current_streak = streak_counts[streak_id.iloc[-1]] if (today - unique_dates.max()).days <= 1 else 0
-    else:
-        total_days = longest_streak = current_streak = 0
+    s = _streak_stats(streak_df)
 
     def _metric(v, label, border):
         return (f"<div style='flex:1;text-align:center;{border}'>"
@@ -517,28 +555,17 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
     _bd = "border-right:1px solid rgba(0,0,0,0.1);"
     metrics_html = (
         "<div class='streak-row' style='display:flex;align-items:center;'>"
-        + _metric(total_days, "Tổng cộng", _bd)
-        + _metric(longest_streak, "Chuỗi dài nhất", _bd)
-        + _metric(current_streak, "Chuỗi hiện tại", "")
+        + _metric(s["total"], "Tổng cộng", _bd)
+        + _metric(s["longest"], "Chuỗi dài nhất", _bd)
+        + _metric(s["current"], "Chuỗi hiện tại", "")
         + "</div>"
     )
 
-    # 3) Lời nhắc chuỗi (chỉ theo dõi, không phải đặt mục tiêu)
     nudge_html = ""
-    if total_days > 0:
-        gap = (today - unique_dates.max()).days
-        if gap == 0 and current_streak >= longest_streak:
-            msg, tone = f"Bạn đang giữ chuỗi {current_streak} ngày — dài nhất từ trước tới nay. Giữ vững nhé!", "good"
-        elif gap == 0:
-            need = longest_streak - current_streak + 1
-            msg, tone = f"Đang có chuỗi {current_streak} ngày. Còn {need} ngày nữa là chạm kỷ lục {longest_streak} ngày.", "good"
-        elif gap == 1:
-            msg, tone = f"Chuỗi {current_streak} ngày đang treo — hôm nay chưa có hoạt động. Trồng một cây để giữ mạch!", "warn"
-        else:
-            msg, tone = f"Chuỗi gần nhất đã dừng {gap} ngày. Hôm nay là lúc tốt để bắt đầu lại.", "neutral"
-        _bg, _fg = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
-                    "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
-                    "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}[tone]
+    nud = _streak_nudge(s)
+    if nud:
+        msg, tone = nud
+        _bg, _fg = NUDGE_TONES[tone]
         nudge_html = (
             "<div style='margin-top:18px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.08);text-align:center;'>"
             f"<span style='background:{_bg};color:{_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{msg}</span></div>"
@@ -965,18 +992,51 @@ if nav == "Thống kê chung":
             total_hrs = df['Thời lượng (Phút)'].sum() / 60
             total_trees = len(df)
             num_days = df['Ngày'].nunique() or 1
+            base_avg = total_hrs / num_days
+
+            # Phong độ 7 ngày gần đây so với mức trung bình của chính mình
+            recent7 = df[df['Ngày'] >= (date.today() - timedelta(days=6))]
+            r_days = recent7['Ngày'].nunique()
+            recent_chips = []
+            if r_days > 0:
+                r_avg = (recent7['Thời lượng (Phút)'].sum() / 60) / r_days
+                _delta = None
+                if base_avg > 0:
+                    _pct = (r_avg - base_avg) / base_avg * 100
+                    _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
+                    _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
+                recent_chips.append({"k": "Giờ / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
+            recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
+
+            s_stat = _streak_stats(df)
+            by_wd = _weekday_avg(df)
+            _sections = [
+                {"label": "Trung bình (toàn thời gian)", "chips": [
+                    {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
+                    {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                ]},
+                {"label": "7 ngày gần đây", "chips": recent_chips},
+                {"label": "Chuỗi ngày", "chips": [
+                    {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
+                    {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
+                ]},
+            ]
+            if len(by_wd) and by_wd.max() > 0:
+                _sections.append({"label": "Theo thứ", "chips": [
+                    {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({by_wd.max():.1f}h)"},
+                    {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
+                ]})
+            _nud = _streak_nudge(s_stat)
+            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
             render_stat_panel(
                 hero_items=[
                     {"label": "Tổng thời gian", "value": f"{total_hrs:.1f}h"},
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
-                sections=[
-                    {"label": "Trung bình", "chips": [
-                        {"k": "Thời gian / ngày", "v": f"{total_hrs/num_days:.1f}h"},
-                        {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
-                    ]},
-                ],
+                sections=_sections,
+                footer=_footer,
             )
 
             st.write("")
@@ -986,7 +1046,7 @@ if nav == "Thống kê chung":
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
         with st.expander("2. Biểu đồ lịch tổng quan", expanded=True):
             df_cal = range_radio(df, key="range_cal")
-            render_calendar_streak(df_cal, df_cal, streak_df=df)
+            render_calendar_grid(df_cal, df_cal)
         with st.expander("3. Xu hướng theo thời gian", expanded=True):
             o1, o2, o3 = st.columns([5, 3, 2])
             with o1:
