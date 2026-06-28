@@ -357,16 +357,6 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
-    # Chú giải thang màu (Ít -> Nhiều), kiểu GitHub
-    _sw = "".join(
-        f"<span style='display:inline-block;width:13px;height:13px;border-radius:3px;"
-        f"background:{c};margin:0 2px;vertical-align:middle;'></span>" for c in LVL_COLORS
-    )
-    st.markdown(
-        f"<div style='text-align:center;color:#86868b;font-size:12px;margin:-2px 0 4px 0;'>Ít {_sw} Nhiều</div>",
-        unsafe_allow_html=True,
-    )
-
     # ----- Gom tổng kết theo thứ + số liệu chuỗi + lời nhắc vào CÙNG MỘT thẻ -----
     # 1) Tổng kết theo thứ (trung bình mỗi ngày, tính cả ngày trống)
     _dt = cal_data['Ngày_x'] if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str'])
