@@ -280,23 +280,78 @@ def render_top_3(df, col_name, title):
     st.markdown(html, unsafe_allow_html=True)
 
 
+# Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
+BUOI_BANDS = [
+    ("Khuya", 0, 5, "rgba(88,86,214,0.05)"),
+    ("Sáng", 5, 11, "rgba(255,204,0,0.08)"),
+    ("Chiều", 11, 17, "rgba(255,149,0,0.06)"),
+    ("Tối", 17, 22, "rgba(0,122,255,0.05)"),
+    ("Khuya ", 22, 24, "rgba(88,86,214,0.05)"),  # dấu cách để không trùng nhãn với buổi Khuya đầu
+]
+
+
+def _buoi_of(h):
+    if 5 <= h < 11: return "Sáng"
+    if 11 <= h < 17: return "Chiều"
+    if 17 <= h < 22: return "Tối"
+    return "Khuya"
+
+
+def _session_hour_dist(scope_df, color_col):
+    """Trải thời lượng MỖI phiên ra các khung giờ mà nó thực sự đi qua (thay vì dồn
+    hết vào giờ bắt đầu). Trả về DataFrame (Khung giờ, color_col, giờ)."""
+    out = []
+    for s, e, c in zip(scope_df['Thời gian bắt đầu'], scope_df['Thời gian kết thúc'], scope_df[color_col]):
+        if pd.isna(s) or pd.isna(e) or e <= s:
+            continue
+        cur = s
+        while cur < e:
+            nxt = cur.floor('h') + pd.Timedelta(hours=1)
+            seg_end = e if e < nxt else nxt
+            out.append((int(cur.hour), c, (seg_end - cur).total_seconds() / 3600.0))
+            cur = seg_end
+    return pd.DataFrame(out, columns=['Khung giờ', color_col, 'giờ'])
+
+
 def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
-    hr_group = scope_df.groupby(['Khung giờ', color_col])['Thời lượng (Phút)'].sum().reset_index()
-    hr_group['Số giờ'] = hr_group['Thời lượng (Phút)'] / 60
+    if scope_df.empty:
+        return
+    num_days = scope_df['Ngày'].nunique() or 1
+    dist = _session_hour_dist(scope_df, color_col)
+    if dist.empty:
+        return
+    dist['giờ'] = dist['giờ'] / num_days  # trung bình mỗi ngày có hoạt động
+
+    hr_group = dist.groupby(['Khung giờ', color_col])['giờ'].sum().reset_index().rename(columns={'giờ': 'Số giờ'})
     fig = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP)
 
-    tot = scope_df.groupby('Khung giờ')['Thời lượng (Phút)'].sum().reset_index()
-    tot['Số giờ'] = tot['Thời lượng (Phút)'] / 60
+    tot = dist.groupby('Khung giờ')['giờ'].sum().reindex(range(24), fill_value=0.0)
     fig.add_trace(go.Scatter(
-        x=tot['Khung giờ'], y=tot['Số giờ'], mode='lines+markers',
+        x=list(tot.index), y=list(tot.values), mode='lines+markers',
         line=dict(color=MAC_COLORS[0], width=2, shape='spline'),
         marker=dict(size=5, color=MAC_COLORS[0]),
         name='Tổng cộng'
     ))
-    y_max = tot['Số giờ'].max() if not tot.empty else 1
-    fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Số giờ", yaxis=dict(range=[0, y_max * 1.2]))
+
+    # Dải nền theo buổi để dễ đọc "sáng/chiều/tối/khuya"
+    for name, x0, x1, col in BUOI_BANDS:
+        fig.add_vrect(x0=x0 - 0.5, x1=x1 - 0.5, fillcolor=col, opacity=1, layer="below", line_width=0,
+                      annotation_text=name.strip(), annotation_position="top left",
+                      annotation=dict(font_size=11, font_color="#9a9aa0"))
+
+    y_max = float(tot.max()) or 1.0
+    fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
+                      yaxis=dict(range=[0, y_max * 1.28]),
+                      xaxis=dict(range=[-0.5, 23.5], dtick=2))
     fig = format_plotly_fig(fig)
+    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.2f} h/ngày<extra></extra>')
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+    # Tự nêu "giờ vàng" + buổi mạnh nhất
+    if tot.max() > 0:
+        peak_h = int(tot.idxmax())
+        strong_buoi = tot.groupby(_buoi_of).sum().idxmax()
+        st.caption(f"Giờ tập trung nhất: **{peak_h}h** (TB {tot.max():.1f}h/ngày) · buổi mạnh nhất: **{strong_buoi}**")
 
 
 def render_calendar_streak(scope_df, full_df, streak_df=None):
