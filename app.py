@@ -372,6 +372,50 @@ def render_top_3(df, col_name, title, week_key=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
+# Phân nhóm độ dài phiên (phút): tên, khoảng hiển thị, [lo, hi), màu
+SESSION_BUCKETS = [
+    ("Ngắn",      "< 25′",  0,   25,    "#cfe3ff"),
+    ("Trung bình","25–50′", 25,  50,    "#7fb5ff"),
+    ("Dài",       "50–90′", 50,  90,    "#2f86ec"),
+    ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
+]
+
+def _avg_session_min(df):
+    """Độ dài bình quân mỗi phiên (phút); 0 nếu chưa có phiên."""
+    n = len(df)
+    return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
+
+def render_session_length(df):
+    """Thanh phân bố độ dài phiên theo nhóm (ngắn / vừa / dài / rất dài) + chú thích số phiên."""
+    n = len(df)
+    if n == 0:
+        return
+    d = df['Thời lượng (Phút)']
+    counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
+    seg = ""
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+        if not c:
+            continue
+        pct = c / n * 100
+        lbl = f"{pct:.0f}%" if pct >= 9 else ""
+        fg = "#fff" if col in ("#2f86ec", "#0a52c4") else "#1d1d1f"
+        seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
+                f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
+    legend = ""
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:#1d1d1f;'>"
+                   f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
+                   f"{name} <span style='color:#86868b;'>{rng}</span> · <b>{c}</b></span>")
+    st.markdown(
+        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
+        f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
+        f"<div style='margin-top:12px;'>{legend}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
 BUOI_BANDS = [
     ("Khuya", 0, 5, "rgba(88,86,214,0.05)"),
@@ -1023,6 +1067,7 @@ if nav == "Thống kê chung":
                 {"label": "Trung bình (toàn thời gian)", "chips": [
                     {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
                     {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                    {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
                 ]},
                 {"label": "7 ngày gần đây", "chips": recent_chips},
                 {"label": "Chuỗi ngày", "chips": [
@@ -1047,6 +1092,7 @@ if nav == "Thống kê chung":
                 sections=_sections,
                 footer=_footer,
             )
+            render_session_length(df)
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
@@ -1114,8 +1160,9 @@ elif nav == "Báo cáo tháng":
             avg_trees_month = trees_om.mean()
             avg_hrs_day_month = (hrs_om / days_om).mean()
             avg_trees_day_month = (trees_om / days_om).mean()
+            avg_min_sess_month = ((hrs_om * 60) / trees_om).mean()
         else:
-            avg_hrs_month = avg_trees_month = avg_hrs_day_month = avg_trees_day_month = None
+            avg_hrs_month = avg_trees_month = avg_hrs_day_month = avg_trees_day_month = avg_min_sess_month = None
 
         y, m = map(int, selected_month.split('-'))
         prev_month_key = f"{y - 1:04d}-12" if m == 1 else f"{y:04d}-{m - 1:02d}"
@@ -1126,8 +1173,9 @@ elif nav == "Báo cáo tháng":
             prev_days_month = df_prev_month['Ngày'].nunique() or 1
             prev_hrs_day_month = prev_hrs_month / prev_days_month
             prev_trees_day_month = prev_trees_month / prev_days_month
+            prev_min_sess_month = (prev_hrs_month * 60) / prev_trees_month if prev_trees_month else None
         else:
-            prev_hrs_month = prev_trees_month = prev_hrs_day_month = prev_trees_day_month = None
+            prev_hrs_month = prev_trees_month = prev_hrs_day_month = prev_trees_day_month = prev_min_sess_month = None
         
         if not df_m.empty:
             with st.expander("1. Tổng quan", expanded=True):
@@ -1148,12 +1196,18 @@ elif nav == "Báo cáo tháng":
                 delta1_trd = (curr_trees_day - prev_trees_day_month) if prev_trees_day_month is not None else None
                 delta2_trd = (curr_trees_day - avg_trees_day_month) if avg_trees_day_month is not None else None
 
+                curr_min_sess = _avg_session_min(df_m)
+                delta1_ms = (curr_min_sess - prev_min_sess_month) if prev_min_sess_month is not None else None
+                delta2_ms = (curr_min_sess - avg_min_sess_month) if avg_min_sess_month is not None else None
+
                 render_stat_panel(hero_items=[
                     {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, "h vs Tháng trước"), _delta_t(delta2_hr, "h vs Trung bình")] if d]},
                     {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, "h vs Tháng trước"), _delta_t(delta2_hrd, "h vs Trung bình")] if d]},
                     {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, "cây vs Tháng trước"), _delta_t(delta2_tr, "cây vs Trung bình")] if d]},
                     {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
+                    {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, "phút vs Tháng trước"), _delta_t(delta2_ms, "phút vs Trung bình")] if d]},
                 ])
+                render_session_length(df_m)
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
@@ -1200,8 +1254,9 @@ elif nav == "Báo cáo tuần":
             avg_trees_week = trees_ow.mean()
             avg_hrs_day_week = (hrs_ow / days_ow).mean()
             avg_trees_day_week = (trees_ow / days_ow).mean()
+            avg_min_sess_week = ((hrs_ow * 60) / trees_ow).mean()
         else:
-            avg_hrs_week = avg_trees_week = avg_hrs_day_week = avg_trees_day_week = None
+            avg_hrs_week = avg_trees_week = avg_hrs_day_week = avg_trees_day_week = avg_min_sess_week = None
 
         week_anchor = df_w['Thời gian bắt đầu'].min()
         prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
@@ -1212,8 +1267,9 @@ elif nav == "Báo cáo tuần":
             prev_days_week = df_prev_week['Ngày'].nunique() or 1
             prev_hrs_day_week = prev_hrs_week / prev_days_week
             prev_trees_day_week = prev_trees_week / prev_days_week
+            prev_min_sess_week = (prev_hrs_week * 60) / prev_trees_week if prev_trees_week else None
         else:
-            prev_hrs_week = prev_trees_week = prev_hrs_day_week = prev_trees_day_week = None
+            prev_hrs_week = prev_trees_week = prev_hrs_day_week = prev_trees_day_week = prev_min_sess_week = None
         
         if not df_w.empty:
             with st.expander("1. Tổng quan", expanded=True):
@@ -1234,12 +1290,18 @@ elif nav == "Báo cáo tuần":
                 d1_trd_w = (curr_trees_day_w - prev_trees_day_week) if prev_trees_day_week is not None else None
                 d2_trd_w = (curr_trees_day_w - avg_trees_day_week) if avg_trees_day_week is not None else None
 
+                curr_min_sess_w = _avg_session_min(df_w)
+                d1_ms_w = (curr_min_sess_w - prev_min_sess_week) if prev_min_sess_week is not None else None
+                d2_ms_w = (curr_min_sess_w - avg_min_sess_week) if avg_min_sess_week is not None else None
+
                 render_stat_panel(hero_items=[
                     {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, "h vs Tuần trước"), _delta_t(d2_hr_w, "h vs Trung bình")] if d]},
                     {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, "h vs Tuần trước"), _delta_t(d2_hrd_w, "h vs Trung bình")] if d]},
                     {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, "cây vs Tuần trước"), _delta_t(d2_tr_w, "cây vs Trung bình")] if d]},
                     {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
+                    {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, "phút vs Tuần trước"), _delta_t(d2_ms_w, "phút vs Trung bình")] if d]},
                 ])
+                render_session_length(df_w)
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
@@ -1305,6 +1367,7 @@ elif nav == "Báo cáo theo nhóm":
                     {"k": "Thời gian / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
                     {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
                     {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
+                    {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
                 ]},
             ]
 
@@ -1342,6 +1405,7 @@ elif nav == "Báo cáo theo nhóm":
                 sections=_grp_sections,
                 footer=_footer_g,
             )
+            render_session_length(df_g)
         with st.expander("2. Biểu đồ lịch", expanded=True):
             df_g_cal = range_radio(df_g, key="range_grp_cal")
             render_calendar_grid(df_g_cal, df_g_cal)
