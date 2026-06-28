@@ -151,10 +151,7 @@ Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập tr
 trung theo thứ → Phân bố độ dài phiên → Bảng số liệu.
 
 ### 3. 🗓️ Báo cáo tuần
-Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**. Có thêm mục cuối **“Tóm tắt cho Claude
-(điểm tuần)”** — tạo một đoạn markdown gọn (có nút copy) gói các chỉ số của tuần đang chọn
-kèm so sánh tuần trước; bạn dán vào cuộc trò chuyện với Claude để nhận một **bản tin điểm
-tuần** nhận xét thói quen tập trung của mình.
+Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**.
 
 ### 4. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
