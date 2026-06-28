@@ -48,9 +48,9 @@ Hiểu 4 khái niệm này là dùng được toàn bộ ứng dụng:
 
 - **Tổng thời gian** — tổng số giờ đã tập trung trong phạm vi đang xem.
 - **Số cây đã trồng** — tổng số phiên (số cây).
-- **Thời gian TB/ngày** — trung bình số giờ mỗi *ngày có hoạt động*.
-- **Số cây TB/ngày** — trung bình số phiên mỗi *ngày có hoạt động*.
-- **Thời gian TB/tuần**, **Số cây TB/tuần** *(tab Báo cáo theo nhóm)* — trung bình theo
+- **Thời gian / ngày** — trung bình số giờ mỗi *ngày có hoạt động*.
+- **Số cây / ngày** — trung bình số phiên mỗi *ngày có hoạt động*.
+- **Thời gian / tuần**, **Số cây / tuần** *(tab Báo cáo theo nhóm)* — trung bình theo
   số *tuần có hoạt động*.
 - **Cập nhật gần nhất** *(tab Thống kê chung)* — thời điểm phiên gần nhất kết thúc, kèm
   khoảng cách so với hiện tại (ví dụ *“1 ngày 3 giờ trước”*).
@@ -62,43 +62,51 @@ Hiểu 4 khái niệm này là dùng được toàn bộ ứng dụng:
 
 > Màu **xanh lá** nghĩa là cao hơn (tốt hơn), **đỏ** nghĩa là thấp hơn.
 
-Ở **Báo cáo theo nhóm**, phần Tổng quan còn có:
+Ở **Thống kê chung / Báo cáo tháng / Báo cáo tuần**, phần Tổng quan còn có **Top 3 Danh
+mục / Dự án** — ba nhóm hoặc dự án bạn dành nhiều giờ nhất trong kỳ.
 
-- **Mốc thời gian**: *Ngày đầu tiên*, *Ngày gần nhất*, *Số ngày có hoạt động* của nhóm/dự án.
-- **Tuần này** (làm nổi bật màu xanh): thời gian và số cây của nhóm/dự án trong tuần hiện
-  tại — chỉ hiện khi tuần này có hoạt động.
-
-- **Top 3 Danh mục / Dự án** — ba nhóm hoặc dự án bạn dành nhiều giờ nhất.
+Ở **Báo cáo theo nhóm**, phần Tổng quan gom mọi chỉ số của nhóm/dự án đang chọn thành các
+nhóm gọn (mỗi nhóm một hàng): **Trung bình** (giờ & cây theo ngày/tuần), **Tuần này** (nổi
+bật màu xanh, chỉ hiện khi tuần này có hoạt động), **Chuỗi ngày** (tổng / dài nhất / hiện
+tại), **Theo thứ** (thứ mạnh nhất & yếu nhất), và **Mốc thời gian** (ngày đầu tiên, ngày
+gần nhất).
 
 ### Các biểu đồ
 
-- **Xu hướng theo thời gian** — cột (hoặc đường) thể hiện số giờ theo thời gian. Bạn có
-  thể *gộp theo* **Ngày / Tuần / Tháng** và tô màu *phân loại theo* **Danh mục / Dự án**.
+- **Xu hướng theo thời gian** — cột chồng thể hiện số giờ theo thời gian, điều chỉnh bằng 3
+  lựa chọn: *Khoảng thời gian*, *gộp theo* **Ngày / Tuần / Tháng**, và tô màu *phân loại
+  theo* **Danh mục / Dự án**. Khi gộp theo **Ngày**, biểu đồ phủ thêm **đường trung bình
+  động 7 ngày** (đường chấm) để cắt nhiễu hằng ngày, cho thấy xu hướng đang lên hay xuống.
 - **Phân bổ thời gian** — biểu đồ tròn cho thấy tỉ trọng thời gian giữa các nhóm/dự án
   trong kỳ.
-- **Xu hướng làm việc theo khung giờ** — số giờ cộng dồn theo **giờ trong ngày (0h–23h)**,
+- **Xu hướng tập trung theo khung giờ** — số giờ cộng dồn theo **khung giờ (0h - 23h)**,
   giúp nhận ra bạn tập trung tốt vào buổi sáng, chiều hay tối. Đường xanh là **tổng cộng**.
+- **Giờ tập trung theo thứ** — bản đồ nhiệt **7 thứ × 24 giờ**: mỗi ô là một khung giờ của
+  một thứ, ô càng **xanh đậm** thì trung bình giờ/ngày ở khung giờ đó càng cao. Trả lời câu
+  hỏi “tập trung tốt nhất vào sáng / chiều / tối thứ mấy”.
 - **Biểu đồ lịch** (kiểu “đóng góp” của GitHub) — mỗi ô là một ngày; ô càng **xanh đậm**
   thì ngày đó càng nhiều giờ. Kèm theo 3 chỉ số chuỗi:
   - **Tổng cộng** — tổng số ngày có hoạt động.
   - **Chuỗi dài nhất** — số ngày liên tiếp dài nhất từng đạt được.
   - **Chuỗi hiện tại** — số ngày liên tiếp tính đến hôm nay (chỉ còn hiệu lực nếu hôm nay
     hoặc hôm qua bạn có hoạt động).
-- **Lịch trồng cây theo giờ** *(tab Báo cáo tuần)* — trục ngang là các thứ trong tuần,
-  trục dọc là giờ 0–24; mỗi thanh (“cây nến”) là một phiên, đặt đúng vào khung giờ thực
-  tế và tô màu theo Danh mục. Đây là “thời khoá biểu” thực tế của tuần.
 
 ### Bảng số liệu
 
-- Ở các tab tổng hợp: bảng dạng **ma trận** *Danh mục / Dự án × kỳ (Tuần/Tháng)*, ô càng
-  xanh càng nhiều giờ, cột **Tổng** ở cuối.
+- Ở **Thống kê chung**: bảng dạng **ma trận** *Danh mục / Dự án × kỳ (Tuần/Tháng)*, ô càng
+  xanh càng nhiều giờ, cột **Tổng** ở cuối. Ô có dấu **▾ đỏ** là kỳ đó **giảm mạnh** (trên
+  60%) so với kỳ liền trước — giúp phát hiện nhóm/dự án đang bị bỏ bê.
+- Ở **Báo cáo tháng / tuần**: bảng **chi tiết** từng Danh mục/Dự án trong kỳ, kèm cột **Tỉ
+  trọng** (% thời gian trên tổng kỳ).
 - Ở **Báo cáo theo nhóm**: vì chỉ xem một nhóm/dự án nên bảng được tối ưu thành dạng
   **theo kỳ** — mỗi dòng là một Tuần/Tháng với *Số giờ*, *Số cây*, *Số ngày*, kèm dòng **Tổng**.
 
 ### Bộ lọc & điều hướng dùng chung
 
 - **Khoảng thời gian**: `30 ngày · 90 ngày · 6 tháng · 1 năm · Tất cả` — lọc nhanh phạm vi
-  dữ liệu (tính lùi từ ngày gần nhất). Phần *Xu hướng* và *Biểu đồ lịch* có bộ lọc riêng.
+  dữ liệu (tính lùi từ ngày gần nhất). Ở **Thống kê chung**, mỗi mục (Biểu đồ lịch, Xu
+  hướng theo thời gian, theo khung giờ, theo thứ, Bảng số liệu) có **bộ lọc khoảng thời
+  gian riêng**, điều chỉnh độc lập với nhau.
 - **Chọn kỳ** (tab tháng/tuần): nút **◀ ▶** để lùi/tiến từng kỳ, ô thả xuống để nhảy nhanh,
   và nút lịch 🗓️ để **về thẳng kỳ hiện tại**.
 - **Mọi mục đều gập/mở được**: bấm vào tiêu đề mục để thu gọn hoặc mở rộng.
@@ -112,18 +120,20 @@ Thanh điều hướng nằm ngay dưới tiêu đề, gồm 5 trang:
 ### 1. 📊 Thống kê chung
 Cái nhìn tổng thể toàn bộ dữ liệu.
 1. **Tổng quan** — các thẻ số liệu chính + cập nhật gần nhất + Top 3.
-2. **Biểu đồ lịch tổng quan** — lịch nhiệt + chuỗi ngày.
-3. **Xu hướng theo thời gian** — chọn khoảng thời gian, cách gộp và cách phân loại.
-4. **Xu hướng làm việc theo khung giờ** — bạn tập trung mạnh vào giờ nào.
-5. **Bảng số liệu** — ma trận Danh mục/Dự án theo Tuần hoặc Tháng.
+2. **Biểu đồ lịch** — lịch nhiệt + chuỗi ngày.
+3. **Xu hướng theo thời gian** — chọn khoảng thời gian, cách gộp và cách phân loại (kèm
+   đường TB động 7 ngày khi xem theo ngày).
+4. **Xu hướng tập trung theo khung giờ** — bạn tập trung mạnh vào giờ nào.
+5. **Giờ tập trung theo thứ** — bản đồ nhiệt 7 thứ × 24 giờ.
+6. **Bảng số liệu** — ma trận Danh mục/Dự án theo Tuần hoặc Tháng.
 
 ### 2. 🗓️ Báo cáo tháng
 Phân tích sâu **một tháng cụ thể** (chọn ở thanh điều hướng kỳ): Tổng quan (kèm so sánh) →
-Phân bổ thời gian → Xu hướng theo ngày trong tháng → Khung giờ → Bảng số liệu.
+Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo khung giờ → Giờ tập
+trung theo thứ → Bảng số liệu.
 
 ### 3. 🗓️ Báo cáo tuần
-Tương tự báo cáo tháng nhưng cho **một tuần**, và có thêm mục **Lịch trồng cây theo giờ**
-(thời khoá biểu thực tế của tuần).
+Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**.
 
 ### 4. 🗂️ Báo cáo theo nhóm
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
@@ -134,12 +144,19 @@ dưới nhóm cha. Gồm: Tổng quan → Biểu đồ lịch → Xu hướng th
 Nơi bạn nạp và quản lý dữ liệu:
 1. **Tải lên từ Forest** — tải file CSV xuất từ Forest. Ứng dụng tự nhận diện cột, chỉ giữ
    các phiên *thành công*, tự tính thời lượng và **bỏ qua các phiên trùng** (theo thời gian
-   bắt đầu/kết thúc) nên bạn có thể tải lại nhiều lần mà không sợ nhân đôi.
-2. **Phân loại** — tạo quy tắc gán **Dự án → Danh mục** (gom dự án vào nhóm). Có thể thêm/xoá
-   quy tắc; bảng quy tắc hiện tại hiển thị bên cạnh.
-3. **Dữ liệu làm việc hiện tại** — xem toàn bộ phiên đang lưu.
-4. **Quản lý hệ thống** — **Tải về** (sao lưu file dữ liệu & quy tắc), **Khôi phục** (nạp lại
-   từ file sao lưu), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
+   bắt đầu/kết thúc). Sau khi chọn file, app **xem trước** ("Đọc được N phiên hợp lệ — bỏ X
+   thất bại, Y unset…") rồi mới cần bấm **Xác nhận cập nhật dữ liệu**; xong sẽ báo tóm tắt
+   *"Đã thêm N phiên mới…"*. Nhờ vậy bạn có thể tải lại nhiều lần mà không sợ nhân đôi.
+2. **Phân loại** — gán **Dự án → Nhóm (Danh mục)** ngay trong **một bảng duy nhất**: chọn
+   nhóm cho từng dự án ở cột *Nhóm*, gõ tên ở ô **"Tạo nhóm mới"** để thêm lựa chọn, để
+   trống nghĩa là bỏ phân loại, rồi bấm **Lưu phân loại**. Phía trên có cảnh báo *"Còn N dự
+   án chưa phân loại…"* (hoặc báo đã gán hết) để biết còn gì cần làm.
+3. **Dữ liệu làm việc hiện tại** — bảng tương tác toàn bộ phiên đang lưu: **bấm tiêu đề cột
+   để sắp xếp**, **tích chọn nhiều dòng rồi xoá** từng phiên rác. Phiên đã xoá được ghi nhớ
+   và **không bị nạp lại** khi tải file Forest mới (kể cả khi file đó vẫn còn phiên này).
+4. **Quản lý hệ thống** — **Sao lưu** (một nút *Tải bản sao lưu* → file `.zip` gồm cả dữ
+   liệu, phân loại và danh sách đã xoá), **Khôi phục** (nạp lại từ chính file `.zip` đó, có
+   xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
 
 ---
 
@@ -149,14 +166,16 @@ Nơi bạn nạp và quản lý dữ liệu:
    (có các cột *Tag/Project*, *Start Time*, *End Time*, *Is Success*).
 2. Mở dashboard → tab **Chuẩn bị dữ liệu** → mục **1. Tải lên từ Forest** → chọn file →
    bấm **Xác nhận cập nhật dữ liệu**.
-3. Sang mục **2. Phân loại** để gom các dự án vào nhóm (ví dụ *Toán*, *Lập trình* → *Học tập*).
-   Bước này không bắt buộc, nhưng giúp các báo cáo theo nhóm có ý nghĩa hơn.
+3. Sang mục **2. Phân loại** để gom các dự án vào nhóm (ví dụ *Toán*, *Lập trình* → *Học tập*):
+   chọn nhóm cho từng dự án trong bảng rồi bấm **Lưu phân loại**. Bước này không bắt buộc,
+   nhưng giúp các báo cáo theo nhóm có ý nghĩa hơn.
 4. Quay lại **Thống kê chung** và khám phá. Định kỳ xuất CSV mới từ Forest rồi tải lên lại
-   để cập nhật — dữ liệu cũ vẫn được giữ, phần trùng tự loại bỏ.
-5. Thỉnh thoảng vào **Quản lý hệ thống → Tải về** để sao lưu phòng khi cần.
+   để cập nhật — dữ liệu cũ vẫn được giữ, phần trùng tự loại bỏ, phiên bạn đã xoá không quay lại.
+5. Thỉnh thoảng vào **Quản lý hệ thống → Tải bản sao lưu** để lấy file `.zip` phòng khi cần.
 
-> 💡 Dữ liệu được lưu cục bộ trong các file `database.csv` (các phiên) và `mapping.csv`
-> (quy tắc phân loại) ở thư mục chạy ứng dụng.
+> 💡 Dữ liệu được lưu cục bộ ở thư mục chạy ứng dụng trong 3 file: `database.csv` (các
+> phiên), `mapping.csv` (phân loại Dự án → Nhóm) và `deleted.csv` (danh sách phiên đã xoá).
+> Một bản sao lưu `.zip` đóng gói cả 3 file này.
 
 ---
 
@@ -191,6 +210,16 @@ Vì mẫu số chỉ gồm những ngày *có hoạt động*, không tính các
 **Tải cùng một file nhiều lần có bị nhân đôi không?**
 Không. Các phiên trùng (cùng thời gian bắt đầu và kết thúc) sẽ được tự loại bỏ.
 
+**Tôi đã xoá một phiên, nhưng file Forest mới vẫn còn nó — tải lên có bị thêm lại không?**
+Không. Khi bạn xoá một phiên ở mục **Dữ liệu làm việc hiện tại**, app ghi nhớ phiên đó và
+sẽ **bỏ qua nó** ở những lần tải file sau. Khi nạp, app báo rõ *"… N phiên đã xoá trước
+đó"*. (Muốn nhận lại tất cả thì dùng **Làm mới** để xoá sạch rồi nạp lại từ đầu.)
+
+**Tôi xoá một Tag trong Forest cho dự án đã kết thúc — có mất nhãn cũ không?**
+Không, miễn là phiên đó **đã được nạp vào app lúc còn tag**. Khi tag bị xoá trong Forest,
+các phiên đó thành *Unset*; lúc nạp file mới, app **bỏ qua phiên Unset** và **giữ nguyên
+nhãn cũ** đã lưu. Nên bạn có thể yên tâm dọn bớt Tag trong Forest.
+
 **Dự án chưa gán nhóm thì sao?**
 Nó vẫn xuất hiện bình thường và được coi như một nhóm độc lập trùng tên với dự án đó.
 
@@ -198,5 +227,5 @@ Nó vẫn xuất hiện bình thường và được coi như một nhóm độc
 Thứ Hai, kết thúc Chủ Nhật (chuẩn ISO).
 
 **Làm sao xoá sạch để bắt đầu lại?**
-Vào **Chuẩn bị dữ liệu → Quản lý hệ thống → Làm mới**, tích xác nhận rồi xoá. Nên **Tải về**
-sao lưu trước khi xoá.
+Vào **Chuẩn bị dữ liệu → Quản lý hệ thống → Làm mới**, tích xác nhận rồi xoá (thao tác này
+cũng xoá danh sách phiên đã xoá). Nên bấm **Tải bản sao lưu** trước khi xoá.
