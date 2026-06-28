@@ -16,6 +16,11 @@ DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 
+# "Nhật ký đọc sách": chỉ hiện cho nhóm sách đọc tuần tự (sửa tên ở đây nếu khác).
+# BOOKS_EXCLUDE = các dự án định kỳ (vd tạp chí) -> không tính như một cuốn sách.
+BOOKS_GROUP = "Reading"
+BOOKS_EXCLUDE = {"The Economist"}
+
 # Tên thứ tiếng Việt (dùng chung mọi nơi)
 VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
            "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
@@ -618,6 +623,60 @@ def _weekday_avg(scope_df):
     wd_count = pd.Series(pd.date_range(mn, mx).day_name()).map(VN_DAYS).value_counts()
     by = scope_df.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
     return (by / wd_count).reindex(DAYS_ORDER).dropna()
+
+
+def render_reading_log(df_books, latest_overall, recency_days=14):
+    """Bảng + timeline + tóm tắt cho từng cuốn sách (đọc tuần tự) trong nhóm.
+    Chỉ đọc & tính toán -> không đụng tới dữ liệu lưu trữ."""
+    if df_books.empty:
+        st.info("Chưa có dữ liệu sách trong nhóm này.")
+        return
+    rows = []
+    for book, g in df_books.groupby('Dự án'):
+        days = pd.to_datetime(g['Ngày'])
+        start, last = days.min(), days.max()
+        span_days = int((last - start).days) + 1
+        hrs = g['Thời lượng (Phút)'].sum() / 60
+        per_week = hrs / max(span_days / 7, 1 / 7)
+        ongoing = (pd.Timestamp(latest_overall) - last).days <= recency_days
+        rows.append({
+            'Cuốn sách': book, 'Bắt đầu': start, 'Gần nhất': last,
+            'Số ngày': span_days, 'Ngày đọc': g['Ngày'].nunique(),
+            'Tổng giờ': round(hrs, 1), 'Số phiên': len(g), 'Giờ/tuần': round(per_week, 1),
+            'Trạng thái': 'Đang đọc' if ongoing else 'Đã xong',
+        })
+    t = pd.DataFrame(rows).sort_values('Bắt đầu').reset_index(drop=True)
+
+    done = t[t['Trạng thái'] == 'Đã xong']
+    reading = t[t['Trạng thái'] == 'Đang đọc']
+    parts = [f"**{len(t)}** cuốn · tổng **{t['Tổng giờ'].sum():.1f}h**"]
+    if len(done):
+        top = done.loc[done['Tổng giờ'].idxmax()]
+        parts.append(f"đã xong **{len(done)}** (TB **{done['Tổng giờ'].mean():.1f}h/cuốn**, "
+                     f"**{done['Số ngày'].mean():.0f} ngày/cuốn**)")
+        parts.append(f"ngốn nhiều giờ nhất: **{top['Cuốn sách']}** ({top['Tổng giờ']:.1f}h)")
+    if len(reading):
+        parts.append("đang đọc: **" + "**, **".join(reading['Cuốn sách']) + "**")
+    st.markdown(" · ".join(parts))
+
+    tl = t.copy()
+    tl['end'] = pd.to_datetime(tl['Gần nhất']) + pd.Timedelta(days=1)
+    fig = px.timeline(tl, x_start='Bắt đầu', x_end='end', y='Cuốn sách', color='Trạng thái',
+                      color_discrete_map={'Đang đọc': '#007aff', 'Đã xong': '#aeaeb2'},
+                      category_orders={'Cuốn sách': list(tl['Cuốn sách'])})
+    fig.update_yaxes(autorange='reversed', title='')
+    fig.update_xaxes(title='')
+    fig.update_layout(height=max(170, 40 * len(tl) + 70), margin=dict(l=10, r=10, t=10, b=10),
+                      legend_title='', plot_bgcolor='white', paper_bgcolor='white',
+                      legend=dict(orientation='h', y=1.15, x=0))
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+    disp = t.copy()
+    disp['Bắt đầu'] = pd.to_datetime(disp['Bắt đầu']).dt.strftime('%d/%m/%Y')
+    disp['Gần nhất'] = pd.to_datetime(disp['Gần nhất']).dt.strftime('%d/%m/%Y')
+    st.dataframe(disp, width='stretch', hide_index=True)
+    st.caption("“Đang đọc” = có phiên trong ~2 tuần gần nhất; “Đã xong” = lâu hơn (suy ra tự động). "
+               "“Số ngày” = khoảng từ phiên đầu tới phiên gần nhất; “Giờ/tuần” tính trên khoảng đó.")
 
 
 def render_calendar_grid(scope_df, full_df):
@@ -1484,6 +1543,11 @@ elif nav == "Báo cáo theo dự án":
             grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key="view_grp")
             grp_view = grp_view or "Tháng"
             render_period_table(df_g, 'Tuần' if grp_view == "Tuần" else 'Tháng')
+        if _kind == "cat" and sel_grp == BOOKS_GROUP:
+            books_df = df_g[~df_g['Dự án'].isin(BOOKS_EXCLUDE)]
+            if books_df['Dự án'].nunique() >= 1:
+                with st.expander("6. Nhật ký đọc sách", expanded=True):
+                    render_reading_log(books_df, df['Ngày'].max())
 # ==========================================
 # TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
