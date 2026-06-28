@@ -249,7 +249,7 @@ def render_stat_panel(hero_items, sections=None, footer=None):
         chips = sec.get('chips') or []
         if not chips:
             continue
-        h += f"<div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
+        h += f"<div class='sp-row'><div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
         for c in chips:
             cls = "chip tw" if c.get('hl') else "chip"
             h += f"<span class='{cls}'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span>"
@@ -257,7 +257,7 @@ def render_stat_panel(hero_items, sections=None, footer=None):
                 dt, dc = c['delta']
                 h += f"<span class='cd' style='color:{dc};'>{dt}</span>"
             h += "</span>"
-        h += "</div>"
+        h += "</div></div>"
     if footer:
         f_txt, f_bg, f_fg = footer
         h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.07);text-align:center;'>"
@@ -842,8 +842,11 @@ st.markdown(
     .stat-panel .sp-l { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: #1d1d1f; }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
-    .stat-panel .sp-sub { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px 2px; }
-    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
+    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+    .stat-panel .sp-sub { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
+    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
+    @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
     .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: #f0f1f4; }
     .stat-panel .chip .ck { color: #86868b; }
     .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
