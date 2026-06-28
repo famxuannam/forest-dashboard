@@ -367,15 +367,22 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         unsafe_allow_html=True,
     )
 
-    # Tổng kết theo thứ trong tuần (trung bình mỗi ngày, tính cả ngày trống)
+    # ----- Gom tổng kết theo thứ + số liệu chuỗi + lời nhắc vào CÙNG MỘT thẻ -----
+    # 1) Tổng kết theo thứ (trung bình mỗi ngày, tính cả ngày trống)
     _dt = cal_data['Ngày_x'] if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str'])
     _mask = (_dt >= min_date) & (_dt <= max_date)
     by_wd = cal_data[_mask].groupby('Thứ')['Số giờ'].mean().reindex(DAYS_ORDER).dropna()
+    wd_html = ""
     if len(by_wd) and by_wd.max() > 0:
-        strong, weak = by_wd.idxmax(), by_wd.idxmin()
-        st.caption(f"Trung bình theo thứ — mạnh nhất: **{strong}** ({by_wd[strong]:.1f}h/ngày) · "
-                   f"yếu nhất: **{weak}** ({by_wd[weak]:.1f}h/ngày)")
+        _stg, _wk = by_wd.idxmax(), by_wd.idxmin()
+        wd_html = (
+            "<div style='text-align:center;color:#86868b;font-size:13px;padding-bottom:16px;"
+            "margin-bottom:18px;border-bottom:1px solid rgba(0,0,0,0.08);'>"
+            f"Trung bình theo thứ — mạnh nhất: <b style='color:#1d1d1f;'>{_stg}</b> ({by_wd[_stg]:.1f}h/ngày)"
+            f" · yếu nhất: <b style='color:#1d1d1f;'>{_wk}</b> ({by_wd[_wk]:.1f}h/ngày)</div>"
+        )
 
+    # 2) Số liệu chuỗi (streak) tính trên toàn lịch sử
     unique_dates = pd.to_datetime(streak_df['Ngày'].dropna().unique())
     unique_dates = unique_dates.sort_values()
     today = pd.Timestamp(date.today())
@@ -385,29 +392,26 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         streak_id = (diffs > 1).cumsum()
         streak_counts = streak_id.value_counts()
         longest_streak = streak_counts.max()
-        # Chuỗi hiện tại tính theo hôm nay: chỉ còn hiệu lực nếu lần gần nhất là hôm nay hoặc hôm qua
+        # Chuỗi hiện tại: chỉ còn hiệu lực nếu lần gần nhất là hôm nay hoặc hôm qua
         current_streak = streak_counts[streak_id.iloc[-1]] if (today - unique_dates.max()).days <= 1 else 0
     else:
         total_days = longest_streak = current_streak = 0
 
-    st.markdown(f"""
-    <div class="glass-card" style='display: flex; width: 100%; max-width: 900px; margin: 0 auto; justify-content: center; align-items: center; padding: 25px;'>
-        <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
-            <h3 style='margin:0; font-size: 32px;'>{total_days} ngày</h3>
-            <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Tổng cộng</p>
-        </div>
-        <div style='flex: 1; text-align: center; border-right: 1px solid rgba(0,0,0,0.1);'>
-            <h3 style='margin:0; font-size: 32px;'>{longest_streak} ngày</h3>
-            <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Chuỗi dài nhất</p>
-        </div>
-        <div style='flex: 1; text-align: center;'>
-            <h3 style='margin:0; font-size: 32px;'>{current_streak} ngày</h3>
-            <p style='margin:5px 0 0 0; color:#86868b; font-size: 15px; font-weight:500;'>Chuỗi hiện tại</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    def _metric(v, label, border):
+        return (f"<div style='flex:1;text-align:center;{border}'>"
+                f"<h3 style='margin:0;font-size:32px;'>{v} ngày</h3>"
+                f"<p style='margin:5px 0 0 0;color:#86868b;font-size:15px;font-weight:500;'>{label}</p></div>")
+    _bd = "border-right:1px solid rgba(0,0,0,0.1);"
+    metrics_html = (
+        "<div class='streak-row' style='display:flex;align-items:center;'>"
+        + _metric(total_days, "Tổng cộng", _bd)
+        + _metric(longest_streak, "Chuỗi dài nhất", _bd)
+        + _metric(current_streak, "Chuỗi hiện tại", "")
+        + "</div>"
+    )
 
-    # Lời nhắc chuỗi: thúc giữ mạch hoặc kéo tới kỷ lục (chỉ là theo dõi, không phải mục tiêu)
+    # 3) Lời nhắc chuỗi (chỉ theo dõi, không phải đặt mục tiêu)
+    nudge_html = ""
     if total_days > 0:
         gap = (today - unique_dates.max()).days
         if gap == 0 and current_streak >= longest_streak:
@@ -422,11 +426,16 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         _bg, _fg = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
                     "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
                     "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}[tone]
-        st.markdown(
-            f"<div style='max-width:900px;margin:10px auto 0 auto;padding:10px 16px;border-radius:12px;"
-            f"background:{_bg};color:{_fg};font-size:14px;font-weight:500;text-align:center;'>{msg}</div>",
-            unsafe_allow_html=True,
+        nudge_html = (
+            "<div style='margin-top:18px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.08);text-align:center;'>"
+            f"<span style='background:{_bg};color:{_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{msg}</span></div>"
         )
+
+    st.markdown(
+        "<div class='glass-card' style='max-width:900px;margin:0 auto;padding:22px 26px;'>"
+        + wd_html + metrics_html + nudge_html + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_week_agenda(scope_df):
@@ -805,6 +814,8 @@ st.markdown(
         /* Thẻ streak: xếp dọc cho dễ đọc */
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
+        .streak-row { flex-direction: column !important; gap: 12px !important; }
+        .streak-row > div { border-right: none !important; }
     }
     </style>
     """,
