@@ -361,7 +361,7 @@ def _explode_session_hours(scope_df, key_col):
     return pd.DataFrame(out, columns=[key_col, 'Khung giờ', 'giờ'])
 
 
-def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
+def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     if scope_df.empty:
         return
     num_days = scope_df['Ngày'].nunique() or 1
@@ -996,7 +996,7 @@ if nav == "Thống kê chung":
                     _pct = (r_avg - base_avg) / base_avg * 100
                     _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
                     _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
-                recent_chips.append({"k": "Giờ / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
+                recent_chips.append({"k": "Thời gian / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
             recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
 
             s_stat = _streak_stats(df)
@@ -1035,7 +1035,7 @@ if nav == "Thống kê chung":
             _wk_now = date.today().strftime('%G-W%V')
             with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
-        with st.expander("2. Biểu đồ lịch tổng quan", expanded=True):
+        with st.expander("2. Biểu đồ lịch", expanded=True):
             df_cal = range_radio(df, key="range_cal")
             render_calendar_grid(df_cal, df_cal)
         with st.expander("3. Xu hướng theo thời gian", expanded=True):
@@ -1059,9 +1059,9 @@ if nav == "Thống kê chung":
                                     ma_df=df_trend if time_col_2 == "Ngày" else None)
             fig1.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
-        with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
+        with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
             df_hour = range_radio(df, key="range_hour")
-            render_hourly_chart(df_hour, color_col_2, x_title="Khung giờ (0h - 23h)")
+            render_hourly_chart(df_hour, color_col_2)
         with st.expander("5. Giờ tập trung theo thứ", expanded=True):
             df_heat = range_radio(df, key="range_heat")
             render_dayhour_heatmap(df_heat)
@@ -1132,9 +1132,9 @@ elif nav == "Báo cáo tháng":
 
                 render_stat_panel(hero_items=[
                     {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, "h vs Tháng trước"), _delta_t(delta2_hr, "h vs Trung bình")] if d]},
-                    {"label": "Thời gian TB/ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, "h vs Tháng trước"), _delta_t(delta2_hrd, "h vs Trung bình")] if d]},
+                    {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, "h vs Tháng trước"), _delta_t(delta2_hrd, "h vs Trung bình")] if d]},
                     {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, "cây vs Tháng trước"), _delta_t(delta2_tr, "cây vs Trung bình")] if d]},
-                    {"label": "Số cây TB/ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
+                    {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
                 ])
 
                 st.write("")
@@ -1157,7 +1157,7 @@ elif nav == "Báo cáo tháng":
                 fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
                 fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
+            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
             with st.expander("5. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_m)
@@ -1218,9 +1218,9 @@ elif nav == "Báo cáo tuần":
 
                 render_stat_panel(hero_items=[
                     {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, "h vs Tuần trước"), _delta_t(d2_hr_w, "h vs Trung bình")] if d]},
-                    {"label": "Thời gian TB/ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, "h vs Tuần trước"), _delta_t(d2_hrd_w, "h vs Trung bình")] if d]},
+                    {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, "h vs Tuần trước"), _delta_t(d2_hrd_w, "h vs Trung bình")] if d]},
                     {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, "cây vs Tuần trước"), _delta_t(d2_tr_w, "cây vs Trung bình")] if d]},
-                    {"label": "Số cây TB/ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
+                    {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
                 ])
 
                 st.write("")
@@ -1242,7 +1242,7 @@ elif nav == "Báo cáo tuần":
                 fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
                 fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng làm việc theo khung giờ", expanded=True):
+            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
             with st.expander("5. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_w)
@@ -1283,10 +1283,10 @@ elif nav == "Báo cáo theo nhóm":
 
             _grp_sections = [
                 {"label": "Trung bình", "chips": [
-                    {"k": "TG / ngày", "v": f"{curr_hrs_g/num_days_g:.1f}h"},
-                    {"k": "TG / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
-                    {"k": "Cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
-                    {"k": "Cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
+                    {"k": "Thời gian / ngày", "v": f"{curr_hrs_g/num_days_g:.1f}h"},
+                    {"k": "Thời gian / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
+                    {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
+                    {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
                 ]},
             ]
 
