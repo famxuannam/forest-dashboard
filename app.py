@@ -323,7 +323,17 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
     cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
     cal_data['day'] = cal_data['Ngày_x'].dt.day if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str']).dt.day
 
-    vmax_cal = float(cal_data['Số giờ'].max()) or 1.0
+    # Thang màu theo BẬC (0 / <1h / 1–2h / 2–4h / >4h) -> ngày thường không bị
+    # một ngày cày khủng làm phẳng hết như thang tuyến tính cũ.
+    def _cal_lvl(h):
+        if h <= 0: return 0
+        if h < 1: return 1
+        if h < 2: return 2
+        if h < 4: return 3
+        return 4
+    cal_data['lvl'] = cal_data['Số giờ'].map(_cal_lvl)
+    LVL_COLORS = ["#e5e5ea", "#ade8bf", "#6fd693", "#34c759", "#1f8f43"]
+
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
                                 labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? 'Th' + (month(datum.value)+1) : ''"))
@@ -332,12 +342,12 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
                    alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
     base = alt.Chart(cal_data).encode(x=enc_x, y=enc_y)
     rect = base.mark_rect(cornerRadius=3).encode(
-        color=alt.Color('Số giờ:Q', scale=alt.Scale(domain=[0, vmax_cal], range=['#e5e5ea', '#34c759']), legend=None),
+        color=alt.Color('lvl:O', scale=alt.Scale(domain=[0, 1, 2, 3, 4], range=LVL_COLORS), legend=None),
         tooltip=cal_tooltip
     )
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        color=alt.condition(f"datum['Số giờ'] > {vmax_cal * 0.55}", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        color=alt.condition("datum.lvl >= 3", alt.value('#ffffff'), alt.value('#a7a7ac')),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
@@ -346,6 +356,25 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         padding={"left": 0, "right": 64, "top": 5, "bottom": 5}
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
+
+    # Chú giải thang màu (Ít -> Nhiều), kiểu GitHub
+    _sw = "".join(
+        f"<span style='display:inline-block;width:13px;height:13px;border-radius:3px;"
+        f"background:{c};margin:0 2px;vertical-align:middle;'></span>" for c in LVL_COLORS
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#86868b;font-size:12px;margin:-2px 0 4px 0;'>Ít {_sw} Nhiều</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Tổng kết theo thứ trong tuần (trung bình mỗi ngày, tính cả ngày trống)
+    _dt = cal_data['Ngày_x'] if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str'])
+    _mask = (_dt >= min_date) & (_dt <= max_date)
+    by_wd = cal_data[_mask].groupby('Thứ')['Số giờ'].mean().reindex(DAYS_ORDER).dropna()
+    if len(by_wd) and by_wd.max() > 0:
+        strong, weak = by_wd.idxmax(), by_wd.idxmin()
+        st.caption(f"Trung bình theo thứ — mạnh nhất: **{strong}** ({by_wd[strong]:.1f}h/ngày) · "
+                   f"yếu nhất: **{weak}** ({by_wd[weak]:.1f}h/ngày)")
 
     unique_dates = pd.to_datetime(streak_df['Ngày'].dropna().unique())
     unique_dates = unique_dates.sort_values()
@@ -377,6 +406,27 @@ def render_calendar_streak(scope_df, full_df, streak_df=None):
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Lời nhắc chuỗi: thúc giữ mạch hoặc kéo tới kỷ lục (chỉ là theo dõi, không phải mục tiêu)
+    if total_days > 0:
+        gap = (today - unique_dates.max()).days
+        if gap == 0 and current_streak >= longest_streak:
+            msg, tone = f"Bạn đang giữ chuỗi {current_streak} ngày — dài nhất từ trước tới nay. Giữ vững nhé!", "good"
+        elif gap == 0:
+            need = longest_streak - current_streak + 1
+            msg, tone = f"Đang có chuỗi {current_streak} ngày. Còn {need} ngày nữa là chạm kỷ lục {longest_streak} ngày.", "good"
+        elif gap == 1:
+            msg, tone = f"Chuỗi {current_streak} ngày đang treo — hôm nay chưa có hoạt động. Trồng một cây để giữ mạch!", "warn"
+        else:
+            msg, tone = f"Chuỗi gần nhất đã dừng {gap} ngày. Hôm nay là lúc tốt để bắt đầu lại.", "neutral"
+        _bg, _fg = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
+                    "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
+                    "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}[tone]
+        st.markdown(
+            f"<div style='max-width:900px;margin:10px auto 0 auto;padding:10px 16px;border-radius:12px;"
+            f"background:{_bg};color:{_fg};font-size:14px;font-weight:500;text-align:center;'>{msg}</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_week_agenda(scope_df):
