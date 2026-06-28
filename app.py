@@ -528,56 +528,6 @@ def render_calendar_grid(scope_df, full_df):
     st.altair_chart(chart, width='content')
 
 
-def render_calendar_streak(scope_df, full_df, streak_df=None):
-    """Lưới lịch + thẻ gộp (tổng kết theo thứ, số liệu chuỗi, lời nhắc).
-    Dùng cho tab Báo cáo theo nhóm; ở Thống kê chung các số liệu này đã đưa lên Tổng quan."""
-    if streak_df is None:
-        streak_df = scope_df
-    render_calendar_grid(scope_df, full_df)
-
-    by_wd = _weekday_avg(scope_df)
-    wd_html = ""
-    if len(by_wd) and by_wd.max() > 0:
-        _stg, _wk = by_wd.idxmax(), by_wd.idxmin()
-        wd_html = (
-            "<div style='text-align:center;color:#86868b;font-size:13px;padding-bottom:16px;"
-            "margin-bottom:18px;border-bottom:1px solid rgba(0,0,0,0.08);'>"
-            f"Trung bình theo thứ — mạnh nhất: <b style='color:#1d1d1f;'>{_stg}</b> ({by_wd[_stg]:.1f}h/ngày)"
-            f" · yếu nhất: <b style='color:#1d1d1f;'>{_wk}</b> ({by_wd[_wk]:.1f}h/ngày)</div>"
-        )
-
-    s = _streak_stats(streak_df)
-
-    def _metric(v, label, border):
-        return (f"<div style='flex:1;text-align:center;{border}'>"
-                f"<h3 style='margin:0;font-size:32px;'>{v} ngày</h3>"
-                f"<p style='margin:5px 0 0 0;color:#86868b;font-size:15px;font-weight:500;'>{label}</p></div>")
-    _bd = "border-right:1px solid rgba(0,0,0,0.1);"
-    metrics_html = (
-        "<div class='streak-row' style='display:flex;align-items:center;'>"
-        + _metric(s["total"], "Tổng cộng", _bd)
-        + _metric(s["longest"], "Chuỗi dài nhất", _bd)
-        + _metric(s["current"], "Chuỗi hiện tại", "")
-        + "</div>"
-    )
-
-    nudge_html = ""
-    nud = _streak_nudge(s)
-    if nud:
-        msg, tone = nud
-        _bg, _fg = NUDGE_TONES[tone]
-        nudge_html = (
-            "<div style='margin-top:18px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.08);text-align:center;'>"
-            f"<span style='background:{_bg};color:{_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{msg}</span></div>"
-        )
-
-    st.markdown(
-        "<div class='glass-card' style='max-width:900px;margin:0 auto;padding:22px 26px;'>"
-        + wd_html + metrics_html + nudge_html + "</div>",
-        unsafe_allow_html=True,
-    )
-
-
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid rgba(0,0,0,0.06); background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.04); }
@@ -923,11 +873,9 @@ st.markdown(
         .dtbl th, .dtbl td { padding: 3px 6px !important; font-size: 11px !important; }
         .dtbl-wrap { max-height: 70vh !important; }
 
-        /* Thẻ streak: xếp dọc cho dễ đọc */
+        /* Thẻ dạng flex (vd Cập nhật gần nhất): xếp dọc cho dễ đọc */
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
-        .streak-row { flex-direction: column !important; gap: 12px !important; }
-        .streak-row > div { border-right: none !important; }
     }
     </style>
     """,
@@ -1298,17 +1246,15 @@ elif nav == "Báo cáo theo nhóm":
             first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
             last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
 
+            s_g = _streak_stats(df_g)
+            wd_g = _weekday_avg(df_g)
+
             _grp_sections = [
                 {"label": "Trung bình", "chips": [
                     {"k": "TG / ngày", "v": f"{curr_hrs_g/num_days_g:.1f}h"},
                     {"k": "TG / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
                     {"k": "Cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
                     {"k": "Cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
-                ]},
-                {"label": "Mốc thời gian", "chips": [
-                    {"k": "Ngày đầu tiên", "v": first_day},
-                    {"k": "Ngày gần nhất", "v": last_day},
-                    {"k": "Số ngày hoạt động", "v": f"{df_g['Ngày'].nunique()}"},
                 ]},
             ]
 
@@ -1319,16 +1265,36 @@ elif nav == "Báo cáo theo nhóm":
                     {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
                 ]})
 
+            # "Tổng cộng" của chuỗi chính là số ngày hoạt động -> bỏ trùng ở Mốc thời gian
+            _grp_sections.append({"label": "Chuỗi ngày", "chips": [
+                {"k": "Tổng cộng", "v": f"{s_g['total']} ngày"},
+                {"k": "Dài nhất", "v": f"{s_g['longest']} ngày"},
+                {"k": "Hiện tại", "v": f"{s_g['current']} ngày", "hl": True},
+            ]})
+            if len(wd_g) and wd_g.max() > 0:
+                _grp_sections.append({"label": "Theo thứ", "chips": [
+                    {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({wd_g.max():.1f}h)"},
+                    {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({wd_g.min():.1f}h)"},
+                ]})
+            _grp_sections.append({"label": "Mốc thời gian", "chips": [
+                {"k": "Ngày đầu tiên", "v": first_day},
+                {"k": "Ngày gần nhất", "v": last_day},
+            ]})
+
+            _nud_g = _streak_nudge(s_g)
+            _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
+
             render_stat_panel(
                 hero_items=[
                     {"label": "Tổng thời gian", "value": f"{curr_hrs_g:.1f}h"},
                     {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                 ],
                 sections=_grp_sections,
+                footer=_footer_g,
             )
         with st.expander("2. Biểu đồ lịch", expanded=True):
             df_g_cal = range_radio(df_g, key="range_grp_cal")
-            render_calendar_streak(df_g_cal, df_g_cal, streak_df=df_g)
+            render_calendar_grid(df_g_cal, df_g_cal)
         with st.expander("3. Xu hướng theo thời gian", expanded=True):
             time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
             time_col_5 = time_col_5 or "Ngày"
