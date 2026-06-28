@@ -677,17 +677,54 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
         sections=_secs,
     )
 
-    tl = t.copy()
-    tl['end'] = pd.to_datetime(tl['Gần nhất']) + pd.Timedelta(days=1)
-    fig = px.timeline(tl, x_start='Bắt đầu', x_end='end', y='Cuốn sách', color='Trạng thái',
-                      color_discrete_map={'Đang đọc': '#007aff', 'Đã xong': '#aeaeb2'},
-                      category_orders={'Cuốn sách': list(tl['Cuốn sách'])})
-    fig.update_yaxes(autorange='reversed', title='')
-    fig.update_xaxes(title='')
-    fig.update_layout(height=max(170, 40 * len(tl) + 70), margin=dict(l=10, r=10, t=10, b=10),
-                      legend_title='', plot_bgcolor='white', paper_bgcolor='white',
-                      legend=dict(orientation='h', y=1.15, x=0))
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    # Timeline trình tự đọc — tự vẽ HTML/CSS (trục tháng tiếng Việt, thanh bo tròn)
+    tmin = pd.to_datetime(t['Bắt đầu']).min().normalize().replace(day=1)
+    tmax = pd.to_datetime(t['Gần nhất']).max().normalize().replace(day=1) + pd.offsets.MonthEnd(1)
+    total = max((tmax - tmin).days, 1)
+    multiyear = tmin.year != tmax.year
+
+    def _pct(d):
+        return (pd.Timestamp(d).normalize() - tmin).days / total * 100
+
+    months = pd.date_range(tmin, tmax, freq='MS')
+    grid_html = ''.join(f'<div class="rtl-grid" style="left:{_pct(m):.3f}%"></div>' for m in months)
+    axis_html = ''.join(
+        f'<span class="rtl-tick" style="left:{_pct(m):.3f}%">Th{m.month}'
+        + (f"<span class='rtl-yr'>’{m.year % 100:02d}</span>" if multiyear and m.month == 1 else "")
+        + '</span>' for m in months)
+
+    bars_html = ''
+    for _, r in t.iterrows():
+        left = _pct(r['Bắt đầu'])
+        width = max((pd.Timestamp(r['Gần nhất']) - pd.Timestamp(r['Bắt đầu'])).days + 1, 1) / total * 100
+        cls = 'reading' if r['Trạng thái'] == 'Đang đọc' else 'done'
+        bars_html += (f'<div class="rtl-row"><div class="rtl-name">{html_escape(str(r["Cuốn sách"]))}</div>'
+                      f'<div class="rtl-track">{grid_html}'
+                      f'<div class="rtl-bar {cls}" style="left:{left:.3f}%;width:{width:.3f}%"></div></div></div>')
+
+    st.markdown(f"""
+<style>
+.rtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:16px 18px;margin-top:14px;}}
+.rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:#6e6e73;}}
+.rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
+.rtl-row{{display:grid;grid-template-columns:144px 1fr;align-items:center;height:32px;}}
+.rtl-name{{font-size:13px;font-weight:600;color:#1d1d1f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
+.rtl-track{{position:relative;height:32px;}}
+.rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
+.rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;}}
+.rtl-bar.done{{background:#aeaeb2;}}
+.rtl-bar.reading{{background:#007aff;}}
+.rtl-axis{{display:grid;grid-template-columns:144px 1fr;margin-top:3px;}}
+.rtl-ticks{{position:relative;height:16px;}}
+.rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
+.rtl-yr{{color:#c7c7cc;margin-left:1px;}}
+</style>
+<div class="rtl-card">
+<div class="rtl-legend"><span><i style="background:#007aff;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+{bars_html}
+<div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
+</div>
+""", unsafe_allow_html=True)
 
     # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu"
     vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
