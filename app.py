@@ -1451,13 +1451,20 @@ elif nav == "Chuẩn bị dữ liệu":
                 render_plain_table(display_map)
     with st.expander("3. Dữ liệu làm việc hiện tại", expanded=True):
         if not db_current.empty:
-            disp_db = db_current.copy()
+            db_base = db_current.reset_index(drop=True)
+            _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
+            st.caption(f"Tổng **{len(db_base)}** phiên · từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}. "
+                       "Bấm tiêu đề cột để sắp xếp; tích chọn dòng để xoá.")
+            disp_db = db_base.copy()
             disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
             disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
             if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
-            disp_db = disp_db.reset_index(drop=True)
-            disp_db.index = disp_db.index + 1
-            render_plain_table(disp_db, num_cols={'Thời lượng (Phút)'})
+            ev = st.dataframe(disp_db, width='stretch', hide_index=True,
+                              on_select="rerun", selection_mode="multi-row", key="db_view")
+            sel_rows = list(ev.selection.rows) if ev and ev.selection else []
+            if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary"):
+                save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
+                st.rerun()
     with st.expander("4. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
