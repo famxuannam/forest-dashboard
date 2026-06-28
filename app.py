@@ -1440,19 +1440,39 @@ elif nav == "Chuẩn bị dữ liệu":
                 st.rerun()
     with st.expander("4. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
+        _today = date.today().strftime('%Y-%m-%d')
         with c1:
-            st.subheader("Tải về")
+            st.subheader("Sao lưu")
+            st.caption("Tải về để lưu trữ; tên file kèm ngày để dễ phân biệt.")
             if os.path.exists(DB_FILE):
-                with open(DB_FILE, "rb") as f: st.download_button("Tải file Dữ liệu", f, "database.csv", "text/csv")
+                with open(DB_FILE, "rb") as f:
+                    st.download_button("Tải file Dữ liệu", f, f"forest_data_{_today}.csv", "text/csv")
             if os.path.exists(MAPPING_FILE):
-                with open(MAPPING_FILE, "rb") as f: st.download_button("Tải file Quy tắc", f, "mapping.csv", "text/csv")
+                with open(MAPPING_FILE, "rb") as f:
+                    st.download_button("Tải file Phân loại", f, f"forest_phanloai_{_today}.csv", "text/csv")
         with c2:
             st.subheader("Khôi phục")
             res_db = st.file_uploader("Tải lên file Dữ liệu", type=["csv"], key="r_db")
-            res_map = st.file_uploader("Tải lên file Quy tắc", type=["csv"], key="r_map")
-            if st.button("Xác nhận Khôi phục", type="primary"):
-                if res_db: save_db(pd.read_csv(res_db))
-                if res_map: save_mapping(pd.read_csv(res_map))
+            res_map = st.file_uploader("Tải lên file Phân loại", type=["csv"], key="r_map")
+            if res_db is not None:
+                try:
+                    res_db.seek(0); _pdb = pd.read_csv(res_db); res_db.seek(0)
+                    _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
+                    _rng = f" · {_dt.min():%d/%m/%Y} – {_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                    st.caption(f"File Dữ liệu: **{len(_pdb)}** phiên{_rng}")
+                except Exception:
+                    st.caption("Không đọc được file Dữ liệu — kiểm tra lại file.")
+            if res_map is not None:
+                try:
+                    res_map.seek(0); _pm = pd.read_csv(res_map); res_map.seek(0)
+                    st.caption(f"File Phân loại: **{len(_pm)}** dự án")
+                except Exception:
+                    st.caption("Không đọc được file Phân loại — kiểm tra lại file.")
+            if res_db is not None or res_map is not None:
+                st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung các file trên.")
+            if st.button("Xác nhận Khôi phục", type="primary", disabled=(res_db is None and res_map is None)):
+                if res_db is not None: res_db.seek(0); save_db(pd.read_csv(res_db))
+                if res_map is not None: res_map.seek(0); save_mapping(pd.read_csv(res_map))
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
                 st.rerun()
