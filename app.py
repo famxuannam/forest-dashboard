@@ -374,7 +374,8 @@ def render_top_3(df, col_name, title, week_key=None):
 
 # Phân nhóm độ dài phiên (phút): tên, khoảng hiển thị, [lo, hi), màu — mốc cố định
 SESSION_BUCKETS = [
-    ("Ngắn",      "< 25′",  0,   25,    "#cfe3ff"),
+    ("Tối thiểu", "= 10′",  0,   11,    "#dce9fb"),
+    ("Ngắn",      "< 25′",  11,  25,    "#a9ccf4"),
     ("Trung bình","25–50′", 25,  50,    "#7fb5ff"),
     ("Dài",       "50–90′", 50,  90,    "#2f86ec"),
     ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
