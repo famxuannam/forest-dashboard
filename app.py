@@ -620,6 +620,67 @@ def _weekday_avg(scope_df):
     return (by / wd_count).reindex(DAYS_ORDER).dropna()
 
 
+def build_week_bulletin(df_w, df_all, week_label):
+    """Bản tóm tắt 'điểm tuần' (markdown) để dán cho Claude viết nhận xét kiểu bản tin."""
+    if df_w.empty:
+        return "Tuần này chưa có phiên nào để tóm tắt."
+    hrs = df_w['Thời lượng (Phút)'].sum() / 60
+    sess = len(df_w)
+    active_days = df_w['Ngày'].nunique()
+    avg_min = _avg_session_min(df_w)
+
+    anchor = df_w['Thời gian bắt đầu'].min()
+    prev_key = (anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(anchor) else None
+    df_prev = df_all[df_all['Tuần'] == prev_key]
+    prev_hrs = (df_prev['Thời lượng (Phút)'].sum() / 60) if not df_prev.empty else None
+    others = df_all[df_all['Tuần'] != week_label]
+    avg_hrs = (others.groupby('Tuần')['Thời lượng (Phút)'].sum() / 60).mean() if others['Tuần'].nunique() else None
+
+    def _cmp(cur, ref):
+        if ref is None:
+            return "—"
+        diff = cur - ref
+        return f"{ref:.1f}h ({'+' if diff >= 0 else ''}{diff:.1f}h)"
+
+    L = [f"# Điểm tuần {week_label}", ""]
+    L.append(f"- Tổng: **{hrs:.1f} giờ** · **{sess} phiên** · hoạt động **{active_days}/7 ngày**")
+    L.append(f"- Độ dài trung bình mỗi phiên: **{avg_min:.0f} phút**")
+    L.append(f"- So với tuần trước: {_cmp(hrs, prev_hrs)} · so với trung bình các tuần: {_cmp(hrs, avg_hrs)}")
+
+    by_day = df_w.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
+    by_day = by_day.reindex([d for d in DAYS_ORDER if d in by_day.index])
+    if len(by_day):
+        L.append(f"- Ngày mạnh nhất: **{by_day.idxmax()}** ({by_day.max():.1f}h)"
+                 + (f" · yếu nhất: {by_day.idxmin()} ({by_day.min():.1f}h)" if len(by_day) > 1 else ""))
+        L.append("- Theo ngày: " + ", ".join(f"{d} {by_day[d]:.1f}h" for d in by_day.index))
+
+    def _top(col, n=3):
+        g = (df_w.groupby(col)['Thời lượng (Phút)'].sum() / 60).sort_values(ascending=False).head(n)
+        return ", ".join(f"{k} {v:.1f}h ({v / (hrs or 1) * 100:.0f}%)" for k, v in g.items())
+    L.append(f"- Top danh mục: {_top('Danh mục')}")
+    L.append(f"- Top dự án: {_top('Dự án')}")
+
+    def _buoi(h):
+        return "Sáng" if 5 <= h < 11 else "Chiều" if 11 <= h < 17 else "Tối" if 17 <= h < 22 else "Khuya"
+    bg = (df_w.assign(_b=df_w['Khung giờ'].map(_buoi)).groupby('_b')['Thời lượng (Phút)'].sum() / 60)
+    L.append("- Theo buổi: " + ", ".join(f"{b} {bg[b]:.1f}h" for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0))
+
+    d = df_w['Thời lượng (Phút)']
+    dist = [f"{name} ({rng}) {int(((d >= lo) & (d < hi)).sum())}"
+            for name, rng, lo, hi, _ in SESSION_BUCKETS if int(((d >= lo) & (d < hi)).sum())]
+    L.append("- Độ dài phiên: " + " · ".join(dist))
+
+    s = _streak_stats(df_all)
+    L.append(f"- Chuỗi ngày (toàn lịch sử): hiện tại {s['current']} ngày · dài nhất {s['longest']} ngày")
+
+    L += ["", "---",
+          "Hãy viết cho tôi một **bản tin \"điểm tuần\"** ngắn (giọng bản tin thời sự, súc tích, "
+          "có chút dí dỏm) nhận xét tuần làm việc tập trung ở trên: tuần này nổi bật điều gì, so với "
+          "tuần trước ra sao, điểm sáng & điểm cần lưu ý, và 1–2 gợi ý nhẹ cho tuần tới. Tôi dùng app "
+          "để THEO DÕI, không đặt mục tiêu — nên đừng phán xét, chỉ quan sát và động viên."]
+    return "\n".join(L)
+
+
 def render_calendar_grid(scope_df, full_df):
     """Chỉ vẽ lưới lịch nhiệt kiểu GitHub (không kèm số liệu chuỗi)."""
     min_date = pd.Timestamp(scope_df['Ngày'].min())
@@ -1376,6 +1437,10 @@ elif nav == "Báo cáo tuần":
                 render_session_histogram(df_w)
             with st.expander("7. Bảng số liệu", expanded=True):
                 render_detail_table(df_w)
+            with st.expander("8. Tóm tắt cho Claude (điểm tuần)", expanded=False):
+                st.caption("Bản tóm tắt gọn của tuần này. Bấm biểu tượng copy ở góc khối bên dưới, "
+                           "dán vào cuộc trò chuyện với Claude để nhận một bản tin điểm tuần.")
+                st.code(build_week_bulletin(df_w, df, selected_week), language="markdown")
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
 # ==========================================
