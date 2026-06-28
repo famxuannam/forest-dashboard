@@ -5,6 +5,7 @@ import time
 import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
+import colorsys
 from html import escape as html_escape
 from datetime import date, timedelta
 
@@ -18,13 +19,36 @@ MAC_COLORS = [
     "#34c759", # Green
     "#ff9500", # Orange
     "#ff2d55", # Red
-    "#5856d6", # Pink
+    "#5856d6", # Indigo
     "#af52de", # Purple
-    "#5ac8fa", # Indigo
+    "#5ac8fa", # Light Blue
     "#ffcc00", # Yellow
     "#32ade6", # Cyan
-    "#a2845e"  # Brown
+    "#a2845e", # Brown
+    "#ff6482", # Rose
+    "#30b0c7", # Teal
+    "#00c7be", # Mint
+    "#bf5af2", # Violet
+    "#ff7b54", # Coral
+    "#8e8e93", # Gray
 ]
+
+
+def _hsl_hex(h, s, l):
+    """(hue, saturation, lightness) trong [0,1] -> mã màu hex."""
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    return f"#{int(round(r * 255)):02x}{int(round(g * 255)):02x}{int(round(b * 255)):02x}"
+
+
+def build_color_map(names):
+    """Gán màu cố định cho từng tên (Danh mục/Dự án). Ưu tiên bảng màu cơ sở;
+    nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
+    (golden angle) để không bao giờ bị trùng màu, vẫn ổn định theo tên."""
+    colors = list(MAC_COLORS)
+    for k in range(len(names) - len(colors)):
+        h = (0.61 + (k + 1) * 0.6180339887) % 1.0  # rải đều sắc độ
+        colors.append(_hsl_hex(h, 0.62, 0.55))
+    return {name: colors[i] for i, name in enumerate(names)}
 CHART_WIDTH = 1120
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
@@ -754,10 +778,13 @@ NAV = {
 df = prep_analysis_data()
 DAYS_ORDER = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
 
-# Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab
+# Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab.
+# Danh mục (mặc định để tô màu) được nhận các màu cơ sở đẹp & tách biệt nhất trước,
+# dự án nhận phần còn lại -> biểu đồ theo Danh mục luôn dễ phân biệt.
 if not df.empty:
-    _all_names = sorted(set(df['Danh mục'].dropna().unique()) | set(df['Dự án'].dropna().unique()))
-    COLOR_MAP = {name: MAC_COLORS[i % len(MAC_COLORS)] for i, name in enumerate(_all_names)}
+    _cats = sorted(df['Danh mục'].dropna().unique())
+    _projs = sorted(set(df['Dự án'].dropna().unique()) - set(_cats))
+    COLOR_MAP = build_color_map(_cats + _projs)
 else:
     COLOR_MAP = {}
 
