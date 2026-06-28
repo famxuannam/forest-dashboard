@@ -12,6 +12,7 @@ from datetime import date, timedelta
 # --- CẤU HÌNH ---
 DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
+DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 
 # Tên thứ tiếng Việt (dùng chung mọi nơi)
 VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
@@ -81,6 +82,20 @@ def load_mapping():
 
 def save_mapping(df):
     df.to_csv(MAPPING_FILE, index=False)
+    st.cache_data.clear()
+
+@st.cache_data
+def load_deleted():
+    """Danh sách phiên đã xoá (theo khoá thời gian bắt đầu + kết thúc, dạng chuỗi)."""
+    if os.path.exists(DELETED_FILE):
+        return pd.read_csv(DELETED_FILE, dtype=str)
+    return pd.DataFrame(columns=["Thời gian bắt đầu", "Thời gian kết thúc"])
+
+def add_deleted(keys_df):
+    """Gộp thêm các khoá thời gian vào danh sách đã xoá (keys_df có 2 cột thời gian)."""
+    keys = keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].astype(str)
+    both = pd.concat([load_deleted(), keys]).drop_duplicates()
+    both.to_csv(DELETED_FILE, index=False)
     st.cache_data.clear()
 
 
@@ -1370,26 +1385,40 @@ elif nav == "Chuẩn bị dữ liệu":
             elif df_new.empty:
                 st.warning("Không tìm thấy phiên hợp lệ nào trong file.")
             else:
-                st.caption(f"Đọc được **{stats['valid']}** phiên hợp lệ — bỏ {stats['failed']} phiên thất bại, "
-                           f"{stats['unset']} phiên unset/rỗng. Xem trước:")
-                preview = df_new.head(8).copy()
-                preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
-                preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
-                st.dataframe(preview, width='stretch', hide_index=True)
-                if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
-                    db = load_db()
-                    before = len(db)
-                    rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
-                    combined = pd.concat([db, df_new])
-                    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].astype(str)
-                    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].astype(str)
-                    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-                    added = len(combined) - before
-                    save_db(combined)
-                    st.session_state['import_msg'] = (
-                        f"Đã thêm {added} phiên mới (bỏ {stats['valid'] - added} trùng, "
-                        f"{stats['failed']} thất bại, {stats['unset']} unset){rng if added else ''}.")
-                    st.rerun()
+                deleted = load_deleted()
+                skipped_deleted = 0
+                if not deleted.empty:
+                    del_keys = set(zip(deleted['Thời gian bắt đầu'].astype(str),
+                                       deleted['Thời gian kết thúc'].astype(str)))
+                    keep = [(s, e) not in del_keys for s, e in
+                            zip(df_new['Thời gian bắt đầu'].astype(str), df_new['Thời gian kết thúc'].astype(str))]
+                    skipped_deleted = len(df_new) - sum(keep)
+                    df_new = df_new[keep]
+                _extra = f", {skipped_deleted} phiên đã xoá trước đó" if skipped_deleted else ""
+                if df_new.empty:
+                    st.info(f"Tất cả {stats['valid']} phiên hợp lệ đều đã nằm trong danh sách đã xoá trước đó — không có gì để thêm.")
+                else:
+                    st.caption(f"Đọc được **{stats['valid']}** phiên hợp lệ — bỏ {stats['failed']} phiên thất bại, "
+                               f"{stats['unset']} phiên unset/rỗng{_extra}. Xem trước:")
+                    preview = df_new.head(8).copy()
+                    preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
+                    preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
+                    st.dataframe(preview, width='stretch', hide_index=True)
+                    if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
+                        db = load_db()
+                        before = len(db)
+                        rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
+                        combined = pd.concat([db, df_new])
+                        combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].astype(str)
+                        combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].astype(str)
+                        combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
+                        added = len(combined) - before
+                        dup = stats['valid'] - skipped_deleted - added
+                        save_db(combined)
+                        st.session_state['import_msg'] = (
+                            f"Đã thêm {added} phiên mới (bỏ {dup} trùng, {stats['failed']} thất bại, "
+                            f"{stats['unset']} unset{_extra}){rng if added else ''}.")
+                        st.rerun()
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
@@ -1436,8 +1465,10 @@ elif nav == "Chuẩn bị dữ liệu":
                               on_select="rerun", selection_mode="multi-row", key="db_view")
             sel_rows = list(ev.selection.rows) if ev and ev.selection else []
             if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary"):
+                add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                 save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
                 st.rerun()
+            st.caption("Phiên đã xoá sẽ không bị nạp lại khi tải file Forest mới (kể cả khi file đó vẫn còn phiên này).")
     with st.expander("4. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
         _today = date.today().strftime('%Y-%m-%d')
@@ -1482,6 +1513,7 @@ elif nav == "Chuẩn bị dữ liệu":
             if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete):
                 if os.path.exists(DB_FILE): os.remove(DB_FILE)
                 if os.path.exists(MAPPING_FILE): os.remove(MAPPING_FILE)
+                if os.path.exists(DELETED_FILE): os.remove(DELETED_FILE)
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu cục bộ!")
                 time.sleep(1)
