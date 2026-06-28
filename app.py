@@ -596,15 +596,20 @@ DTBL_CSS = """
 """
 
 
-def _heat_cell(v, ref, extra_cls=""):
-    """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền xanh theo tỉ lệ v/ref."""
+def _heat_cell(v, ref, extra_cls="", drop=False):
+    """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền xanh theo tỉ lệ v/ref.
+    drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước)."""
     cls = extra_cls.strip()
+    mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
+    title = " title='Giảm mạnh so với kỳ trước'" if drop else ""
     if v < 0.05:
+        if drop:
+            return f'<td class="{cls}"{title}>{mark}</td>'
         return f'<td class="{(cls + " zero").strip()}">·</td>'
     a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
     bg = f'background:rgba(52,199,89,{a:.2f});' if a > 0.02 else ''
     cls_attr = f' class="{cls}"' if cls else ''
-    return f'<td{cls_attr} style="{bg}">{v:.1f}</td>'
+    return f'<td{cls_attr}{title} style="{bg}">{mark}{v:.1f}</td>'
 
 
 def render_data_table(df, time_col):
@@ -626,24 +631,35 @@ def render_data_table(df, time_col):
         parts = key.split('-')               # '2026-05'  -> 'Th5'
         return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
 
+    has_drop = [False]
+
+    def heat_row(values, vmax):
+        out = ""
+        for i, v in enumerate(values):
+            # Sụt mạnh: kỳ trước có ≥1h và kỳ này giảm trên 60%
+            d = i >= 1 and values[i - 1] >= 1.0 and v <= values[i - 1] * 0.4
+            if d:
+                has_drop[0] = True
+            out += _heat_cell(v, vmax, drop=d)
+        return out
+
     head = ''.join(f'<th>{col_label(c)}</th>' for c in cols)
     rows_html = ''
     for c in sorted(cat.index):
-        c_vals = cat.loc[c]
-        c_total = float(c_vals.sum())
+        c_vals = [float(cat.loc[c][col]) for col in cols]
         rows_html += '<tr class="cat">'
         rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
-        rows_html += ''.join(_heat_cell(float(c_vals[col]), vmax_cat) for col in cols)
-        rows_html += _heat_cell(c_total, 0, "tot")   # cột Tổng không tô heat cho gọn
+        rows_html += heat_row(c_vals, vmax_cat)
+        rows_html += _heat_cell(sum(c_vals), 0, "tot")   # cột Tổng không tô heat cho gọn
         rows_html += '</tr>'
 
         sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
         for idx, row in sub.iterrows():
-            p_total = float(row.sum())
+            p_vals = [float(row[col]) for col in cols]
             rows_html += '<tr class="proj">'
             rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
-            rows_html += ''.join(_heat_cell(float(row[col]), vmax_proj) for col in cols)
-            rows_html += _heat_cell(p_total, 0, "tot")
+            rows_html += heat_row(p_vals, vmax_proj)
+            rows_html += _heat_cell(sum(p_vals), 0, "tot")
             rows_html += '</tr>'
 
     st.markdown(DTBL_CSS + f"""
@@ -652,6 +668,8 @@ def render_data_table(df, time_col):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if has_drop[0]:
+        st.caption("▾ = giảm mạnh so với kỳ liền trước (trên 60%)")
 
 
 def render_detail_table(scope_df):
@@ -662,24 +680,29 @@ def render_detail_table(scope_df):
     proj = scope_df.groupby(['Danh mục', 'Dự án'])['Thời lượng (Phút)'].sum() / 60
     vmax_cat = float(cat.max()) if len(cat) else 0.0
     vmax_proj = float(proj.max()) if len(proj) else 0.0
+    total_all = float(cat.sum()) or 1.0
 
     rows_html = ''
     for c in sorted(cat.index):
+        cv = float(cat.loc[c])
         rows_html += '<tr class="cat">'
         rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
-        rows_html += _heat_cell(float(cat.loc[c]), vmax_cat)
+        rows_html += _heat_cell(cv, vmax_cat)
+        rows_html += f'<td class="tot">{cv/total_all*100:.0f}%</td>'
         rows_html += '</tr>'
 
         sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
         for idx, v in sub.items():
+            pv = float(v)
             rows_html += '<tr class="proj">'
             rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
-            rows_html += _heat_cell(float(v), vmax_proj)
+            rows_html += _heat_cell(pv, vmax_proj)
+            rows_html += f'<td class="tot">{pv/total_all*100:.0f}%</td>'
             rows_html += '</tr>'
 
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th></tr></thead>
+<thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th><th>Tỉ trọng</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
