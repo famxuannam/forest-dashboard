@@ -749,32 +749,6 @@ def render_period_table(df, time_col):
 """, unsafe_allow_html=True)
 
 
-def render_plain_table(df, num_cols=()):
-    """Bảng liệt kê đơn giản (quy tắc, log) cùng phong cách: cột chữ căn trái, cột số căn phải."""
-    if df.empty:
-        return
-    cols = list(df.columns)
-    head = f'<th class="lbl">{html_escape(str(df.index.name or "#"))}</th>'
-    for c in cols:
-        cls = '' if c in num_cols else ' class="txt"'
-        head += f'<th{cls}>{html_escape(str(c))}</th>'
-    body = ''
-    for i, row in df.iterrows():
-        body += '<tr class="prow">'
-        body += f'<td class="lbl">{html_escape(str(i))}</td>'
-        for c in cols:
-            cls = 'num' if c in num_cols else 'txt'
-            body += f'<td class="{cls}">{html_escape(str(row[c]))}</td>'
-        body += '</tr>'
-
-    st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap"><table class="dtbl">
-<thead><tr>{head}</tr></thead>
-<tbody>{body}</tbody>
-</table></div>
-""", unsafe_allow_html=True)
-
-
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
@@ -1419,36 +1393,35 @@ elif nav == "Chuẩn bị dữ liệu":
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Thêm quy tắc mới")
-            all_projs = db_current['Dự án'].unique() if not db_current.empty else []
-            mapped_projs = mapping_df['Dự án'].tolist() if not mapping_df.empty else []
-            unmapped_projs = [p for p in all_projs if p not in mapped_projs]
-            sel_proj = st.selectbox("Chọn Dự án:", unmapped_projs if unmapped_projs else ["Không có Dự án mới"])
-            new_cat = st.text_input("Nhập tên nhóm (Danh mục):")
-            if st.button("Lưu quy tắc", type="primary") and new_cat and sel_proj != "Không có Dự án mới":
-                new_rule = pd.DataFrame({"Dự án": [sel_proj], "Danh mục": [new_cat]})
-                mapping_df = pd.concat([mapping_df, new_rule]).drop_duplicates(subset=['Dự án'], keep='last')
-                save_mapping(mapping_df)
-                st.success("Đã thêm quy tắc phân loại!")
-                time.sleep(0.5)
+        all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
+        cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Danh mục'])) if not mapping_df.empty else {}
+        if not all_projs:
+            st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 1 trước.")
+        else:
+            existing_cats = sorted({str(v) for v in cur_map.values() if pd.notna(v) and str(v).strip()})
+            unmapped = [p for p in all_projs if not (cur_map.get(p) and str(cur_map.get(p)).strip())]
+            if unmapped:
+                _show = ", ".join(unmapped[:8]) + ("…" if len(unmapped) > 8 else "")
+                st.warning(f"Còn **{len(unmapped)}** dự án chưa phân loại: {_show}")
+            else:
+                st.success("Tất cả dự án đã được phân loại.")
+
+            new_cat = st.text_input("Tạo nhóm mới (tuỳ chọn — sẽ xuất hiện trong danh sách chọn ở cột Nhóm):").strip()
+            opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
+            st.caption("Chọn Nhóm cho từng dự án (gõ ở ô trên để thêm nhóm mới). Để trống = bỏ phân loại.")
+            tbl = pd.DataFrame({"Dự án": all_projs, "Nhóm (Danh mục)": [cur_map.get(p) for p in all_projs]})
+            edited = st.data_editor(
+                tbl, hide_index=True, width='stretch', key="map_editor",
+                column_config={
+                    "Dự án": st.column_config.TextColumn("Dự án", disabled=True),
+                    "Nhóm (Danh mục)": st.column_config.SelectboxColumn("Nhóm (Danh mục)", options=opts),
+                },
+            )
+            if st.button("Lưu phân loại", type="primary"):
+                nm = edited.rename(columns={"Nhóm (Danh mục)": "Danh mục"})
+                nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
+                save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                 st.rerun()
-            st.subheader("Bỏ quy tắc cũ")
-            if not mapping_df.empty:
-                rule_to_remove = st.selectbox("Chọn quy tắc muốn xoá:", mapping_df['Dự án'].tolist())
-                if st.button("Xoá quy tắc"):
-                    mapping_df = mapping_df[mapping_df['Dự án'] != rule_to_remove]
-                    save_mapping(mapping_df)
-                    st.success("Đã xoá quy tắc phân loại!")
-                    time.sleep(0.5)
-                    st.rerun()
-        with col2:
-            st.subheader("Bảng quy tắc hiện tại")
-            if not mapping_df.empty:
-                display_map = mapping_df.sort_values(by='Danh mục').reset_index(drop=True)
-                display_map.index = display_map.index + 1
-                render_plain_table(display_map)
     with st.expander("3. Dữ liệu làm việc hiện tại", expanded=True):
         if not db_current.empty:
             db_base = db_current.reset_index(drop=True)
