@@ -261,14 +261,20 @@ def render_stat_panel(hero_items, sections=None):
     st.markdown(h, unsafe_allow_html=True)
 
 
-def render_top_3(df, col_name, title):
-    if df.empty: 
+def render_top_3(df, col_name, title, week_key=None):
+    if df.empty:
         html_list = "<p style='color:#86868b; font-size: 14px;'>Không có dữ liệu</p>"
     else:
         top3 = df.groupby(col_name)['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(3)
+        # Thời gian của từng nhóm/dự án trong tuần này (nếu được yêu cầu)
+        wk = {}
+        if week_key is not None and 'Tuần' in df.columns:
+            wk = (df[df['Tuần'] == week_key].groupby(col_name)['Thời lượng (Phút)'].sum() / 60).to_dict()
         html_list = "<ul style='margin:0; padding-left: 20px; color: #1d1d1f; font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
-            html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h</li>"
+            wh = wk.get(k, 0)
+            wsuf = f" <span style='color:#007aff; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
+            html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
         html_list += "</ul>"
     
     html = f"""
@@ -347,11 +353,24 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ"):
     fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.2f} h/ngày<extra></extra>')
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
-    # Tự nêu "giờ vàng" + buổi mạnh nhất
+    # Tự nêu "giờ vàng" + buổi mạnh nhất, đặt trong glass card cho đồng bộ
     if tot.max() > 0:
         peak_h = int(tot.idxmax())
         strong_buoi = tot.groupby(_buoi_of).sum().idxmax()
-        st.caption(f"Giờ tập trung nhất: **{peak_h}h** (TB {tot.max():.1f}h/ngày) · buổi mạnh nhất: **{strong_buoi}**")
+        _lbl = "font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
+        _val = "font-size:17px;color:#1d1d1f;font-weight:600;"
+        st.markdown(
+            "<div class='glass-card' style='display:flex;flex-wrap:wrap;justify-content:center;align-items:center;"
+            "gap:6px 16px;max-width:900px;margin:8px auto 0 auto;padding:12px 18px;'>"
+            f"<span style='{_lbl}'>Giờ tập trung nhất</span>"
+            f"<span style='{_val}'>{peak_h}h</span>"
+            f"<span style='font-size:13px;color:#86868b;'>(TB {tot.max():.1f}h/ngày)</span>"
+            "<span style='color:#d2d2d7;'>·</span>"
+            f"<span style='{_lbl}'>Buổi mạnh nhất</span>"
+            f"<span style='{_val}'>{strong_buoi}</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_calendar_streak(scope_df, full_df, streak_df=None):
@@ -944,8 +963,9 @@ if nav == "Thống kê chung":
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
-            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục')
-            with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án')
+            _wk_now = date.today().strftime('%G-W%V')
+            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
+            with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
         with st.expander("2. Biểu đồ lịch tổng quan", expanded=True):
             df_cal = range_radio(df, key="range_cal")
             render_calendar_streak(df_cal, df_cal, streak_df=df)
