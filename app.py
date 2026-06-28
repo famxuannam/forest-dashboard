@@ -372,48 +372,84 @@ def render_top_3(df, col_name, title, week_key=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
-# Phân nhóm độ dài phiên (phút): tên, khoảng hiển thị, [lo, hi), màu
-SESSION_BUCKETS = [
-    ("Ngắn",      "< 25′",  0,   25,    "#cfe3ff"),
-    ("Trung bình","25–50′", 25,  50,    "#7fb5ff"),
-    ("Dài",       "50–90′", 50,  90,    "#2f86ec"),
-    ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
-]
+# Phân nhóm độ dài phiên: tên cố định + mốc mặc định (người dùng tự chỉnh được)
+SESSION_BUCKET_NAMES = ["Ngắn", "Trung bình", "Dài", "Rất Dài"]
+DEFAULT_LEN_THRESHOLDS = (25, 50, 90)
 
 def _avg_session_min(df):
     """Độ dài bình quân mỗi phiên (phút); 0 nếu chưa có phiên."""
     n = len(df)
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
+def _parse_len_thresholds(raw):
+    """Đọc '25, 50, 90' -> ([25,50,90], True). Sai định dạng -> (mặc định, False)."""
+    try:
+        vals = [int(round(float(x))) for x in raw.replace('/', ',').split(',') if x.strip()]
+        vals = [v for v in vals if v > 0]
+        if len(vals) == 3 and vals[0] < vals[1] < vals[2]:
+            return vals, True
+    except Exception:
+        pass
+    return list(DEFAULT_LEN_THRESHOLDS), False
+
 def render_session_length(df):
-    """Thanh phân bố độ dài phiên theo nhóm (ngắn / vừa / dài / rất dài) + chú thích số phiên."""
+    """Histogram độ dài phiên (bin 5 phút) + mốc chia nhóm tự chỉnh + tóm tắt 4 nhóm."""
     n = len(df)
     if n == 0:
         return
-    d = df['Thời lượng (Phút)']
-    counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
-    seg = ""
-    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-        if not c:
-            continue
-        pct = c / n * 100
-        lbl = f"{pct:.0f}%" if pct >= 9 else ""
-        fg = "#fff" if col in ("#2f86ec", "#0a52c4") else "#1d1d1f"
-        seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
-                f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
-    legend = ""
-    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:#1d1d1f;'>"
-                   f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
-                   f"{name} <span style='color:#86868b;'>{rng}</span> · <b>{c}</b></span>")
+    d = df['Thời lượng (Phút)'].astype(float)
+
     st.markdown(
-        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
-        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
-        f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
-        f"<div style='margin-top:12px;'>{legend}</div>"
-        "</div>",
+        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;"
+        "letter-spacing:0.5px;margin:18px 0 0;'>Phân bố độ dài phiên</div>",
         unsafe_allow_html=True,
     )
+    raw = st.text_input(
+        "Mốc chia nhóm (phút)", value="25, 50, 90", key="len_thr",
+        help="Ba mốc tăng dần, cách nhau bởi dấu phẩy — chia phiên thành Ngắn / Trung bình / Dài / Rất Dài.",
+    )
+    thr, ok = _parse_len_thresholds(raw)
+
+    # Histogram: bin 5 phút từ 10 (mức tối thiểu của Forest) đến 60, phần dài hơn gộp vào '≥ 60'
+    start, top, step = 10, 60, 5
+    edges = list(range(start, top + 1, step))
+    counts = [int(((d >= edges[i]) & (d < edges[i + 1])).sum()) for i in range(len(edges) - 1)]
+    counts[0] += int((d < start).sum())  # gộp phiên ngắn bất thường (nếu có) vào bin đầu
+    counts.append(int((d >= top).sum()))
+    centers = [edges[i] + step / 2 for i in range(len(edges) - 1)] + [top + step / 2]
+    labels = [f"{edges[i]}–{edges[i + 1]}′" for i in range(len(edges) - 1)] + [f"≥ {top}′"]
+
+    fig = go.Figure(go.Bar(
+        x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
+        customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
+    ))
+    for t in thr:
+        if start < t <= top:
+            fig.add_vline(x=t, line=dict(color='#0a52c4', width=1.5, dash='dot'))
+    avg = d.mean()
+    if start <= avg <= top + step:
+        fig.add_vline(x=avg, line=dict(color='#1d1d1f', width=2, dash='dash'),
+                      annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
+                      annotation_font=dict(size=12, color='#1d1d1f'))
+    fig.update_layout(
+        height=240, margin=dict(l=10, r=10, t=22, b=10), bargap=0.06, showlegend=False,
+        xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
+                   tickvals=[10, 20, 30, 40, 50, 60],
+                   ticktext=['10', '20', '30', '40', '50', '60+'],
+                   tickfont=dict(size=12), showgrid=False),
+        yaxis=dict(title='Số phiên', tickfont=dict(size=12), gridcolor='rgba(0,0,0,0.06)'),
+        plot_bgcolor='white', paper_bgcolor='white',
+    )
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+    t1, t2, t3 = thr
+    cnt = [int((d < t1).sum()), int(((d >= t1) & (d < t2)).sum()),
+           int(((d >= t2) & (d < t3)).sum()), int((d >= t3).sum())]
+    rngs = [f"< {t1}′", f"{t1}–{t2}′", f"{t2}–{t3}′", f"≥ {t3}′"]
+    summary = " · ".join(f"**{nm}** ({rg}): {c}" for nm, rg, c in zip(SESSION_BUCKET_NAMES, rngs, cnt))
+    if not ok:
+        st.caption("Mốc không hợp lệ (cần 3 số tăng dần) — đang dùng mặc định 25, 50, 90.")
+    st.caption("Đường chấm = mốc chia nhóm · đường gạch = trung bình. " + summary)
 
 
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
