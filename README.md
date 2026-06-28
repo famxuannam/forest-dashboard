@@ -52,6 +52,9 @@ Hiểu 4 khái niệm này là dùng được toàn bộ ứng dụng:
 - **Số cây / ngày** — trung bình số phiên mỗi *ngày có hoạt động*.
 - **Thời gian / tuần**, **Số cây / tuần** *(tab Báo cáo theo nhóm)* — trung bình theo
   số *tuần có hoạt động*.
+- **Thời gian / phiên** — độ dài bình quân của mỗi phiên (tổng thời gian ÷ số phiên), tính
+  bằng **phút**. Phản ánh *độ sâu* mỗi lần tập trung: bạn làm nhiều phiên ngắn hay ít phiên
+  sâu. Ở **Báo cáo tháng/tuần** chỉ số này cũng có 2 dòng so sánh như các thẻ khác.
 - **Cập nhật gần nhất** *(tab Thống kê chung)* — thời điểm phiên gần nhất kết thúc, kèm
   khoảng cách so với hiện tại (ví dụ *“1 ngày 3 giờ trước”*).
 
@@ -70,6 +73,21 @@ nhóm gọn (mỗi nhóm một hàng): **Trung bình** (giờ & cây theo ngày/
 bật màu xanh, chỉ hiện khi tuần này có hoạt động), **Chuỗi ngày** (tổng / dài nhất / hiện
 tại), **Theo thứ** (thứ mạnh nhất & yếu nhất), và **Mốc thời gian** (ngày đầu tiên, ngày
 gần nhất).
+
+### Phân bố độ dài phiên
+
+Ngay dưới panel Tổng quan (ở cả 4 tab) có một **thanh phân bố** chia các phiên thành **4
+nhóm theo độ dài**, kèm tỉ lệ % và số phiên mỗi nhóm. Các mốc được neo theo phương pháp
+**Pomodoro** (1 pomodoro = 25 phút tập trung) và ngưỡng deep-work ~90 phút:
+
+| Nhóm | Khoảng | Ý nghĩa |
+|------|--------|---------|
+| **Ngắn** | < 25 phút | chưa trọn 1 pomodoro (phiên bị ngắt hoặc việc nhỏ) |
+| **Trung bình** | 25–50 phút | 1–2 pomodoro — vùng tập trung chuẩn |
+| **Dài** | 50–90 phút | nhiều pomodoro liên tục — deep work |
+| **Rất Dài** | ≥ 90 phút | vượt ngưỡng tập trung tự nhiên — phiên rất sâu |
+
+> Phiên đúng 25 phút được xếp vào **Trung bình** (vì nó chính là trọn 1 pomodoro).
 
 ### Các biểu đồ
 
