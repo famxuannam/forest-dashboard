@@ -843,7 +843,7 @@ def render_day_timeline(day_df, sel, df_all):
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
 .dtl-typ{{position:absolute;top:0;bottom:0;}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.06);}}
-.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:#86868b;}}
 .dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:#3a3a3c;}}
@@ -1697,20 +1697,21 @@ elif nav == "Báo cáo ngày":
 
             with st.expander("4. Danh sách phiên", expanded=True):
                 rows_html = ''
-                for _, r in day_df.sort_values('Thời gian bắt đầu').iterrows():
+                for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
                     s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
                     cat = r.get('Danh mục')
                     cat = str(cat) if pd.notna(cat) and str(cat) != str(r['Dự án']) else '—'
                     rows_html += ('<tr class="prow">'
-                                  f'<td class="lbl">{html_escape(str(r["Dự án"]))}</td>'
+                                  f'<td class="lbl">{i}</td>'
+                                  f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
                                   f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
                                   f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
                                   f'<td class="txt">{html_escape(cat)}</td></tr>')
-                rows_html += ('<tr class="cat"><td class="lbl">Tổng</td><td></td><td></td>'
+                rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
                               f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
                 st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
+<thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
