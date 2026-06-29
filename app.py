@@ -861,7 +861,7 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:14px 18px;}}
+.dtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:#aeaeb2;}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
@@ -893,7 +893,7 @@ def render_note_editor(day):
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     txt_key = f"note_txt_{day}"
-    with st.container(border=True):
+    with st.container(border=True, key="note_card"):
         if not st.session_state.get(edit_key, False):
             # Chế độ xem: chỉ ghi chú + 1 nút
             if cur:
@@ -1425,6 +1425,14 @@ st.markdown(
         border-left: 3px solid #007aff; border-radius: 10px; padding: 2px 14px; }
     .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
         border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
+
+    /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước) trông như glass-card ===== */
+    .st-key-note_card, [class*="st-key-jcard"] {
+        border-radius: 14px !important;
+        border-color: rgba(0,0,0,0.06) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04) !important;
+        background: #fff !important;
+    }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
     [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
