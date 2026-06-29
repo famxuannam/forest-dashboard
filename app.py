@@ -8,8 +8,27 @@ import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
 import colorsys
+import re
 from html import escape as html_escape
 from datetime import date, timedelta
+from streamlit_quill import st_quill
+
+# Thanh công cụ cho ô soạn ghi chú (Quill): đậm/nghiêng/gạch chân, màu chữ & nền,
+# danh sách + thụt lề, liên kết, xoá định dạng. (Không bật chèn ảnh để tránh phình notes.csv.)
+NOTE_TOOLBAR = [
+    ["bold", "italic", "underline"],
+    [{"color": []}, {"background": []}],
+    [{"list": "ordered"}, {"list": "bullet"}, {"indent": "-1"}, {"indent": "+1"}],
+    ["link"],
+    ["clean"],
+]
+
+def _note_is_empty(html):
+    """Ghi chú coi như rỗng nếu sau khi bỏ thẻ HTML chỉ còn khoảng trắng (Quill để '<p><br></p>')."""
+    if not html:
+        return True
+    txt = re.sub(r"<[^>]+>", "", str(html)).replace("&nbsp;", " ").replace(" ", " ")
+    return txt.strip() == ""
 
 # --- CẤU HÌNH ---
 DB_FILE = "database.csv"
@@ -119,11 +138,11 @@ def get_note(day):
     return str(m.iloc[0]['Ghi chú']) if not m.empty else ""
 
 def save_note(day, text):
-    """Lưu/sửa ghi chú của một ngày; text rỗng = xoá ghi chú ngày đó."""
+    """Lưu/sửa ghi chú của một ngày; nội dung rỗng = xoá ghi chú ngày đó."""
     key = str(day)
     nd = load_notes()
     nd = nd[nd['Ngày'].astype(str) != key]
-    text = (text or "").strip()
+    text = "" if _note_is_empty(text) else str(text).strip()
     if text:
         nd = pd.concat([nd, pd.DataFrame([{"Ngày": key, "Ghi chú": text}])], ignore_index=True)
     nd.to_csv(NOTES_FILE, index=False)
@@ -889,39 +908,41 @@ def render_day_timeline(day_df, sel, df_all):
 
 def render_note_editor(day):
     """Ghi chú một ngày, gói trong thẻ. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
-    trống) kèm một nút; bấm nút mới mở ô soạn inline với các nút Cập nhật/Huỷ/Xoá."""
+    trống) kèm một nút; bấm nút mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá."""
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
-    txt_key = f"note_txt_{day}"
+    quill_key = f"note_quill_{day}"
+
+    def _enter_edit():
+        # Xoá trạng thái cũ của ô soạn để khởi tạo lại đúng nội dung đang lưu
+        st.session_state.pop(quill_key, None)
+        st.session_state[edit_key] = True
+
     with st.container(border=True, key="note_card"):
         if not st.session_state.get(edit_key, False):
             # Chế độ xem: chỉ ghi chú + 1 nút
             if cur:
                 with st.container(key="note_saved"):
-                    st.markdown(cur)
+                    st.markdown(cur, unsafe_allow_html=True)
                 if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
-                    st.session_state[edit_key] = True
-                    st.session_state[txt_key] = cur
+                    _enter_edit()
                     st.rerun()
             else:
                 st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
                             unsafe_allow_html=True)
                 if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
                              key=f"note_addbtn_{day}"):
-                    st.session_state[edit_key] = True
-                    st.session_state[txt_key] = ""
+                    _enter_edit()
                     st.rerun()
         else:
-            # Chế độ soạn: ô nhập inline + Cập nhật / Huỷ / Xoá
-            if txt_key not in st.session_state:
-                st.session_state[txt_key] = cur
-            st.text_area("Soạn ghi chú", key=txt_key, height=130, label_visibility="collapsed",
-                         placeholder="Viết vài dòng về ngày này… (markdown nhẹ: “- ” gạch đầu dòng, **đậm**)")
+            # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
+            content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
+                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
             c1, c2, _, c4 = st.columns([2, 2, 2, 3])
             with c1:
                 if st.button("Cập nhật", icon=":material/check:", type="primary",
                              key=f"note_save_{day}", use_container_width=True):
-                    save_note(day, st.session_state[txt_key])
+                    save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
                     st.session_state[edit_key] = False
                     st.rerun()
             with c2:
@@ -935,7 +956,7 @@ def render_note_editor(day):
                     save_note(day, "")
                     st.session_state[edit_key] = False
                     st.rerun()
-            st.caption("Hỗ trợ markdown nhẹ: “- ” gạch đầu dòng, **đậm**. "
+            st.caption("Mẹo: bôi đen rồi ⌘/Ctrl+B để in đậm, Tab để thụt lề. "
                        "Ghi chú lưu theo ngày, độc lập với dữ liệu phiên.")
 
 
@@ -960,7 +981,7 @@ def render_notes_journal(period_key, kind):
                 st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
                             f"<div class='jdm'>{d:%d/%m}</div></div>", unsafe_allow_html=True)
             with c2:
-                st.markdown(str(r['Ghi chú']))
+                st.markdown(f"<div class='note-html'>{str(r['Ghi chú'])}</div>", unsafe_allow_html=True)
 
 
 def render_on_this_day(sel, df_all):
@@ -1011,7 +1032,7 @@ def render_on_this_day(sel, df_all):
                     chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
                 st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
                 if notes.get(y):
-                    st.markdown(notes[y])
+                    st.markdown(f"<div class='note-html'>{notes[y]}</div>", unsafe_allow_html=True)
                 else:
                     st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
                                 unsafe_allow_html=True)
@@ -1425,6 +1446,16 @@ st.markdown(
         border-left: 3px solid #007aff; border-radius: 10px; padding: 2px 14px; }
     .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
         border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
+
+    /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
+    .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
+    .note-html p, .st-key-note_saved p { margin: 4px 0; }
+    .note-html ul, .note-html ol { margin: 4px 0; padding-left: 22px; }
+    .note-html a, .st-key-note_saved a { color: #007aff; }
+    /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
+    .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
+    .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
+    .ql-indent-5 { padding-left: 10em; } .ql-indent-6 { padding-left: 12em; }
 
     /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước) trông như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"] {
