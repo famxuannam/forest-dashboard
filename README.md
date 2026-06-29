@@ -133,7 +133,7 @@ Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
 
 ## Hướng dẫn sử dụng theo từng trang
 
-Thanh điều hướng nằm ngay dưới tiêu đề, gồm 5 trang:
+Thanh điều hướng nằm ngay dưới tiêu đề, gồm 6 trang:
 
 ### 1. 📊 Thống kê chung
 Cái nhìn tổng thể toàn bộ dữ liệu.
@@ -154,7 +154,20 @@ trung theo thứ → Phân bố độ dài phiên → Bảng số liệu.
 ### 3. 🗓️ Báo cáo tuần
 Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**.
 
-### 4. 🗂️ Báo cáo theo dự án
+### 4. 📅 Báo cáo ngày
+Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không thời gian thực) nên trọng tâm là
+*ôn lại các ngày đã qua*.
+- **Chọn ngày**: nút **◀ ▶** nhảy tới ngày **có hoạt động** liền kề (bỏ qua ngày trống), **lịch
+  chọn ngày** để nhảy thẳng tới bất kỳ ngày nào, và nút **"Ngày gần nhất"**. Ngày trống sẽ báo
+  rõ và gợi ý dùng ◀ ▶.
+- **Tổng quan ngày**: Tổng giờ · Số phiên · Độ dài/phiên, kèm **So sánh** với *cùng thứ tuần
+  trước* và *trung bình các ngày cùng thứ* (hợp với lịch theo tuần), Mốc trong ngày (phiên
+  đầu/cuối, trải dài) và phân bổ theo buổi.
+- **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền dải
+  buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
+- **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (Bắt đầu – Kết thúc · Độ dài · Danh mục).
+
+### 5. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
 Trong danh sách, mỗi lựa chọn được ghi rõ *“· Nhóm”* hay *“· Dự án”*, dự án con thụt vào
 dưới nhóm cha. Gồm: Tổng quan → Biểu đồ lịch → Xu hướng theo thời gian → Phân bố độ dài phiên → Bảng số liệu.
@@ -167,7 +180,7 @@ và tóm tắt (số cuốn, TB giờ & ngày mỗi cuốn, cuốn ngốn nhiề
 trừ (vd `The Economist`) khai báo ở đầu `app.py` (`BOOKS_GROUP`, `BOOKS_EXCLUDE`). Mục này **chỉ
 tính toán để hiển thị, không tạo hay sửa dữ liệu** nên không ảnh hưởng tới sao lưu/khôi phục.
 
-### 5. ⚙️ Chuẩn bị dữ liệu
+### 6. ⚙️ Chuẩn bị dữ liệu
 Nơi bạn nạp và quản lý dữ liệu:
 1. **Tải lên từ Forest** — tải file CSV xuất từ Forest. Ứng dụng tự nhận diện cột, chỉ giữ
    các phiên *thành công*, tự tính thời lượng và **bỏ qua các phiên trùng** (theo thời gian
