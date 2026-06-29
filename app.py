@@ -541,8 +541,6 @@ def render_session_histogram(df):
         plot_bgcolor='white', paper_bgcolor='white',
     )
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-    st.caption("Mỗi cột = số phiên trong khoảng 5 phút (bắt đầu từ 10′ — mức tối thiểu của Forest). "
-               "Đường chấm = mốc nhóm 25 / 50 / 90′ · đường gạch = trung bình.")
 
 
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
@@ -829,8 +827,6 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-    st.caption("“Đang đọc” = có phiên trong ~2 tuần gần nhất; “Đã xong” = lâu hơn (suy ra tự động). "
-               "“Số ngày” = khoảng từ phiên đầu tới phiên gần nhất; “Giờ/tuần” tính trên khoảng đó.")
 
 
 def render_day_timeline(day_df, sel, df_all):
@@ -901,9 +897,6 @@ def render_day_timeline(day_df, sel, df_all):
 <div class="dtl-legend">{legend_html}</div>
 </div>
 """, unsafe_allow_html=True)
-    if n_same:
-        st.caption(f"Vùng xám mờ = khung giờ điển hình của {vn_dow} (trung bình {n_same} ngày {vn_dow} khác). "
-                   "Khối đậm = phiên trong ngày đang xem.")
 
 
 def render_note_editor(day):
@@ -976,7 +969,7 @@ def render_notes_journal(period_key, kind):
     with st.container(border=True, key="jcard_journal"):
         for _, r in nd.iterrows():
             d = r['_d']
-            c1, c2 = st.columns([1, 5], vertical_alignment="center")
+            c1, c2 = st.columns([1, 5], vertical_alignment="top")
             with c1:
                 st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
                             f"<div class='jdm'>{d:%d/%m}</div></div>", unsafe_allow_html=True)
@@ -1005,11 +998,17 @@ def render_on_this_day(sel, df_all):
 
     years = sorted(set(stats) | set(notes), reverse=True)
     if not years:
-        st.markdown(f"<p style='margin:0 0 4px 0;font-size:13px;color:#86868b;font-weight:600;'>"
-                    f"Khớp theo ngày <b style='color:#1d1d1f;'>{d:02d}/{m:02d}</b> ở các năm trước.</p>",
-                    unsafe_allow_html=True)
-        st.caption(f"Chưa có dữ liệu ngày {d:02d}/{m:02d} ở các năm trước. "
-                   "Mục này sẽ dày dần theo thời gian.")
+        _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
+                "fill='#c7c7cc'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
+                "2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/></svg>")
+        st.markdown(
+            "<div class='glass-card' style='padding:22px 18px;text-align:center;'>"
+            f"<div style='margin-bottom:8px;'>{_cal}</div>"
+            "<div style='font-size:1.0rem;font-weight:600;color:#1d1d1f;'>"
+            f"Chưa có dữ liệu ngày {d:02d}/{m:02d} ở các năm trước</div>"
+            "<div style='font-size:13px;color:#86868b;margin-top:4px;'>"
+            "Mục này sẽ dày dần theo thời gian — cứ ghi chú &amp; tích lũy mỗi ngày.</div></div>",
+            unsafe_allow_html=True)
         return
 
     def _chip(k, v):
@@ -1018,7 +1017,7 @@ def render_on_this_day(sel, df_all):
     with st.container(border=True, key="jcard_otd"):
         for y in years:
             wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
-            c1, c2 = st.columns([1, 5], vertical_alignment="center")
+            c1, c2 = st.columns([1, 5], vertical_alignment="top")
             with c1:
                 st.markdown(f"<div class='jdate'><div class='jyear'>{y}</div>"
                             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>",
@@ -1036,7 +1035,8 @@ def render_on_this_day(sel, df_all):
                 else:
                     st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
                                 unsafe_allow_html=True)
-    st.caption(f"Khớp theo ngày {d:02d}/{m:02d} ở các năm trước. Mục này sẽ dày dần theo thời gian.")
+        st.markdown(f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
+                    "Mục này sẽ dày dần theo thời gian.</div>", unsafe_allow_html=True)
 
 
 def render_calendar_grid(scope_df, full_df):
@@ -1188,8 +1188,6 @@ def render_data_table(df, time_col):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-    if has_drop[0]:
-        st.caption("▾ = giảm mạnh so với kỳ liền trước (trên 60%)")
 
 
 def render_detail_table(scope_df):
@@ -1451,6 +1449,9 @@ st.markdown(
     .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
     .note-html p, .st-key-note_saved p { margin: 4px 0; }
     .note-html ul, .note-html ol { margin: 4px 0; padding-left: 22px; }
+    /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
+    .note-html > :first-child { margin-top: 0 !important; }
+    .note-html > :last-child { margin-bottom: 0 !important; }
     .note-html a, .st-key-note_saved a { color: #007aff; }
     /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
     .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
@@ -1475,11 +1476,14 @@ st.markdown(
     .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
     .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
+    .otd-foot { font-size: 12px; color: #86868b; padding-top: 12px; }
+    .otd-foot b { color: #1d1d1f; }
     .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
+
     @media (max-width: 640px) {
         [class*="st-key-jcard"] [data-testid="stColumn"] { margin-bottom: 0 !important; }
         /* Khi cột xếp dọc trên mobile, bỏ vạch dọc (border-right) cho gọn */
