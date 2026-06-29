@@ -127,7 +127,9 @@ Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
   gian riêng**, điều chỉnh độc lập với nhau.
 - **Chọn kỳ** (tab tháng/tuần): nút **◀ ▶** để lùi/tiến từng kỳ, ô thả xuống để nhảy nhanh,
   và nút lịch 🗓️ để **về thẳng kỳ hiện tại**.
-- **Mọi mục đều gập/mở được**: bấm vào tiêu đề mục để thu gọn hoặc mở rộng.
+- **Mọi mục đều gập/mở được**: bấm vào tiêu đề mục để thu gọn hoặc mở rộng. Trong các trang
+  báo cáo, **mặc định chỉ mở sẵn mục _Tổng quan_** (và _Nhật ký_/_Ghi chú ngày_ nếu có) cho gọn
+  gàng; các mục còn lại đóng sẵn, mở khi cần.
 
 ---
 
@@ -161,15 +163,20 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
 - **Chọn ngày**: nút **◀ ▶** nhảy tới ngày **có hoạt động** liền kề (bỏ qua ngày trống), **lịch
   chọn ngày** để nhảy thẳng tới bất kỳ ngày nào, và nút **"Ngày gần nhất"**. Ngày trống sẽ báo
   rõ và gợi ý dùng ◀ ▶.
-- **Tổng quan ngày**: Tổng giờ · Số phiên · Độ dài/phiên, kèm **So sánh** với *cùng thứ tuần
-  trước* và *trung bình các ngày cùng thứ* (hợp với lịch theo tuần), Mốc trong ngày (phiên
-  đầu/cuối, trải dài) và phân bổ theo buổi.
+- **Tổng quan ngày**: gói gọn mọi thứ về ngày đó trong một mục —
+  - Tổng giờ · Số phiên · Độ dài/phiên, kèm **So sánh** với *cùng thứ tuần trước* và *trung
+    bình các ngày cùng thứ* (hợp với lịch theo tuần), Mốc trong ngày (phiên đầu/cuối, trải
+    dài) và phân bổ theo buổi.
+  - **Top 5 Danh mục** và **Top 5 Dự án** trong ngày (hiện toàn bộ nếu chưa đủ 5).
+  - **Phân bố độ dài phiên** (thanh theo 5 nhóm 10/25/50/90′).
+  - **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền
+    dải buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
 - **Ghi chú ngày** (nhật ký): viết **một ghi chú cho mỗi ngày** (hỗ trợ markdown nhẹ) rồi
   **Lưu**/**Xoá**. Ghi chú lưu **độc lập với phiên** (ngày không có hoạt động vẫn ghi được, và
   import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.
-- **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền dải
-  buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
 - **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (STT · Bắt đầu – Kết thúc · Độ dài · Danh mục).
+- **Ngày này năm trước**: khớp **cùng ngày/tháng ở các năm trước** (gộp từ cả phiên lẫn ghi chú);
+  mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. Mục này dày dần theo thời gian.
 
 ### 5. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
