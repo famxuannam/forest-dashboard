@@ -172,10 +172,12 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
   - **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền
     dải buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
 - **Ghi chú ngày** (nhật ký): mặc định chỉ hiện **ghi chú đã lưu** (hoặc trạng thái trống) kèm
-  nút **Thêm ghi chú**/**Sửa ghi chú**; bấm nút mới mở ô soạn ngay trong trang với **Cập nhật** /
-  **Huỷ** / **Xoá**. Mỗi ngày **một ghi chú** (markdown nhẹ), lưu **độc lập với phiên** (ngày không
-  có hoạt động vẫn ghi được; import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục
-  *Nhật ký* của tuần/tháng tương ứng.
+  nút **Thêm ghi chú**/**Sửa ghi chú**; bấm nút mới mở **trình soạn thảo** ngay trong trang với
+  **Cập nhật** / **Huỷ** / **Xoá**. Trình soạn (Quill) có thanh công cụ và **phím tắt quen thuộc**
+  (⌘/Ctrl+B đậm, I nghiêng, U gạch chân; **Tab** thụt lề bullet): đậm/nghiêng/gạch chân, màu chữ
+  & tô nền, danh sách + thụt lề nhiều cấp, liên kết. Mỗi ngày **một ghi chú**, lưu **độc lập với
+  phiên** (ngày không có hoạt động vẫn ghi được; import/xoá phiên không làm mất ghi chú), và
+  **hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.
 - **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (STT · Bắt đầu – Kết thúc · Độ dài · Danh mục).
 - **Ngày này năm trước**: khớp **cùng ngày/tháng ở các năm trước** (gộp từ cả phiên lẫn ghi chú);
   mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. Mục này dày dần theo thời gian.
