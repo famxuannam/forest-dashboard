@@ -15,6 +15,7 @@ from datetime import date, timedelta
 DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
+NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
 
 # "Nhật ký đọc sách": chỉ hiện cho nhóm sách đọc tuần tự (sửa tên ở đây nếu khác).
 # BOOKS_EXCLUDE = các dự án định kỳ (vd tạp chí) -> không tính như một cuốn sách.
@@ -103,6 +104,29 @@ def add_deleted(keys_df):
     keys = keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].astype(str)
     both = pd.concat([load_deleted(), keys]).drop_duplicates()
     both.to_csv(DELETED_FILE, index=False)
+    st.cache_data.clear()
+
+@st.cache_data
+def load_notes():
+    """Ghi chú/nhật ký theo ngày: cột Ngày (YYYY-MM-DD) + Ghi chú (text)."""
+    if os.path.exists(NOTES_FILE):
+        return pd.read_csv(NOTES_FILE, dtype=str).fillna("")
+    return pd.DataFrame(columns=["Ngày", "Ghi chú"])
+
+def get_note(day):
+    nd = load_notes()
+    m = nd[nd['Ngày'].astype(str) == str(day)]
+    return str(m.iloc[0]['Ghi chú']) if not m.empty else ""
+
+def save_note(day, text):
+    """Lưu/sửa ghi chú của một ngày; text rỗng = xoá ghi chú ngày đó."""
+    key = str(day)
+    nd = load_notes()
+    nd = nd[nd['Ngày'].astype(str) != key]
+    text = (text or "").strip()
+    if text:
+        nd = pd.concat([nd, pd.DataFrame([{"Ngày": key, "Ghi chú": text}])], ignore_index=True)
+    nd.to_csv(NOTES_FILE, index=False)
     st.cache_data.clear()
 
 
@@ -861,6 +885,56 @@ def render_day_timeline(day_df, sel, df_all):
                    "Khối đậm = phiên trong ngày đang xem.")
 
 
+def render_note_editor(day):
+    """Ô soạn ghi chú cho một ngày + hiển thị markdown của ghi chú đã lưu."""
+    cur = get_note(day)
+    if cur:
+        st.caption("Ghi chú đã lưu")
+        with st.container(border=True):
+            st.markdown(cur)
+    nk = f"note_{day}"
+    if nk not in st.session_state:
+        st.session_state[nk] = cur
+    st.text_area("Ghi chú ngày", key=nk, height=120, label_visibility="collapsed",
+                 placeholder="Viết vài dòng về ngày này… (hỗ trợ markdown: “- ” gạch đầu dòng, **đậm**)")
+    c1, c2, _ = st.columns([2, 2, 6])
+    with c1:
+        if st.button("Lưu ghi chú", type="primary", key=f"note_save_{day}", use_container_width=True):
+            save_note(day, st.session_state[nk])
+            st.rerun()
+    with c2:
+        if cur and st.button("Xoá ghi chú", key=f"note_del_{day}", use_container_width=True):
+            save_note(day, "")
+            st.session_state[nk] = ""
+            st.rerun()
+
+
+def render_notes_journal(period_key, kind):
+    """Liệt kê (chỉ đọc) ghi chú của các ngày thuộc một kỳ (tuần/tháng)."""
+    nd = load_notes()
+    if not nd.empty:
+        nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce')).dropna(subset=['_d'])
+        if kind == 'month':
+            nd = nd[nd['_d'].dt.strftime('%Y-%m') == period_key]
+        else:
+            nd = nd[nd['_d'].dt.strftime('%G-W%V') == period_key]
+        nd = nd.sort_values('_d')
+    if nd.empty:
+        st.caption("Chưa có ghi chú nào trong kỳ này. Thêm ghi chú ở tab **Báo cáo ngày**.")
+        return
+    for _, r in nd.iterrows():
+        d = r['_d']
+        c1, c2 = st.columns([1, 6], vertical_alignment="top")
+        with c1:
+            st.markdown(f"<div style='font-size:13px;font-weight:600;color:#007aff;'>"
+                        f"{VN_DAYS.get(d.day_name(), '')}<br><span style='color:#86868b;font-weight:500;'>"
+                        f"{d:%d/%m}</span></div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown(str(r['Ghi chú']))
+        st.markdown("<hr style='margin:8px 0;border:none;border-top:1px solid rgba(0,0,0,0.06);'>",
+                    unsafe_allow_html=True)
+
+
 def render_calendar_grid(scope_df, full_df):
     """Chỉ vẽ lưới lịch nhiệt kiểu GitHub (không kèm số liệu chuỗi)."""
     min_date = pd.Timestamp(scope_df['Ngày'].min())
@@ -1499,7 +1573,9 @@ elif nav == "Báo cáo tháng":
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục Tháng')
                 with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
-            with st.expander("2. Phân bổ thời gian", expanded=True):
+            with st.expander("2. Nhật ký", expanded=True):
+                render_notes_journal(selected_month, 'month')
+            with st.expander("3. Phân bổ thời gian", expanded=True):
                 color_col_3 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab3")
                 color_col_3 = color_col_3 or "Danh mục"
                 pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
@@ -1508,20 +1584,20 @@ elif nav == "Báo cáo tháng":
                 fig_p_m.update_layout(width=CHART_WIDTH)
                 fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
                 st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Xu hướng theo thời gian", expanded=True):
+            with st.expander("4. Xu hướng theo thời gian", expanded=True):
                 t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
                 fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
                 fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_m, color_col_3)
-            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_m)
-            with st.expander("6. Phân bố độ dài phiên", expanded=True):
+            with st.expander("7. Phân bố độ dài phiên", expanded=True):
                 render_session_histogram(df_m)
-            with st.expander("7. Bảng số liệu", expanded=True):
+            with st.expander("8. Bảng số liệu", expanded=True):
                 render_detail_table(df_m)
 # ==========================================
 # TAB BÁO CÁO TUẦN
@@ -1595,7 +1671,9 @@ elif nav == "Báo cáo tuần":
                 c_top1, c_top2 = st.columns(2)
                 with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
                 with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
-            with st.expander("2. Phân bổ thời gian", expanded=True):
+            with st.expander("2. Nhật ký", expanded=True):
+                render_notes_journal(selected_week, 'week')
+            with st.expander("3. Phân bổ thời gian", expanded=True):
                 color_col_4 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab4")
                 color_col_4 = color_col_4 or "Danh mục"
                 pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
@@ -1604,19 +1682,19 @@ elif nav == "Báo cáo tuần":
                 fig_p_w.update_layout(width=CHART_WIDTH)
                 fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
                 st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("3. Xu hướng theo thời gian", expanded=True):
+            with st.expander("4. Xu hướng theo thời gian", expanded=True):
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
                 fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
                 fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=True):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=True):
                 render_hourly_chart(df_w, color_col_4)
-            with st.expander("5. Giờ tập trung theo thứ", expanded=True):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=True):
                 render_dayhour_heatmap(df_w)
-            with st.expander("6. Phân bố độ dài phiên", expanded=True):
+            with st.expander("7. Phân bố độ dài phiên", expanded=True):
                 render_session_histogram(df_w)
-            with st.expander("7. Bảng số liệu", expanded=True):
+            with st.expander("8. Bảng số liệu", expanded=True):
                 render_detail_table(df_w)
 # ==========================================
 # TAB BÁO CÁO NGÀY
@@ -1630,12 +1708,24 @@ elif nav == "Báo cáo ngày":
         day_df = df[df['Ngày'] == sel]
         vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
 
-        if day_df.empty:
-            st.caption(f"**{vn_dow}, {sel:%d/%m/%Y}** — không có hoạt động.")
-            st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
-        else:
-            st.caption(f"**{vn_dow}, {sel:%d/%m/%Y}** · ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}")
+        _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' "
+                "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
+                "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
+        _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+        st.markdown(
+            "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
+            "flex-wrap:wrap;gap:6px 12px;'>"
+            "<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+            f"{_evt}Ngày đang xem</span>"
+            f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
+            f"<span style='font-size:13px;color:#86868b;'>{_sub}</span></div>",
+            unsafe_allow_html=True)
 
+        if day_df.empty:
+            st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
+            with st.expander("Ghi chú ngày", expanded=True):
+                render_note_editor(sel)
+        else:
             with st.expander("1. Tổng quan ngày", expanded=True):
                 d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
                 d_sess = len(day_df)
@@ -1682,10 +1772,13 @@ elif nav == "Báo cáo ngày":
                     {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
                 ], sections=_secs)
 
-            with st.expander("2. Dòng thời gian trong ngày", expanded=True):
+            with st.expander("2. Ghi chú ngày", expanded=True):
+                render_note_editor(sel)
+
+            with st.expander("3. Dòng thời gian trong ngày", expanded=True):
                 render_day_timeline(day_df, sel, df)
 
-            with st.expander("3. Phân bổ thời gian", expanded=True):
+            with st.expander("4. Phân bổ thời gian", expanded=True):
                 cc = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Dự án", key="rad_day")
                 cc = cc or "Dự án"
                 pc = day_df.groupby(cc)['Thời lượng (Phút)'].sum().reset_index()
@@ -1695,7 +1788,7 @@ elif nav == "Báo cáo ngày":
                 fig_d = format_plotly_fig(fig_d, is_pie=True)
                 st.plotly_chart(fig_d, width='stretch', config=PLOTLY_CONFIG)
 
-            with st.expander("4. Danh sách phiên", expanded=True):
+            with st.expander("5. Danh sách phiên", expanded=True):
                 rows_html = ''
                 for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
                     s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
@@ -1934,11 +2027,11 @@ elif nav == "Chuẩn bị dữ liệu":
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
-            st.caption("Một file .zip gồm cả dữ liệu, phân loại và danh sách đã xoá; tên kèm ngày để dễ phân biệt.")
+            st.caption("Một file .zip gồm dữ liệu, phân loại, danh sách đã xoá và ghi chú; tên kèm ngày để dễ phân biệt.")
             if os.path.exists(DB_FILE):
                 _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
-                    for _fn in [DB_FILE, MAPPING_FILE, DELETED_FILE]:
+                    for _fn in [DB_FILE, MAPPING_FILE, DELETED_FILE, NOTES_FILE]:
                         if os.path.exists(_fn):
                             _z.write(_fn, arcname=os.path.basename(_fn))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
@@ -1964,6 +2057,8 @@ elif nav == "Chuẩn bị dữ liệu":
                             parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
                         if DELETED_FILE in names:
                             parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
+                        if NOTES_FILE in names:
+                            parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -1981,6 +2076,8 @@ elif nav == "Chuẩn bị dữ liệu":
                     if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
                     if DELETED_FILE in names:
                         with open(DELETED_FILE, "wb") as _f: _f.write(_z.read(DELETED_FILE))
+                    if NOTES_FILE in names:
+                        with open(NOTES_FILE, "wb") as _f: _f.write(_z.read(NOTES_FILE))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -1992,6 +2089,7 @@ elif nav == "Chuẩn bị dữ liệu":
                 if os.path.exists(DB_FILE): os.remove(DB_FILE)
                 if os.path.exists(MAPPING_FILE): os.remove(MAPPING_FILE)
                 if os.path.exists(DELETED_FILE): os.remove(DELETED_FILE)
+                if os.path.exists(NOTES_FILE): os.remove(NOTES_FILE)
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu cục bộ!")
                 time.sleep(1)
