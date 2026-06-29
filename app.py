@@ -1436,7 +1436,7 @@ st.markdown(
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
     [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
-        border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 12px; }
+        border-bottom: 1px solid rgba(0,0,0,0.06); padding: 12px 0; }
     [class*="st-key-jcard"] [data-testid="stColumn"]:first-child {
         border-right: 1px solid rgba(0,0,0,0.08); }
     .jdate { text-align: center; }
