@@ -148,11 +148,12 @@ Cái nhìn tổng thể toàn bộ dữ liệu.
 
 ### 2. 🗓️ Báo cáo tháng
 Phân tích sâu **một tháng cụ thể** (chọn ở thanh điều hướng kỳ): Tổng quan (kèm so sánh) →
-Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo khung giờ → Giờ tập
-trung theo thứ → Phân bố độ dài phiên → Bảng số liệu.
+**Nhật ký** → Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo khung giờ
+→ Giờ tập trung theo thứ → Phân bố độ dài phiên → Bảng số liệu. Mục **Nhật ký** liệt kê (chỉ
+đọc) ghi chú của các ngày trong tháng (xem [Ghi chú theo ngày](#4--báo-cáo-ngày)).
 
 ### 3. 🗓️ Báo cáo tuần
-Tương tự báo cáo tháng nhưng cho **một tuần cụ thể**.
+Tương tự báo cáo tháng nhưng cho **một tuần cụ thể** (cũng có mục **Nhật ký** của các ngày trong tuần).
 
 ### 4. 📅 Báo cáo ngày
 Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không thời gian thực) nên trọng tâm là
@@ -163,9 +164,12 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
 - **Tổng quan ngày**: Tổng giờ · Số phiên · Độ dài/phiên, kèm **So sánh** với *cùng thứ tuần
   trước* và *trung bình các ngày cùng thứ* (hợp với lịch theo tuần), Mốc trong ngày (phiên
   đầu/cuối, trải dài) và phân bổ theo buổi.
+- **Ghi chú ngày** (nhật ký): viết **một ghi chú cho mỗi ngày** (hỗ trợ markdown nhẹ) rồi
+  **Lưu**/**Xoá**. Ghi chú lưu **độc lập với phiên** (ngày không có hoạt động vẫn ghi được, và
+  import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.
 - **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền dải
   buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
-- **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (Bắt đầu – Kết thúc · Độ dài · Danh mục).
+- **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (STT · Bắt đầu – Kết thúc · Độ dài · Danh mục).
 
 ### 5. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
@@ -194,9 +198,9 @@ Nơi bạn nạp và quản lý dữ liệu:
 3. **Dữ liệu làm việc hiện tại** — bảng tương tác toàn bộ phiên đang lưu: **bấm tiêu đề cột
    để sắp xếp**, **tích chọn nhiều dòng rồi xoá** từng phiên rác. Phiên đã xoá được ghi nhớ
    và **không bị nạp lại** khi tải file Forest mới (kể cả khi file đó vẫn còn phiên này).
-4. **Quản lý hệ thống** — **Sao lưu** (một nút *Tải bản sao lưu* → file `.zip` gồm cả dữ
-   liệu, phân loại và danh sách đã xoá), **Khôi phục** (nạp lại từ chính file `.zip` đó, có
-   xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
+4. **Quản lý hệ thống** — **Sao lưu** (một nút *Tải bản sao lưu* → file `.zip` gồm dữ liệu,
+   phân loại, danh sách đã xoá **và ghi chú**), **Khôi phục** (nạp lại từ chính file `.zip` đó,
+   có xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
 
 ---
 
@@ -213,9 +217,9 @@ Nơi bạn nạp và quản lý dữ liệu:
    để cập nhật — dữ liệu cũ vẫn được giữ, phần trùng tự loại bỏ, phiên bạn đã xoá không quay lại.
 5. Thỉnh thoảng vào **Quản lý hệ thống → Tải bản sao lưu** để lấy file `.zip` phòng khi cần.
 
-> 💡 Dữ liệu được lưu cục bộ ở thư mục chạy ứng dụng trong 3 file: `database.csv` (các
-> phiên), `mapping.csv` (phân loại Dự án → Nhóm) và `deleted.csv` (danh sách phiên đã xoá).
-> Một bản sao lưu `.zip` đóng gói cả 3 file này.
+> 💡 Dữ liệu được lưu cục bộ ở thư mục chạy ứng dụng trong 4 file: `database.csv` (các
+> phiên), `mapping.csv` (phân loại Dự án → Nhóm), `deleted.csv` (danh sách phiên đã xoá) và
+> `notes.csv` (ghi chú theo ngày). Một bản sao lưu `.zip` đóng gói cả 4 file này.
 
 ---
 
