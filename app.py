@@ -283,6 +283,45 @@ def period_stepper(periods, key, fmt, current=None):
                       use_container_width=True)
     return st.session_state[pk]
 
+def day_picker(active_days):
+    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề + lịch chọn ngày + nút ngày gần nhất."""
+    pk = "day_pick"
+    lo, hi = active_days[0], active_days[-1]
+    if pk not in st.session_state:
+        st.session_state[pk] = hi
+    st.session_state[pk] = min(max(st.session_state[pk], lo), hi)
+    sel = st.session_state[pk]
+
+    def _prev():
+        cand = [d for d in active_days if d < st.session_state[pk]]
+        if cand: st.session_state[pk] = cand[-1]
+
+    def _next():
+        cand = [d for d in active_days if d > st.session_state[pk]]
+        if cand: st.session_state[pk] = cand[0]
+
+    def _latest():
+        st.session_state[pk] = hi
+
+    with st.container(key="day_stepper"):
+        c1, c2, c3, c4 = st.columns([1, 6, 1, 2], vertical_alignment="center")
+        with c1:
+            st.button("", icon=":material/chevron_left:", key="day_prev", on_click=_prev,
+                      disabled=not [d for d in active_days if d < sel], use_container_width=True)
+        with c2:
+            picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
+                                   format="DD/MM/YYYY", label_visibility="collapsed")
+        with c3:
+            st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
+                      disabled=not [d for d in active_days if d > sel], use_container_width=True)
+        with c4:
+            st.button("Ngày gần nhất", icon=":material/keyboard_double_arrow_down:", key="day_latest",
+                      on_click=_latest, disabled=sel == hi, use_container_width=True)
+    if picked != st.session_state[pk]:
+        st.session_state[pk] = picked
+        st.rerun()
+    return st.session_state[pk]
+
 def format_relative(ts):
     """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
     if pd.isna(ts):
@@ -751,6 +790,77 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
                "“Số ngày” = khoảng từ phiên đầu tới phiên gần nhất; “Giờ/tuần” tính trên khoảng đó.")
 
 
+def render_day_timeline(day_df, sel, df_all):
+    """Dòng thời gian trong ngày (0–24h): khối phiên tô màu theo dự án, kèm lớp mờ
+    'khung giờ điển hình của thứ này' để thấy hôm nay lệch nhịp ra sao."""
+    if day_df.empty:
+        return
+    vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
+
+    # Lớp mờ: khung giờ điển hình của cùng thứ (TB giờ tại mỗi giờ-trong-ngày), trừ ngày đang xem
+    same = df_all[(pd.to_datetime(df_all['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
+                  & (df_all['Ngày'] != sel)]
+    n_same = same['Ngày'].nunique()
+    typ = {}
+    if n_same:
+        per_hour = _explode_session_hours(same, 'Ngày').groupby('Khung giờ')['giờ'].sum() / n_same
+        mx = float(per_hour.max()) if len(per_hour) else 0.0
+        if mx > 0:
+            typ = {int(h): v / mx for h, v in per_hour.items()}
+    typ_html = ''.join(
+        f'<div class="dtl-typ" style="left:{h/24*100:.3f}%;width:{100/24:.3f}%;'
+        f'background:rgba(120,120,128,{0.04 + typ.get(h, 0) * 0.20:.3f});"></div>' for h in range(24)) if typ else ''
+
+    line_html = ''.join(f'<div class="dtl-line" style="left:{b/24*100:.3f}%;"></div>' for b in (5, 11, 17, 22))
+    label_html = ''.join(
+        f'<span class="dtl-bl" style="left:{(s + e) / 2 / 24 * 100:.3f}%;">{nm.strip().upper()}</span>'
+        for nm, s, e, _ in BUOI_BANDS if (e - s) >= 3)
+
+    bars_html = ''
+    for _, r in day_df.sort_values('Thời gian bắt đầu').iterrows():
+        s = pd.Timestamp(r['Thời gian bắt đầu']); e = pd.Timestamp(r['Thời gian kết thúc'])
+        s_min = s.hour * 60 + s.minute
+        left = s_min / 1440 * 100
+        width = min(max(float(r['Thời lượng (Phút)']), 6), 1440 - s_min) / 1440 * 100
+        proj = str(r['Dự án'])
+        lab = proj if width > 5.5 else ''
+        bars_html += (f'<div class="dtl-bar" title="{html_escape(proj)}: {s:%H:%M}–{e:%H:%M}" '
+                      f'style="left:{left:.3f}%;width:{width:.3f}%;background:{COLOR_MAP.get(proj, "#8e8e93")};">'
+                      f'{html_escape(lab)}</div>')
+
+    ticks_html = ''.join(
+        f'<span class="dtl-tk" style="left:{h/24*100:.3f}%;">{h}{"h" if h in (0, 24) else ""}</span>'
+        for h in range(0, 25, 3))
+    projs = list(dict.fromkeys(day_df.sort_values('Thời gian bắt đầu')['Dự án'].astype(str)))
+    legend_html = ''.join(
+        f'<span><i style="background:{COLOR_MAP.get(p, "#8e8e93")};"></i>{html_escape(p)}</span>' for p in projs)
+
+    st.markdown(f"""
+<style>
+.dtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:14px 18px;}}
+.dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
+.dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:#aeaeb2;}}
+.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
+.dtl-typ{{position:absolute;top:0;bottom:0;}}
+.dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.06);}}
+.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-axis{{position:relative;height:16px;margin-top:4px;}}
+.dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:#86868b;}}
+.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:#3a3a3c;}}
+.dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
+</style>
+<div class="dtl-card">
+<div class="dtl-strip">{label_html}</div>
+<div class="dtl-track">{typ_html}{line_html}{bars_html}</div>
+<div class="dtl-axis">{ticks_html}</div>
+<div class="dtl-legend">{legend_html}</div>
+</div>
+""", unsafe_allow_html=True)
+    if n_same:
+        st.caption(f"Vùng xám mờ = khung giờ điển hình của {vn_dow} (trung bình {n_same} ngày {vn_dow} khác). "
+                   "Khối đậm = phiên trong ngày đang xem.")
+
+
 def render_calendar_grid(scope_df, full_df):
     """Chỉ vẽ lưới lịch nhiệt kiểu GitHub (không kèm số liệu chuỗi)."""
     min_date = pd.Timestamp(scope_df['Ngày'].min())
@@ -1167,6 +1277,7 @@ NAV = {
     "Thống kê chung": ":material/bar_chart:",
     "Báo cáo tháng": ":material/calendar_month:",
     "Báo cáo tuần": ":material/calendar_view_week:",
+    "Báo cáo ngày": ":material/today:",
     "Báo cáo theo dự án": ":material/category:",
     "Chuẩn bị dữ liệu": ":material/settings:",
 }
@@ -1507,6 +1618,102 @@ elif nav == "Báo cáo tuần":
                 render_session_histogram(df_w)
             with st.expander("7. Bảng số liệu", expanded=True):
                 render_detail_table(df_w)
+# ==========================================
+# TAB BÁO CÁO NGÀY
+# ==========================================
+elif nav == "Báo cáo ngày":
+    if df.empty:
+        st.info("Chưa có dữ liệu. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
+    else:
+        active_days = sorted(df['Ngày'].dropna().unique())
+        sel = day_picker(active_days)
+        day_df = df[df['Ngày'] == sel]
+        vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
+
+        if day_df.empty:
+            st.caption(f"**{vn_dow}, {sel:%d/%m/%Y}** — không có hoạt động.")
+            st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
+        else:
+            st.caption(f"**{vn_dow}, {sel:%d/%m/%Y}** · ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}")
+
+            with st.expander("1. Tổng quan ngày", expanded=True):
+                d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
+                d_sess = len(day_df)
+                d_avg = _avg_session_min(day_df)
+
+                cmp_chips = []
+                pw = df[df['Ngày'] == (sel - timedelta(days=7))]
+                if not pw.empty:
+                    pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
+                    _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
+                    cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{pw_h:.1f}h",
+                                      "delta": (f"{_fmt_delta(d_hrs - pw_h)}h · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
+                else:
+                    cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
+                same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
+                          & (df['Ngày'] != sel)]
+                if same['Ngày'].nunique():
+                    avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
+                    _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
+                    cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{avg_h:.1f}h",
+                                      "delta": (f"{_fmt_delta(d_hrs - avg_h)}h", _c)})
+
+                t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
+                t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
+                _sp = t1 - t0
+                span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
+
+                def _buoi(h):
+                    return "Sáng" if 5 <= h < 11 else "Chiều" if 11 <= h < 17 else "Tối" if 17 <= h < 22 else "Khuya"
+                bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi))
+                            .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
+                buoi_chips = [{"k": b, "v": f"{bg[b]:.1f}h"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
+
+                _secs = [{"label": "So sánh", "chips": cmp_chips},
+                         {"label": "Mốc trong ngày", "chips": [
+                             {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
+                             {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
+                             {"k": "Trải dài", "v": span_str}]}]
+                if buoi_chips:
+                    _secs.append({"label": "Theo buổi", "chips": buoi_chips})
+                render_stat_panel(hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{d_hrs:.1f}h"},
+                    {"label": "Số phiên", "value": f"{d_sess}"},
+                    {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
+                ], sections=_secs)
+
+            with st.expander("2. Dòng thời gian trong ngày", expanded=True):
+                render_day_timeline(day_df, sel, df)
+
+            with st.expander("3. Phân bổ thời gian", expanded=True):
+                cc = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Dự án", key="rad_day")
+                cc = cc or "Dự án"
+                pc = day_df.groupby(cc)['Thời lượng (Phút)'].sum().reset_index()
+                pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
+                fig_d = px.pie(pc, values='Số giờ', names=cc, color=cc, color_discrete_map=COLOR_MAP)
+                fig_d.update_layout(width=CHART_WIDTH)
+                fig_d = format_plotly_fig(fig_d, is_pie=True)
+                st.plotly_chart(fig_d, width='stretch', config=PLOTLY_CONFIG)
+
+            with st.expander("4. Danh sách phiên", expanded=True):
+                rows_html = ''
+                for _, r in day_df.sort_values('Thời gian bắt đầu').iterrows():
+                    s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
+                    cat = r.get('Danh mục')
+                    cat = str(cat) if pd.notna(cat) and str(cat) != str(r['Dự án']) else '—'
+                    rows_html += ('<tr class="prow">'
+                                  f'<td class="lbl">{html_escape(str(r["Dự án"]))}</td>'
+                                  f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
+                                  f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
+                                  f'<td class="txt">{html_escape(cat)}</td></tr>')
+                rows_html += ('<tr class="cat"><td class="lbl">Tổng</td><td></td><td></td>'
+                              f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
+                st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
 # ==========================================
 # TAB BÁO CÁO THEO NHÓM
 # ==========================================
