@@ -167,13 +167,15 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
   - Tổng giờ · Số phiên · Độ dài/phiên, kèm **So sánh** với *cùng thứ tuần trước* và *trung
     bình các ngày cùng thứ* (hợp với lịch theo tuần), Mốc trong ngày (phiên đầu/cuối, trải
     dài) và phân bổ theo buổi.
-  - **Top 5 Danh mục** và **Top 5 Dự án** trong ngày (hiện toàn bộ nếu chưa đủ 5).
+  - **Top 3 Danh mục** và **Top 3 Dự án** trong ngày (hiện toàn bộ nếu chưa đủ 3).
   - **Phân bố độ dài phiên** (thanh theo 5 nhóm 10/25/50/90′).
   - **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền
     dải buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
-- **Ghi chú ngày** (nhật ký): viết **một ghi chú cho mỗi ngày** (hỗ trợ markdown nhẹ) rồi
-  **Lưu**/**Xoá**. Ghi chú lưu **độc lập với phiên** (ngày không có hoạt động vẫn ghi được, và
-  import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.
+- **Ghi chú ngày** (nhật ký): mặc định chỉ hiện **ghi chú đã lưu** (hoặc trạng thái trống) kèm
+  nút **Thêm ghi chú**/**Sửa ghi chú**; bấm nút mới mở ô soạn ngay trong trang với **Cập nhật** /
+  **Huỷ** / **Xoá**. Mỗi ngày **một ghi chú** (markdown nhẹ), lưu **độc lập với phiên** (ngày không
+  có hoạt động vẫn ghi được; import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục
+  *Nhật ký* của tuần/tháng tương ứng.
 - **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (STT · Bắt đầu – Kết thúc · Độ dài · Danh mục).
 - **Ngày này năm trước**: khớp **cùng ngày/tháng ở các năm trước** (gộp từ cả phiên lẫn ghi chú);
   mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. Mục này dày dần theo thời gian.

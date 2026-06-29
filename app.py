@@ -872,8 +872,10 @@ def render_day_timeline(day_df, sel, df_all):
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:#86868b;}}
 .dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:#3a3a3c;}}
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
+.dtl-ttl{{font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
 </style>
 <div class="dtl-card">
+<div class="dtl-ttl">Dòng thời gian trong ngày</div>
 <div class="dtl-strip">{label_html}</div>
 <div class="dtl-track">{typ_html}{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
@@ -886,27 +888,55 @@ def render_day_timeline(day_df, sel, df_all):
 
 
 def render_note_editor(day):
-    """Ô soạn ghi chú cho một ngày + hiển thị markdown của ghi chú đã lưu."""
+    """Ghi chú một ngày, gói trong thẻ. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
+    trống) kèm một nút; bấm nút mới mở ô soạn inline với các nút Cập nhật/Huỷ/Xoá."""
     cur = get_note(day)
-    if cur:
-        st.caption("Ghi chú đã lưu")
-        with st.container(border=True):
-            st.markdown(cur)
-    nk = f"note_{day}"
-    if nk not in st.session_state:
-        st.session_state[nk] = cur
-    st.text_area("Ghi chú ngày", key=nk, height=120, label_visibility="collapsed",
-                 placeholder="Viết vài dòng về ngày này… (hỗ trợ markdown: “- ” gạch đầu dòng, **đậm**)")
-    c1, c2, _ = st.columns([2, 2, 6])
-    with c1:
-        if st.button("Lưu ghi chú", type="primary", key=f"note_save_{day}", use_container_width=True):
-            save_note(day, st.session_state[nk])
-            st.rerun()
-    with c2:
-        if cur and st.button("Xoá ghi chú", key=f"note_del_{day}", use_container_width=True):
-            save_note(day, "")
-            st.session_state[nk] = ""
-            st.rerun()
+    edit_key = f"note_edit_{day}"
+    txt_key = f"note_txt_{day}"
+    with st.container(border=True):
+        if not st.session_state.get(edit_key, False):
+            # Chế độ xem: chỉ ghi chú + 1 nút
+            if cur:
+                with st.container(key="note_saved"):
+                    st.markdown(cur)
+                if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
+                    st.session_state[edit_key] = True
+                    st.session_state[txt_key] = cur
+                    st.rerun()
+            else:
+                st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
+                            unsafe_allow_html=True)
+                if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
+                             key=f"note_addbtn_{day}"):
+                    st.session_state[edit_key] = True
+                    st.session_state[txt_key] = ""
+                    st.rerun()
+        else:
+            # Chế độ soạn: ô nhập inline + Cập nhật / Huỷ / Xoá
+            if txt_key not in st.session_state:
+                st.session_state[txt_key] = cur
+            st.text_area("Soạn ghi chú", key=txt_key, height=130, label_visibility="collapsed",
+                         placeholder="Viết vài dòng về ngày này… (markdown nhẹ: “- ” gạch đầu dòng, **đậm**)")
+            c1, c2, _, c4 = st.columns([2, 2, 2, 3])
+            with c1:
+                if st.button("Cập nhật", icon=":material/check:", type="primary",
+                             key=f"note_save_{day}", use_container_width=True):
+                    save_note(day, st.session_state[txt_key])
+                    st.session_state[edit_key] = False
+                    st.rerun()
+            with c2:
+                if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}",
+                             use_container_width=True):
+                    st.session_state[edit_key] = False
+                    st.rerun()
+            with c4:
+                if cur and st.button("Xoá ghi chú", icon=":material/delete:",
+                                     key=f"note_del_{day}", use_container_width=True):
+                    save_note(day, "")
+                    st.session_state[edit_key] = False
+                    st.rerun()
+            st.caption("Hỗ trợ markdown nhẹ: “- ” gạch đầu dòng, **đậm**. "
+                       "Ghi chú lưu theo ngày, độc lập với dữ liệu phiên.")
 
 
 def render_notes_journal(period_key, kind):
@@ -922,17 +952,15 @@ def render_notes_journal(period_key, kind):
     if nd.empty:
         st.caption("Chưa có ghi chú nào trong kỳ này. Thêm ghi chú ở tab **Báo cáo ngày**.")
         return
-    for _, r in nd.iterrows():
-        d = r['_d']
-        c1, c2 = st.columns([1, 6], vertical_alignment="top")
-        with c1:
-            st.markdown(f"<div style='font-size:13px;font-weight:600;color:#007aff;'>"
-                        f"{VN_DAYS.get(d.day_name(), '')}<br><span style='color:#86868b;font-weight:500;'>"
-                        f"{d:%d/%m}</span></div>", unsafe_allow_html=True)
-        with c2:
-            st.markdown(str(r['Ghi chú']))
-        st.markdown("<hr style='margin:8px 0;border:none;border-top:1px solid rgba(0,0,0,0.06);'>",
-                    unsafe_allow_html=True)
+    with st.container(border=True, key="jcard_journal"):
+        for _, r in nd.iterrows():
+            d = r['_d']
+            c1, c2 = st.columns([1, 5], vertical_alignment="center")
+            with c1:
+                st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
+                            f"<div class='jdm'>{d:%d/%m}</div></div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown(str(r['Ghi chú']))
 
 
 def render_on_this_day(sel, df_all):
@@ -955,41 +983,39 @@ def render_on_this_day(sel, df_all):
             notes[int(r['_d'].year)] = str(r['Ghi chú'])
 
     years = sorted(set(stats) | set(notes), reverse=True)
-    st.markdown(f"<p style='margin:0 0 4px 0;font-size:13px;color:#86868b;font-weight:600;'>"
-                f"Khớp theo ngày <b style='color:#1d1d1f;'>{d:02d}/{m:02d}</b> ở các năm trước.</p>",
-                unsafe_allow_html=True)
     if not years:
+        st.markdown(f"<p style='margin:0 0 4px 0;font-size:13px;color:#86868b;font-weight:600;'>"
+                    f"Khớp theo ngày <b style='color:#1d1d1f;'>{d:02d}/{m:02d}</b> ở các năm trước.</p>",
+                    unsafe_allow_html=True)
         st.caption(f"Chưa có dữ liệu ngày {d:02d}/{m:02d} ở các năm trước. "
                    "Mục này sẽ dày dần theo thời gian.")
         return
 
     def _chip(k, v):
-        return (f"<span style='display:inline-block;background:#f0f1f4;border-radius:10px;padding:6px 12px;"
-                f"font-size:13px;margin:0 6px 6px 0;'><span style='color:#86868b;'>{k}</span>"
-                f"<span style='font-weight:600;color:#1d1d1f;margin-left:5px;'>{v}</span></span>")
+        return f"<span class='jchip'><span class='ck'>{k}</span><span class='cv'>{v}</span></span>"
 
-    for y in years:
-        wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
-        c1, c2 = st.columns([1, 6], vertical_alignment="top")
-        with c1:
-            st.markdown(f"<div style='font-size:17px;font-weight:700;color:#007aff;'>{y}</div>"
-                        f"<div style='font-size:12px;color:#86868b;'>{wd} · {d:02d}/{m:02d}</div>",
-                        unsafe_allow_html=True)
-        with c2:
-            if y in stats:
-                hrs, ss = stats[y]
-                avg = (hrs * 60 / ss) if ss else 0
-                chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
-            else:
-                chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
-            st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
-            if notes.get(y):
-                st.markdown(notes[y])
-            else:
-                st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
+    with st.container(border=True, key="jcard_otd"):
+        for y in years:
+            wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
+            c1, c2 = st.columns([1, 5], vertical_alignment="center")
+            with c1:
+                st.markdown(f"<div class='jdate'><div class='jyear'>{y}</div>"
+                            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>",
                             unsafe_allow_html=True)
-        st.markdown("<hr style='margin:8px 0;border:none;border-top:1px solid rgba(0,0,0,0.06);'>",
-                    unsafe_allow_html=True)
+            with c2:
+                if y in stats:
+                    hrs, ss = stats[y]
+                    avg = (hrs * 60 / ss) if ss else 0
+                    chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
+                else:
+                    chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
+                st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
+                if notes.get(y):
+                    st.markdown(notes[y])
+                else:
+                    st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
+                                unsafe_allow_html=True)
+    st.caption(f"Khớp theo ngày {d:02d}/{m:02d} ở các năm trước. Mục này sẽ dày dần theo thời gian.")
 
 
 def render_calendar_grid(scope_df, full_df):
@@ -1392,6 +1418,33 @@ st.markdown(
         /* Thẻ dạng flex (vd Cập nhật gần nhất): xếp dọc cho dễ đọc */
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
+    }
+
+    /* ===== Ghi chú ngày: hộp hiển thị ghi chú đã lưu / trạng thái trống ===== */
+    .st-key-note_saved { background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.12);
+        border-left: 3px solid #007aff; border-radius: 10px; padding: 2px 14px; }
+    .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
+        border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
+
+    /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
+    [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
+        border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 12px; }
+    [class*="st-key-jcard"] [data-testid="stColumn"]:first-child {
+        border-right: 1px solid rgba(0,0,0,0.08); }
+    .jdate { text-align: center; }
+    .jdate .jyear { font-size: 20px; font-weight: 700; color: #007aff; letter-spacing: -0.5px; line-height: 1; }
+    .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
+    .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
+    .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
+    .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
+        font-size: 12.5px; margin: 0 6px 6px 0; }
+    .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
+    /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
+    .st-key-day_top3 { margin-top: 14px; }
+    @media (max-width: 640px) {
+        [class*="st-key-jcard"] [data-testid="stColumn"] { margin-bottom: 0 !important; }
+        /* Khi cột xếp dọc trên mobile, bỏ vạch dọc (border-right) cho gọn */
+        [class*="st-key-jcard"] [data-testid="stColumn"]:first-child { border-right: none !important; }
     }
     </style>
     """,
@@ -1831,17 +1884,14 @@ elif nav == "Báo cáo ngày":
                     {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
                 ], sections=_secs)
 
-                tc1, tc2 = st.columns(2)
-                with tc1:
-                    render_top_3(day_df, 'Danh mục', "Top 5 Danh mục", n=5)
-                with tc2:
-                    render_top_3(day_df, 'Dự án', "Top 5 Dự án", n=5)
+                with st.container(key="day_top3"):
+                    tc1, tc2 = st.columns(2)
+                    with tc1:
+                        render_top_3(day_df, 'Danh mục', "Top 3 Danh mục")
+                    with tc2:
+                        render_top_3(day_df, 'Dự án', "Top 3 Dự án")
 
                 render_session_bar(day_df)
-
-                st.markdown("<p style='margin:18px 0 8px 2px;font-size:11px;color:#86868b;font-weight:600;"
-                            "text-transform:uppercase;letter-spacing:0.5px;'>Dòng thời gian trong ngày</p>",
-                            unsafe_allow_html=True)
                 render_day_timeline(day_df, sel, df)
 
             with st.expander("2. Ghi chú ngày", expanded=True):
