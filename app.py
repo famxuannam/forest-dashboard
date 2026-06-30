@@ -318,9 +318,14 @@ def format_plotly_fig(fig, is_pie=False):
         margin=dict(t=10)
     )
     if is_pie:
-        fig.update_traces(hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
+        # Đường viền trắng phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer)
+        fig.update_traces(marker=dict(line=dict(color='#ffffff', width=2)),
+                          hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
     else:
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
+        # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
+        # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
+        fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
     return fig
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
@@ -582,6 +587,7 @@ def render_session_histogram(df):
 
     fig = go.Figure(go.Bar(
         x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
+        marker_cornerradius=6, cliponaxis=False,  # bo góc trên + bóng (CSS) không bị cắt — đồng bộ các cột khác
         customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
     ))
     for t in LEN_THRESHOLDS:
@@ -854,7 +860,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 .rtl-name{{font-size:13px;font-weight:600;color:#1d1d1f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
 .rtl-track{{position:relative;height:32px;}}
 .rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
-.rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;}}
+.rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .rtl-bar.done{{background:#aeaeb2;}}
 .rtl-bar.reading{{background:#007aff;}}
 .rtl-axis{{display:grid;grid-template-columns:144px 1fr;margin-top:3px;}}
@@ -1513,6 +1519,12 @@ st.markdown(
         padding: 14px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
+
+    /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
+       các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
+       Cần cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
+    [data-testid="stPlotlyChart"] g.barlayer { filter: drop-shadow(0 2.5px 2.5px rgba(0,0,0,0.30)); }
+    [data-testid="stPlotlyChart"] g.pielayer { filter: drop-shadow(0 3px 4px rgba(0,0,0,0.30)); }
 
     [data-testid="stMetric"] { display: none; }
 
