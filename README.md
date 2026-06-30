@@ -135,7 +135,7 @@ Có hai cách nhìn về độ dài phiên, đều ở phần đầu mỗi tab:
 
 ## Hướng dẫn sử dụng theo từng trang
 
-Thanh điều hướng nằm ngay dưới tiêu đề, gồm 6 trang:
+Thanh điều hướng nằm ngay dưới tiêu đề, gồm 7 trang:
 
 ### 1. 📊 Thống kê chung
 Cái nhìn tổng thể toàn bộ dữ liệu.
@@ -212,6 +212,12 @@ Nơi bạn nạp và quản lý dữ liệu:
 4. **Quản lý hệ thống** — **Sao lưu** (một nút *Tải bản sao lưu* → file `.zip` gồm dữ liệu,
    phân loại, danh sách đã xoá **và ghi chú**), **Khôi phục** (nạp lại từ chính file `.zip` đó,
    có xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
+
+### 7. ❓ Hướng dẫn
+Trang **Hướng dẫn & Giải thích** ngay trong app: giải thích chi tiết **mọi số liệu, biểu đồ và
+tính năng** (Số liệu tổng quan, các biểu đồ, Dòng thời gian trong ngày, Ghi chú, Nhật ký đọc sách,
+Chuẩn bị dữ liệu…), **kèm ảnh minh hoạ** cho từng phần và hộp **Mẹo** gợi ý cách dùng hữu ích.
+Ảnh minh hoạ nằm trong `assets/help/`.
 
 ---
 
