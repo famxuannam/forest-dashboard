@@ -1010,8 +1010,6 @@ def render_note_editor(day):
                     save_note(day, "")
                     st.session_state[edit_key] = False
                     st.rerun()
-            st.caption("Mẹo: bôi đen rồi ⌘/Ctrl+B để in đậm, Tab để thụt lề. "
-                       "Ghi chú lưu theo ngày, độc lập với dữ liệu phiên.")
 
 
 def render_notes_journal(period_key, kind):
@@ -1025,7 +1023,7 @@ def render_notes_journal(period_key, kind):
             nd = nd[nd['_d'].dt.strftime('%G-W%V') == period_key]
         nd = nd.sort_values('_d')
     if nd.empty:
-        st.caption("Chưa có ghi chú nào trong kỳ này. Thêm ghi chú ở tab **Báo cáo ngày**.")
+        st.caption("Chưa có ghi chú nào trong kỳ này.")
         return
     with st.container(border=True, key="jcard_journal"):
         for _, r in nd.iterrows():
@@ -2152,7 +2150,6 @@ elif nav == "Chuẩn bị dữ liệu":
         _msg = st.session_state.pop('import_msg', None)
         if _msg:
             st.success(_msg)
-        st.caption("Dùng file CSV xuất từ app Forest — cần các cột Tag/Project, Start Time, End Time, Is Success.")
         forest_file = st.file_uploader("Tải lên file CSV từ máy tính", type=["csv"], key="forest")
         if forest_file:
             df_new, stats, missing = parse_forest_csv(forest_file)
@@ -2213,7 +2210,6 @@ elif nav == "Chuẩn bị dữ liệu":
 
             new_cat = st.text_input("Tạo nhóm mới (tuỳ chọn — sẽ xuất hiện trong danh sách chọn ở cột Nhóm):").strip()
             opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
-            st.caption("Chọn Nhóm cho từng dự án (gõ ở ô trên để thêm nhóm mới). Để trống = bỏ phân loại.")
             tbl = pd.DataFrame({"Dự án": all_projs, "Nhóm (Danh mục)": [cur_map.get(p) for p in all_projs]})
             edited = st.data_editor(
                 tbl, hide_index=True, width='stretch', key="map_editor",
@@ -2231,8 +2227,7 @@ elif nav == "Chuẩn bị dữ liệu":
         if not db_current.empty:
             db_base = db_current.reset_index(drop=True)
             _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
-            st.caption(f"Tổng **{len(db_base)}** phiên · từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}. "
-                       "Bấm tiêu đề cột để sắp xếp; tích chọn dòng để xoá.")
+            st.caption(f"Tổng **{len(db_base)}** phiên · từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}.")
             disp_db = db_base.copy()
             disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
             disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
@@ -2250,7 +2245,6 @@ elif nav == "Chuẩn bị dữ liệu":
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
-            st.caption("Một file .zip gồm dữ liệu, phân loại, danh sách đã xoá và ghi chú; tên kèm ngày để dễ phân biệt.")
             if os.path.exists(DB_FILE):
                 _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
