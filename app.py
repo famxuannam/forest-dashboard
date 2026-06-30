@@ -1592,6 +1592,10 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
+    /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
+       flex-start -> đẩy hàng nút vào giữa */
+    .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
+
     /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
     [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
@@ -2295,27 +2299,33 @@ elif nav == "Chuẩn bị dữ liệu":
         if not db_current.empty:
             db_base = db_current.reset_index(drop=True)
             _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
-            st.caption(f"Tổng **{len(db_base)}** phiên · từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}.")
+            # Tổng quan: thẻ căn giữa
+            st.markdown(
+                f"<div class='glass-card' style='padding:10px 18px;margin-bottom:14px;text-align:center;'>"
+                f"<span style='font-size:14px;color:#1d1d1f;'>Tổng <b>{len(db_base)}</b> phiên · "
+                f"từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}</span></div>",
+                unsafe_allow_html=True)
             disp_db = db_base.copy()
             disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
             disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
             if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
 
-            # Phân trang khi nhiều phiên -> bảng nhẹ & dễ thao tác. Dòng chọn để xoá là theo
-            # vị trí TRONG trang nên cộng offset _start để ra chỉ số tuyệt đối trong db_base.
+            # Phân trang 100 dòng/trang khi nhiều phiên. Đọc trang từ session_state TRƯỚC để cắt
+            # bảng; render widget pagination Ở DƯỚI bảng (cùng key nên vẫn lái được lát cắt qua
+            # mỗi lần rerun). Dòng chọn để xoá là vị trí TRONG trang -> cộng _start ra chỉ số tuyệt đối.
             PAGE_SIZE = 100
             n = len(disp_db)
+            paged = n > PAGE_SIZE
             _start = 0
-            if n > PAGE_SIZE:
+            if paged:
                 num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
-                if st.session_state.get("db_page", 1) > num_pages:   # clamp khi dữ liệu co lại sau xoá
-                    st.session_state["db_page"] = num_pages
-                _page = st.pagination(num_pages, key="db_page")
-                _start = (_page - 1) * PAGE_SIZE
+                page = min(st.session_state.get("db_page", 1), num_pages)  # clamp khi co lại sau xoá
+                st.session_state["db_page"] = page
+                _start = (page - 1) * PAGE_SIZE
                 page_df = disp_db.iloc[_start:_start + PAGE_SIZE]
-                st.caption(f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}.")
             else:
                 page_df = disp_db
+
             ev = st.dataframe(page_df, width='stretch', hide_index=True,
                               on_select="rerun", selection_mode="multi-row", key="db_view")
             sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
@@ -2323,7 +2333,15 @@ elif nav == "Chuẩn bị dữ liệu":
                 add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                 save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
                 st.rerun()
-            st.caption("Phiên đã xoá sẽ không bị nạp lại khi tải file Forest mới (kể cả khi file đó vẫn còn phiên này).")
+
+            # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.
+            if paged:
+                with st.container(key="db_pag"):
+                    st.pagination(num_pages, key="db_page")
+                st.markdown(
+                    f"<div style='text-align:center;font-size:13px;color:#86868b;margin-top:2px;'>"
+                    f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
+                    unsafe_allow_html=True)
     with st.expander("4. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
         _today = date.today().strftime('%Y-%m-%d')
