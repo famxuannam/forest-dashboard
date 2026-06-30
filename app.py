@@ -2317,9 +2317,25 @@ elif nav == "Chuẩn bị dữ liệu":
             disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
             disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
             if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
-            ev = st.dataframe(disp_db, width='stretch', hide_index=True,
+
+            # Phân trang khi nhiều phiên -> bảng nhẹ & dễ thao tác. Dòng chọn để xoá là theo
+            # vị trí TRONG trang nên cộng offset _start để ra chỉ số tuyệt đối trong db_base.
+            PAGE_SIZE = 100
+            n = len(disp_db)
+            _start = 0
+            if n > PAGE_SIZE:
+                num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
+                if st.session_state.get("db_page", 1) > num_pages:   # clamp khi dữ liệu co lại sau xoá
+                    st.session_state["db_page"] = num_pages
+                _page = st.pagination(num_pages, key="db_page")
+                _start = (_page - 1) * PAGE_SIZE
+                page_df = disp_db.iloc[_start:_start + PAGE_SIZE]
+                st.caption(f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}.")
+            else:
+                page_df = disp_db
+            ev = st.dataframe(page_df, width='stretch', hide_index=True,
                               on_select="rerun", selection_mode="multi-row", key="db_view")
-            sel_rows = list(ev.selection.rows) if ev and ev.selection else []
+            sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
             if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary"):
                 add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                 save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
