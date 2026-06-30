@@ -464,14 +464,15 @@ def _delta_t(delta, label):
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
-def render_stat_panel(hero_items, sections=None, footer=None, groups=None):
+def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:20px;"):
     """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
 
-    hero_items: list dict {label, value, deltas?: [(text, color)]}
+    hero_items: list dict {label, value, deltas?: [(text, color)]}; rỗng -> bỏ hàng hero.
     sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]}
     footer:     (text, bg, fg) -> dòng nhắn nằm cuối thẻ (vd lời nhắc chuỗi)
     groups:     list dict {label?: str, sections: [...]} — nhóm nhiều sections với divider;
                 nếu truyền thì sections bị bỏ qua.
+    card_style: style inline cho thẻ ngoài (vd thêm margin-top để tách thẻ).
     Toàn bộ HTML viết sát lề trái để Streamlit không hiểu nhầm là code block.
     """
     def _render_sec(sec):
@@ -489,13 +490,15 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None):
         out += "</div></div>"
         return out
 
-    h = "<div class='glass-card stat-panel' style='padding:20px;'><div class='sp-hero'>"
-    for it in hero_items:
-        h += f"<div class='sp-hi'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
-        for txt, col in it.get('deltas', []) or []:
-            h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
+    h = f"<div class='glass-card stat-panel' style='{card_style}'>"
+    if hero_items:
+        h += "<div class='sp-hero'>"
+        for it in hero_items:
+            h += f"<div class='sp-hi'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
+            for txt, col in it.get('deltas', []) or []:
+                h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
+            h += "</div>"
         h += "</div>"
-    h += "</div>"
     if groups is not None:
         first = True
         for grp in groups:
@@ -865,48 +868,47 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
             for _, r in reading.iterrows()
         ]})
 
-    _groups = [
-        {
-            "label": "Tổng kết",
-            "sections": _grp_summary,
-        },
-        {
-            "label": "Hoạt động",
-            "sections": [
-                {"label": "Chuỗi đọc", "chips": [
-                    {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
-                    {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
-                    {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
-                ]},
-                {"label": "Đều đặn", "chips": [
-                    {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
-                    {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
-                ]},
-                {"label": "Nhịp gần đây", "chips": [
-                    {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
-                    {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
-                ]},
-            ],
-        },
-        {
-            "label": "Kỳ này",
-            "sections": [
-                {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
-                {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
-                _sec_timeslot,
-            ],
-        },
-    ]
-
+    # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
             {"label": "Số cuốn", "value": f"{len(t)}"},
             {"label": "Tổng giờ", "value": f"{t['Tổng giờ'].sum():.1f}h"},
         ],
-        groups=_groups,
+        groups=[{"label": "Tổng kết", "sections": _grp_summary}],
     )
 
-    st.markdown("<div class='section-hd'>Phân bố phiên đọc</div>", unsafe_allow_html=True)
+    # Thẻ 2: Hoạt động — thẻ độc lập, tách khỏi thẻ trên
+    render_stat_panel(
+        hero_items=[],
+        groups=[{"label": "Hoạt động", "sections": [
+            {"label": "Chuỗi đọc", "chips": [
+                {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
+                {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
+                {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
+            ]},
+            {"label": "Đều đặn", "chips": [
+                {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
+                {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
+            ]},
+            {"label": "Nhịp gần đây", "chips": [
+                {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
+                {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
+            ]},
+        ]}],
+        card_style="padding:20px;margin-top:14px;",
+    )
+
+    # Thẻ 3: Kỳ này — thẻ độc lập
+    render_stat_panel(
+        hero_items=[],
+        groups=[{"label": "Kỳ này", "sections": [
+            {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
+            {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
+            _sec_timeslot,
+        ]}],
+        card_style="padding:20px;margin-top:14px;",
+    )
+
     render_session_bar(df_books)
 
     # Timeline trình tự đọc — tự vẽ HTML/CSS (trục tháng tiếng Việt, thanh bo tròn)
@@ -1639,6 +1641,7 @@ st.markdown(
     .stat-panel .chip.tw { background: rgba(0,122,255,0.10); }
     .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
     .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .stat-panel > .sp-glabel:first-child { margin-top: 0; }
     .stat-panel .chip.tw .ck { color: #0067d6; }
     .stat-panel .chip.tw .cv { color: #007aff; }
     .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
