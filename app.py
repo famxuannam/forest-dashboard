@@ -1,7 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 import io
+import json
 import time
 import zipfile
 import plotly.express as px
@@ -22,6 +24,58 @@ NOTE_TOOLBAR = [
     ["link"],
     ["clean"],
 ]
+
+# Quill (ô soạn ghi chú) chạy trong iframe riêng nên CSS của app không chạm tới được.
+# Bộ CSS dưới đây được bơm vào *bên trong* iframe để ô soạn hợp tông app:
+# - chữ to & rõ hơn (mặc định Quill chỉ 13px), font Apple, dòng thoáng;
+# - thu hẹp mỗi bậc thụt lề (Tab) từ 3em mặc định xuống 1.6em — cho cả đoạn văn lẫn
+#   mục danh sách; selector :not(.ql-direction-rtl) để khớp đúng độ ưu tiên của Quill;
+# - bo góc, màu chỉ dẫn (placeholder) nhạt, con trỏ & nút đang bật theo xanh #007aff.
+QUILL_CSS = """
+.ql-toolbar.ql-snow { border-color:#e2e2e7; border-top-left-radius:10px; border-top-right-radius:10px; background:#fafafa; }
+.ql-container.ql-snow { border-color:#e2e2e7; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
+.ql-editor { line-height:1.65; padding:14px 16px; color:#1d1d1f; min-height:150px; caret-color:#007aff; }
+.ql-editor.ql-blank::before { color:#aeaeb2; font-style:normal; left:16px; right:16px; }
+.ql-editor .ql-indent-1:not(.ql-direction-rtl){padding-left:1.6em;}
+.ql-editor .ql-indent-2:not(.ql-direction-rtl){padding-left:3.2em;}
+.ql-editor .ql-indent-3:not(.ql-direction-rtl){padding-left:4.8em;}
+.ql-editor .ql-indent-4:not(.ql-direction-rtl){padding-left:6.4em;}
+.ql-editor li.ql-indent-1:not(.ql-direction-rtl){padding-left:3.1em;}
+.ql-editor li.ql-indent-2:not(.ql-direction-rtl){padding-left:4.7em;}
+.ql-editor li.ql-indent-3:not(.ql-direction-rtl){padding-left:6.3em;}
+.ql-editor li.ql-indent-4:not(.ql-direction-rtl){padding-left:7.9em;}
+.ql-snow.ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.ql-snow .ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke { stroke:#007aff; }
+.ql-snow.ql-toolbar button:hover .ql-fill, .ql-snow.ql-toolbar button.ql-active .ql-fill { fill:#007aff; }
+.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active { color:#007aff; }
+"""
+
+
+def style_quill():
+    """Bơm QUILL_CSS vào trong iframe của Quill (cùng origin). Lặp lại định kỳ vì mỗi
+    lần Streamlit rerun, iframe bị tạo lại và mất style. Chỉ gọi khi đang mở ô soạn."""
+    js = (
+        "<script>\n"
+        "const CSS = " + json.dumps(QUILL_CSS) + ";\n"
+        "function applyQuillCss(){\n"
+        "  try{\n"
+        "    const frames = window.parent.document.querySelectorAll('iframe');\n"
+        "    frames.forEach(function(f){\n"
+        "      let d; try{ d = f.contentDocument; }catch(e){ return; }\n"
+        "      if(!d || !d.querySelector('.ql-editor')) return;\n"
+        "      if(d.getElementById('app-quill-css')) return;\n"
+        "      const s = d.createElement('style'); s.id='app-quill-css'; s.textContent=CSS;\n"
+        "      d.head.appendChild(s);\n"
+        "    });\n"
+        "  }catch(e){}\n"
+        "}\n"
+        "applyQuillCss();\n"
+        "setInterval(applyQuillCss, 400);\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
 
 def _note_is_empty(html):
     """Ghi chú coi như rỗng nếu sau khi bỏ thẻ HTML chỉ còn khoảng trắng (Quill để '<p><br></p>')."""
@@ -937,6 +991,7 @@ def render_note_editor(day):
             # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
             content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
                                placeholder="Viết vài dòng về ngày này…", key=quill_key)
+            style_quill()
             c1, c2, _, c4 = st.columns([2, 2, 2, 3])
             with c1:
                 if st.button("Cập nhật", icon=":material/check:", type="primary",
