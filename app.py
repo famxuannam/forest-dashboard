@@ -464,14 +464,31 @@ def _delta_t(delta, label):
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
-def render_stat_panel(hero_items, sections=None, footer=None):
+def render_stat_panel(hero_items, sections=None, footer=None, groups=None):
     """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
 
     hero_items: list dict {label, value, deltas?: [(text, color)]}
     sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]}
     footer:     (text, bg, fg) -> dòng nhắn nằm cuối thẻ (vd lời nhắc chuỗi)
+    groups:     list dict {label?: str, sections: [...]} — nhóm nhiều sections với divider;
+                nếu truyền thì sections bị bỏ qua.
     Toàn bộ HTML viết sát lề trái để Streamlit không hiểu nhầm là code block.
     """
+    def _render_sec(sec):
+        chips = sec.get('chips') or []
+        if not chips:
+            return ''
+        out = f"<div class='sp-row'><div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
+        for c in chips:
+            cls = "chip tw" if c.get('hl') else "chip"
+            out += f"<span class='{cls}'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span>"
+            if c.get('delta'):
+                dt, dc = c['delta']
+                out += f"<span class='cd' style='color:{dc};'>{dt}</span>"
+            out += "</span>"
+        out += "</div></div>"
+        return out
+
     h = "<div class='glass-card stat-panel' style='padding:20px;'><div class='sp-hero'>"
     for it in hero_items:
         h += f"<div class='sp-hi'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
@@ -479,19 +496,22 @@ def render_stat_panel(hero_items, sections=None, footer=None):
             h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
         h += "</div>"
     h += "</div>"
-    for sec in (sections or []):
-        chips = sec.get('chips') or []
-        if not chips:
-            continue
-        h += f"<div class='sp-row'><div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
-        for c in chips:
-            cls = "chip tw" if c.get('hl') else "chip"
-            h += f"<span class='{cls}'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span>"
-            if c.get('delta'):
-                dt, dc = c['delta']
-                h += f"<span class='cd' style='color:{dc};'>{dt}</span>"
-            h += "</span>"
-        h += "</div></div>"
+    if groups is not None:
+        first = True
+        for grp in groups:
+            grp_secs = [s for s in (grp.get('sections') or []) if s.get('chips')]
+            if not grp_secs:
+                continue
+            if not first:
+                h += "<div class='sp-divider'></div>"
+            first = False
+            if grp.get('label'):
+                h += f"<div class='sp-glabel'>{grp['label']}</div>"
+            for sec in grp_secs:
+                h += _render_sec(sec)
+    else:
+        for sec in (sections or []):
+            h += _render_sec(sec)
     if footer:
         f_txt, f_bg, f_fg = footer
         h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.07);text-align:center;'>"
@@ -800,17 +820,9 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
     done = t[t['Trạng thái'] == 'Đã xong']
     reading = t[t['Trạng thái'] == 'Đang đọc']
 
-    # Số liệu đầu mục: panel thẻ giống "Tổng quan"
-    _secs = []
-
-    # --- Số liệu hoạt động đọc: chuỗi / kỳ hiện tại / nhịp / đều đặn / khung giờ ---
+    # Số liệu đầu mục: panel thẻ giống "Tổng quan", chia 3 nhóm dọc
     _today = date.today()
     s_read = _streak_stats(df_books)
-    _secs.append({"label": "Chuỗi đọc", "chips": [
-        {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
-        {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
-        {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
-    ]})
 
     def _period_chips(scope):
         _h = scope['Thời lượng (Phút)'].sum() / 60
@@ -820,56 +832,82 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
             {"k": "Số giờ", "v": f"{_h:.1f}h"},
             {"k": "TB giờ/ngày", "v": f"{_h / _nd:.1f}h" if _nd else "—"},
         ]
-    _secs.append({"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])})
-    _secs.append({"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])})
 
     def _pace(d):
         _r = df_books[df_books['Ngày'] >= (_today - timedelta(days=d - 1))]
         return _r['Thời lượng (Phút)'].sum() / 60 / d
-    _secs.append({"label": "Nhịp gần đây", "chips": [
-        {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
-        {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
-    ]})
 
     _span = (pd.Timestamp(df_books['Ngày'].max()) - pd.Timestamp(df_books['Ngày'].min())).days + 1
-    _secs.append({"label": "Đều đặn", "chips": [
-        {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
-        {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
-    ]})
 
     _hr = _explode_session_hours(df_books, 'Dự án').groupby('Khung giờ')['giờ'].sum()
-    if len(_hr) and _hr.sum() > 0:
-        _secs.append({"label": "Khung giờ đọc", "chips": [
-            {"k": "Hay đọc nhất", "v": f"{int(_hr.idxmax())}h"},
-            {"k": "Buổi mạnh nhất", "v": f"{_hr.groupby(_buoi_of).sum().idxmax()}"},
-        ]})
+    _sec_timeslot = {"label": "Khung giờ đọc", "chips": [
+        {"k": "Hay đọc nhất", "v": f"{int(_hr.idxmax())}h"},
+        {"k": "Buổi mạnh nhất", "v": f"{_hr.groupby(_buoi_of).sum().idxmax()}"},
+    ]} if (len(_hr) and _hr.sum() > 0) else {"label": "", "chips": []}
 
-    # --- Số liệu theo từng cuốn ---
+    # Nhóm 1 · Tổng kết: thống kê theo đầu cuốn
+    _grp_summary = []
     if len(done):
-        _secs.append({"label": "Đã xong", "chips": [
+        top = done.loc[done['Tổng giờ'].idxmax()]
+        fast = done.loc[done['Số ngày'].idxmin()]
+        _grp_summary.append({"label": "Đã xong", "chips": [
             {"k": "Số cuốn", "v": f"{len(done)}"},
             {"k": "TB giờ/cuốn", "v": f"{done['Tổng giờ'].mean():.1f}h"},
             {"k": "TB ngày/cuốn", "v": f"{done['Số ngày'].mean():.0f}"},
         ]})
-        top = done.loc[done['Tổng giờ'].idxmax()]
-        fast = done.loc[done['Số ngày'].idxmin()]
-        _secs.append({"label": "Nổi bật", "chips": [
+        _grp_summary.append({"label": "Nổi bật", "chips": [
             {"k": "Nhiều giờ nhất", "v": f"{top['Cuốn sách']} ({top['Tổng giờ']:.1f}h)"},
             {"k": "Đọc nhanh nhất", "v": f"{fast['Cuốn sách']} ({int(fast['Số ngày'])} ngày)"},
         ]})
     if len(reading):
-        _secs.append({"label": "Đang đọc", "chips": [
+        _grp_summary.append({"label": "Đang đọc", "chips": [
             {"k": r['Cuốn sách'], "v": f"{r['Tổng giờ']:.1f}h", "hl": True}
             for _, r in reading.iterrows()
         ]})
+
+    _groups = [
+        {
+            "label": "Tổng kết",
+            "sections": _grp_summary,
+        },
+        {
+            "label": "Hoạt động",
+            "sections": [
+                {"label": "Chuỗi đọc", "chips": [
+                    {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
+                    {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
+                ]},
+                {"label": "Đều đặn", "chips": [
+                    {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
+                    {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
+                ]},
+                {"label": "Nhịp gần đây", "chips": [
+                    {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
+                    {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
+                ]},
+            ],
+        },
+        {
+            "label": "Kỳ này",
+            "sections": [
+                {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
+                {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
+                _sec_timeslot,
+            ],
+        },
+    ]
+
     render_stat_panel(
         hero_items=[
             {"label": "Số cuốn", "value": f"{len(t)}"},
             {"label": "Tổng giờ", "value": f"{t['Tổng giờ'].sum():.1f}h"},
         ],
-        sections=_secs,
+        groups=_groups,
     )
-    render_session_bar(df_books)  # phân bố độ dài phiên đọc (thanh gọn)
+
+    st.markdown("<div class='section-hd'>Phân bố phiên đọc</div>", unsafe_allow_html=True)
+    render_session_bar(df_books)
 
     # Timeline trình tự đọc — tự vẽ HTML/CSS (trục tháng tiếng Việt, thanh bo tròn)
     tmin = pd.to_datetime(t['Bắt đầu']).min().normalize().replace(day=1)
@@ -913,6 +951,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 .rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
 .rtl-yr{{color:#c7c7cc;margin-left:1px;}}
 </style>
+<div class="section-hd">Dòng thời gian</div>
 <div class="rtl-card">
 <div class="rtl-legend"><span><i style="background:#007aff;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 {bars_html}
@@ -920,6 +959,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 </div>
 """, unsafe_allow_html=True)
 
+    st.markdown("<div class='section-hd'>Chi tiết từng cuốn</div>", unsafe_allow_html=True)
     # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu"
     vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
     rows_html = ''
@@ -1597,8 +1637,11 @@ st.markdown(
     .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw { background: rgba(0,122,255,0.10); }
+    .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel .chip.tw .ck { color: #0067d6; }
     .stat-panel .chip.tw .cv { color: #007aff; }
+    .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
