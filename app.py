@@ -1477,8 +1477,8 @@ st.markdown(
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
     .ql-indent-5 { padding-left: 10em; } .ql-indent-6 { padding-left: 12em; }
 
-    /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước) trông như glass-card ===== */
-    .st-key-note_card, [class*="st-key-jcard"] {
+    /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card ===== */
+    .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
         border-radius: 14px !important;
         border-color: rgba(0,0,0,0.06) !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.04) !important;
@@ -2292,14 +2292,15 @@ elif nav == "Hướng dẫn":
         unsafe_allow_html=True)
 
     st.markdown("### Tổng quan ứng dụng")
-    st.markdown(
-        "Forest Tracker giúp bạn **xem lại** thói quen tập trung từ dữ liệu app Forest (không phải để đặt mục tiêu). "
-        "Thanh điều hướng trên cùng gồm các trang:\n\n"
-        "- **Thống kê chung** — bức tranh toàn bộ lịch sử.\n"
-        "- **Báo cáo tháng / tuần / ngày** — đào sâu một kỳ cụ thể (có thêm Nhật ký, Ngày này năm trước…).\n"
-        "- **Báo cáo theo dự án** — tập trung vào một Nhóm/Dự án (kèm *Nhật ký đọc sách* cho nhóm sách).\n"
-        "- **Chuẩn bị dữ liệu** — nạp file Forest, phân loại, sao lưu/khôi phục.\n\n"
-        "Trong mỗi trang báo cáo, **mặc định chỉ mở sẵn mục _Tổng quan_** (và _Nhật ký_ nếu có); các mục khác bấm tiêu đề để mở.")
+    with st.container(border=True, key="guide_intro"):
+        st.markdown(
+            "Forest Tracker giúp bạn **xem lại** thói quen tập trung từ dữ liệu app Forest (không phải để đặt mục tiêu). "
+            "Thanh điều hướng trên cùng gồm các trang:\n\n"
+            "- **Thống kê chung** — bức tranh toàn bộ lịch sử.\n"
+            "- **Báo cáo tháng / tuần / ngày** — đào sâu một kỳ cụ thể (có thêm Nhật ký, Ngày này năm trước…).\n"
+            "- **Báo cáo theo dự án** — tập trung vào một Nhóm/Dự án (kèm *Nhật ký đọc sách* cho nhóm sách).\n"
+            "- **Chuẩn bị dữ liệu** — nạp file Forest, phân loại, sao lưu/khôi phục.\n\n"
+            "Trong mỗi trang báo cáo, **mặc định chỉ mở sẵn mục _Tổng quan_** (và _Nhật ký_ nếu có); các mục khác bấm tiêu đề để mở.")
 
     st.markdown("### Số liệu tổng quan")
     guide_item(
@@ -2398,10 +2399,11 @@ elif nav == "Hướng dẫn":
         "**hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.",
         tip="Ghi vài dòng mỗi ngày → khi xem lại tuần/tháng (hoặc 'Ngày này năm trước') bạn có cả ngữ cảnh, không chỉ con số.",
         where="Báo cáo ngày → Ghi chú ngày")
-    st.markdown(
-        "Ngoài ra, Báo cáo ngày còn có mục **Ngày này năm trước**: tự khớp **cùng ngày/tháng ở các năm trước** "
-        "(gộp từ cả phiên lẫn ghi chú), mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. "
-        "Mục này sẽ dày dần theo thời gian khi bạn tích lũy dữ liệu.")
+    with st.container(border=True, key="guide_otd"):
+        st.markdown(
+            "Ngoài ra, Báo cáo ngày còn có mục **Ngày này năm trước**: tự khớp **cùng ngày/tháng ở các năm trước** "
+            "(gộp từ cả phiên lẫn ghi chú), mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. "
+            "Mục này sẽ dày dần theo thời gian khi bạn tích lũy dữ liệu.")
 
     st.markdown("### Nhật ký đọc sách")
     guide_item(
