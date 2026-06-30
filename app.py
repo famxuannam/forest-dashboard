@@ -1333,6 +1333,74 @@ def guide_item(img, title, body_md, tip=None, where=None):
                 st.info(tip, icon=":material/lightbulb:")
 
 
+# --- FRAGMENT: cô lập rerun cho từng mục biểu đồ có bộ điều khiển riêng ---
+# Khi đổi bộ lọc bên trong một mục, chỉ mục đó vẽ lại thay vì rerun cả trang
+# (nhanh hơn, nhất là trang nhiều dữ liệu/khi xem trên điện thoại).
+@st.fragment
+def frag_calendar(scope_df, key):
+    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng."""
+    df_cal = range_radio(scope_df, key=key)
+    render_calendar_grid(df_cal, df_cal)
+
+
+@st.fragment
+def frag_trend(scope_df, key_prefix, default_color):
+    """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại."""
+    o1, o2, o3 = st.columns([5, 3, 2])
+    with o1:
+        rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key=f"{key_prefix}_range")
+    with o2:
+        tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key=f"{key_prefix}_time")
+    with o3:
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+    rl = rl or "90 ngày"
+    tcol = tcol or "Ngày"
+    ccol = ccol or default_color
+    dft = filter_by_range(scope_df, rl)
+    g = dft.groupby([tcol, ccol])['Thời lượng (Phút)'].sum().reset_index()
+    g['Số giờ'] = g['Thời lượng (Phút)'] / 60
+    if tcol == "Ngày":
+        g['Ngày'] = pd.to_datetime(g['Ngày'])
+    fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+
+@st.fragment
+def frag_hourly(scope_df, key, color_state_key, default_color):
+    """Mục Xu hướng tập trung theo khung giờ — dùng phân loại từ mục Xu hướng
+    (đọc qua session_state để fragment không phụ thuộc biến ngoài)."""
+    df_hour = range_radio(scope_df, key=key)
+    ccol = st.session_state.get(color_state_key) or default_color
+    render_hourly_chart(df_hour, ccol)
+
+
+@st.fragment
+def frag_heatmap(scope_df, key):
+    """Mục Giờ tập trung theo thứ — bộ chọn khoảng thời gian riêng."""
+    df_heat = range_radio(scope_df, key=key)
+    render_dayhour_heatmap(df_heat)
+
+
+@st.fragment
+def frag_data_table(scope_df, key_prefix):
+    """Mục Bảng số liệu (Thống kê chung): khoảng thời gian + xem theo Tuần/Tháng."""
+    cc1, cc2 = st.columns([5, 2])
+    with cc1:
+        df_tbl = range_radio(scope_df, key=f"{key_prefix}_range")
+    with cc2:
+        view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key=f"{key_prefix}_view")
+    view_opt = view_opt or "Tuần"
+    render_data_table(df_tbl, 'Tuần' if view_opt == "Tuần" else 'Tháng')
+
+
+@st.fragment
+def frag_period_table(scope_df, key):
+    """Mục Bảng số liệu (Báo cáo theo dự án): xem theo Tuần/Tháng."""
+    grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key=key)
+    grp_view = grp_view or "Tháng"
+    render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
+
+
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
@@ -1684,45 +1752,17 @@ if nav == "Thống kê chung":
             with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
         with st.expander("2. Biểu đồ lịch", expanded=False):
-            df_cal = range_radio(df, key="range_cal")
-            render_calendar_grid(df_cal, df_cal)
+            frag_calendar(df, "range_cal")
         with st.expander("3. Xu hướng theo thời gian", expanded=False):
-            o1, o2, o3 = st.columns([5, 3, 2])
-            with o1:
-                _rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend")
-            with o2:
-                time_col_2 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab2")
-            with o3:
-                color_col_2 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab2")
-            _rl = _rl or "90 ngày"
-            time_col_2 = time_col_2 or "Ngày"
-            color_col_2 = color_col_2 or "Danh mục"
-            df_trend = filter_by_range(df, _rl)
-
-            trend_group = df_trend.groupby([time_col_2, color_col_2])['Thời lượng (Phút)'].sum().reset_index()
-            trend_group['Số giờ'] = trend_group['Thời lượng (Phút)'] / 60
-            if time_col_2 == "Ngày":
-                trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
-            fig1 = render_trend_fig(trend_group, time_col_2, color_col_2,
-                                    ma_df=df_trend if time_col_2 == "Ngày" else None)
-            st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
+            frag_trend(df, "trend_main", "Danh mục")
         with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
-            df_hour = range_radio(df, key="range_hour")
-            render_hourly_chart(df_hour, color_col_2)
+            frag_hourly(df, "range_hour", "trend_main_color", "Danh mục")
         with st.expander("5. Giờ tập trung theo thứ", expanded=False):
-            df_heat = range_radio(df, key="range_heat")
-            render_dayhour_heatmap(df_heat)
+            frag_heatmap(df, "range_heat")
         with st.expander("6. Phân bố độ dài phiên", expanded=False):
             render_session_histogram(df)
         with st.expander("7. Bảng số liệu", expanded=False):
-            cc1, cc2 = st.columns([5, 2])
-            with cc1:
-                df_tbl = range_radio(df, key="range_table")
-            with cc2:
-                view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key="view_tab1")
-            view_opt = view_opt or "Tuần"
-            time_col = 'Tuần' if view_opt == "Tuần" else 'Tháng'
-            render_data_table(df_tbl, time_col)
+            frag_data_table(df, "tbl_main")
     else:
         st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
 
@@ -2117,34 +2157,13 @@ elif nav == "Báo cáo theo dự án":
             )
             render_session_bar(df_g)
         with st.expander("2. Biểu đồ lịch", expanded=False):
-            df_g_cal = range_radio(df_g, key="range_grp_cal")
-            render_calendar_grid(df_g_cal, df_g_cal)
+            frag_calendar(df_g, "range_grp_cal")
         with st.expander("3. Xu hướng theo thời gian", expanded=False):
-            g1, g2, g3 = st.columns([5, 3, 2])
-            with g1:
-                _rlg = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key="range_trend_grp")
-            with g2:
-                time_col_5 = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key="time_tab5")
-            with g3:
-                color_col_5 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Dự án", key="rad_tab5")
-            _rlg = _rlg or "90 ngày"
-            time_col_5 = time_col_5 or "Ngày"
-            color_col_5 = color_col_5 or "Dự án"
-            df_g_trend = filter_by_range(df_g, _rlg)
-
-            tg = df_g_trend.groupby([time_col_5, color_col_5])['Thời lượng (Phút)'].sum().reset_index()
-            tg['Số giờ'] = tg['Thời lượng (Phút)'] / 60
-            if time_col_5 == "Ngày":
-                tg['Ngày'] = pd.to_datetime(tg['Ngày'])
-            fig_g = render_trend_fig(tg, time_col_5, color_col_5,
-                                     ma_df=df_g_trend if time_col_5 == "Ngày" else None)
-            st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
+            frag_trend(df_g, "trend_grp", "Dự án")
         with st.expander("4. Phân bố độ dài phiên", expanded=False):
             render_session_histogram(df_g)
         with st.expander("5. Bảng số liệu", expanded=False):
-            grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key="view_grp")
-            grp_view = grp_view or "Tháng"
-            render_period_table(df_g, 'Tuần' if grp_view == "Tuần" else 'Tháng')
+            frag_period_table(df_g, "view_grp")
         if _kind == "cat" and sel_grp == BOOKS_GROUP:
             books_df = df_g[~df_g['Dự án'].isin(BOOKS_EXCLUDE)]
             if books_df['Dự án'].nunique() >= 1:
