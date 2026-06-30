@@ -1587,14 +1587,22 @@ if not df.empty:
 else:
     COLOR_MAP = {}
 
+# Khởi tạo trang từ URL (?nav=…) -> cho phép deep-link & giữ trang khi F5/refresh.
+# Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác.
+if "nav" not in st.session_state:
+    _nav_q = st.query_params.get("nav")
+    st.session_state["nav"] = _nav_q if _nav_q in NAV else "Thống kê chung"
+
 # Thanh chọn trang luôn hiển thị ngay dưới tiêu đề (kiểu iOS segmented control)
 nav = st.segmented_control(
     "Trang", list(NAV.keys()),
     format_func=lambda x: f"{NAV[x]} {x}",
-    default="Thống kê chung", key="nav", label_visibility="collapsed",
+    key="nav", label_visibility="collapsed",
 )
 if not nav:
     nav = "Thống kê chung"
+# Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
+st.query_params["nav"] = nav
 
 # ==========================================
 # TRANG: THỐNG KÊ CHUNG
