@@ -727,8 +727,9 @@ def render_dayhour_heatmap(scope_df):
         color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
-    ).properties(width=alt.Step(48), height=alt.Step(22)).configure_view(strokeWidth=0)
-    st.altair_chart(chart, width='stretch')
+    ).properties(width=alt.Step(46), height=alt.Step(26)).configure_view(strokeWidth=0)
+    # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
+    st.altair_chart(chart, width='content')
 
 
 def _streak_stats(streak_df):
@@ -1519,6 +1520,12 @@ st.markdown(
         padding: 14px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
+    /* Chart Altair width='content' (heatmap, lịch): Streamlit ép cả chuỗi wrapper
+       (stElementContainer > stFullScreenFrame > div) về fit-content -> dồn trái.
+       Ép chuỗi này full-width để justify-content:center của thẻ vega căn giữa biểu đồ. */
+    [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]),
+    [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
+    [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
 
     /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
        các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
