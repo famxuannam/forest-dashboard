@@ -1366,12 +1366,43 @@ def frag_trend(scope_df, key_prefix, default_color):
 
 
 @st.fragment
-def frag_hourly(scope_df, key, color_state_key, default_color):
-    """Mục Xu hướng tập trung theo khung giờ — dùng phân loại từ mục Xu hướng
-    (đọc qua session_state để fragment không phụ thuộc biến ngoài)."""
-    df_hour = range_radio(scope_df, key=key)
-    ccol = st.session_state.get(color_state_key) or default_color
-    render_hourly_chart(df_hour, ccol)
+def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
+    """Mục Xu hướng tập trung theo khung giờ — bộ điều khiển ĐỘC LẬP của riêng mục
+    (khoảng thời gian nếu có + phân loại). Không dùng chung với mục nào khác."""
+    if with_range:
+        c1, c2 = st.columns([5, 3])
+        with c1:
+            rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key=f"{key_prefix}_range")
+        with c2:
+            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+        scope_df = filter_by_range(scope_df, rl or "90 ngày")
+    else:
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+    render_hourly_chart(scope_df, ccol or default_color)
+
+
+@st.fragment
+def frag_pie(scope_df, key, default_color):
+    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng."""
+    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key) or default_color
+    pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
+    pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
+    fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
+    fig = format_plotly_fig(fig, is_pie=True)
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+
+@st.fragment
+def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
+    """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
+    Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig)."""
+    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key) or default_color
+    g = scope_df.groupby([group_col, ccol])['Thời lượng (Phút)'].sum().reset_index()
+    g['Số giờ'] = g['Thời lượng (Phút)'] / 60
+    if group_col == 'Ngày':
+        g['Ngày'] = pd.to_datetime(g['Ngày'])
+    fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 @st.fragment
@@ -1756,7 +1787,7 @@ if nav == "Thống kê chung":
         with st.expander("3. Xu hướng theo thời gian", expanded=False):
             frag_trend(df, "trend_main", "Danh mục")
         with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
-            frag_hourly(df, "range_hour", "trend_main_color", "Danh mục")
+            frag_hourly(df, "hour_main", "Danh mục")
         with st.expander("5. Giờ tập trung theo thứ", expanded=False):
             frag_heatmap(df, "range_heat")
         with st.expander("6. Phân bố độ dài phiên", expanded=False):
@@ -1841,21 +1872,11 @@ elif nav == "Báo cáo tháng":
             with st.expander("2. Nhật ký", expanded=True):
                 render_notes_journal(selected_month, 'month')
             with st.expander("3. Phân bổ thời gian", expanded=False):
-                color_col_3 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab3")
-                color_col_3 = color_col_3 or "Danh mục"
-                pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
-                pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
-                fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
-                fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
-                st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
+                frag_pie(df_m, "rad_tab3", "Danh mục")
             with st.expander("4. Xu hướng theo thời gian", expanded=False):
-                t_m = df_m.groupby(['Ngày', color_col_3])['Thời lượng (Phút)'].sum().reset_index()
-                t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
-                t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
-                fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
-                st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
+                frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
             with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
-                render_hourly_chart(df_m, color_col_3)
+                frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
             with st.expander("6. Giờ tập trung theo thứ", expanded=False):
                 render_dayhour_heatmap(df_m)
             with st.expander("7. Phân bố độ dài phiên", expanded=False):
@@ -1937,20 +1958,11 @@ elif nav == "Báo cáo tuần":
             with st.expander("2. Nhật ký", expanded=True):
                 render_notes_journal(selected_week, 'week')
             with st.expander("3. Phân bổ thời gian", expanded=False):
-                color_col_4 = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Danh mục", key="rad_tab4")
-                color_col_4 = color_col_4 or "Danh mục"
-                pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
-                pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
-                fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
-                fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
-                st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
+                frag_pie(df_w, "rad_tab4", "Danh mục")
             with st.expander("4. Xu hướng theo thời gian", expanded=False):
-                t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
-                t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
-                fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
-                st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
+                frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
             with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
-                render_hourly_chart(df_w, color_col_4)
+                frag_hourly(df_w, "hour_w", "Danh mục", with_range=False)
             with st.expander("6. Giờ tập trung theo thứ", expanded=False):
                 render_dayhour_heatmap(df_w)
             with st.expander("7. Phân bố độ dài phiên", expanded=False):
@@ -2047,13 +2059,7 @@ elif nav == "Báo cáo ngày":
                 render_note_editor(sel)
 
             with st.expander("3. Phân bổ thời gian", expanded=False):
-                cc = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default="Dự án", key="rad_day")
-                cc = cc or "Dự án"
-                pc = day_df.groupby(cc)['Thời lượng (Phút)'].sum().reset_index()
-                pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
-                fig_d = px.pie(pc, values='Số giờ', names=cc, color=cc, color_discrete_map=COLOR_MAP)
-                fig_d = format_plotly_fig(fig_d, is_pie=True)
-                st.plotly_chart(fig_d, width='stretch', config=PLOTLY_CONFIG)
+                frag_pie(day_df, "rad_day", "Dự án")
 
             with st.expander("4. Danh sách phiên", expanded=False):
                 rows_html = ''
