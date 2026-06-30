@@ -236,8 +236,12 @@ def prep_analysis_data():
     
     if not mapping.empty:
         db = db.merge(mapping, on='Dự án', how='left')
+        # Cờ "có phân loại thật" (trước khi fillna) -> phân biệt với trường hợp tên
+        # Danh mục trùng tên Dự án. Không suy ra bằng so sánh tên ở nơi hiển thị.
+        db['Có danh mục'] = db['Danh mục'].notna() & (db['Danh mục'].astype(str).str.strip() != '')
         db['Danh mục'] = db['Danh mục'].fillna(db['Dự án'])
     else:
+        db['Có danh mục'] = False
         db['Danh mục'] = db['Dự án']
         
     db['Thời gian bắt đầu'] = pd.to_datetime(db['Thời gian bắt đầu'], errors='coerce')
@@ -2199,7 +2203,7 @@ elif nav == "Báo cáo ngày":
                 for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
                     s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
                     cat = r.get('Danh mục')
-                    cat = str(cat) if pd.notna(cat) and str(cat) != str(r['Dự án']) else '—'
+                    cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
                     rows_html += ('<tr class="prow">'
                                   f'<td class="lbl">{i}</td>'
                                   f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
