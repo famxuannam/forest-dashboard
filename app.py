@@ -81,7 +81,6 @@ def build_color_map(names):
         h = (0.61 + (k + 1) * 0.6180339887) % 1.0  # rải đều sắc độ
         colors.append(_hsl_hex(h, 0.62, 0.55))
     return {name: colors[i] for i, name in enumerate(names)}
-CHART_WIDTH = 1120
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
@@ -294,6 +293,14 @@ def fmt_week(w):
     mon = date.fromisocalendar(y, wk, 1)
     sun = mon + timedelta(days=6)
     return f"{mon:%d/%m} – {sun:%d/%m/%Y}"
+
+def period_label(key):
+    """Nhãn cột kỳ gọn cho bảng số liệu: '2026-W14' -> 'W14'; '2026-05' -> 'Th5'."""
+    key = str(key)
+    if 'W' in key:                       # '2026-W14' -> 'W14'
+        return 'W' + key.split('W')[-1]
+    parts = key.split('-')               # '2026-05'  -> 'Th5'
+    return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
 
 def period_stepper(periods, key, fmt, current=None):
     """Chọn kỳ: nút lùi/tiến + selectbox nhảy nhanh + nút về kỳ hiện tại (icon Material)."""
@@ -608,7 +615,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
                       annotation=dict(font_size=11, font_color="#9a9aa0"))
 
     y_max = float(tot.max()) or 1.0
-    fig.update_layout(width=CHART_WIDTH, xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
+    fig.update_layout(xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
                       yaxis=dict(range=[0, y_max * 1.28]),
                       xaxis=dict(range=[-PAD, 23 + PAD], dtick=2))
     fig = format_plotly_fig(fig)
@@ -834,7 +841,6 @@ def render_day_timeline(day_df, sel, df_all):
     'khung giờ điển hình của thứ này' để thấy hôm nay lệch nhịp ra sao."""
     if day_df.empty:
         return
-    vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
 
     # Lớp mờ: khung giờ điển hình của cùng thứ (TB giờ tại mỗi giờ-trong-ngày), trừ ngày đang xem
     same = df_all[(pd.to_datetime(df_all['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
@@ -1144,13 +1150,6 @@ def render_data_table(df, time_col):
     vmax_proj = float(proj.values.max()) if proj.size else 0.0
     vmax_cat = float(cat.values.max()) if cat.size else 0.0
 
-    def col_label(key):
-        key = str(key)
-        if 'W' in key:                       # '2026-W14' -> 'W14'
-            return 'W' + key.split('W')[-1]
-        parts = key.split('-')               # '2026-05'  -> 'Th5'
-        return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
-
     has_drop = [False]
 
     def heat_row(values, vmax):
@@ -1163,7 +1162,7 @@ def render_data_table(df, time_col):
             out += _heat_cell(v, vmax, drop=d)
         return out
 
-    head = ''.join(f'<th>{col_label(c)}</th>' for c in cols)
+    head = ''.join(f'<th>{period_label(c)}</th>' for c in cols)
     rows_html = ''
     for c in sorted(cat.index):
         c_vals = [float(cat.loc[c][col]) for col in cols]
@@ -1238,17 +1237,10 @@ def render_period_table(df, time_col):
     periods = sorted(hrs.index)
     vmax = float(hrs.max()) if len(hrs) else 0.0
 
-    def plabel(key):
-        key = str(key)
-        if 'W' in key:                       # '2026-W14' -> 'W14'
-            return 'W' + key.split('W')[-1]
-        parts = key.split('-')               # '2026-05'  -> 'Th5'
-        return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
-
     rows_html = ''
     for p in periods:
         rows_html += '<tr class="prow">'
-        rows_html += f'<td class="lbl">{plabel(p)}</td>'
+        rows_html += f'<td class="lbl">{period_label(p)}</td>'
         rows_html += _heat_cell(float(hrs[p]), vmax)
         rows_html += f'<td>{int(trees[p])}</td>'
         rows_html += f'<td>{int(days[p])}</td>'
@@ -1652,7 +1644,6 @@ if nav == "Thống kê chung":
                 trend_group['Ngày'] = pd.to_datetime(trend_group['Ngày'])
             fig1 = render_trend_fig(trend_group, time_col_2, color_col_2,
                                     ma_df=df_trend if time_col_2 == "Ngày" else None)
-            fig1.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig1, width='stretch', config=PLOTLY_CONFIG)
         with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
             df_hour = range_radio(df, key="range_hour")
@@ -1754,7 +1745,6 @@ elif nav == "Báo cáo tháng":
                 pc_m = df_m.groupby(color_col_3)['Thời lượng (Phút)'].sum().reset_index()
                 pc_m['Số giờ'] = pc_m['Thời lượng (Phút)'] / 60
                 fig_p_m = px.pie(pc_m, values='Số giờ', names=color_col_3, color=color_col_3, color_discrete_map=COLOR_MAP)
-                fig_p_m.update_layout(width=CHART_WIDTH)
                 fig_p_m = format_plotly_fig(fig_p_m, is_pie=True)
                 st.plotly_chart(fig_p_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng theo thời gian", expanded=False):
@@ -1762,7 +1752,6 @@ elif nav == "Báo cáo tháng":
                 t_m['Số giờ'] = t_m['Thời lượng (Phút)'] / 60
                 t_m['Ngày'] = pd.to_datetime(t_m['Ngày'])
                 fig_m = render_trend_fig(t_m, 'Ngày', color_col_3, ma_df=df_m, x_title="Ngày trong tháng")
-                fig_m.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_m, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
                 render_hourly_chart(df_m, color_col_3)
@@ -1852,14 +1841,12 @@ elif nav == "Báo cáo tuần":
                 pc_w = df_w.groupby(color_col_4)['Thời lượng (Phút)'].sum().reset_index()
                 pc_w['Số giờ'] = pc_w['Thời lượng (Phút)'] / 60
                 fig_p_w = px.pie(pc_w, values='Số giờ', names=color_col_4, color=color_col_4, color_discrete_map=COLOR_MAP)
-                fig_p_w.update_layout(width=CHART_WIDTH)
                 fig_p_w = format_plotly_fig(fig_p_w, is_pie=True)
                 st.plotly_chart(fig_p_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("4. Xu hướng theo thời gian", expanded=False):
                 t_w = df_w.groupby(['Thứ', color_col_4])['Thời lượng (Phút)'].sum().reset_index()
                 t_w['Số giờ'] = t_w['Thời lượng (Phút)'] / 60
                 fig_w = render_trend_fig(t_w, 'Thứ', color_col_4, cat_order=DAYS_ORDER, x_title="Thứ trong tuần")
-                fig_w.update_layout(width=CHART_WIDTH)
                 st.plotly_chart(fig_w, width='stretch', config=PLOTLY_CONFIG)
             with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
                 render_hourly_chart(df_w, color_col_4)
@@ -1928,9 +1915,7 @@ elif nav == "Báo cáo ngày":
                 _sp = t1 - t0
                 span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
 
-                def _buoi(h):
-                    return "Sáng" if 5 <= h < 11 else "Chiều" if 11 <= h < 17 else "Tối" if 17 <= h < 22 else "Khuya"
-                bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi))
+                bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
                             .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
                 buoi_chips = [{"k": b, "v": f"{bg[b]:.1f}h"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
 
@@ -1966,7 +1951,6 @@ elif nav == "Báo cáo ngày":
                 pc = day_df.groupby(cc)['Thời lượng (Phút)'].sum().reset_index()
                 pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
                 fig_d = px.pie(pc, values='Số giờ', names=cc, color=cc, color_discrete_map=COLOR_MAP)
-                fig_d.update_layout(width=CHART_WIDTH)
                 fig_d = format_plotly_fig(fig_d, is_pie=True)
                 st.plotly_chart(fig_d, width='stretch', config=PLOTLY_CONFIG)
 
@@ -2093,7 +2077,6 @@ elif nav == "Báo cáo theo dự án":
                 tg['Ngày'] = pd.to_datetime(tg['Ngày'])
             fig_g = render_trend_fig(tg, time_col_5, color_col_5,
                                      ma_df=df_g_trend if time_col_5 == "Ngày" else None)
-            fig_g.update_layout(width=CHART_WIDTH)
             st.plotly_chart(fig_g, width='stretch', config=PLOTLY_CONFIG)
         with st.expander("4. Phân bố độ dài phiên", expanded=False):
             render_session_histogram(df_g)
