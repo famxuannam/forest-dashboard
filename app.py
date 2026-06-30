@@ -802,6 +802,49 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 
     # Số liệu đầu mục: panel thẻ giống "Tổng quan"
     _secs = []
+
+    # --- Số liệu hoạt động đọc: chuỗi / kỳ hiện tại / nhịp / đều đặn / khung giờ ---
+    _today = date.today()
+    s_read = _streak_stats(df_books)
+    _secs.append({"label": "Chuỗi đọc", "chips": [
+        {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
+        {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
+        {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
+    ]})
+
+    def _period_chips(scope):
+        _h = scope['Thời lượng (Phút)'].sum() / 60
+        _nd = scope['Ngày'].nunique()
+        return [
+            {"k": "Số cuốn", "v": f"{scope['Dự án'].nunique()}"},
+            {"k": "Số giờ", "v": f"{_h:.1f}h"},
+            {"k": "TB giờ/ngày", "v": f"{_h / _nd:.1f}h" if _nd else "—"},
+        ]
+    _secs.append({"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])})
+    _secs.append({"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])})
+
+    def _pace(d):
+        _r = df_books[df_books['Ngày'] >= (_today - timedelta(days=d - 1))]
+        return _r['Thời lượng (Phút)'].sum() / 60 / d
+    _secs.append({"label": "Nhịp gần đây", "chips": [
+        {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
+        {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
+    ]})
+
+    _span = (pd.Timestamp(df_books['Ngày'].max()) - pd.Timestamp(df_books['Ngày'].min())).days + 1
+    _secs.append({"label": "Đều đặn", "chips": [
+        {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
+        {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
+    ]})
+
+    _hr = _explode_session_hours(df_books, 'Dự án').groupby('Khung giờ')['giờ'].sum()
+    if len(_hr) and _hr.sum() > 0:
+        _secs.append({"label": "Khung giờ đọc", "chips": [
+            {"k": "Hay đọc nhất", "v": f"{int(_hr.idxmax())}h"},
+            {"k": "Buổi mạnh nhất", "v": f"{_hr.groupby(_buoi_of).sum().idxmax()}"},
+        ]})
+
+    # --- Số liệu theo từng cuốn ---
     if len(done):
         _secs.append({"label": "Đã xong", "chips": [
             {"k": "Số cuốn", "v": f"{len(done)}"},
@@ -826,6 +869,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
         ],
         sections=_secs,
     )
+    render_session_bar(df_books)  # phân bố độ dài phiên đọc (thanh gọn)
 
     # Timeline trình tự đọc — tự vẽ HTML/CSS (trục tháng tiếng Việt, thanh bo tròn)
     tmin = pd.to_datetime(t['Bắt đầu']).min().normalize().replace(day=1)
@@ -854,7 +898,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 
     st.markdown(f"""
 <style>
-.rtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:16px 18px;margin-top:14px;}}
+.rtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:16px 24px;margin-top:14px;}}
 .rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:#6e6e73;}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-row{{display:grid;grid-template-columns:144px 1fr;align-items:center;height:32px;}}
