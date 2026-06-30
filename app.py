@@ -712,14 +712,16 @@ def render_dayhour_heatmap(scope_df):
     cell = grp.reindex(full, fill_value=0.0).reset_index(name='giờ')
     cell['TB'] = cell.apply(lambda r: r['giờ'] / max(int(wd_count.get(r['Thứ'], 1)), 1), axis=1)
 
+    # Thứ ra trục ngang (nhãn ở trên), giờ xuống trục dọc (nhãn mỗi 2h) -> lưới cao, hẹp
     chart = alt.Chart(cell).mark_rect(cornerRadius=2).encode(
-        x=alt.X('Khung giờ:O', title='Khung giờ (0h - 23h)',
-                axis=alt.Axis(labelAngle=0, values=list(range(0, 24, 2)), tickSize=0, domain=False)),
-        y=alt.Y('Thứ:O', sort=DAYS_ORDER, title='', axis=alt.Axis(tickSize=0, domain=False)),
+        x=alt.X('Thứ:O', sort=DAYS_ORDER, title='',
+                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False)),
+        y=alt.Y('Khung giờ:O', title='Khung giờ (0h - 23h)',
+                axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False)),
         color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
-    ).properties(height=alt.Step(26)).configure_view(strokeWidth=0)
+    ).properties(width=alt.Step(48), height=alt.Step(22)).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='stretch')
 
 
