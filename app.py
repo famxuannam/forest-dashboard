@@ -1738,6 +1738,7 @@ st.markdown(
 )
 
 # Thanh điều hướng 1 hàng phẳng (kiểu iOS segmented control), icon Material cho từng trang.
+# Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
     "Thống kê chung": ":material/bar_chart:",
     "Báo cáo tháng": ":material/calendar_month:",
@@ -1747,6 +1748,17 @@ NAV = {
     "Nhật ký đọc sách": ":material/menu_book:",
     "Chuẩn bị dữ liệu": ":material/settings:",
     "Hướng dẫn": ":material/help:",
+}
+# Nhãn ngắn để 8 tab vừa 1 hàng (key trang giữ nguyên).
+NAV_SHORT = {
+    "Thống kê chung": "Tổng quan",
+    "Báo cáo tháng": "Tháng",
+    "Báo cáo tuần": "Tuần",
+    "Báo cáo ngày": "Ngày",
+    "Báo cáo theo dự án": "Dự án",
+    "Nhật ký đọc sách": "Sách",
+    "Chuẩn bị dữ liệu": "Dữ liệu",
+    "Hướng dẫn": "Trợ giúp",
 }
 
 df = prep_analysis_data()
@@ -1770,7 +1782,7 @@ if "nav" not in st.session_state:
 
 nav = st.segmented_control(
     "Trang", list(NAV.keys()),
-    format_func=lambda x: f"{NAV[x]} {x}",
+    format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
     key="nav", label_visibility="collapsed",
 )
 if not nav:
