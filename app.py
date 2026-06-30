@@ -1589,11 +1589,8 @@ st.markdown(
     [data-testid="stButtonGroup"] { margin-bottom: 10px; }
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
        Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
-    .st-key-nav_group, .st-key-nav_sub_row { width: 100% !important; }
-    .st-key-nav_group [data-testid="stButtonGroup"], .st-key-nav_sub_row [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
-    /* Hàng con (Báo cáo) nhỏ & sát hơn hàng nhóm để phân cấp rõ */
-    .st-key-nav_sub_row { margin-top: 2px !important; }
-    .st-key-nav_sub_row [data-testid="stButtonGroup"] button { font-size: 0.9rem !important; padding-top: 4px !important; padding-bottom: 4px !important; }
+    .st-key-nav { width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
     /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
     [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
@@ -1692,23 +1689,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Điều hướng dạng menu hamburger (sidebar), kèm icon cho từng trang
-# Nav 2 tầng: hàng 1 là các nhóm cấp 1; nhóm "Báo cáo" có hàng con (Tháng/Tuần/Ngày/Theo dự án).
-NAV_GROUPS = {
+# Thanh điều hướng 1 hàng phẳng (kiểu iOS segmented control), icon Material cho từng trang.
+NAV = {
     "Thống kê chung": ":material/bar_chart:",
-    "Báo cáo": ":material/folder:",
+    "Báo cáo tháng": ":material/calendar_month:",
+    "Báo cáo tuần": ":material/calendar_view_week:",
+    "Báo cáo ngày": ":material/today:",
+    "Báo cáo theo dự án": ":material/category:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Chuẩn bị dữ liệu": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
-# Trang con của nhóm "Báo cáo": key = tên trang thật (dùng cho dispatch & URL), value = nhãn ngắn.
-REPORT_SUB = {
-    "Báo cáo tháng": "Tháng",
-    "Báo cáo tuần": "Tuần",
-    "Báo cáo ngày": "Ngày",
-    "Báo cáo theo dự án": "Theo dự án",
-}
-ALL_PAGES = set(NAV_GROUPS) | set(REPORT_SUB)
 
 df = prep_analysis_data()
 DAYS_ORDER = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
@@ -1723,35 +1714,20 @@ if not df.empty:
 else:
     COLOR_MAP = {}
 
-# Khởi tạo nav từ URL (?nav=<trang thật>) -> deep-link & giữ trang khi F5/refresh.
+# Khởi tạo nav từ URL (?nav=<trang>) -> deep-link & giữ trang khi F5/refresh.
 # Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác.
-if "nav_group" not in st.session_state:
+if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
-    _page0 = _q if _q in ALL_PAGES else "Thống kê chung"
-    st.session_state["nav_group"] = "Báo cáo" if _page0 in REPORT_SUB else _page0
-    st.session_state["nav_sub"] = _page0 if _page0 in REPORT_SUB else "Báo cáo tháng"
+    st.session_state["nav"] = _q if _q in NAV else "Thống kê chung"
 
-# Hàng 1: nhóm cấp 1 (segmented control kiểu iOS)
-group = st.segmented_control(
-    "Trang", list(NAV_GROUPS.keys()),
-    format_func=lambda x: f"{NAV_GROUPS[x]} {x}",
-    key="nav_group", label_visibility="collapsed",
+nav = st.segmented_control(
+    "Trang", list(NAV.keys()),
+    format_func=lambda x: f"{NAV[x]} {x}",
+    key="nav", label_visibility="collapsed",
 )
-group = group or "Thống kê chung"
-
-# Hàng 2: chỉ hiện khi đang ở nhóm "Báo cáo" -> chọn trang con
-if group == "Báo cáo":
-    with st.container(key="nav_sub_row"):
-        sub = st.segmented_control(
-            "Báo cáo", list(REPORT_SUB.keys()),
-            format_func=lambda x: REPORT_SUB[x],
-            key="nav_sub", label_visibility="collapsed",
-        )
-    nav = sub or "Báo cáo tháng"
-else:
-    nav = group
-
-# Đồng bộ trang thật lên URL (idempotent -> không gây rerun lặp)
+if not nav:
+    nav = "Thống kê chung"
+# Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
 # ==========================================
@@ -2435,10 +2411,10 @@ elif nav == "Hướng dẫn":
     with st.container(border=True, key="guide_intro"):
         st.markdown(
             "Forest Tracker giúp bạn **xem lại** thói quen tập trung từ dữ liệu app Forest (không phải để đặt mục tiêu). "
-            "Thanh điều hướng trên cùng gồm các nhóm:\n\n"
+            "Thanh điều hướng trên cùng gồm các trang:\n\n"
             "- **Thống kê chung** — bức tranh toàn bộ lịch sử.\n"
-            "- **Báo cáo** — chọn kỳ ở hàng con: *Tháng / Tuần / Ngày* (có thêm Nhật ký, Ngày này năm "
-            "trước…) và *Theo dự án* (tập trung một Nhóm/Dự án).\n"
+            "- **Báo cáo tháng / tuần / ngày** — đào sâu một kỳ cụ thể (có thêm Nhật ký, Ngày này năm trước…).\n"
+            "- **Báo cáo theo dự án** — tập trung vào một Nhóm/Dự án.\n"
             "- **Nhật ký đọc sách** — theo dõi tiến độ đọc từng cuốn (nhóm sách).\n"
             "- **Chuẩn bị dữ liệu** — nạp file Forest, phân loại, sao lưu/khôi phục.\n\n"
             "Trong mỗi trang báo cáo, **mặc định chỉ mở sẵn mục _Tổng quan_** (và _Nhật ký_ nếu có); các mục khác bấm tiêu đề để mở.")
