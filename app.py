@@ -743,15 +743,15 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
 
 
 def render_dayhour_heatmap(scope_df):
-    """Bản đồ nhiệt 7 thứ × 24 giờ: ô càng đậm = trung bình giờ/ngày ở khung giờ đó
-    của thứ đó càng cao -> nhận ra 'tập trung tốt nhất vào sáng thứ mấy'."""
+    """Bản đồ nhiệt 7 thứ × 24 giờ: ô càng đậm = trung bình giờ/ngày (chỉ tính ngày CÓ
+    hoạt động ở đúng thứ đó) ở khung giờ đó của thứ đó càng cao -> nhận ra 'tập trung tốt
+    nhất vào sáng thứ mấy' mà không bị pha loãng bởi các ngày trống trong khoảng xem."""
     if scope_df.empty:
         return
     d = _explode_session_hours(scope_df, 'Thứ')
     if d.empty:
         return
-    span = pd.date_range(pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max()))
-    wd_count = pd.Series(span.day_name()).map(VN_DAYS).value_counts()
+    wd_count = scope_df.groupby('Thứ')['Ngày'].nunique()
 
     grp = d.groupby(['Thứ', 'Khung giờ'])['giờ'].sum()
     full = pd.MultiIndex.from_product([DAYS_ORDER, range(24)], names=['Thứ', 'Khung giờ'])
@@ -811,11 +811,10 @@ def _streak_nudge(s):
 
 
 def _weekday_avg(scope_df):
-    """Trung bình giờ mỗi ngày theo thứ (tính cả ngày trống) trên span của scope_df."""
+    """Trung bình giờ mỗi ngày theo thứ, chỉ tính những ngày có hoạt động (bỏ ngày trống)."""
     if scope_df.empty:
         return pd.Series(dtype=float)
-    mn, mx = pd.Timestamp(scope_df['Ngày'].min()), pd.Timestamp(scope_df['Ngày'].max())
-    wd_count = pd.Series(pd.date_range(mn, mx).day_name()).map(VN_DAYS).value_counts()
+    wd_count = scope_df.groupby('Thứ')['Ngày'].nunique()
     by = scope_df.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
     return (by / wd_count).reindex(DAYS_ORDER).dropna()
 
@@ -859,8 +858,12 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
         ]
 
     def _pace(d):
+        """Nhịp đọc gần đây: chia cho số ngày CÓ đọc trong cửa sổ d ngày (không phải d),
+        khớp cách tính '7 ngày gần đây' ở bảng tổng quan chính -> không bị pha loãng bởi
+        các ngày không đọc trong cửa sổ."""
         _r = df_books[df_books['Ngày'] >= (_today - timedelta(days=d - 1))]
-        return _r['Thời lượng (Phút)'].sum() / 60 / d
+        _ad = _r['Ngày'].nunique()
+        return (_r['Thời lượng (Phút)'].sum() / 60 / _ad) if _ad else 0.0
 
     _span = (pd.Timestamp(df_books['Ngày'].max()) - pd.Timestamp(df_books['Ngày'].min())).days + 1
 
@@ -2620,9 +2623,10 @@ elif nav == "Hướng dẫn":
         "nhỏ, đọc lướt là nắm được bức tranh chung mà không cần cuộn xuống biểu đồ:\n\n"
         "- **Tổng thời gian** & **Số cây đã trồng**: tổng giờ tập trung cộng dồn và tổng số phiên hợp lệ trong phạm vi "
         "đang xem (mỗi phiên Forest trồng thành công = một cây, mỗi cây tương ứng đúng một dòng dữ liệu).\n"
-        "- **Trung bình (toàn thời gian)**: *Thời gian/ngày* và *Số cây/ngày* chia đều cho toàn bộ số ngày trong phạm vi "
-        "(kể cả ngày trống), còn **Thời gian/phiên** là độ dài bình quân của một lần tập trung — con số này giúp nhận ra "
-        "thói quen: phiên trung bình 20 phút khác hẳn ý nghĩa với phiên trung bình 70 phút dù tổng giờ như nhau.\n"
+        "- **Trung bình (toàn thời gian)**: *Thời gian/ngày* và *Số cây/ngày* chia cho số ngày **có hoạt động** trong "
+        "phạm vi đang xem (bỏ qua ngày trống, không bị pha loãng bởi những ngày không trồng cây nào), còn **Thời gian/"
+        "phiên** là độ dài bình quân của một lần tập trung — con số này giúp nhận ra thói quen: phiên trung bình 20 "
+        "phút khác hẳn ý nghĩa với phiên trung bình 70 phút dù tổng giờ như nhau.\n"
         "- **7 ngày gần đây**: so sánh nhịp *7 ngày vừa qua* với mức trung bình giờ/ngày của *toàn bộ lịch sử đang xem* — "
         "gọi tắt là *thường lệ*. Ví dụ `+18% vs thường lệ` nghĩa là 7 ngày qua bạn tập trung nhiều hơn 18% so với mức "
         "bình quân mọi khi của chính mình (màu xanh lá); số âm (màu đỏ) nghĩa là đang chùng xuống. Đi kèm là **Số ngày "
@@ -2631,8 +2635,9 @@ elif nav == "Hướng dẫn":
         "*Dài nhất* là kỷ lục chuỗi ngày liên tiếp có hoạt động (không đứt ngày nào); *Hiện tại* là chuỗi đang giữ tính tới "
         "hôm nay — chuỗi này vẫn còn hiệu lực nếu lần hoạt động gần nhất là **hôm nay hoặc hôm qua** (chưa bấm sang ngày "
         "thứ 2 liên tiếp không có gì), và sẽ về 0 ngay khi đứt quá 1 ngày.\n"
-        "- **Theo thứ**: trong 7 thứ của tuần, thứ nào có tổng giờ trung bình cao nhất (**Mạnh nhất**) và thấp nhất "
-        "(**Yếu nhất**) — hữu ích để nhận ra ví dụ cuối tuần luôn là điểm yếu, hay giữa tuần mới là lúc sung sức nhất.",
+        "- **Theo thứ**: trong 7 thứ của tuần, thứ nào có giờ trung bình mỗi lần hoạt động cao nhất (**Mạnh nhất**) và "
+        "thấp nhất (**Yếu nhất**) — trung bình này chỉ tính trên những lần đúng thứ đó có hoạt động (bỏ qua tuần nào "
+        "thứ đó bạn nghỉ), hữu ích để nhận ra ví dụ cuối tuần luôn là điểm yếu, hay giữa tuần mới là lúc sung sức nhất.",
         tip="Theo dõi **Chuỗi hiện tại** mỗi ngày để giữ đà — chỉ cần một phiên ngắn cũng đủ giữ chuỗi không đứt. "
             "Ở Báo cáo tuần/tháng, các con số này còn kèm mũi tên **▲/▼** so sánh trực tiếp với kỳ liền trước và với "
             "mức trung bình các kỳ, nên đọc nhanh được là kỳ này đang tốt lên hay đi xuống so với chính mình trước đó.",
