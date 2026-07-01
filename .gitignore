@@ -1,0 +1,12 @@
+# Dữ liệu chạy cục bộ (được tạo/import lúc dùng app, không phải mã nguồn)
+database.csv
+mapping.csv
+deleted.csv
+notes.csv
+
+# Khoá Supabase thật (dùng .streamlit/secrets.toml.example làm mẫu)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
