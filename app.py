@@ -1694,6 +1694,15 @@ st.markdown(
 
     /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
     [data-testid="stButtonGroup"] { margin-bottom: 10px; }
+    /* Nút đang chọn trong mọi segmented_control (nav bar + bộ lọc biểu đồ: Khoảng thời gian,
+       Phân loại, Xem theo...) -> nền màu accent đặc + chữ/icon trắng + đổ bóng, đồng bộ với
+       nút primary. */
+    button[kind="segmented_controlActive"] {
+        background-color: #00a3ad !important;
+        color: #fff !important;
+        border-color: #00a3ad !important;
+        box-shadow: 0 2px 5px rgba(0,163,173,0.3) !important;
+    }
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
        Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
     .st-key-nav { width: 100% !important; }
