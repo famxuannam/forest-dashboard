@@ -30,12 +30,12 @@ NOTE_TOOLBAR = [
 # - chữ to & rõ hơn (mặc định Quill chỉ 13px), font Apple, dòng thoáng;
 # - thu hẹp mỗi bậc thụt lề (Tab) từ 3em mặc định xuống 1.6em — cho cả đoạn văn lẫn
 #   mục danh sách; selector :not(.ql-direction-rtl) để khớp đúng độ ưu tiên của Quill;
-# - bo góc, màu chỉ dẫn (placeholder) nhạt, con trỏ & nút đang bật theo xanh #007aff.
+# - bo góc, màu chỉ dẫn (placeholder) nhạt, con trỏ & nút đang bật theo màu accent #00a3ad.
 QUILL_CSS = """
 .ql-toolbar.ql-snow { border-color:#e2e2e7; border-top-left-radius:10px; border-top-right-radius:10px; background:#fafafa; }
 .ql-container.ql-snow { border-color:#e2e2e7; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
-.ql-editor { line-height:1.65; padding:14px 16px; color:#1d1d1f; min-height:150px; caret-color:#007aff; }
+.ql-editor { line-height:1.65; padding:14px 16px; color:#1d1d1f; min-height:150px; caret-color:#00a3ad; }
 .ql-editor.ql-blank::before { color:#aeaeb2; font-style:normal; left:16px; right:16px; }
 .ql-editor .ql-indent-1:not(.ql-direction-rtl){padding-left:1.6em;}
 .ql-editor .ql-indent-2:not(.ql-direction-rtl){padding-left:3.2em;}
@@ -46,9 +46,9 @@ QUILL_CSS = """
 .ql-editor li.ql-indent-3:not(.ql-direction-rtl){padding-left:6.3em;}
 .ql-editor li.ql-indent-4:not(.ql-direction-rtl){padding-left:7.9em;}
 .ql-snow.ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar button.ql-active .ql-stroke,
-.ql-snow .ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke { stroke:#007aff; }
-.ql-snow.ql-toolbar button:hover .ql-fill, .ql-snow.ql-toolbar button.ql-active .ql-fill { fill:#007aff; }
-.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active { color:#007aff; }
+.ql-snow .ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke { stroke:#00a3ad; }
+.ql-snow.ql-toolbar button:hover .ql-fill, .ql-snow.ql-toolbar button.ql-active .ql-fill { fill:#00a3ad; }
+.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active { color:#00a3ad; }
 """
 
 
@@ -539,7 +539,7 @@ def render_top_3(df, col_name, title, week_key=None, n=3):
         html_list = "<ul style='margin:0; padding-left: 20px; color: #1d1d1f; font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
-            wsuf = f" <span style='color:#007aff; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
+            wsuf = f" <span style='color:#00a3ad; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
             html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
         html_list += "</ul>"
     
@@ -951,7 +951,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 .rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
 .rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .rtl-bar.done{{background:#aeaeb2;}}
-.rtl-bar.reading{{background:#007aff;}}
+.rtl-bar.reading{{background:#00a3ad;}}
 .rtl-axis{{display:grid;grid-template-columns:144px 1fr;margin-top:3px;}}
 .rtl-ticks{{position:relative;height:16px;}}
 .rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
@@ -959,7 +959,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 </style>
 <div class="rtl-card">
 <div class="card-label">Dòng thời gian</div>
-<div class="rtl-legend"><span><i style="background:#007aff;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+<div class="rtl-legend"><span><i style="background:#00a3ad;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 {bars_html}
 <div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
 </div>
@@ -969,7 +969,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
     vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
     rows_html = ''
     for _, r in t.iterrows():
-        s_col = '#007aff' if r['Trạng thái'] == 'Đang đọc' else '#86868b'
+        s_col = '#00a3ad' if r['Trạng thái'] == 'Đang đọc' else '#86868b'
         start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
         last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
         rows_html += '<tr class="prow">'
@@ -1574,13 +1574,13 @@ st.markdown(
     hr { border-color: rgba(0,0,0,0.08) !important; }
     
     div[data-testid="stButton"] button[kind="primary"] {
-        background-color: #007aff !important;
+        background-color: #00a3ad !important;
         color: white !important;
         border-radius: 8px !important;
         border: none !important;
         font-weight: 500 !important;
         padding: 6px 16px !important;
-        box-shadow: 0 2px 5px rgba(0,122,255,0.3) !important;
+        box-shadow: 0 2px 5px rgba(0,163,173,0.3) !important;
         transition: all 0.2s ease !important;
     }
     div[data-testid="stButton"] button[kind="primary"]:hover {
@@ -1590,7 +1590,7 @@ st.markdown(
     
     div[data-testid="stButton"] button[kind="secondary"] {
         background-color: white !important;
-        color: #007aff !important;
+        color: #00a3ad !important;
         border-radius: 8px !important;
         border: 1px solid #d1d1d6 !important;
         font-weight: 500 !important;
@@ -1648,16 +1648,16 @@ st.markdown(
     .stat-panel .chip .ck { color: #86868b; }
     .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
-    .stat-panel .chip.tw { background: rgba(0,122,255,0.10); }
+    .stat-panel .chip.tw { background: rgba(0,163,173,0.10); }
     .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
-    .stat-panel .chip.tw .ck { color: #0067d6; }
-    .stat-panel .chip.tw .cv { color: #007aff; }
+    .stat-panel .chip.tw .ck { color: #00767d; }
+    .stat-panel .chip.tw .cv { color: #00a3ad; }
     .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
-    .card-label { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
+    .card-label { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -1673,13 +1673,17 @@ st.markdown(
     }
     [data-testid="stExpander"] summary {
         padding: 8px 2px !important;
-        border-bottom: 2px solid rgba(0,0,0,0.07) !important;
+        border-bottom: 1px solid #d1d1d6 !important;
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
-    [data-testid="stExpander"] summary:hover { border-bottom-color: #007aff !important; }
+    [data-testid="stExpander"] summary:hover { border-bottom-color: #00a3ad !important; }
     [data-testid="stExpander"] summary:hover svg,
-    [data-testid="stExpander"] summary:hover p { color: #007aff !important; }
+    [data-testid="stExpander"] summary:hover p { color: #00a3ad !important; }
+    /* Mục đang mở: viền dưới + icon chevron chuyển màu accent để dễ nhận biết đang mở dù
+       không hover; giữ màu chữ mặc định để không rối mắt khi nhiều mục cùng mở. */
+    [data-testid="stExpander"] details[open] > summary { border-bottom-color: #00a3ad !important; }
+    [data-testid="stExpander"] details[open] > summary svg { color: #00a3ad !important; }
     [data-testid="stExpander"] summary p {
         font-size: 1.35rem !important;
         font-weight: 600 !important;
@@ -1737,8 +1741,8 @@ st.markdown(
     }
 
     /* ===== Ghi chú ngày: hộp hiển thị ghi chú đã lưu / trạng thái trống ===== */
-    .st-key-note_saved { background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.12);
-        border-left: 3px solid #007aff; border-radius: 10px; padding: 2px 14px; }
+    .st-key-note_saved { background: rgba(0,163,173,0.05); border: 1px solid rgba(0,163,173,0.12);
+        border-left: 3px solid #00a3ad; border-radius: 10px; padding: 2px 14px; }
     .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
         border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
 
@@ -1749,7 +1753,7 @@ st.markdown(
     /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
     .note-html > :first-child { margin-top: 0 !important; }
     .note-html > :last-child { margin-bottom: 0 !important; }
-    .note-html a, .st-key-note_saved a { color: #007aff; }
+    .note-html a, .st-key-note_saved a { color: #00a3ad; }
     /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
     .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
@@ -1777,7 +1781,7 @@ st.markdown(
         .jrows .jrow > .jdate { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
-    .jdate .jyear { font-size: 20px; font-weight: 700; color: #007aff; letter-spacing: -0.5px; line-height: 1; }
+    .jdate .jyear { font-size: 20px; font-weight: 700; color: #00a3ad; letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
     .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
