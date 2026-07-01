@@ -126,6 +126,16 @@ def _hsl_hex(h, s, l):
     return f"#{int(round(r * 255)):02x}{int(round(g * 255)):02x}{int(round(b * 255)):02x}"
 
 
+TEAL_HUE = 0.5096  # góc màu (hue) của accent #00a3ad, tính từ colorsys.rgb_to_hls
+
+
+def _teal_shades(n, l_lo=0.90, l_hi=0.16):
+    """Sinh n sắc độ teal (cùng hue với accent #00a3ad) từ nhạt (l_lo) đến đậm (l_hi)
+    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, Giờ tập trung theo thứ, thanh Phân bổ
+    độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng."""
+    return [_hsl_hex(TEAL_HUE, 0.75, l_lo + (l_hi - l_lo) * i / (n - 1)) for i in range(n)]
+
+
 def build_color_map(names):
     """Gán màu cố định cho từng tên (Danh mục/Dự án). Ưu tiên bảng màu cơ sở;
     nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
@@ -566,12 +576,13 @@ def render_top_3(df, col_name, title, week_key=None, n=3):
 
 
 # Phân nhóm độ dài phiên (phút): tên, khoảng hiển thị, [lo, hi), màu — mốc cố định
+_SESSION_COLORS = _teal_shades(5)
 SESSION_BUCKETS = [
-    ("Tối thiểu", "= 10′",  0,   11,    "#dce9fb"),
-    ("Ngắn",      "< 25′",  11,  25,    "#a9ccf4"),
-    ("Trung bình","25–<50′",25,  50,    "#7fb5ff"),
-    ("Dài",       "50–<90′",50,  90,    "#2f86ec"),
-    ("Rất Dài",   "≥ 90′",  90,  10**9, "#0a52c4"),
+    ("Tối thiểu", "= 10′",  0,   11,    _SESSION_COLORS[0]),
+    ("Ngắn",      "< 25′",  11,  25,    _SESSION_COLORS[1]),
+    ("Trung bình","25–<50′",25,  50,    _SESSION_COLORS[2]),
+    ("Dài",       "50–<90′",50,  90,    _SESSION_COLORS[3]),
+    ("Rất Dài",   "≥ 90′",  90,  10**9, _SESSION_COLORS[4]),
 ]
 LEN_THRESHOLDS = (25, 50, 90)  # mốc tham chiếu trên histogram
 
@@ -593,7 +604,7 @@ def render_session_bar(df):
             continue
         pct = c / n * 100
         lbl = f"{pct:.0f}%" if pct >= 9 else ""
-        fg = "#fff" if col in ("#2f86ec", "#0a52c4") else "#1d1d1f"
+        fg = "#fff" if col in _SESSION_COLORS[3:] else "#1d1d1f"
         seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
                 f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
     legend = ""
@@ -766,7 +777,9 @@ def render_dayhour_heatmap(scope_df):
         y=alt.Y('Khung giờ:O', title='Khung giờ (0h - 23h)',
                 axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False,
                                labelFontSize=12, titleFontSize=12)),
-        color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
+        # Đầu nhạt lấy từ cùng dải _teal_shades (khớp tông với Biểu đồ lịch) thay vì xám
+        # trung tính -> cả dải đều là sắc teal, không bị xỉn/xám ở vùng giá trị thấp.
+        color=alt.Color('TB:Q', scale=alt.Scale(range=[_teal_shades(7)[0], _teal_shades(7)[-1]]), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
     ).properties(width=alt.Step(54), height=alt.Step(26), background='white').configure_view(strokeWidth=0)
@@ -791,9 +804,9 @@ def _streak_stats(streak_df):
     return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
 
 
-NUDGE_TONES = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
-               "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
-               "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}
+NUDGE_TONES = {"good": ("rgba(0,163,173,0.12)", "#00767d"),      # teal (đồng bộ accent)
+               "warn": ("rgba(255,149,0,0.15)", "#a85d00"),      # cam (giữ nguyên, tránh nhầm với "good")
+               "neutral": ("rgba(255,59,48,0.12)", "#c50a00")}   # đỏ (đối lập teal, chuỗi đã đứt)
 
 
 def _streak_nudge(s):
@@ -1252,16 +1265,20 @@ def render_calendar_grid(scope_df, full_df):
     cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
     cal_data['day'] = cal_data['Ngày_x'].dt.day if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str']).dt.day
 
-    # Thang màu theo BẬC (0 / <1h / 1–2h / 2–4h / >4h) -> ngày thường không bị
-    # một ngày cày khủng làm phẳng hết như thang tuyến tính cũ.
+    # Thang màu theo BẬC (0 / <0.5h / 0.5–1h / 1–2h / 2–3h / 3–4h / 4–6h / ≥6h) -> ngày
+    # thường không bị một ngày cày khủng làm phẳng hết như thang tuyến tính cũ; nhiều bậc
+    # hơn (7 thay vì 4) để phân biệt được các mức độ trung gian rõ hơn.
     def _cal_lvl(h):
         if h <= 0: return 0
-        if h < 1: return 1
-        if h < 2: return 2
-        if h < 4: return 3
-        return 4
+        if h < 0.5: return 1
+        if h < 1: return 2
+        if h < 2: return 3
+        if h < 3: return 4
+        if h < 4: return 5
+        if h < 6: return 6
+        return 7
     cal_data['lvl'] = cal_data['Số giờ'].map(_cal_lvl)
-    LVL_COLORS = ["#e5e5ea", "#ade8bf", "#6fd693", "#34c759", "#1f8f43"]
+    LVL_COLORS = ["#e5e5ea"] + _teal_shades(7)
 
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
@@ -1271,12 +1288,13 @@ def render_calendar_grid(scope_df, full_df):
                    alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
     base = alt.Chart(cal_data).encode(x=enc_x, y=enc_y)
     rect = base.mark_rect(cornerRadius=3).encode(
-        color=alt.Color('lvl:O', scale=alt.Scale(domain=[0, 1, 2, 3, 4], range=LVL_COLORS), legend=None),
+        color=alt.Color('lvl:O', scale=alt.Scale(domain=list(range(8)), range=LVL_COLORS), legend=None),
         tooltip=cal_tooltip
     )
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        color=alt.condition("datum.lvl >= 3", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        # lvl 5,6,7 (3 bậc teal đậm nhất) đã đủ tối để cần chữ trắng, còn lại chữ xám mờ
+        color=alt.condition("datum.lvl >= 5", alt.value('#ffffff'), alt.value('#a7a7ac')),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
@@ -1313,7 +1331,7 @@ DTBL_CSS = """
 
 
 def _heat_cell(v, ref, extra_cls="", drop=False):
-    """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền xanh theo tỉ lệ v/ref.
+    """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền teal theo tỉ lệ v/ref.
     drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước)."""
     cls = extra_cls.strip()
     mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
@@ -1323,7 +1341,7 @@ def _heat_cell(v, ref, extra_cls="", drop=False):
             return f'<td class="{cls}"{title}>{mark}</td>'
         return f'<td class="{(cls + " zero").strip()}">·</td>'
     a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
-    bg = f'background:rgba(52,199,89,{a:.2f});' if a > 0.02 else ''
+    bg = f'background:rgba(0,163,173,{a:.2f});' if a > 0.02 else ''
     cls_attr = f' class="{cls}"' if cls else ''
     return f'<td{cls_attr}{title} style="{bg}">{mark}{v:.1f}</td>'
 
@@ -2663,8 +2681,9 @@ elif nav == "Hướng dẫn":
         "calendar.png", "Biểu đồ lịch",
         "Lưới ô kiểu lịch đóng góp của GitHub: mỗi ô vuông là **một ngày**, xếp thành các cột tuần chạy từ trái "
         "(quá khứ) sang phải (hiện tại), mỗi cột 7 ô theo thứ tự Chủ Nhật → Thứ Bảy. Màu ô càng đậm thì tổng số giờ "
-        "tập trung trong ngày đó càng cao; thang màu tự co giãn theo dữ liệu đang xem, nên 'đậm nhất' trong biểu đồ "
-        "này luôn tương ứng với ngày nhiều giờ nhất trong đúng phạm vi đang lọc, không phải một mốc cố định.\n\n"
+        "tập trung trong ngày đó càng cao, chia theo 7 bậc màu teal đậm dần theo ngưỡng giờ **cố định** (dưới 0.5h, "
+        "0.5–1h, 1–2h, 2–3h, 3–4h, 4–6h, từ 6h trở lên) — nhờ vậy một ngày 5h luôn cùng một tông màu dù xem tháng "
+        "nào, so được công bằng giữa các khoảng thời gian khác nhau thay vì bị co giãn theo riêng dữ liệu đang lọc.\n\n"
         "- Ô **trắng/nhạt nhất** = ngày hoàn toàn không có phiên nào (kể cả ngày trước khi bạn bắt đầu dùng Forest, "
         "nếu nằm trong phạm vi đang xem, cũng hiện trắng).\n"
         "- Một **dải ô đậm liên tiếp theo chiều dọc hoặc kéo dài nhiều cột** cho thấy chuỗi ngày làm việc đều, ít đứt quãng.\n"
