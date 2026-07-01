@@ -756,12 +756,12 @@ def render_dayhour_heatmap(scope_df):
         color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
-    ).properties(width=alt.Step(54), height=alt.Step(26)).configure_view(strokeWidth=0)
+    ).properties(width=alt.Step(54), height=alt.Step(26), background='white').configure_view(strokeWidth=0)
     # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
-    # Bọc trong container có key riêng để CSS chỉ chỉnh nền thẻ này (khớp màu nền của lưới,
-    # #eef0f3 - đầu thang màu), không ảnh hưởng các biểu đồ Vega/Plotly khác.
-    with st.container(key="dayhour_heat"):
-        st.altair_chart(chart, width='content')
+    # background='white' ở properties(): Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền
+    # trang, không phải trắng) -> nếu không ép, phần "ở giữa" (canvas SVG) sẽ lệch tông với phần
+    # đệm/viền thẻ trắng bao quanh (CSS chỉ chỉnh được phần đệm, không chỉnh được nền SVG).
+    st.altair_chart(chart, width='content')
 
 
 def _streak_stats(streak_df):
@@ -1266,7 +1266,10 @@ def render_calendar_grid(scope_df, full_df):
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
         # padding phải bù cho vùng nhãn thứ bên trái -> lưới căn giữa trong thẻ
-        padding={"left": 0, "right": 64, "top": 5, "bottom": 5}
+        padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
+        # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng)
+        # -> ép trắng khớp với nền thẻ bọc ngoài, tránh có viền lệch tông quanh lưới.
+        background='white',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
@@ -1628,10 +1631,6 @@ st.markdown(
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
 
-    /* Biểu đồ "Giờ tập trung theo thứ": nền thẻ (phần đệm hai bên lưới) khớp màu nền lưới
-       (#eef0f3 - đầu thang màu của các ô giá trị thấp/0) để không có viền trắng lệch tông. */
-    .st-key-dayhour_heat [data-testid="stVegaLiteChart"] { background: #eef0f3 !important; }
-
     /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
        các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
        Cần cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
@@ -1682,7 +1681,7 @@ st.markdown(
     }
     [data-testid="stExpander"] summary {
         padding: 8px 2px !important;
-        border-bottom: 1px solid #d1d1d6 !important;
+        border-bottom: 2px solid #d1d1d6 !important;
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
