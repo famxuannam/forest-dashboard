@@ -35,8 +35,8 @@ QUILL_CSS = """
 .ql-toolbar.ql-snow { border-color:#e2e2e7; border-top-left-radius:10px; border-top-right-radius:10px; background:#fafafa; }
 .ql-container.ql-snow { border-color:#e2e2e7; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
-.ql-editor { line-height:1.65; padding:14px 16px; color:var(--text-1); min-height:150px; caret-color:var(--accent); }
-.ql-editor.ql-blank::before { color:var(--text-4); font-style:normal; left:16px; right:16px; }
+.ql-editor { line-height:1.65; padding:14px 16px; color:#1d1d1f; min-height:150px; caret-color:#007aff; }
+.ql-editor.ql-blank::before { color:#aeaeb2; font-style:normal; left:16px; right:16px; }
 .ql-editor .ql-indent-1:not(.ql-direction-rtl){padding-left:1.6em;}
 .ql-editor .ql-indent-2:not(.ql-direction-rtl){padding-left:3.2em;}
 .ql-editor .ql-indent-3:not(.ql-direction-rtl){padding-left:4.8em;}
@@ -48,48 +48,16 @@ QUILL_CSS = """
 .ql-snow.ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar button.ql-active .ql-stroke,
 .ql-snow .ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke { stroke:#007aff; }
 .ql-snow.ql-toolbar button:hover .ql-fill, .ql-snow.ql-toolbar button.ql-active .ql-fill { fill:#007aff; }
-.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active { color:var(--accent); }
-"""
-
-
-def quill_css():
-    """CSS cho iframe Quill theo theme. Light = nguyên gốc (không đổi); Dark = biến thể Nord
-    (iframe không nhận var() của :root nên phải nhúng giá trị màu trực tiếp)."""
-    if not is_dark():
-        return QUILL_CSS
-    t = _DARK
-    ic = "#c8cfda"  # màu icon toolbar trên nền tối
-    return f"""
-.ql-toolbar.ql-snow {{ border-color:{t['border-3']}; border-top-left-radius:10px; border-top-right-radius:10px; background:{t['bg-elev']}; }}
-.ql-container.ql-snow {{ border-color:{t['border-3']}; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
-  background:{t['bg-card']}; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }}
-.ql-editor {{ line-height:1.65; padding:14px 16px; color:{t['text-1']}; min-height:150px; caret-color:{t['accent']}; }}
-.ql-editor.ql-blank::before {{ color:{t['text-4']}; font-style:normal; left:16px; right:16px; }}
-.ql-editor .ql-indent-1:not(.ql-direction-rtl){{padding-left:1.6em;}}
-.ql-editor .ql-indent-2:not(.ql-direction-rtl){{padding-left:3.2em;}}
-.ql-editor .ql-indent-3:not(.ql-direction-rtl){{padding-left:4.8em;}}
-.ql-editor .ql-indent-4:not(.ql-direction-rtl){{padding-left:6.4em;}}
-.ql-editor li.ql-indent-1:not(.ql-direction-rtl){{padding-left:3.1em;}}
-.ql-editor li.ql-indent-2:not(.ql-direction-rtl){{padding-left:4.7em;}}
-.ql-editor li.ql-indent-3:not(.ql-direction-rtl){{padding-left:6.3em;}}
-.ql-editor li.ql-indent-4:not(.ql-direction-rtl){{padding-left:7.9em;}}
-.ql-snow .ql-stroke {{ stroke:{ic}; }}
-.ql-snow .ql-fill {{ fill:{ic}; }}
-.ql-snow .ql-picker, .ql-snow .ql-picker-label {{ color:{ic}; }}
-.ql-snow .ql-picker-options {{ background:{t['bg-card']}; }}
-.ql-snow.ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar button.ql-active .ql-stroke,
-.ql-snow .ql-toolbar button:hover .ql-stroke, .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke {{ stroke:{t['accent']}; }}
-.ql-snow.ql-toolbar button:hover .ql-fill, .ql-snow.ql-toolbar button.ql-active .ql-fill {{ fill:{t['accent']}; }}
-.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active {{ color:{t['accent']}; }}
+.ql-snow.ql-toolbar button:hover, .ql-snow.ql-toolbar button.ql-active { color:#007aff; }
 """
 
 
 def style_quill():
-    """Bơm CSS Quill vào trong iframe của Quill (cùng origin). Lặp lại định kỳ vì mỗi
+    """Bơm QUILL_CSS vào trong iframe của Quill (cùng origin). Lặp lại định kỳ vì mỗi
     lần Streamlit rerun, iframe bị tạo lại và mất style. Chỉ gọi khi đang mở ô soạn."""
     js = (
         "<script>\n"
-        "const CSS = " + json.dumps(quill_css()) + ";\n"
+        "const CSS = " + json.dumps(QUILL_CSS) + ";\n"
         "function applyQuillCss(){\n"
         "  try{\n"
         "    const frames = window.parent.document.querySelectorAll('iframe');\n"
@@ -150,80 +118,6 @@ MAC_COLORS = [
     "#ff7b54", # Coral
     "#8e8e93", # Gray
 ]
-
-# ===== THEME (Sáng mặc định + Nord tối) =====
-# Mỗi token là 1 màu ngữ nghĩa; dùng chung cho CSS (var --token) lẫn code dựng biểu đồ.
-# Light = giữ nguyên bộ màu hiện tại; Dark = bảng màu Nord.
-_LIGHT = {
-    "bg-app": "#f5f5f7", "bg-card": "#ffffff",
-    "bg-card-glass": "rgba(255,255,255,0.65)", "bg-card-border": "rgba(255,255,255,0.4)",
-    "bg-elev": "#f0f1f4", "bg-elev2": "#f5f5f7", "bg-input": "rgba(255,255,255,0.8)",
-    "text-1": "#1d1d1f", "text-2": "#86868b", "text-3": "#6e6e73",
-    "text-4": "#aeaeb2", "text-5": "#c7c7cc",
-    "border-1": "rgba(0,0,0,0.06)", "border-2": "rgba(0,0,0,0.10)", "border-3": "#d1d1d6",
-    "shadow-sm": "rgba(0,0,0,0.04)", "shadow-md": "rgba(0,0,0,0.18)",
-    "accent": "#007aff", "accent-2": "#0067d6",
-    "accent-tint": "rgba(0,122,255,0.10)", "accent-tint-2": "rgba(0,122,255,0.05)",
-    "danger": "#ff3b30", "done-bar": "#aeaeb2",
-    # biểu đồ / mã hóa dữ liệu (dùng ở code Python)
-    "chart-font": "#1d1d1f", "chart-grid": "rgba(0,0,0,0.06)", "chart-divider": "rgba(0,0,0,0.18)",
-    "pie-divider": "#ffffff", "hist-bar": "#7fb5ff", "heat-green-rgb": "52,199,89",
-    "buckets": ["#dce9fb", "#a9ccf4", "#7fb5ff", "#2f86ec", "#0a52c4"],
-    "lvl": ["#e5e5ea", "#ade8bf", "#6fd693", "#34c759", "#1f8f43"],
-    "dayhour": ["#eef0f3", "#1f8f43"],
-    "cal-text-hi": "#ffffff", "cal-text-lo": "#a7a7ac",
-}
-_DARK = {
-    "bg-app": "#2e3440", "bg-card": "#3b4252",
-    "bg-card-glass": "rgba(59,66,82,0.72)", "bg-card-border": "rgba(255,255,255,0.08)",
-    "bg-elev": "#434c5e", "bg-elev2": "#434c5e", "bg-input": "rgba(59,66,82,0.85)",
-    "text-1": "#eceff4", "text-2": "#b8c0cc", "text-3": "#a0a8b4",
-    "text-4": "#7b8494", "text-5": "#5b6472",
-    "border-1": "rgba(255,255,255,0.08)", "border-2": "rgba(255,255,255,0.12)", "border-3": "rgba(255,255,255,0.18)",
-    "shadow-sm": "rgba(0,0,0,0.35)", "shadow-md": "rgba(0,0,0,0.55)",
-    "accent": "#4aa3ff", "accent-2": "#7cc0ff",
-    "accent-tint": "rgba(74,163,255,0.16)", "accent-tint-2": "rgba(74,163,255,0.08)",
-    "danger": "#ff6b60", "done-bar": "#6b7280",
-    "chart-font": "#eceff4", "chart-grid": "rgba(255,255,255,0.10)", "chart-divider": "rgba(255,255,255,0.18)",
-    "pie-divider": "#3b4252", "hist-bar": "#81a1c1", "heat-green-rgb": "163,190,140",
-    "buckets": ["#3b4a63", "#4c6285", "#5e81ac", "#81a1c1", "#88c0d0"],
-    "lvl": ["#3b4252", "#3f5a44", "#4f7a52", "#6a9955", "#a3be8c"],
-    "dayhour": ["#3b4252", "#a3be8c"],
-    "cal-text-hi": "#2e3440", "cal-text-lo": "#b8c0cc",
-}
-THEMES = {"light": _LIGHT, "dark": _DARK}
-# Token vô hướng bơm thành CSS custom properties (:root). Các key list-only bỏ qua.
-_CSS_TOKENS = ["bg-app", "bg-card", "bg-card-glass", "bg-card-border", "bg-elev", "bg-elev2",
-               "bg-input", "text-1", "text-2", "text-3", "text-4", "text-5",
-               "border-1", "border-2", "border-3", "shadow-sm", "shadow-md",
-               "accent", "accent-2", "accent-tint", "accent-tint-2", "danger", "done-bar"]
-
-
-def is_dark():
-    return st.session_state.get("app_theme") == "dark"
-
-
-def theme():
-    """Bộ token màu của theme đang chọn (dùng cho code Python dựng biểu đồ)."""
-    return THEMES["dark" if is_dark() else "light"]
-
-
-def css_vars_block():
-    """Khối :root {…} chứa CSS variables theo theme hiện tại."""
-    t = theme()
-    body = ";".join(f"--{k}:{t[k]}" for k in _CSS_TOKENS)
-    return f"<style>:root{{{body}}}</style>"
-
-
-def _readable_fg(hexcol):
-    """Chọn chữ trắng/đen tương phản tốt trên nền màu bất kỳ (dùng cho thanh có chữ đè)."""
-    try:
-        h = hexcol.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return "#1d1d1f" if lum > 0.6 else "#ffffff"
-    except Exception:
-        return "#1d1d1f"
 
 
 def _hsl_hex(h, s, l):
@@ -364,7 +258,7 @@ def add_total_labels(fig, df, x_col, y_col):
     totals = df.groupby(x_col)[y_col].sum().reset_index()
     fig.add_trace(go.Scatter(
         x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].round(1).astype(str),
-        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=theme()["chart-font"], size=13)
+        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color="#1d1d1f", size=13)
     ))
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
@@ -381,7 +275,7 @@ def add_ma_overlay(fig, scope_df, window=7):
     ma = daily.rolling(window, min_periods=1).mean()
     fig.add_trace(go.Scatter(
         x=list(ma.index), y=list(ma.values), mode='lines',
-        line=dict(color=theme()["chart-font"], width=2.5, dash='dot'),
+        line=dict(color='#1d1d1f', width=2.5, dash='dot'),
         name=f'TB động {window} ngày'
     ))
     return fig
@@ -412,7 +306,7 @@ def add_week_dividers(fig, dates):
     first_mon = dmin + pd.Timedelta(days=(0 - dmin.dayofweek) % 7)  # Thứ Hai đầu tiên
     d = first_mon
     while d <= dmax + pd.Timedelta(days=1):
-        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color=theme()["chart-divider"])
+        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color="rgba(0,0,0,0.18)")
         d += pd.Timedelta(days=7)
     fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
     return fig
@@ -422,14 +316,14 @@ def format_plotly_fig(fig, is_pie=False):
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color=theme()["chart-font"]),
+        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f"),
         # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
         legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
         margin=dict(t=10)
     )
     if is_pie:
-        # Đường viền phân tách các miếng theo màu nền thẻ (bóng cả vòng thêm bằng CSS g.pielayer)
-        fig.update_traces(marker=dict(line=dict(color=theme()["pie-divider"], width=2)),
+        # Đường viền trắng phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer)
+        fig.update_traces(marker=dict(line=dict(color='#ffffff', width=2)),
                           hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
     else:
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
@@ -570,7 +464,7 @@ def _delta_t(delta, label):
     """Trả về (chuỗi, màu) cho một delta, hoặc None nếu không có."""
     if delta is None:
         return None
-    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "var(--text-2)"
+    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
@@ -627,7 +521,7 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
             h += _render_sec(sec)
     if footer:
         f_txt, f_bg, f_fg = footer
-        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid var(--border-1);text-align:center;'>"
+        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.07);text-align:center;'>"
               f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
     h += "</div>"
     st.markdown(h, unsafe_allow_html=True)
@@ -635,23 +529,23 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
 
 def render_top_3(df, col_name, title, week_key=None, n=3):
     if df.empty:
-        html_list = "<p style='color:var(--text-2); font-size: 14px;'>Không có dữ liệu</p>"
+        html_list = "<p style='color:#86868b; font-size: 14px;'>Không có dữ liệu</p>"
     else:
         top3 = df.groupby(col_name)['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(n)
         # Thời gian của từng nhóm/dự án trong tuần này (nếu được yêu cầu)
         wk = {}
         if week_key is not None and 'Tuần' in df.columns:
             wk = (df[df['Tuần'] == week_key].groupby(col_name)['Thời lượng (Phút)'].sum() / 60).to_dict()
-        html_list = "<ul style='margin:0; padding-left: 20px; color: var(--text-1); font-size: 15px; line-height: 1.6;'>"
+        html_list = "<ul style='margin:0; padding-left: 20px; color: #1d1d1f; font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
-            wsuf = f" <span style='color:var(--accent); font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
+            wsuf = f" <span style='color:#007aff; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
             html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
         html_list += "</ul>"
-
+    
     html = f"""
     <div class="glass-card" style="height: 100%;">
-        <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
+        <p style="margin: 0 0 12px 0; font-size: 13px; color: #86868b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
         {html_list}
     </div>
     """
@@ -680,26 +574,23 @@ def render_session_bar(df):
         return
     d = df['Thời lượng (Phút)']
     counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
-    cols = theme()["buckets"]  # màu ramp theo theme (5 mức)
     seg = ""
-    for i, ((name, rng, lo, hi, _), c) in enumerate(zip(SESSION_BUCKETS, counts)):
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
         if not c:
             continue
-        col = cols[i]
         pct = c / n * 100
         lbl = f"{pct:.0f}%" if pct >= 9 else ""
-        fg = _readable_fg(col)
+        fg = "#fff" if col in ("#2f86ec", "#0a52c4") else "#1d1d1f"
         seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
                 f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
     legend = ""
-    for i, ((name, rng, lo, hi, _), c) in enumerate(zip(SESSION_BUCKETS, counts)):
-        col = cols[i]
-        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:var(--text-1);'>"
+    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:#1d1d1f;'>"
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
-                   f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
+                   f"{name} <span style='color:#86868b;'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
-        "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
+        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
         f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
@@ -721,28 +612,27 @@ def render_session_histogram(df):
     centers = [edges[i] + step / 2 for i in range(len(edges) - 1)] + [top + step / 2]
     labels = [f"{edges[i]}–{edges[i + 1]}′" for i in range(len(edges) - 1)] + [f"≥ {top}′"]
 
-    _t = theme()
     fig = go.Figure(go.Bar(
-        x=centers, y=counts, width=step * 0.88, marker_color=_t["hist-bar"],
+        x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
         marker_cornerradius=6, cliponaxis=False,  # bo góc trên + bóng (CSS) không bị cắt — đồng bộ các cột khác
         customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
     ))
     for t in LEN_THRESHOLDS:
         if start < t <= top:
-            fig.add_vline(x=t, line=dict(color=_t["accent-2"], width=1.5, dash='dot'))
+            fig.add_vline(x=t, line=dict(color='#0a52c4', width=1.5, dash='dot'))
     avg = d.mean()
     if start <= avg <= top + step:
-        fig.add_vline(x=avg, line=dict(color=_t["chart-font"], width=2, dash='dash'),
+        fig.add_vline(x=avg, line=dict(color='#1d1d1f', width=2, dash='dash'),
                       annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
-                      annotation_font=dict(size=12, color=_t["chart-font"]))
+                      annotation_font=dict(size=12, color='#1d1d1f'))
     fig.update_layout(
         height=300, margin=dict(l=10, r=10, t=24, b=10), bargap=0.06, showlegend=False,
         xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
                    tickvals=[10, 20, 30, 40, 50, 60],
                    ticktext=['10', '20', '30', '40', '50', '60+'],
                    tickfont=dict(size=12), showgrid=False),
-        yaxis=dict(title='Số phiên', tickfont=dict(size=12), gridcolor=_t["chart-grid"]),
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        yaxis=dict(title='Số phiên', tickfont=dict(size=12), gridcolor='rgba(0,0,0,0.06)'),
+        plot_bgcolor='white', paper_bgcolor='white',
     )
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
@@ -792,12 +682,11 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     hr_group = dist.groupby(['Khung giờ', color_col])['giờ'].sum().reset_index().rename(columns={'giờ': 'Số giờ'})
     fig = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP)
 
-    _acc = theme()["accent"]
     tot = dist.groupby('Khung giờ')['giờ'].sum().reindex(range(24), fill_value=0.0)
     fig.add_trace(go.Scatter(
         x=list(tot.index), y=list(tot.values), mode='lines+markers',
-        line=dict(color=_acc, width=2, shape='spline'),
-        marker=dict(size=5, color=_acc),
+        line=dict(color=MAC_COLORS[0], width=2, shape='spline'),
+        marker=dict(size=5, color=MAC_COLORS[0]),
         name='Tổng cộng'
     ))
 
@@ -810,7 +699,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
         hi = 23 + PAD if i == _last else x1 - 0.5
         fig.add_vrect(x0=lo, x1=hi, fillcolor=col, opacity=1, layer="below", line_width=0,
                       annotation_text=name.strip(), annotation_position="top left",
-                      annotation=dict(font_size=11, font_color="#9a9aa0" if not is_dark() else "#8892a0"))
+                      annotation=dict(font_size=11, font_color="#9a9aa0"))
 
     y_max = float(tot.max()) or 1.0
     fig.update_layout(xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
@@ -824,15 +713,15 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     if tot.max() > 0:
         peak_h = int(tot.idxmax())
         strong_buoi = tot.groupby(_buoi_of).sum().idxmax()
-        _lbl = "font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
-        _val = "font-size:17px;color:var(--text-1);font-weight:600;"
+        _lbl = "font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
+        _val = "font-size:17px;color:#1d1d1f;font-weight:600;"
         st.markdown(
             "<div class='glass-card' style='display:flex;flex-wrap:wrap;justify-content:center;align-items:center;"
             "gap:6px 16px;max-width:900px;margin:8px auto 0 auto;padding:12px 18px;'>"
             f"<span style='{_lbl}'>Giờ tập trung nhất</span>"
             f"<span style='{_val}'>{peak_h}h</span>"
-            f"<span style='font-size:13px;color:var(--text-2);'>(TB {tot.max():.1f}h/ngày)</span>"
-            "<span style='color:var(--text-5);'>·</span>"
+            f"<span style='font-size:13px;color:#86868b;'>(TB {tot.max():.1f}h/ngày)</span>"
+            "<span style='color:#d2d2d7;'>·</span>"
             f"<span style='{_lbl}'>Buổi mạnh nhất</span>"
             f"<span style='{_val}'>{strong_buoi}</span>"
             "</div>",
@@ -862,7 +751,7 @@ def render_dayhour_heatmap(scope_df):
                 axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False)),
         y=alt.Y('Khung giờ:O', title='Khung giờ (0h - 23h)',
                 axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False)),
-        color=alt.Color('TB:Q', scale=alt.Scale(range=theme()["dayhour"]), legend=None),
+        color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
     ).properties(width=alt.Step(46), height=alt.Step(26)).configure_view(strokeWidth=0)
@@ -884,15 +773,9 @@ def _streak_stats(streak_df):
     return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
 
 
-def nudge_tones():
-    """(bg, fg) cho badge nhắc chuỗi theo theme (dark: nền tint + chữ sáng hơn)."""
-    if is_dark():
-        return {"good": ("rgba(163,190,140,0.18)", "#a3be8c"),
-                "warn": ("rgba(235,203,139,0.18)", "#ebcb8b"),
-                "neutral": ("rgba(255,255,255,0.06)", "#b8c0cc")}
-    return {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
-            "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
-            "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}
+NUDGE_TONES = {"good": ("rgba(52,199,89,0.12)", "#248a3d"),
+               "warn": ("rgba(255,149,0,0.15)", "#a85d00"),
+               "neutral": ("rgba(0,0,0,0.05)", "#6e6e73")}
 
 
 def _streak_nudge(s):
@@ -1059,24 +942,24 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 
     st.markdown(f"""
 <style>
-.rtl-card{{background:var(--bg-card);border:1px solid var(--border-1);border-radius:14px;box-shadow:0 4px 15px var(--shadow-sm);padding:16px 24px;margin-top:14px;}}
-.rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:var(--text-3);}}
+.rtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:16px 24px;margin-top:14px;}}
+.rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:#6e6e73;}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-row{{display:grid;grid-template-columns:144px 1fr;align-items:center;height:32px;}}
-.rtl-name{{font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
+.rtl-name{{font-size:13px;font-weight:600;color:#1d1d1f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
 .rtl-track{{position:relative;height:32px;}}
-.rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:var(--border-1);}}
-.rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px var(--shadow-md);}}
-.rtl-bar.done{{background:var(--done-bar);}}
-.rtl-bar.reading{{background:var(--accent);}}
+.rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
+.rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.rtl-bar.done{{background:#aeaeb2;}}
+.rtl-bar.reading{{background:#007aff;}}
 .rtl-axis{{display:grid;grid-template-columns:144px 1fr;margin-top:3px;}}
 .rtl-ticks{{position:relative;height:16px;}}
-.rtl-tick{{position:absolute;font-size:11px;color:var(--text-2);white-space:nowrap;}}
-.rtl-yr{{color:var(--text-5);margin-left:1px;}}
+.rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
+.rtl-yr{{color:#c7c7cc;margin-left:1px;}}
 </style>
 <div class="section-hd">Dòng thời gian</div>
 <div class="rtl-card">
-<div class="rtl-legend"><span><i style="background:var(--accent);"></i>Đang đọc</span><span><i style="background:var(--done-bar);"></i>Đã xong</span></div>
+<div class="rtl-legend"><span><i style="background:#007aff;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 {bars_html}
 <div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
 </div>
@@ -1087,7 +970,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
     vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
     rows_html = ''
     for _, r in t.iterrows():
-        s_col = 'var(--accent)' if r['Trạng thái'] == 'Đang đọc' else 'var(--text-2)'
+        s_col = '#007aff' if r['Trạng thái'] == 'Đang đọc' else '#86868b'
         start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
         last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
         rows_html += '<tr class="prow">'
@@ -1152,18 +1035,18 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--bg-card);border:1px solid var(--border-1);border-radius:14px;box-shadow:0 4px 15px var(--shadow-sm);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
-.dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-4);}}
-.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--border-1);background:var(--bg-elev2);}}
+.dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:#aeaeb2;}}
+.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
 .dtl-typ{{position:absolute;top:0;bottom:0;}}
-.dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--border-1);}}
-.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px var(--shadow-md);}}
+.dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.06);}}
+.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
-.dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
-.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--text-3);}}
+.dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:#86868b;}}
+.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:#3a3a3c;}}
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
-.dtl-ttl{{font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
+.dtl-ttl{{font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
 </style>
 <div class="dtl-card">
 <div class="dtl-ttl">Dòng thời gian trong ngày</div>
@@ -1280,14 +1163,14 @@ def render_on_this_day(sel, df_all):
     years = sorted(set(stats) | set(notes), reverse=True)
     if not years:
         _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
-                "fill='currentColor'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
+                "fill='#c7c7cc'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
                 "2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/></svg>")
         st.markdown(
             "<div class='glass-card' style='padding:22px 18px;text-align:center;'>"
-            f"<div style='margin-bottom:8px;color:var(--text-5);'>{_cal}</div>"
-            "<div style='font-size:1.0rem;font-weight:600;color:var(--text-1);'>"
+            f"<div style='margin-bottom:8px;'>{_cal}</div>"
+            "<div style='font-size:1.0rem;font-weight:600;color:#1d1d1f;'>"
             f"Chưa có dữ liệu ngày {d:02d}/{m:02d} ở các năm trước</div>"
-            "<div style='font-size:13px;color:var(--text-2);margin-top:4px;'>"
+            "<div style='font-size:13px;color:#86868b;margin-top:4px;'>"
             "Mục này sẽ dày dần theo thời gian — cứ ghi chú &amp; tích lũy mỗi ngày.</div></div>",
             unsafe_allow_html=True)
         return
@@ -1309,12 +1192,12 @@ def render_on_this_day(sel, df_all):
                     avg = (hrs * 60 / ss) if ss else 0
                     chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
                 else:
-                    chips = "<span style='font-size:13px;color:var(--text-4);'>Không có phiên tập trung</span>"
+                    chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
                 st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
                 if notes.get(y):
                     st.markdown(f"<div class='note-html'>{notes[y]}</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown("<span style='font-size:13px;color:var(--text-4);'>(không có ghi chú)</span>",
+                    st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
                                 unsafe_allow_html=True)
         st.markdown(f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
                     "Mục này sẽ dày dần theo thời gian.</div>", unsafe_allow_html=True)
@@ -1349,8 +1232,7 @@ def render_calendar_grid(scope_df, full_df):
         if h < 4: return 3
         return 4
     cal_data['lvl'] = cal_data['Số giờ'].map(_cal_lvl)
-    _th = theme()
-    LVL_COLORS = _th["lvl"]
+    LVL_COLORS = ["#e5e5ea", "#ade8bf", "#6fd693", "#34c759", "#1f8f43"]
 
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
@@ -1365,7 +1247,7 @@ def render_calendar_grid(scope_df, full_df):
     )
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        color=alt.condition("datum.lvl >= 3", alt.value(_th["cal-text-hi"]), alt.value(_th["cal-text-lo"])),
+        color=alt.condition("datum.lvl >= 3", alt.value('#ffffff'), alt.value('#a7a7ac')),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
@@ -1378,22 +1260,22 @@ def render_calendar_grid(scope_df, full_df):
 
 DTBL_CSS = """
 <style>
-.dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid var(--border-1); background:var(--bg-card); box-shadow:0 4px 15px var(--shadow-sm); }
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid rgba(0,0,0,0.06); background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.04); }
 .dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--bg-elev); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--border-2); }
-.dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--bg-card); z-index:1; }
-.dtbl thead th.lbl { z-index:3; background:var(--bg-elev); }
-.dtbl tr.cat td { font-weight:700; color:var(--text-1); border-top:1px solid var(--border-1); }
-.dtbl tr.cat td.lbl { background:var(--bg-card); }
-.dtbl tr.proj td { color:var(--text-3); }
-.dtbl tr.proj td.lbl { padding-left:34px; color:var(--text-2); font-weight:400; }
-.dtbl td.zero { color:var(--text-5); }
-.dtbl td.tot { border-left:1px solid var(--border-2); font-weight:600; color:var(--text-1); }
-.dtbl tr.proj td.tot { font-weight:500; color:var(--text-3); }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
+.dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:#ffffff; z-index:1; }
+.dtbl thead th.lbl { z-index:3; background:#f5f5f7; }
+.dtbl tr.cat td { font-weight:700; color:#1d1d1f; border-top:1px solid rgba(0,0,0,0.07); }
+.dtbl tr.cat td.lbl { background:#ffffff; }
+.dtbl tr.proj td { color:#6e6e73; }
+.dtbl tr.proj td.lbl { padding-left:34px; color:#86868b; font-weight:400; }
+.dtbl td.zero { color:#cfcfd4; }
+.dtbl td.tot { border-left:1px solid rgba(0,0,0,0.08); font-weight:600; color:#1d1d1f; }
+.dtbl tr.proj td.tot { font-weight:500; color:#6e6e73; }
 .dtbl th.txt, .dtbl td.txt { text-align:left; }
-.dtbl tr.prow td { color:var(--text-3); font-weight:400; border-top:1px solid var(--border-1); }
-.dtbl tr.prow td.lbl { color:var(--text-4); font-weight:500; }
+.dtbl tr.prow td { color:#3a3a3c; font-weight:400; border-top:1px solid rgba(0,0,0,0.05); }
+.dtbl tr.prow td.lbl { color:#aeaeb2; font-weight:500; }
 </style>
 """
 
@@ -1402,14 +1284,14 @@ def _heat_cell(v, ref, extra_cls="", drop=False):
     """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền xanh theo tỉ lệ v/ref.
     drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước)."""
     cls = extra_cls.strip()
-    mark = "<span style='color:var(--danger);font-size:10px;'>▾</span>" if drop else ""
+    mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
     title = " title='Giảm mạnh so với kỳ trước'" if drop else ""
     if v < 0.05:
         if drop:
             return f'<td class="{cls}"{title}>{mark}</td>'
         return f'<td class="{(cls + " zero").strip()}">·</td>'
     a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
-    bg = f'background:rgba({theme()["heat-green-rgb"]},{a:.2f});' if a > 0.02 else ''
+    bg = f'background:rgba(52,199,89,{a:.2f});' if a > 0.02 else ''
     cls_attr = f' class="{cls}"' if cls else ''
     return f'<td{cls_attr}{title} style="{bg}">{mark}{v:.1f}</td>'
 
@@ -1541,7 +1423,7 @@ def guide_item(img, title, body_md, tip=None, where=None):
     """Một mục trong trang Hướng dẫn: ảnh minh hoạ + giải thích chi tiết (+ mẹo)."""
     with st.container(border=True, key=f"guide_{img}"):
         if where:
-            st.markdown(f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
+            st.markdown(f"<div style='font-size:11px;font-weight:700;color:#86868b;"
                         f"text-transform:uppercase;letter-spacing:.5px;'>{where}</div>",
                         unsafe_allow_html=True)
         st.markdown(f"#### {title}")
@@ -1658,14 +1540,6 @@ def frag_period_table(scope_df, key):
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
-# Theme: mặc định Sáng; giữ qua F5 bằng ?theme=dark (giống ?nav=). Đọc state TRƯỚC khi
-# render nút toggle -> theo pattern Streamlit (nút chỉ ảnh hưởng lần rerun kế tiếp).
-if "app_theme" not in st.session_state:
-    st.session_state["app_theme"] = "dark" if st.query_params.get("theme") == "dark" else "light"
-
-# Bơm CSS variables theo theme hiện tại (đặt trước khối CSS chính để mọi rule dùng var()).
-st.markdown(css_vars_block(), unsafe_allow_html=True)
-
 st.markdown(
     """
     <style>
@@ -1675,28 +1549,26 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .stApp {
-        background-color: var(--bg-app);
+        background-color: #f5f5f7;
     }
-    /* Header gốc của Streamlit: trong suốt để không thành vệt sáng ở chế độ tối */
-    [data-testid="stHeader"] { background: transparent !important; }
-
+    
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
-
+    
     .glass-card {
-        background: var(--bg-card-glass);
+        background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid var(--bg-card-border);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 4px 15px var(--shadow-sm);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
-
-    h1, h2, h3 { color: var(--text-1) !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
-    hr { border-color: var(--border-2) !important; }
-
+    
+    h1, h2, h3 { color: #1d1d1f !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
+    hr { border-color: rgba(0,0,0,0.08) !important; }
+    
     div[data-testid="stButton"] button[kind="primary"] {
-        background-color: var(--accent) !important;
+        background-color: #007aff !important;
         color: white !important;
         border-radius: 8px !important;
         border: none !important;
@@ -1709,35 +1581,34 @@ st.markdown(
         transform: scale(0.98);
         opacity: 0.9;
     }
-
+    
     div[data-testid="stButton"] button[kind="secondary"] {
-        background-color: var(--bg-card) !important;
-        color: var(--accent) !important;
+        background-color: white !important;
+        color: #007aff !important;
         border-radius: 8px !important;
-        border: 1px solid var(--border-3) !important;
+        border: 1px solid #d1d1d6 !important;
         font-weight: 500 !important;
-        box-shadow: 0 1px 2px var(--shadow-sm) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
     }
     div[data-testid="stButton"] button { width: 100%; }
-
+    
     .stSelectbox > div > div, .stTextInput > div > div > input {
         border-radius: 8px !important;
-        border: 1px solid var(--border-3) !important;
-        background-color: var(--bg-input) !important;
-        box-shadow: 0 1px 3px var(--shadow-sm) !important;
-        color: var(--text-1) !important;
+        border: 1px solid #d1d1d6 !important;
+        background-color: rgba(255,255,255,0.8) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
-
+    
     [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
         margin: 0 auto !important;
-        background: var(--bg-card-glass);
-        border: 1px solid var(--bg-card-border);
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 16px;
         padding: 14px;
-        box-shadow: 0 4px 15px var(--shadow-sm);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
     }
     /* Chart Altair width='content' (heatmap, lịch): Streamlit ép cả chuỗi wrapper
        (stElementContainer > stFullScreenFrame > div) về fit-content -> dồn trái.
@@ -1756,28 +1627,28 @@ st.markdown(
 
     /* ===== Bảng tổng quan gọn (hero + chip) ===== */
     .stat-panel .sp-hero { display: flex; flex-wrap: wrap; }
-    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid var(--border-1); }
+    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid rgba(0,0,0,0.07); }
     .stat-panel .sp-hi:first-child { padding-left: 2px; }
     .stat-panel .sp-hi:last-child { border-right: none; }
-    .stat-panel .sp-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text-1); }
+    .stat-panel .sp-l { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: #1d1d1f; }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
     /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
     .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
-    .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
+    .stat-panel .sp-sub { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
     .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
     @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
-    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: var(--bg-elev); }
-    .stat-panel .chip .ck { color: var(--text-2); }
-    .stat-panel .chip .cv { font-weight: 600; color: var(--text-1); margin-left: 5px; }
+    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: #f0f1f4; }
+    .stat-panel .chip .ck { color: #86868b; }
+    .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
-    .stat-panel .chip.tw { background: var(--accent-tint); }
-    .stat-panel .sp-divider { border-top: 1px solid var(--border-1); margin: 10px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .stat-panel .chip.tw { background: rgba(0,122,255,0.10); }
+    .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
-    .stat-panel .chip.tw .ck { color: var(--accent-2); }
-    .stat-panel .chip.tw .cv { color: var(--accent); }
-    .section-hd { font-size: 15px; font-weight: 700; color: var(--text-1); margin: 22px 0 6px; letter-spacing: -0.2px; }
+    .stat-panel .chip.tw .ck { color: #0067d6; }
+    .stat-panel .chip.tw .cv { color: #007aff; }
+    .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -1793,18 +1664,18 @@ st.markdown(
     }
     [data-testid="stExpander"] summary {
         padding: 8px 2px !important;
-        border-bottom: 2px solid var(--border-1) !important;
+        border-bottom: 2px solid rgba(0,0,0,0.07) !important;
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
-    [data-testid="stExpander"] summary:hover { border-bottom-color: var(--accent) !important; }
+    [data-testid="stExpander"] summary:hover { border-bottom-color: #007aff !important; }
     [data-testid="stExpander"] summary:hover svg,
-    [data-testid="stExpander"] summary:hover p { color: var(--accent) !important; }
+    [data-testid="stExpander"] summary:hover p { color: #007aff !important; }
     [data-testid="stExpander"] summary p {
         font-size: 1.35rem !important;
         font-weight: 600 !important;
         letter-spacing: -0.4px !important;
-        color: var(--text-1) !important;
+        color: #1d1d1f !important;
     }
     [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; }
 
@@ -1857,19 +1728,19 @@ st.markdown(
     }
 
     /* ===== Ghi chú ngày: hộp hiển thị ghi chú đã lưu / trạng thái trống ===== */
-    .st-key-note_saved { background: var(--accent-tint-2); border: 1px solid var(--accent-tint);
-        border-left: 3px solid var(--accent); border-radius: 10px; padding: 2px 14px; }
-    .note-empty { font-size: 14px; color: var(--text-2); background: var(--bg-elev);
-        border: 1px dashed var(--border-2); border-radius: 10px; padding: 13px 15px; }
+    .st-key-note_saved { background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.12);
+        border-left: 3px solid #007aff; border-radius: 10px; padding: 2px 14px; }
+    .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
+        border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
 
     /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
-    .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: var(--text-1); }
+    .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
     .note-html p, .st-key-note_saved p { margin: 4px 0; }
     .note-html ul, .note-html ol { margin: 4px 0; padding-left: 22px; }
     /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
     .note-html > :first-child { margin-top: 0 !important; }
     .note-html > :last-child { margin-bottom: 0 !important; }
-    .note-html a, .st-key-note_saved a { color: var(--accent); }
+    .note-html a, .st-key-note_saved a { color: #007aff; }
     /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
     .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
@@ -1878,26 +1749,26 @@ st.markdown(
     /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
         border-radius: 14px !important;
-        border-color: var(--border-1) !important;
-        box-shadow: 0 4px 15px var(--shadow-sm) !important;
-        background: var(--bg-card) !important;
+        border-color: rgba(0,0,0,0.06) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04) !important;
+        background: #fff !important;
     }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
     [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
-        border-bottom: 1px solid var(--border-1); padding: 12px 0; }
+        border-bottom: 1px solid rgba(0,0,0,0.06); padding: 12px 0; }
     [class*="st-key-jcard"] [data-testid="stColumn"]:first-child {
-        border-right: 1px solid var(--border-2); }
+        border-right: 1px solid rgba(0,0,0,0.08); }
     .jdate { text-align: center; }
-    .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
-    .jdate .jdow { font-size: 15px; font-weight: 700; color: var(--text-1); margin-top: 6px; }
-    .jdate .jdowbig { font-size: 18px; font-weight: 700; color: var(--text-1); letter-spacing: -0.3px; }
-    .jdate .jdm { font-size: 13px; color: var(--text-2); font-weight: 500; margin-top: 2px; }
-    .otd-foot { font-size: 12px; color: var(--text-2); padding-top: 12px; }
-    .otd-foot b { color: var(--text-1); }
-    .jchip { display: inline-block; background: var(--bg-elev); border-radius: 10px; padding: 5px 11px;
+    .jdate .jyear { font-size: 20px; font-weight: 700; color: #007aff; letter-spacing: -0.5px; line-height: 1; }
+    .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
+    .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
+    .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
+    .otd-foot { font-size: 12px; color: #86868b; padding-top: 12px; }
+    .otd-foot b { color: #1d1d1f; }
+    .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
-    .jchip .ck { color: var(--text-2); } .jchip .cv { font-weight: 600; color: var(--text-1); margin-left: 5px; }
+    .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
 
@@ -1910,62 +1781,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# CSS chỉ áp cho chế độ TỐI: theme các widget gốc của Streamlit mà light vốn dựa vào
-# mặc định (segmented control, ô nhập/selectbox popover, editor bảng...). Tách riêng để
-# KHÔNG đụng gì tới giao diện Sáng.
-if is_dark():
-    _d = _DARK
-    st.markdown(f"""
-    <style>
-    /* Tiêu đề expander: Streamlit tô nền sáng cho <summary> -> ở chế độ tối làm chữ
-       trắng biến mất. Ép trong suốt để hiện nền tối + gạch chân theo var. */
-    [data-testid="stExpander"] summary {{ background: transparent !important; }}
-    /* Segmented control (nav + bộ chọn kỳ/phân loại) */
-    [data-testid="stButtonGroup"] button {{
-        background-color: {_d['bg-card']} !important;
-        color: {_d['text-1']} !important;
-        border-color: {_d['border-3']} !important;
-    }}
-    [data-testid="stButtonGroup"] button[aria-checked="true"],
-    [data-testid="stButtonGroup"] button[aria-selected="true"] {{
-        background-color: {_d['accent']} !important;
-        color: #ffffff !important;
-        border-color: {_d['accent']} !important;
-    }}
-    /* Baseweb: popover selectbox, ô ngày, vùng kéo-thả upload, dataframe/data_editor */
-    [data-baseweb="popover"] [role="listbox"], [data-baseweb="menu"], [data-baseweb="calendar"] {{
-        background-color: {_d['bg-card']} !important; color: {_d['text-1']} !important;
-    }}
-    [data-baseweb="select"] > div, [data-baseweb="input"] > div {{
-        background-color: {_d['bg-input']} !important; color: {_d['text-1']} !important;
-        border-color: {_d['border-3']} !important;
-    }}
-    [data-testid="stFileUploaderDropzone"] {{
-        background-color: {_d['bg-elev']} !important; color: {_d['text-2']} !important;
-    }}
-    [data-testid="stDataFrame"], [data-testid="stDataFrameResizable"] {{
-        background-color: {_d['bg-card']} !important;
-    }}
-    /* Tooltip/caption/help gốc */
-    [data-testid="stTooltipContent"], [data-testid="stCaptionContainer"] {{ color: {_d['text-2']} !important; }}
-    </style>
-    """, unsafe_allow_html=True)
-
-# Nút chuyển giao diện Sáng/Tối (phải-căn-phải, gọn), đặt trên tiêu đề.
-_sp_th, _th_col = st.columns([10, 1.4], vertical_alignment="center")
-with _th_col:
-    if st.button("", icon=":material/light_mode:" if is_dark() else ":material/dark_mode:",
-                 key="theme_toggle", help="Chuyển giao diện Sáng / Tối", use_container_width=True):
-        st.session_state["app_theme"] = "light" if is_dark() else "dark"
-        if st.session_state["app_theme"] == "dark":
-            st.query_params["theme"] = "dark"
-        else:
-            try:
-                del st.query_params["theme"]
-            except KeyError:
-                pass
-        st.rerun()
 
 st.markdown(
     "<h1 style='text-align:center; margin:0 0 0.35em 0; letter-spacing:-0.6px;'>Forest Dashboard</h1>",
@@ -2038,11 +1853,11 @@ if nav == "Thống kê chung":
                 st.markdown(
                     f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
                     f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
-                    f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-                    f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='currentColor' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
+                    f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+                    f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
                     f"Cập nhật gần nhất</span>"
-                    f"<span style='font-size:17px;color:var(--text-1);font-weight:600;'>{format_relative(last_dt)}</span>"
-                    f"<span style='font-size:13px;color:var(--text-2);'>({abs_str})</span>"
+                    f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{format_relative(last_dt)}</span>"
+                    f"<span style='font-size:13px;color:#86868b;'>({abs_str})</span>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -2061,7 +1876,7 @@ if nav == "Thống kê chung":
                 _delta = None
                 if base_avg > 0:
                     _pct = (r_avg - base_avg) / base_avg * 100
-                    _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "var(--text-2)"
+                    _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
                     _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
                 recent_chips.append({"k": "Thời gian / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
             recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
@@ -2087,7 +1902,7 @@ if nav == "Thống kê chung":
                     {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
                 ]})
             _nud = _streak_nudge(s_stat)
-            _footer = (_nud[0],) + nudge_tones()[_nud[1]] if _nud else None
+            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
             render_stat_panel(
                 hero_items=[
@@ -2303,17 +2118,17 @@ elif nav == "Báo cáo ngày":
         day_df = df[df['Ngày'] == sel]
         vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
 
-        _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='currentColor' "
+        _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' "
                 "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
                 "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
         _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
         st.markdown(
             "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
             "flex-wrap:wrap;gap:6px 12px;'>"
-            "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+            "<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
             f"{_evt}Ngày đang xem</span>"
-            f"<span style='font-size:17px;color:var(--text-1);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-            f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>",
+            f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
+            f"<span style='font-size:13px;color:#86868b;'>{_sub}</span></div>",
             unsafe_allow_html=True)
 
         if day_df.empty:
@@ -2332,7 +2147,7 @@ elif nav == "Báo cáo ngày":
                 pw = df[df['Ngày'] == (sel - timedelta(days=7))]
                 if not pw.empty:
                     pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
-                    _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "var(--text-2)"
+                    _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
                     cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{pw_h:.1f}h",
                                       "delta": (f"{_fmt_delta(d_hrs - pw_h)}h · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
                 else:
@@ -2341,7 +2156,7 @@ elif nav == "Báo cáo ngày":
                           & (df['Ngày'] != sel)]
                 if same['Ngày'].nunique():
                     avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-                    _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "var(--text-2)"
+                    _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
                     cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{avg_h:.1f}h",
                                       "delta": (f"{_fmt_delta(d_hrs - avg_h)}h", _c)})
 
@@ -2473,7 +2288,7 @@ elif nav == "Báo cáo theo dự án":
             ]})
 
             _nud_g = _streak_nudge(s_g)
-            _footer_g = (_nud_g[0],) + nudge_tones()[_nud_g[1]] if _nud_g else None
+            _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
 
             render_stat_panel(
                 hero_items=[
@@ -2593,7 +2408,7 @@ elif nav == "Chuẩn bị dữ liệu":
             # Tổng quan: thẻ căn giữa
             st.markdown(
                 f"<div class='glass-card' style='padding:10px 18px;margin-bottom:14px;text-align:center;'>"
-                f"<span style='font-size:14px;color:var(--text-1);'>Tổng <b>{len(db_base)}</b> phiên · "
+                f"<span style='font-size:14px;color:#1d1d1f;'>Tổng <b>{len(db_base)}</b> phiên · "
                 f"từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}</span></div>",
                 unsafe_allow_html=True)
             disp_db = db_base.copy()
@@ -2630,7 +2445,7 @@ elif nav == "Chuẩn bị dữ liệu":
                 with st.container(key="db_pag"):
                     st.pagination(num_pages, key="db_page")
                 st.markdown(
-                    f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
+                    f"<div style='text-align:center;font-size:13px;color:#86868b;margin-top:2px;'>"
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
     with st.expander("4. Quản lý hệ thống", expanded=True):
@@ -2712,7 +2527,7 @@ elif nav == "Hướng dẫn":
     st.markdown(
         "<div style='margin-bottom:6px;'>"
         "<div style='font-size:1.9rem;font-weight:700;letter-spacing:-0.5px;'>Hướng dẫn &amp; Giải thích</div>"
-        "<div style='font-size:14.5px;color:var(--text-2);margin-top:2px;'>Mọi số liệu, biểu đồ và tính năng trong "
+        "<div style='font-size:14.5px;color:#86868b;margin-top:2px;'>Mọi số liệu, biểu đồ và tính năng trong "
         "app có ý nghĩa gì, đọc thế nào và dùng để làm gì — kèm ảnh minh hoạ.</div></div>",
         unsafe_allow_html=True)
 
