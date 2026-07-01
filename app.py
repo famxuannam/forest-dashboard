@@ -942,7 +942,7 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 
     st.markdown(f"""
 <style>
-.rtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:16px 24px;margin-top:14px;}}
+.rtl-card{{background:#fff;border:1px solid #d1d1d6;border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
 .rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:#6e6e73;}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-row{{display:grid;grid-template-columns:144px 1fr;align-items:center;height:32px;}}
@@ -1035,7 +1035,7 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,0.04);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:#fff;border:1px solid #d1d1d6;border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:#aeaeb2;}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
@@ -1267,7 +1267,7 @@ def render_calendar_grid(scope_df, full_df):
 
 DTBL_CSS = """
 <style>
-.dtbl-wrap { overflow:auto; max-height:560px; border-radius:14px; border:1px solid rgba(0,0,0,0.06); background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.04); }
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:16px; border:1px solid #d1d1d6; background:#ffffff; box-shadow:0 1px 1px rgba(0,0,0,0.02); }
 .dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
@@ -1562,13 +1562,11 @@ st.markdown(
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
     .glass-card {
-        background: rgba(255, 255, 255, 0.65);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        background: #fff;
+        border: 1px solid #d1d1d6;
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
     
     h1, h2, h3 { color: #1d1d1f !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
@@ -1611,11 +1609,11 @@ st.markdown(
         justify-content: center !important;
         width: 100% !important;
         margin: 0 auto !important;
-        background: rgba(255, 255, 255, 0.65);
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        background: #fff;
+        border: 1px solid #d1d1d6;
         border-radius: 16px;
         padding: 14px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
     /* Chart Altair width='content' (heatmap, lịch): Streamlit ép cả chuỗi wrapper
        (stElementContainer > stFullScreenFrame > div) về fit-content -> dồn trái.
@@ -1755,9 +1753,9 @@ st.markdown(
 
     /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
-        border-radius: 14px !important;
-        border-color: rgba(0,0,0,0.06) !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04) !important;
+        border-radius: 16px !important;
+        border-color: #d1d1d6 !important;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
         background: #fff !important;
     }
 
