@@ -319,7 +319,10 @@ def format_plotly_fig(fig, is_pie=False):
         font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f"),
         # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
         legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
-        margin=dict(t=10)
+        # r=28: chừa chỗ cho nhãn trục hoành CUỐI (vd '28/06') -> không bị tràn/cắt chữ ở
+        # mép phải canvas, vì nhãn căn giữa cột cuối nên phần nửa sau dễ vượt khỏi biên vẽ.
+        margin=dict(t=10, r=28),
+        xaxis=dict(automargin=True),
     )
     if is_pie:
         # Đường viền trắng phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer)
@@ -357,13 +360,23 @@ def fmt_week(w):
     sun = mon + timedelta(days=6)
     return f"{mon:%d/%m} – {sun:%d/%m/%Y}"
 
-def period_label(key):
-    """Nhãn cột kỳ gọn cho bảng số liệu: '2026-W14' -> 'W14'; '2026-05' -> 'Th5'."""
+def period_label(key, multiyear=False):
+    """Nhãn cột/dòng kỳ gọn cho bảng số liệu: '2026-W14' -> 'W14'; '2026-05' -> 'Th5'.
+    Khi multiyear=True (danh sách kỳ đang hiển thị trải hơn 1 năm dương lịch), thêm hậu tố
+    năm 2 số (vd 'Th1 ’26') để không nhầm giữa các kỳ trùng số nhưng khác năm -- cùng kiểu
+    hậu tố '’YY' đã dùng ở trục timeline đọc sách (rtl-yr)."""
     key = str(key)
+    suffix = f" ’{key.split('-')[0][-2:]}" if multiyear else ""
     if 'W' in key:                       # '2026-W14' -> 'W14'
-        return 'W' + key.split('W')[-1]
+        return 'W' + key.split('W')[-1] + suffix
     parts = key.split('-')               # '2026-05'  -> 'Th5'
-    return f"Th{int(parts[-1])}" if len(parts) >= 2 else key
+    return f"Th{int(parts[-1])}{suffix}" if len(parts) >= 2 else key
+
+
+def _periods_multiyear(keys):
+    """True nếu danh sách khoá kỳ (vd '2026-05', '2026-W14') trải hơn 1 năm dương lịch
+    -> period_label() cần thêm năm để tránh nhầm lẫn (vd hai 'Th1' của hai năm khác nhau)."""
+    return len({str(k).split('-')[0] for k in keys}) > 1
 
 def period_stepper(periods, key, fmt, current=None):
     """Chọn kỳ: nút lùi/tiến + selectbox nhảy nhanh + nút về kỳ hiện tại (icon Material)."""
@@ -762,6 +775,7 @@ def render_dayhour_heatmap(scope_df):
     # trang, không phải trắng) -> nếu không ép, phần "ở giữa" (canvas SVG) sẽ lệch tông với phần
     # đệm/viền thẻ trắng bao quanh (CSS chỉ chỉnh được phần đệm, không chỉnh được nền SVG).
     st.altair_chart(chart, width='content')
+    st.markdown("<div class='scroll-hint'>◀ Vuốt ngang để xem đủ 7 ngày ▶</div>", unsafe_allow_html=True)
 
 
 def _streak_stats(streak_df):
@@ -1272,6 +1286,7 @@ def render_calendar_grid(scope_df, full_df):
         background='white',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
+    st.markdown("<div class='scroll-hint'>◀ Vuốt ngang để xem đủ lịch ▶</div>", unsafe_allow_html=True)
 
 
 DTBL_CSS = """
@@ -1336,7 +1351,8 @@ def render_data_table(df, time_col):
             out += _heat_cell(v, vmax, drop=d)
         return out
 
-    head = ''.join(f'<th>{period_label(c)}</th>' for c in cols)
+    _my = _periods_multiyear(cols)
+    head = ''.join(f'<th>{period_label(c, _my)}</th>' for c in cols)
     rows_html = ''
     for c in sorted(cat.index):
         c_vals = [float(cat.loc[c][col]) for col in cols]
@@ -1411,10 +1427,11 @@ def render_period_table(df, time_col):
     periods = sorted(hrs.index)
     vmax = float(hrs.max()) if len(hrs) else 0.0
 
+    _my = _periods_multiyear(periods)
     rows_html = ''
     for p in periods:
         rows_html += '<tr class="prow">'
-        rows_html += f'<td class="lbl">{period_label(p)}</td>'
+        rows_html += f'<td class="lbl">{period_label(p, _my)}</td>'
         rows_html += _heat_cell(float(hrs[p]), vmax)
         rows_html += f'<td>{int(trees[p])}</td>'
         rows_html += f'<td>{int(days[p])}</td>'
@@ -1666,6 +1683,9 @@ st.markdown(
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
     .card-label { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
+    /* Gợi ý vuốt ngang cho lưới rộng (lịch/heatmap) khi co hẹp -> chỉ hiện trên di động
+       (bật lại display:block trong @media bên dưới). */
+    .scroll-hint { display: none; font-size: 11px; color: #86868b; text-align: center; margin-top: 6px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -1745,8 +1765,12 @@ st.markdown(
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
-        /* Lịch (Vega) rộng -> cho cuộn ngang trong thẻ thay vì tràn */
+        /* Lịch/heatmap (Vega) rộng -> cho cuộn ngang trong thẻ thay vì tràn */
         [data-testid="stVegaLiteChart"] { overflow-x: auto !important; justify-content: flex-start !important; }
+        /* Gợi ý vuốt ngang: thanh cuộn trên di động (iOS/Android) là overlay của hệ điều hành,
+           KHÔNG áp được màu qua ::-webkit-scrollbar -> dùng chữ gợi ý thật để chắc chắn hiển thị,
+           tránh hiểu nhầm lưới chỉ có bấy nhiêu cột (vd Thứ 7/Chủ Nhật bị khuất ngoài mép). */
+        .scroll-hint { display: block !important; }
 
         /* Bảng số liệu: chữ nhỏ & đệm sát để chứa nhiều cột hơn */
         .dtbl th, .dtbl td { padding: 3px 6px !important; font-size: 11px !important; }
@@ -2430,7 +2454,12 @@ elif nav == "Chuẩn bị dữ liệu":
                 tbl, hide_index=True, width='stretch', key="map_editor",
                 column_config={
                     "Dự án": st.column_config.TextColumn("Dự án", disabled=True),
-                    "Nhóm (Danh mục)": st.column_config.SelectboxColumn("Nhóm (Danh mục)", options=opts),
+                    # Ô trống luôn hiện chữ "None" (canvas riêng của SelectboxColumn, không phải
+                    # DOM nên không sửa được bằng CSS/đổi kiểu None->NaN) -> chú thích rõ ý nghĩa
+                    # qua tooltip cột thay vì cố "ẩn" nó đi.
+                    "Nhóm (Danh mục)": st.column_config.SelectboxColumn(
+                        "Nhóm (Danh mục)", options=opts,
+                        help="Để trống (hiện 'None') = dự án tự đứng riêng, không thuộc nhóm nào."),
                 },
             )
             if st.button("Lưu phân loại", type="primary"):
