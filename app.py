@@ -1118,7 +1118,10 @@ def render_note_editor(day):
 
 
 def render_notes_journal(period_key, kind):
-    """Liệt kê (chỉ đọc) ghi chú của các ngày thuộc một kỳ (tuần/tháng)."""
+    """Liệt kê (chỉ đọc) ghi chú của các ngày thuộc một kỳ (tuần/tháng).
+    Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
+    cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
+    hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
     nd = load_notes()
     if not nd.empty:
         nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce')).dropna(subset=['_d'])
@@ -1130,15 +1133,18 @@ def render_notes_journal(period_key, kind):
     if nd.empty:
         st.caption("Chưa có ghi chú nào trong kỳ này.")
         return
+    rows_html = ''
+    for _, r in nd.iterrows():
+        d = r['_d']
+        rows_html += (
+            "<div class='jrow'>"
+            f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
+            f"<div class='jdm'>{d:%d/%m}</div></div>"
+            f"<div class='note-html'>{str(r['Ghi chú'])}</div>"
+            "</div>"
+        )
     with st.container(border=True, key="jcard_journal"):
-        for _, r in nd.iterrows():
-            d = r['_d']
-            c1, c2 = st.columns([1, 5], vertical_alignment="top")
-            with c1:
-                st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
-                            f"<div class='jdm'>{d:%d/%m}</div></div>", unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"<div class='note-html'>{str(r['Ghi chú'])}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
 def render_on_this_day(sel, df_all):
@@ -1178,29 +1184,30 @@ def render_on_this_day(sel, df_all):
     def _chip(k, v):
         return f"<span class='jchip'><span class='ck'>{k}</span><span class='cv'>{v}</span></span>"
 
+    # Dựng HTML tự thân (1 khối st.markdown duy nhất) như render_notes_journal -> tránh
+    # cơ chế flex/chiều cao tự tính của Streamlit làm khoảng cách quanh đường kẻ lệch nhau.
+    rows_html = ''
+    for y in years:
+        wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
+        if y in stats:
+            hrs, ss = stats[y]
+            avg = (hrs * 60 / ss) if ss else 0
+            chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
+        else:
+            chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
+        note_block = (f"<div class='note-html'>{notes[y]}</div>" if notes.get(y) else
+                      "<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>")
+        rows_html += (
+            "<div class='jrow'>"
+            f"<div class='jdate'><div class='jyear'>{y}</div>"
+            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
+            f"<div><div style='margin-bottom:6px;'>{chips}</div>{note_block}</div>"
+            "</div>"
+        )
+    foot_html = (f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
+                 "Mục này sẽ dày dần theo thời gian.</div>")
     with st.container(border=True, key="jcard_otd"):
-        for y in years:
-            wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
-            c1, c2 = st.columns([1, 5], vertical_alignment="top")
-            with c1:
-                st.markdown(f"<div class='jdate'><div class='jyear'>{y}</div>"
-                            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>",
-                            unsafe_allow_html=True)
-            with c2:
-                if y in stats:
-                    hrs, ss = stats[y]
-                    avg = (hrs * 60 / ss) if ss else 0
-                    chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
-                else:
-                    chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
-                st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
-                if notes.get(y):
-                    st.markdown(f"<div class='note-html'>{notes[y]}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>",
-                                unsafe_allow_html=True)
-        st.markdown(f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
-                    "Mục này sẽ dày dần theo thời gian.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='jrows'>{rows_html}</div>{foot_html}", unsafe_allow_html=True)
 
 
 def render_calendar_grid(scope_df, full_df):
@@ -1754,11 +1761,19 @@ st.markdown(
         background: #fff !important;
     }
 
-    /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
-    [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
-        border-bottom: 1px solid rgba(0,0,0,0.06); padding: 12px 0; }
-    [class*="st-key-jcard"] [data-testid="stColumn"]:first-child {
-        border-right: 1px solid rgba(0,0,0,0.08); }
+    /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
+       Dựng bằng HTML tự thân (1 khối st.markdown duy nhất mỗi thẻ) thay vì st.columns()
+       lặp lại -> tránh hoàn toàn cơ chế flex/chiều cao tự tính của Streamlit (từng làm
+       khoảng cách quanh đường kẻ lệch nhau dù CSS đặt padding bằng nhau, do JS tính sẵn
+       chiều cao hàng theo layout ban đầu, không cập nhật lại khi nội dung dài tràn khung). */
+    .jrows .jrow { display: grid; grid-template-columns: 1fr 5fr; align-items: start;
+        column-gap: 10px; padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .jrows .jrow:last-child { border-bottom: none; }
+    .jrows .jrow > .jdate { border-right: 1px solid rgba(0,0,0,0.08); padding-right: 10px; }
+    @media (max-width: 640px) {
+        .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
+        .jrows .jrow > .jdate { border-right: none; padding-right: 0; }
+    }
     .jdate { text-align: center; }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: #007aff; letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
@@ -1771,12 +1786,6 @@ st.markdown(
     .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
-
-    @media (max-width: 640px) {
-        [class*="st-key-jcard"] [data-testid="stColumn"] { margin-bottom: 0 !important; }
-        /* Khi cột xếp dọc trên mobile, bỏ vạch dọc (border-right) cho gọn */
-        [class*="st-key-jcard"] [data-testid="stColumn"]:first-child { border-right: none !important; }
-    }
     </style>
     """,
     unsafe_allow_html=True
