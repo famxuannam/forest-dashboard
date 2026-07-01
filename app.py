@@ -957,15 +957,14 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
 .rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
 .rtl-yr{{color:#c7c7cc;margin-left:1px;}}
 </style>
-<div class="section-hd">Dòng thời gian</div>
 <div class="rtl-card">
+<div class="card-label">Dòng thời gian</div>
 <div class="rtl-legend"><span><i style="background:#007aff;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 {bars_html}
 <div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown("<div class='section-hd'>Chi tiết từng cuốn</div>", unsafe_allow_html=True)
     # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu"
     vmax_h = float(t['Tổng giờ'].max()) if len(t) else 0.0
     rows_html = ''
@@ -982,7 +981,9 @@ def render_reading_log(df_books, latest_overall, recency_days=14):
         rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
         rows_html += '</tr>'
     st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap"><table class="dtbl">
+<div class="dtbl-wrap" style="margin-top:14px;">
+<div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">Chi tiết từng cuốn</div>
+<table class="dtbl">
 <thead><tr><th class="lbl">Cuốn sách</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>Ngày đọc</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
@@ -1654,6 +1655,9 @@ st.markdown(
     .stat-panel .chip.tw .ck { color: #0067d6; }
     .stat-panel .chip.tw .cv { color: #007aff; }
     .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
+    /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
+       bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
+    .card-label { font-size: 11px; font-weight: 700; color: #007aff; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
