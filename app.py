@@ -1755,8 +1755,16 @@ st.markdown(
     }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải ===== */
+    /* Streamlit tự thêm gap 16px giữa các hàng (mỗi ngày = 1 lần gọi st.columns trong vòng lặp)
+       -> cộng dồn vào khoảng CÁCH SAU đường kẻ, làm nó luôn lớn hơn khoảng trước dù padding
+       bằng nhau. Tắt gap này để tự kiểm soát hoàn toàn bằng padding, đảm bảo cân đối thật. */
+    [class*="st-key-jcard"][data-testid="stVerticalBlock"] { gap: 0 !important; }
     [class*="st-key-jcard"] [data-testid="stHorizontalBlock"] {
-        border-bottom: 1px solid rgba(0,0,0,0.06); padding: 12px 0 22px; }
+        border-bottom: 1px solid rgba(0,0,0,0.06); padding: 16px 0; }
+    /* Mỗi hàng nằm riêng trong 1 stLayoutWrapper (con duy nhất) nên :last-child đặt trực
+       tiếp trên stHorizontalBlock sẽ khớp MỌI hàng; phải xét :last-child ở cấp wrapper. */
+    [class*="st-key-jcard"] > [data-testid="stLayoutWrapper"]:last-child [data-testid="stHorizontalBlock"] {
+        border-bottom: none; }
     [class*="st-key-jcard"] [data-testid="stColumn"]:first-child {
         border-right: 1px solid rgba(0,0,0,0.08); }
     .jdate { text-align: center; }
