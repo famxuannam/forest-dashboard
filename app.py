@@ -775,7 +775,6 @@ def render_dayhour_heatmap(scope_df):
     # trang, không phải trắng) -> nếu không ép, phần "ở giữa" (canvas SVG) sẽ lệch tông với phần
     # đệm/viền thẻ trắng bao quanh (CSS chỉ chỉnh được phần đệm, không chỉnh được nền SVG).
     st.altair_chart(chart, width='content')
-    st.markdown("<div class='scroll-hint'>◀ Vuốt ngang để xem đủ 7 ngày ▶</div>", unsafe_allow_html=True)
 
 
 def _streak_stats(streak_df):
@@ -1286,7 +1285,6 @@ def render_calendar_grid(scope_df, full_df):
         background='white',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
-    st.markdown("<div class='scroll-hint'>◀ Vuốt ngang để xem đủ lịch ▶</div>", unsafe_allow_html=True)
 
 
 DTBL_CSS = """
@@ -1683,9 +1681,6 @@ st.markdown(
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
     .card-label { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
-    /* Gợi ý vuốt ngang cho lưới rộng (lịch/heatmap) khi co hẹp -> chỉ hiện trên di động
-       (bật lại display:block trong @media bên dưới). */
-    .scroll-hint { display: none; font-size: 11px; color: #86868b; text-align: center; margin-top: 6px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -1767,10 +1762,6 @@ st.markdown(
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
         /* Lịch/heatmap (Vega) rộng -> cho cuộn ngang trong thẻ thay vì tràn */
         [data-testid="stVegaLiteChart"] { overflow-x: auto !important; justify-content: flex-start !important; }
-        /* Gợi ý vuốt ngang: thanh cuộn trên di động (iOS/Android) là overlay của hệ điều hành,
-           KHÔNG áp được màu qua ::-webkit-scrollbar -> dùng chữ gợi ý thật để chắc chắn hiển thị,
-           tránh hiểu nhầm lưới chỉ có bấy nhiêu cột (vd Thứ 7/Chủ Nhật bị khuất ngoài mép). */
-        .scroll-hint { display: block !important; }
 
         /* Bảng số liệu: chữ nhỏ & đệm sát để chứa nhiều cột hơn */
         .dtbl th, .dtbl td { padding: 3px 6px !important; font-size: 11px !important; }
