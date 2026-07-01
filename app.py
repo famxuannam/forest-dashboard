@@ -746,17 +746,22 @@ def render_dayhour_heatmap(scope_df):
     cell['TB'] = cell.apply(lambda r: r['giờ'] / max(int(wd_count.get(r['Thứ'], 1)), 1), axis=1)
 
     # Thứ ra trục ngang (nhãn ở trên), giờ xuống trục dọc (nhãn mỗi 2h) -> lưới cao, hẹp
+    # Step rộng hơn (54 thay vì 46) để có chỗ cho chữ trục to hơn mà không bị chật/đè nhau.
     chart = alt.Chart(cell).mark_rect(cornerRadius=2).encode(
         x=alt.X('Thứ:O', sort=DAYS_ORDER, title='',
-                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False)),
+                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False, labelFontSize=12)),
         y=alt.Y('Khung giờ:O', title='Khung giờ (0h - 23h)',
-                axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False)),
+                axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False,
+                               labelFontSize=12, titleFontSize=12)),
         color=alt.Color('TB:Q', scale=alt.Scale(range=['#eef0f3', '#1f8f43']), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
-    ).properties(width=alt.Step(46), height=alt.Step(26)).configure_view(strokeWidth=0)
+    ).properties(width=alt.Step(54), height=alt.Step(26)).configure_view(strokeWidth=0)
     # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
-    st.altair_chart(chart, width='content')
+    # Bọc trong container có key riêng để CSS chỉ chỉnh nền thẻ này (khớp màu nền của lưới,
+    # #eef0f3 - đầu thang màu), không ảnh hưởng các biểu đồ Vega/Plotly khác.
+    with st.container(key="dayhour_heat"):
+        st.altair_chart(chart, width='content')
 
 
 def _streak_stats(streak_df):
@@ -1622,6 +1627,10 @@ st.markdown(
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]),
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
+
+    /* Biểu đồ "Giờ tập trung theo thứ": nền thẻ (phần đệm hai bên lưới) khớp màu nền lưới
+       (#eef0f3 - đầu thang màu của các ô giá trị thấp/0) để không có viền trắng lệch tông. */
+    .st-key-dayhour_heat [data-testid="stVegaLiteChart"] { background: #eef0f3 !important; }
 
     /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
        các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
