@@ -129,7 +129,7 @@ def _hsl_hex(h, s, l):
 TEAL_HUE = 0.5096  # góc màu (hue) của accent #00a3ad, tính từ colorsys.rgb_to_hls
 
 
-def _teal_shades(n, l_lo=0.90, l_hi=0.16):
+def _teal_shades(n, l_lo=0.90, l_hi=0.26):
     """Sinh n sắc độ teal (cùng hue với accent #00a3ad) từ nhạt (l_lo) đến đậm (l_hi)
     -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, Giờ tập trung theo thứ, thanh Phân bổ
     độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng."""
@@ -1293,8 +1293,8 @@ def render_calendar_grid(scope_df, full_df):
     )
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        # lvl 5,6,7 (3 bậc teal đậm nhất) đã đủ tối để cần chữ trắng, còn lại chữ xám mờ
-        color=alt.condition("datum.lvl >= 5", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        # lvl 6,7 (2 bậc teal đậm nhất) đã đủ tối để cần chữ trắng, còn lại chữ xám mờ
+        color=alt.condition("datum.lvl >= 6", alt.value('#ffffff'), alt.value('#a7a7ac')),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
