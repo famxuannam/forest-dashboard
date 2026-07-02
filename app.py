@@ -2499,10 +2499,14 @@ elif nav == "Chuẩn bị dữ liệu":
                 deleted = load_deleted()
                 skipped_deleted = 0
                 if not deleted.empty:
-                    del_keys = set(zip(deleted['Thời gian bắt đầu'].astype(str),
-                                       deleted['Thời gian kết thúc'].astype(str)))
+                    # _fmt_ts (không phải .astype(str) thô) ở CẢ 2 vế -> deleted đã là chuỗi
+                    # chuẩn "YYYY-MM-DD HH:MM:SS" (không giây lẻ, từ load_deleted), còn df_new
+                    # là Timestamp mới parse (thường CÓ giây lẻ) -- so sánh thô sẽ luôn lệch
+                    # nhau nên phiên đã xoá không được nhận ra, bị thêm lại khi nạp lại CSV cũ.
+                    del_keys = set(zip(deleted['Thời gian bắt đầu'].map(_fmt_ts),
+                                       deleted['Thời gian kết thúc'].map(_fmt_ts)))
                     keep = [(s, e) not in del_keys for s, e in
-                            zip(df_new['Thời gian bắt đầu'].astype(str), df_new['Thời gian kết thúc'].astype(str))]
+                            zip(df_new['Thời gian bắt đầu'].map(_fmt_ts), df_new['Thời gian kết thúc'].map(_fmt_ts))]
                     skipped_deleted = len(df_new) - sum(keep)
                     df_new = df_new[keep]
                 _extra = f", {skipped_deleted} phiên đã xoá trước đó" if skipped_deleted else ""
