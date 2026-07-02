@@ -352,6 +352,33 @@ thường.
 > ⚠️ Mật khẩu ứng dụng chỉ nên dùng cho đúng mục đích này. Nếu nghi ngờ bị lộ, thu hồi ngay
 > tại appleid.apple.com và tạo mật khẩu mới, không ảnh hưởng gì tới tài khoản Apple ID chính.
 
+### Đọc sách khi Reminder List không nằm trong iCloud
+
+CalDAV chỉ đọc được Reminder List **đã lưu trong tài khoản iCloud**. Nếu list được tạo/lưu
+dưới **"Trên iPhone của tôi"** (cục bộ, chưa đồng bộ iCloud), Đồng bộ đọc sách qua CalDAV sẽ
+luôn ra 0 kết quả dù bấm bao nhiêu lần — kiểm tra trong app Nhắc nhở xem list có tách nhóm
+"iCloud"/"Trên iPhone của tôi" không, hoặc chuyển list sang iCloud (giữ chuột/chạm menu list →
+"Chuyển đến tài khoản...").
+
+Nếu không muốn/không chuyển được, dùng **Shortcuts** thay thế — đọc thẳng dữ liệu Reminders
+trên máy (thấy được cả list cục bộ, không qua iCloud):
+
+1. Mở app **Shortcuts** trên iPhone → tạo Shortcut mới.
+2. Thêm action **"Find Reminders"**: để trống bộ lọc List (lấy tất cả danh sách), thêm điều
+   kiện lọc **Completed = Yes** (chỉ lấy reminder đã hoàn thành).
+3. **Repeat with Each** trên kết quả trên. Trong vòng lặp: lấy **List**, **Title**,
+   **Completion Date** của từng reminder (action "Get Details of Reminders"), định dạng
+   Completion Date thành text bằng action **"Format Date"** (Custom Format: `yyyy-MM-dd
+   HH:mm:ss`), rồi ghép 3 giá trị thành 1 dòng dạng `List|Title|CompletionDate` (dấu `|`,
+   không phải dấu phẩy) và gom vào 1 biến danh sách (action "Add to Variable").
+4. Sau vòng lặp: nối dòng header `list|title|completed_date` lên đầu, rồi **Combine Text**
+   toàn bộ (Separator: New Line) thành 1 file text.
+5. **Save File** (Files app) hoặc **Share** (AirDrop/gửi email cho chính mình) để lấy file đó
+   ra máy tính.
+6. Mở app → mục **"Đồng bộ đọc sách"** → ô **"Tải lên file từ Shortcuts"** → chọn file vừa
+   xuất → xem trước → **"Xác nhận nạp dữ liệu"** (thay thế toàn bộ dữ liệu Đọc sách hiện có,
+   giống hệt khi Đồng bộ ngay qua CalDAV).
+
 ---
 
 ## Cài đặt & chạy ứng dụng
