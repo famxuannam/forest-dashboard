@@ -42,6 +42,19 @@ create table if not exists work_calendar (
   primary key (uid, start_time)
 );
 
+-- Phần sách đã đọc, đồng bộ từ Apple Reminders qua CalDAV (VTODO) -- mỗi Reminder List = 1
+-- cuốn sách ("Tác giả - Tên sách"), mỗi Reminder đã hoàn thành trong list đó = 1 phần/chương
+-- đã đọc. Khoá theo (uid, completed_date): 1 reminder chỉ hoàn thành 1 lần trong thực tế
+-- nhưng dùng khoá kép cho nhất quán với work_calendar (đề phòng cùng uid xuất hiện lại nếu
+-- reminder bị bỏ tick rồi tick lại ở ngày khác).
+create table if not exists reading_log (
+  uid text not null,
+  completed_date timestamp not null,
+  book text not null,
+  title text not null,
+  primary key (uid, completed_date)
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -50,9 +63,11 @@ alter table mapping enable row level security;
 alter table deleted_sessions enable row level security;
 alter table notes enable row level security;
 alter table work_calendar enable row level security;
+alter table reading_log enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
 create policy "anon full access" on deleted_sessions for all using (true) with check (true);
 create policy "anon full access" on notes for all using (true) with check (true);
 create policy "anon full access" on work_calendar for all using (true) with check (true);
+create policy "anon full access" on reading_log for all using (true) with check (true);
