@@ -13,9 +13,11 @@ import colorsys
 import re
 from itertools import groupby
 from html import escape as html_escape
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from streamlit_quill import st_quill
 from supabase import create_client
+from caldav import DAVClient
 
 # Thanh công cụ cho ô soạn ghi chú (Quill): đậm/nghiêng/gạch chân, màu chữ & nền,
 # danh sách + thụt lề, liên kết, xoá định dạng. (Không bật chèn ảnh để tránh phình notes.csv.)
@@ -93,6 +95,7 @@ DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
+WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 
 @st.cache_resource
 def _get_supabase():
@@ -286,6 +289,88 @@ def save_notes_bulk(df):
                 if str(r["Ghi chú"]).strip()]
         if recs:
             sb.table("notes").insert(recs).execute()
+    st.cache_data.clear()
+
+
+# --- ĐỒNG BỘ LỊCH WORK (Apple Calendar qua CalDAV) ---
+# Tính năng phụ, không bắt buộc: thiếu ICLOUD_* trong secrets thì mục "Đồng bộ lịch Work" báo
+# lỗi cấu hình khi bấm nút, phần còn lại của app vẫn chạy bình thường (khác SUPABASE_* là bắt
+# buộc cho toàn app ngay từ đầu).
+APP_TZ = ZoneInfo("Asia/Ho_Chi_Minh")  # cố định múi giờ hiển thị, không phụ thuộc múi giờ server
+
+def _has_icloud_secrets():
+    try:
+        return bool(st.secrets.get("ICLOUD_USERNAME")) and bool(st.secrets.get("ICLOUD_APP_PASSWORD"))
+    except Exception:
+        return False
+
+@st.cache_resource
+def _get_caldav_client():
+    return DAVClient(url="https://caldav.icloud.com/",
+                      username=st.secrets["ICLOUD_USERNAME"],
+                      password=st.secrets["ICLOUD_APP_PASSWORD"])
+
+def _find_work_calendar():
+    name = st.secrets.get("ICLOUD_WORK_CALENDAR", "Work")
+    for cal in _get_caldav_client().principal().calendars():
+        if cal.name == name:
+            return cal
+    return None
+
+def sync_work_calendar(start_date, end_date):
+    """Kéo appointment lịch Work trong [start_date, end_date] (kể cả sự kiện lặp lại, tự khai
+    triển qua expand=True), chuẩn hoá giờ về naive local wall-clock theo APP_TZ, upsert vào
+    Supabase theo (uid, start_time) -- an toàn khi đồng bộ lại cùng khoảng ngày (không trùng).
+    Trả về (số dòng đã đồng bộ, thông báo lỗi hoặc None)."""
+    if not _has_icloud_secrets():
+        return 0, "Chưa cấu hình ICLOUD_USERNAME/ICLOUD_APP_PASSWORD trong secrets."
+    try:
+        cal = _find_work_calendar()
+    except Exception as e:
+        return 0, f"Không kết nối được tới iCloud: {e}"
+    if cal is None:
+        return 0, f"Không tìm thấy lịch '{st.secrets.get('ICLOUD_WORK_CALENDAR', 'Work')}' trong tài khoản."
+    events = cal.date_search(start=datetime.combine(start_date, datetime.min.time()),
+                              end=datetime.combine(end_date, datetime.min.time()), expand=True)
+    recs = []
+    for ev in events:
+        comp = ev.icalendar_component
+        dtstart = comp.get('DTSTART').dt
+        if isinstance(dtstart, datetime) and dtstart.tzinfo is not None:
+            dtstart = dtstart.astimezone(APP_TZ).replace(tzinfo=None)
+        title = str(comp.get('SUMMARY', '')).strip()
+        if not title:
+            continue
+        recs.append({"uid": str(comp.get('UID')), "start_time": _fmt_ts(dtstart), "title": title})
+    sb = _get_supabase()
+    for i in range(0, len(recs), 500):
+        sb.table("work_calendar").upsert(recs[i:i + 500], on_conflict="uid,start_time").execute()
+    st.cache_data.clear()
+    return len(recs), None
+
+@st.cache_data
+def load_work_calendar():
+    sb = _get_supabase()
+    res = sb.table("work_calendar").select("start_time,title").execute()
+    cols = ["Thời gian bắt đầu", "Tiêu đề"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(res.data).rename(columns={"start_time": "Thời gian bắt đầu", "title": "Tiêu đề"})
+    df["Thời gian bắt đầu"] = pd.to_datetime(df["Thời gian bắt đầu"], format='ISO8601')
+    return df[cols]
+
+def save_work_calendar_bulk(df):
+    """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu). File sao lưu không có cột uid gốc
+    (load_work_calendar() không xuất uid) nên sinh uid tạm theo thứ tự dòng -- lần "Đồng bộ lịch
+    Work" thật tiếp theo sẽ tự chèn lại đúng uid gốc từ CalDAV bên cạnh các dòng phục hồi này;
+    chấp nhận đánh đổi này vì Khôi phục là thao tác hiếm, không phải luồng chính."""
+    sb = _get_supabase()
+    _sb_delete_all("work_calendar", "uid")
+    if not df.empty:
+        recs = [{"uid": f"restored-{i}", "start_time": _fmt_ts(r["Thời gian bắt đầu"]), "title": str(r["Tiêu đề"])}
+                for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề"]).strip()]
+        for i in range(0, len(recs), 500):
+            sb.table("work_calendar").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
 
 
@@ -1170,6 +1255,29 @@ def render_day_timeline(day_df, sel, df_all):
 """, unsafe_allow_html=True)
 
 
+def render_work_calendar_box(day):
+    """Box appointment lịch Work trong ngày `day` (nếu có), đặt phía trên Ghi chú ngày. Im
+    lặng không render gì nếu ngày đó không có appointment nào -- không dùng expander riêng
+    để tránh phải đánh số lại các mục expander khác trong trang."""
+    wc = load_work_calendar()
+    if wc.empty:
+        return
+    day_events = wc[wc['Thời gian bắt đầu'].dt.date == day].sort_values('Thời gian bắt đầu')
+    if day_events.empty:
+        return
+    chips = ''.join(
+        f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+        f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+        for _, r in day_events.iterrows()
+    )
+    st.markdown(
+        "<div class='glass-card' style='padding:14px 18px;margin-bottom:14px;'>"
+        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;"
+        "letter-spacing:0.5px;margin-bottom:8px;'>Lịch Work</div>"
+        f"<div>{chips}</div></div>",
+        unsafe_allow_html=True)
+
+
 @st.fragment
 def render_note_editor(day):
     """Ghi chú một ngày, gói trong thẻ. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
@@ -1230,29 +1338,52 @@ def render_note_editor(day):
 
 
 def render_notes_journal(period_key, kind):
-    """Liệt kê (chỉ đọc) ghi chú của các ngày thuộc một kỳ (tuần/tháng).
+    """Liệt kê (chỉ đọc) ghi chú + appointment lịch Work của các ngày thuộc một kỳ (tuần/tháng)
+    -- một dòng cho mỗi ngày có ghi chú HOẶC có appointment (hợp/union 2 nguồn), không chỉ
+    giới hạn ở ngày đã có ghi chú viết tay như trước.
     Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
     cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
     hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
+    def _in_period(dt_series):
+        return (dt_series.dt.strftime('%Y-%m') == period_key) if kind == 'month' \
+            else (dt_series.dt.strftime('%G-W%V') == period_key)
+
     nd = load_notes()
     if not nd.empty:
         nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce')).dropna(subset=['_d'])
-        if kind == 'month':
-            nd = nd[nd['_d'].dt.strftime('%Y-%m') == period_key]
-        else:
-            nd = nd[nd['_d'].dt.strftime('%G-W%V') == period_key]
-        nd = nd.sort_values('_d')
-    if nd.empty:
-        st.caption("Chưa có ghi chú nào trong kỳ này.")
+        nd = nd[_in_period(nd['_d'])]
+
+    wc = load_work_calendar()
+    if not wc.empty:
+        wc = wc.assign(_d=wc['Thời gian bắt đầu'].dt.normalize())
+        wc = wc[_in_period(wc['_d'])]
+
+    note_days = set(nd['_d']) if not nd.empty else set()
+    event_days = set(wc['_d']) if not wc.empty else set()
+    days = sorted(note_days | event_days)
+    if not days:
+        st.caption("Chưa có ghi chú hoặc appointment nào trong kỳ này.")
         return
+
     rows_html = ''
-    for _, r in nd.iterrows():
-        d = r['_d']
+    for d in days:
+        chips_html = ''
+        if d in event_days:
+            day_events = wc[wc['_d'] == d].sort_values('Thời gian bắt đầu')
+            chips = ''.join(
+                f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+                f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+                for _, r in day_events.iterrows()
+            )
+            chips_html = f"<div style='margin-bottom:6px;'>{chips}</div>"
+        note_html = ''
+        if d in note_days:
+            note_html = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
         rows_html += (
             "<div class='jrow'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m}</div></div>"
-            f"<div class='note-html'>{str(r['Ghi chú'])}</div>"
+            f"<div>{chips_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_journal"):
@@ -2320,6 +2451,7 @@ elif nav == "Báo cáo ngày":
 
         if day_df.empty:
             st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
+            render_work_calendar_box(sel)
             with st.expander("Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
             with st.expander("Ngày này năm trước", expanded=False):
@@ -2379,6 +2511,7 @@ elif nav == "Báo cáo ngày":
                 render_session_bar(day_df)
                 render_day_timeline(day_df, sel, df)
 
+            render_work_calendar_box(sel)
             with st.expander("2. Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
 
@@ -2658,7 +2791,8 @@ elif nav == "Chuẩn bị dữ liệu":
                 _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
                     for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
-                                      (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes())]:
+                                      (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes()),
+                                      (WORK_CALENDAR_FILE, load_work_calendar())]:
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
@@ -2686,6 +2820,8 @@ elif nav == "Chuẩn bị dữ liệu":
                             parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
                         if NOTES_FILE in names:
                             parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
+                        if WORK_CALENDAR_FILE in names:
+                            parts.append(f"Lịch Work **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -2705,6 +2841,8 @@ elif nav == "Chuẩn bị dữ liệu":
                         save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
                     if NOTES_FILE in names:
                         save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
+                    if WORK_CALENDAR_FILE in names:
+                        save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -2717,10 +2855,35 @@ elif nav == "Chuẩn bị dữ liệu":
                 _sb_delete_all("mapping", "project")
                 _sb_delete_all("deleted_sessions", "start_time")
                 _sb_delete_all("notes", "note_date")
+                _sb_delete_all("work_calendar", "uid")
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
+
+    with st.expander("5. Đồng bộ lịch Work", expanded=True):
+        st.caption("Kéo appointment từ lịch **Work** trong Apple Calendar về app (qua CalDAV) — "
+                   "cần cấu hình `ICLOUD_USERNAME`/`ICLOUD_APP_PASSWORD` trong secrets trước "
+                   "(xem README mục thiết lập).")
+        sc1, sc2 = st.columns([3, 1])
+        with sc1:
+            sync_range = st.segmented_control("Khoảng đồng bộ (quanh hôm nay)",
+                                               ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
+                                               default="-90 / +90 ngày", key="wc_range")
+        sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
+        with sc2:
+            st.write("")
+            if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
+                _start = date.today() - timedelta(days=sync_days)
+                _end = date.today() + timedelta(days=sync_days)
+                with st.spinner("Đang kết nối iCloud..."):
+                    _n, _err = sync_work_calendar(_start, _end)
+                if _err:
+                    st.error(_err)
+                else:
+                    st.success(f"Đã đồng bộ {_n} appointment (từ {_start:%d/%m/%Y} đến {_end:%d/%m/%Y}).")
+                    time.sleep(1)
+                    st.rerun()
 
 # ==========================================
 # TAB HƯỚNG DẪN
@@ -3006,3 +3169,17 @@ elif nav == "Hướng dẫn":
             "sao lưu **định kỳ** (vd mỗi lần vừa import dữ liệu mới xong) làm lớp an toàn thứ hai, phòng trường "
             "hợp thao tác nhầm hoặc sự cố ngoài ý muốn.",
         where="Chuẩn bị dữ liệu → Quản lý hệ thống")
+    guide_item(
+        "prep_work_calendar.png", "Đồng bộ lịch Work",
+        "Kéo các appointment (cuộc hẹn/họp) từ lịch **\"Work\"** trong Apple Calendar về app qua "
+        "**CalDAV** — kết nối trực tiếp tài khoản iCloud, không cần xuất file thủ công. Sau khi đồng "
+        "bộ, các appointment hiện ở hai nơi:\n\n"
+        "- **Báo cáo ngày**: một khối **Lịch Work** hiện các appointment trong ngày (giờ bắt đầu + "
+        "tiêu đề), đặt ngay phía trên Ghi chú ngày.\n"
+        "- **Báo cáo tuần/tháng** (mục Nhật ký): appointment của mỗi ngày được xen kẽ vào đúng dòng "
+        "ngày đó, kể cả những ngày không có ghi chú viết tay.",
+        tip="Tính năng tuỳ chọn — cần tạo **App-Specific Password** tại appleid.apple.com và điền vào "
+            "secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, mục \"Đồng bộ lịch "
+            "Work\"). Chưa cấu hình thì mục này chỉ báo lỗi khi bấm nút, không ảnh hưởng phần còn lại "
+            "của app.",
+        where="Chuẩn bị dữ liệu → Đồng bộ lịch Work")

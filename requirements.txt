@@ -4,3 +4,4 @@ plotly>=6,<7
 altair>=5,<7
 streamlit-quill>=0.0.3,<0.1
 supabase>=2,<3
+caldav>=3,<4

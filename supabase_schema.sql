@@ -32,6 +32,16 @@ create table if not exists notes (
   note text not null
 );
 
+-- Appointment đồng bộ từ lịch "Work" (Apple Calendar) qua CalDAV -- xem mục "Đồng bộ lịch
+-- Work" trong tab Chuẩn bị dữ liệu. Khoá theo (uid, start_time) chứ không chỉ uid, vì 1 sự
+-- kiện lặp lại (recurring) sau khi khai triển có nhiều lần xuất hiện cùng uid khác start_time.
+create table if not exists work_calendar (
+  uid text not null,
+  start_time timestamp not null,
+  title text not null,
+  primary key (uid, start_time)
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -39,8 +49,10 @@ alter table sessions enable row level security;
 alter table mapping enable row level security;
 alter table deleted_sessions enable row level security;
 alter table notes enable row level security;
+alter table work_calendar enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
 create policy "anon full access" on deleted_sessions for all using (true) with check (true);
 create policy "anon full access" on notes for all using (true) with check (true);
+create policy "anon full access" on work_calendar for all using (true) with check (true);
