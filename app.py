@@ -1394,6 +1394,28 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 </div>
 """, unsafe_allow_html=True)
 
+    # Xem chi tiết 1 cuốn/series -- tái dùng đúng 1 dòng đã tính sẵn trong t + _reading_rows_html
+    # (đang dùng y hệt cho "Nhật ký đọc" ở Báo cáo theo dự án), không đụng dữ liệu Dự án Forest
+    # thật -- dùng chung được cho cả Sách lẫn Gundam qua labels đã tổng quát hoá sẵn.
+    _detail_opts = ["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
+    _detail_sel = st.selectbox(f"Xem chi tiết 1 {labels['item_col'].lower()}",
+                                _detail_opts, key=f"rl_detail_{labels['item_col']}")
+    if _detail_sel != _detail_opts[0]:
+        _row = t[t['Cuốn sách'] == _detail_sel].iloc[0]
+        render_stat_panel(hero_items=[
+            {"label": "Bắt đầu", "value": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
+            {"label": "Gần nhất", "value": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
+            {"label": "Số ngày", "value": f"{int(_row['Số ngày'])}"},
+            {"label": "Tổng giờ", "value": f"{_row['Tổng giờ']:.1f}h" if pd.notna(_row['Tổng giờ']) else "—"},
+            {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
+            {"label": "Trạng thái", "value": _row['Trạng thái']},
+        ])
+        _rl_detail = reading_log_df[reading_log_df['Cuốn sách'] == _detail_sel]
+        if not _rl_detail.empty:
+            with st.container(border=True, key="jcard_reading_detail"):
+                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_detail, label_book=False)}</div>",
+                            unsafe_allow_html=True)
+
     # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu". Cột thuộc nguồn Forest
     # (Số ngày/Ngày đọc/Tổng giờ/Số phiên/Giờ tuần) hoặc nguồn Reminders (Số phần đã đọc/Phần
     # gần nhất) có thể NaN nếu sách đó chỉ có 1 trong 2 nguồn -- hiện '—' thay vì để lọt "nan"
@@ -1716,8 +1738,24 @@ def render_on_this_day(sel, df_all):
         nd = nd[(nd['_d'].dt.month == m) & (nd['_d'].dt.day == d) & (nd['_d'].dt.year < sel.year)]
         for _, r in nd.iterrows():
             notes[int(r['_d'].year)] = str(r['Ghi chú'])
+    # Lịch (appointment) cùng ngày/tháng ở các năm trước
+    events = {}  # year -> DataFrame
+    wc = load_work_calendar()
+    if not wc.empty:
+        wc_m = wc[(wc['Thời gian bắt đầu'].dt.month == m) & (wc['Thời gian bắt đầu'].dt.day == d)
+                  & (wc['Thời gian bắt đầu'].dt.year < sel.year)]
+        for y, g in wc_m.groupby(wc_m['Thời gian bắt đầu'].dt.year):
+            events[int(y)] = g.sort_values('Thời gian bắt đầu')
+    # Đọc sách/Gundam cùng ngày/tháng ở các năm trước
+    reading = {}  # year -> DataFrame
+    rl = load_reading_log()
+    if not rl.empty:
+        rl_m = rl[(rl['Ngày hoàn thành'].dt.month == m) & (rl['Ngày hoàn thành'].dt.day == d)
+                  & (rl['Ngày hoàn thành'].dt.year < sel.year)]
+        for y, g in rl_m.groupby(rl_m['Ngày hoàn thành'].dt.year):
+            reading[int(y)] = g
 
-    years = sorted(set(stats) | set(notes), reverse=True)
+    years = sorted(set(stats) | set(notes) | set(events) | set(reading), reverse=True)
     if not years:
         _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
                 "fill='#c7c7cc'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
@@ -1746,13 +1784,21 @@ def render_on_this_day(sel, df_all):
             chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
         else:
             chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
+        cal_html = ''
+        if y in events:
+            _cchips = ''.join(
+                f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+                f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+                for _, r in events[y].iterrows())
+            cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{_cchips}</div>"
+        read_html = _book_chips_html(reading[y]) if y in reading else ''
         note_block = (f"<div class='note-html'>{notes[y]}</div>" if notes.get(y) else
                       "<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>")
         rows_html += (
             "<div class='jrow'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
-            f"<div><div style='margin-bottom:6px;'>{chips}</div>{note_block}</div>"
+            f"<div><div style='margin-bottom:6px;'>{chips}</div>{cal_html}{read_html}{note_block}</div>"
             "</div>"
         )
     foot_html = (f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
@@ -2354,6 +2400,9 @@ st.markdown(
 
     /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
     .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
+    .st-key-note_saved [data-testid="stMarkdownContainer"],
+    .st-key-note_saved [data-testid="stMarkdownContainer"] p,
+    .st-key-note_saved [data-testid="stMarkdownContainer"] li { font-size: 14.5px !important; line-height: 1.6 !important; }
     .note-html p, .st-key-note_saved p { margin: 4px 0; }
     .note-html ul, .note-html ol, .st-key-note_saved ul, .st-key-note_saved ol { margin: 4px 0; padding-left: 22px; }
     /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
@@ -2440,9 +2489,9 @@ NAV = {
     "Báo cáo tháng": ":material/calendar_month:",
     "Báo cáo tuần": ":material/calendar_view_week:",
     "Báo cáo ngày": ":material/today:",
-    "Báo cáo theo dự án": ":material/category:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/smart_toy:",
+    "Báo cáo theo dự án": ":material/category:",
     "Chuẩn bị dữ liệu": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
@@ -2452,9 +2501,9 @@ NAV_SHORT = {
     "Báo cáo tháng": "Tháng",
     "Báo cáo tuần": "Tuần",
     "Báo cáo ngày": "Ngày",
-    "Báo cáo theo dự án": "Dự án",
     "Nhật ký đọc sách": "Sách",
     "Gundam": "Gundam",
+    "Báo cáo theo dự án": "Dự án",
     "Chuẩn bị dữ liệu": "Dữ liệu",
     "Hướng dẫn": "Trợ giúp",
 }
@@ -3020,108 +3069,128 @@ elif nav == "Gundam":
 # ==========================================
 elif nav == "Chuẩn bị dữ liệu":
     with st.expander("1. Dữ liệu đầu vào", expanded=True):
-        st.subheader("Tải lên từ Forest")
-        _msg = st.session_state.pop('import_msg', None)
-        if _msg:
-            st.success(_msg)
-        forest_file = st.file_uploader("Tải lên file CSV từ máy tính", type=["csv"], key="forest")
-        if forest_file:
-            df_new, stats, missing = parse_forest_csv(forest_file)
-            if missing:
-                st.error("File thiếu cột: " + ", ".join(missing) + ". Hãy dùng CSV xuất từ Forest (Tag/Project, Start Time, End Time, Is Success).")
-            elif df_new.empty:
-                st.warning("Không tìm thấy phiên hợp lệ nào trong file.")
-            else:
-                deleted = load_deleted()
-                skipped_deleted = 0
-                if not deleted.empty:
-                    # _fmt_ts (không phải .astype(str) thô) ở CẢ 2 vế -> deleted đã là chuỗi
-                    # chuẩn "YYYY-MM-DD HH:MM:SS" (không giây lẻ, từ load_deleted), còn df_new
-                    # là Timestamp mới parse (thường CÓ giây lẻ) -- so sánh thô sẽ luôn lệch
-                    # nhau nên phiên đã xoá không được nhận ra, bị thêm lại khi nạp lại CSV cũ.
-                    del_keys = set(zip(deleted['Thời gian bắt đầu'].map(_fmt_ts),
-                                       deleted['Thời gian kết thúc'].map(_fmt_ts)))
-                    keep = [(s, e) not in del_keys for s, e in
-                            zip(df_new['Thời gian bắt đầu'].map(_fmt_ts), df_new['Thời gian kết thúc'].map(_fmt_ts))]
-                    skipped_deleted = len(df_new) - sum(keep)
-                    df_new = df_new[keep]
-                _extra = f", {skipped_deleted} phiên đã xoá trước đó" if skipped_deleted else ""
-                if df_new.empty:
-                    st.info(f"Tất cả {stats['valid']} phiên hợp lệ đều đã nằm trong danh sách đã xoá trước đó — không có gì để thêm.")
+        _tab_forest, _tab_cal, _tab_rem = st.tabs(["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
+        with _tab_forest:
+            _msg = st.session_state.pop('import_msg', None)
+            if _msg:
+                st.success(_msg)
+            forest_file = st.file_uploader("Tải lên file CSV từ máy tính", type=["csv"], key="forest")
+            if forest_file:
+                df_new, stats, missing = parse_forest_csv(forest_file)
+                if missing:
+                    st.error("File thiếu cột: " + ", ".join(missing) + ". Hãy dùng CSV xuất từ Forest (Tag/Project, Start Time, End Time, Is Success).")
+                elif df_new.empty:
+                    st.warning("Không tìm thấy phiên hợp lệ nào trong file.")
                 else:
-                    st.caption(f"Đọc được **{stats['valid']}** phiên hợp lệ — bỏ {stats['failed']} phiên thất bại, "
-                               f"{stats['unset']} phiên unset/rỗng{_extra}. Xem trước:")
-                    preview = df_new.head(8).copy()
-                    preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
-                    preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
-                    st.dataframe(preview, width='stretch', hide_index=True)
-                    if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
-                        db = load_db()
-                        before = len(db)
-                        rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
-                        combined = pd.concat([db, df_new])
-                        # _fmt_ts (không phải .astype(str) thô) -> chuẩn hoá về cùng 1 định dạng
-                        # "YYYY-MM-DD HH:MM:SS" bất kể cột đang là chuỗi (từ db cũ) hay Timestamp
-                        # (từ df_new mới parse) -> drop_duplicates nhận đúng phiên trùng dù nguồn
-                        # gốc có/không giây lẻ, tránh chèn trùng khi nạp lại cùng file Forest.
-                        combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
-                        combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
-                        combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-                        added = len(combined) - before
-                        dup = stats['valid'] - skipped_deleted - added
-                        save_db(combined)
-                        st.session_state['import_msg'] = (
-                            f"Đã thêm {added} phiên mới (bỏ {dup} trùng, {stats['failed']} thất bại, "
-                            f"{stats['unset']} unset{_extra}){rng if added else ''}.")
+                    deleted = load_deleted()
+                    skipped_deleted = 0
+                    if not deleted.empty:
+                        # _fmt_ts (không phải .astype(str) thô) ở CẢ 2 vế -> deleted đã là chuỗi
+                        # chuẩn "YYYY-MM-DD HH:MM:SS" (không giây lẻ, từ load_deleted), còn df_new
+                        # là Timestamp mới parse (thường CÓ giây lẻ) -- so sánh thô sẽ luôn lệch
+                        # nhau nên phiên đã xoá không được nhận ra, bị thêm lại khi nạp lại CSV cũ.
+                        del_keys = set(zip(deleted['Thời gian bắt đầu'].map(_fmt_ts),
+                                           deleted['Thời gian kết thúc'].map(_fmt_ts)))
+                        keep = [(s, e) not in del_keys for s, e in
+                                zip(df_new['Thời gian bắt đầu'].map(_fmt_ts), df_new['Thời gian kết thúc'].map(_fmt_ts))]
+                        skipped_deleted = len(df_new) - sum(keep)
+                        df_new = df_new[keep]
+                    _extra = f", {skipped_deleted} phiên đã xoá trước đó" if skipped_deleted else ""
+                    if df_new.empty:
+                        st.info(f"Tất cả {stats['valid']} phiên hợp lệ đều đã nằm trong danh sách đã xoá trước đó — không có gì để thêm.")
+                    else:
+                        st.caption(f"Đọc được **{stats['valid']}** phiên hợp lệ — bỏ {stats['failed']} phiên thất bại, "
+                                   f"{stats['unset']} phiên unset/rỗng{_extra}. Xem trước:")
+                        preview = df_new.head(8).copy()
+                        preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
+                        preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
+                        st.dataframe(preview, width='stretch', hide_index=True)
+                        if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
+                            db = load_db()
+                            before = len(db)
+                            rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
+                            combined = pd.concat([db, df_new])
+                            # _fmt_ts (không phải .astype(str) thô) -> chuẩn hoá về cùng 1 định dạng
+                            # "YYYY-MM-DD HH:MM:SS" bất kể cột đang là chuỗi (từ db cũ) hay Timestamp
+                            # (từ df_new mới parse) -> drop_duplicates nhận đúng phiên trùng dù nguồn
+                            # gốc có/không giây lẻ, tránh chèn trùng khi nạp lại cùng file Forest.
+                            combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
+                            combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
+                            combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
+                            added = len(combined) - before
+                            dup = stats['valid'] - skipped_deleted - added
+                            save_db(combined)
+                            st.session_state['import_msg'] = (
+                                f"Đã thêm {added} phiên mới (bỏ {dup} trùng, {stats['failed']} thất bại, "
+                                f"{stats['unset']} unset{_extra}){rng if added else ''}.")
+                            st.rerun()
+
+        with _tab_cal:
+            sc1, sc2 = st.columns([3, 1])
+            with sc1:
+                sync_range = st.segmented_control("Khoảng đồng bộ (quanh hôm nay)",
+                                                   ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
+                                                   default="-90 / +90 ngày", key="wc_range")
+            sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
+            with sc2:
+                st.write("")
+                if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
+                    _start = date.today() - timedelta(days=sync_days)
+                    _end = date.today() + timedelta(days=sync_days)
+                    with st.spinner("Đang kết nối iCloud..."):
+                        _n, _err = sync_work_calendar(_start, _end)
+                    if _err:
+                        st.error(_err)
+                    else:
+                        st.success(f"Đã đồng bộ {_n} appointment (từ {_start:%d/%m/%Y} đến {_end:%d/%m/%Y}).")
+                        time.sleep(1)
                         st.rerun()
 
-        st.divider()
-        st.subheader("Đồng bộ lịch")
-        sc1, sc2 = st.columns([3, 1])
-        with sc1:
-            sync_range = st.segmented_control("Khoảng đồng bộ (quanh hôm nay)",
-                                               ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
-                                               default="-90 / +90 ngày", key="wc_range")
-        sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
-        with sc2:
-            st.write("")
-            if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
-                _start = date.today() - timedelta(days=sync_days)
-                _end = date.today() + timedelta(days=sync_days)
-                with st.spinner("Đang kết nối iCloud..."):
-                    _n, _err = sync_work_calendar(_start, _end)
-                if _err:
-                    st.error(_err)
-                else:
-                    st.success(f"Đã đồng bộ {_n} appointment (từ {_start:%d/%m/%Y} đến {_end:%d/%m/%Y}).")
-                    time.sleep(1)
-                    st.rerun()
+            with st.expander("Đồng bộ khoảng ngày khác (nâng cao)", expanded=False):
+                st.caption("Dùng khi cần lấp dữ liệu lịch cũ cho mục *Ngày này năm trước* — không "
+                           "cần dùng thường xuyên.")
+                dc1, dc2, dc3 = st.columns([2, 2, 1])
+                with dc1:
+                    _adv_start = st.date_input("Từ ngày", value=date.today() - timedelta(days=365 * 2), key="wc_adv_start")
+                with dc2:
+                    _adv_end = st.date_input("Đến ngày", value=date.today(), key="wc_adv_end")
+                with dc3:
+                    st.write("")
+                    if st.button("Đồng bộ ngay", key="wc_adv_sync_btn"):
+                        if _adv_start >= _adv_end:
+                            st.error("Từ ngày phải trước Đến ngày.")
+                        else:
+                            with st.spinner("Đang kết nối iCloud..."):
+                                _n2, _err2 = sync_work_calendar(_adv_start, _adv_end)
+                            if _err2:
+                                st.error(_err2)
+                            else:
+                                st.success(f"Đã đồng bộ {_n2} appointment (từ {_adv_start:%d/%m/%Y} đến {_adv_end:%d/%m/%Y}).")
+                                time.sleep(1)
+                                st.rerun()
 
-        st.divider()
-        st.subheader("Tải lên từ Reminder")
-        st.caption("Tạo 1 Shortcut trên iPhone/Mac xuất tiến độ đọc sách/xem Gundam từ Apple "
-                   "Reminders ra file `reading_log.csv` rồi tải lên đây (xem hướng dẫn tạo "
-                   "Shortcut trong tab Hướng dẫn). Mỗi lần tải lên sẽ **thay thế toàn bộ** dữ "
-                   "liệu cũ bằng nội dung file mới.")
-        rl_file = st.file_uploader("Tải lên file từ Shortcuts (.csv/.txt)", type=["csv", "txt"], key="rl_shortcut_file")
-        if rl_file:
-            rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(rl_file)
-            if rl_missing:
-                st.error("File thiếu cột: " + ", ".join(rl_missing) + " — cần đúng 3 cột "
-                          "'list|title|completed_date' (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
-            elif rl_df.empty:
-                st.warning("Không đọc được dòng hợp lệ nào trong file.")
-            else:
-                st.caption(f"Đọc được **{rl_stats['valid']}**/{rl_stats['raw']} dòng hợp lệ. Xem trước:")
-                _rl_prev = rl_df.head(8).copy()
-                _rl_prev['Ngày hoàn thành'] = _rl_prev['Ngày hoàn thành'].dt.strftime('%Y-%m-%d %H:%M')
-                st.dataframe(_rl_prev, width='stretch', hide_index=True)
-                st.caption("Xác nhận sẽ **thay thế toàn bộ** dữ liệu Đọc sách hiện có bằng nội dung file này.")
-                if st.button("Xác nhận nạp dữ liệu", type="primary", key="rl_shortcut_confirm"):
-                    save_reading_log_bulk(rl_df)
-                    st.success(f"Đã nạp {rl_df['Sách (gốc)'].nunique()} cuốn sách, {len(rl_df)} phần đã đọc.")
-                    time.sleep(1)
-                    st.rerun()
+        with _tab_rem:
+            st.caption("Tải file `reading_log.csv` xuất từ Shortcut (xem hướng dẫn tạo Shortcut ở "
+                       "tab Hướng dẫn). Mỗi lần tải lên sẽ **thay thế toàn bộ** dữ liệu cũ.")
+            rl_file = st.file_uploader("Tải lên file từ Shortcuts (.csv/.txt)", type=["csv", "txt"], key="rl_shortcut_file")
+            if rl_file:
+                rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(rl_file)
+                if rl_missing:
+                    st.error("File thiếu cột: " + ", ".join(rl_missing) + " — cần đúng 3 cột "
+                              "'list|title|completed_date' (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
+                elif rl_df.empty:
+                    st.warning("Không đọc được dòng hợp lệ nào trong file.")
+                else:
+                    st.caption(f"Đọc được **{rl_stats['valid']}**/{rl_stats['raw']} dòng hợp lệ. Xem trước:")
+                    _rl_prev = rl_df.head(8).copy()
+                    _rl_prev['Ngày hoàn thành'] = _rl_prev['Ngày hoàn thành'].dt.strftime('%Y-%m-%d %H:%M')
+                    st.dataframe(_rl_prev, width='stretch', hide_index=True)
+                    st.caption("Xác nhận sẽ **thay thế toàn bộ** dữ liệu Đọc sách hiện có bằng nội dung file này.")
+                    if st.button("Xác nhận nạp dữ liệu", type="primary", key="rl_shortcut_confirm"):
+                        save_reading_log_bulk(rl_df)
+                        st.success(f"Đã nạp {rl_df['Sách (gốc)'].nunique()} cuốn sách, {len(rl_df)} phần đã đọc.")
+                        time.sleep(1)
+                        st.rerun()
 
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
@@ -3577,7 +3646,7 @@ elif nav == "Hướng dẫn":
     st.markdown("### Chuẩn bị dữ liệu")
     guide_item(
         "prep_data_input.png", "Dữ liệu đầu vào",
-        "Ba nguồn dữ liệu, gộp chung một mục:\n\n"
+        "Ba nguồn dữ liệu, gộp chung một mục, mỗi nguồn một tab riêng cho gọn:\n\n"
         "- **Tải lên từ Forest**: nơi duy nhất **nạp dữ liệu phiên tập trung** vào app — tải lên file **CSV xuất "
         "trực tiếp từ app Forest** (mục xuất dữ liệu trong Forest, không cần chỉnh sửa gì trước). App tự nhận diện "
         "các cột cần thiết (Tag/Project tương ứng Dự án, Start Time/End Time để tính thời lượng và ngày giờ, cột "
@@ -3590,7 +3659,9 @@ elif nav == "Hướng dẫn":
         "đồng bộ, appointment hiện dưới dạng chip (giờ bắt đầu + tiêu đề) ngay trong thẻ **Ghi chú ngày** (Báo cáo "
         "ngày) và xen kẽ vào từng dòng ngày ở mục *Nhật ký* (Báo cáo tuần/tháng), kể cả ngày không có ghi chú viết "
         "tay. Mỗi lần đồng bộ cũng **dọn sạch appointment đã bị xoá** trên Apple Calendar khỏi app, không chỉ thêm "
-        "mới — nên kết quả luôn khớp đúng lịch thật tại thời điểm đồng bộ.\n"
+        "mới — nên kết quả luôn khớp đúng lịch thật tại thời điểm đồng bộ. Có thêm 1 mục **Đồng bộ khoảng ngày khác "
+        "(nâng cao)** thu gọn sẵn — chọn tay Từ ngày/Đến ngày để lấp dữ liệu lịch cũ hơn (vd để phục vụ mục *Ngày "
+        "này năm trước*), không cần dùng thường xuyên.\n"
         "- **Tải lên từ Reminder** *(tuỳ chọn)*: nạp tiến độ đọc sách/xem Gundam từ **Apple Reminders** — tải lên "
         "file `list|title|completed_date` do 1 Shortcut trên iPhone/Mac xuất ra (xem mục *Gundam* và *Nhật ký đọc "
         "sách* phía trên để biết quy ước đặt tên list, cách tạo Shortcut xem hướng dẫn cụ thể trong README). Mỗi "
