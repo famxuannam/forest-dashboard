@@ -16,7 +16,7 @@ Giao diện theo phong cách iOS/macOS: tối giản, dùng thẻ kính mờ và
 - [Hướng dẫn sử dụng theo từng trang](#hướng-dẫn-sử-dụng-theo-từng-trang)
 - [Quy trình bắt đầu nhanh](#quy-trình-bắt-đầu-nhanh)
 - [Thiết lập Supabase (bắt buộc)](#thiết-lập-supabase-bắt-buộc)
-- [Đồng bộ lịch Work (tuỳ chọn)](#đồng-bộ-lịch-work-tuỳ-chọn)
+- [Đồng bộ lịch & đọc sách (tuỳ chọn)](#đồng-bộ-lịch--đọc-sách-tuỳ-chọn)
 - [Cài đặt & chạy ứng dụng](#cài-đặt--chạy-ứng-dụng)
 - [Câu hỏi thường gặp](#câu-hỏi-thường-gặp)
 
@@ -152,12 +152,16 @@ Cái nhìn tổng thể toàn bộ dữ liệu.
 
 ### 2. 🗓️ Báo cáo tháng
 Phân tích sâu **một tháng cụ thể** (chọn ở thanh điều hướng kỳ): Tổng quan (kèm so sánh) →
-**Nhật ký** → Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập trung theo khung giờ
-→ Giờ tập trung theo thứ → Phân bố độ dài phiên → Bảng số liệu. Mục **Nhật ký** liệt kê (chỉ
-đọc) ghi chú của các ngày trong tháng (xem [Ghi chú theo ngày](#4--báo-cáo-ngày)).
+**Nhật ký** → **Nhật ký đọc sách** → Phân bổ thời gian → Xu hướng theo thời gian → Xu hướng tập
+trung theo khung giờ → Giờ tập trung theo thứ → Phân bố độ dài phiên → Bảng số liệu. Mục
+**Nhật ký** liệt kê (chỉ đọc) ghi chú của các ngày trong tháng (xem
+[Ghi chú theo ngày](#4--báo-cáo-ngày)). Mục **Nhật ký đọc sách** — thẻ riêng, tách khỏi Nhật ký
+ở trên — liệt kê các phần/chương sách hoàn thành trong tháng (đồng bộ từ Apple Reminders, xem
+[Nhật ký đọc sách](#6--nhật-ký-đọc-sách)).
 
 ### 3. 🗓️ Báo cáo tuần
-Tương tự báo cáo tháng nhưng cho **một tuần cụ thể** (cũng có mục **Nhật ký** của các ngày trong tuần).
+Tương tự báo cáo tháng nhưng cho **một tuần cụ thể** (cũng có mục **Nhật ký** và **Nhật ký đọc
+sách** của các ngày trong tuần).
 
 ### 4. 📅 Báo cáo ngày
 Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không thời gian thực) nên trọng tâm là
@@ -173,13 +177,17 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
   - **Phân bố độ dài phiên** (thanh theo 5 nhóm 10/25/50/90′).
   - **Dòng thời gian trong ngày**: trục 0–24h, mỗi phiên là một khối tô màu theo dự án, nền
     dải buổi; phủ thêm **lớp mờ "khung giờ điển hình của thứ này"** để thấy hôm đó lệch nhịp ra sao.
-- **Ghi chú ngày** (nhật ký): mặc định chỉ hiện **ghi chú đã lưu** (hoặc trạng thái trống) kèm
-  nút **Thêm ghi chú**/**Sửa ghi chú**; bấm nút mới mở **trình soạn thảo** ngay trong trang với
-  **Cập nhật** / **Huỷ** / **Xoá**. Trình soạn (Quill) có thanh công cụ và **phím tắt quen thuộc**
-  (⌘/Ctrl+B đậm, I nghiêng, U gạch chân; **Tab** thụt lề bullet): đậm/nghiêng/gạch chân, màu chữ
-  & tô nền, danh sách + thụt lề nhiều cấp, liên kết. Mỗi ngày **một ghi chú**, lưu **độc lập với
-  phiên** (ngày không có hoạt động vẫn ghi được; import/xoá phiên không làm mất ghi chú), và
-  **hiện lại** ở mục *Nhật ký* của tuần/tháng tương ứng.
+- **Đọc sách**: nếu ngày đó có phần/chương sách hoàn thành (đồng bộ từ Apple Reminders), một
+  khối riêng hiện tên các phần đó (nhóm theo tên sách nếu đọc nhiều cuốn cùng ngày), đặt phía
+  trên Ghi chú ngày. Im lặng không hiện gì nếu ngày đó không có phần nào.
+- **Ghi chú ngày** (nhật ký): bố cục 2 cột (Thứ/ngày trái, nội dung phải). Mặc định chỉ hiện
+  **ghi chú đã lưu** (hoặc trạng thái trống) kèm nút **Thêm ghi chú**/**Sửa ghi chú**; bấm nút
+  mới mở **trình soạn thảo** ngay trong trang với **Cập nhật** / **Huỷ** / **Xoá**. Trình soạn
+  (Quill) có thanh công cụ và **phím tắt quen thuộc** (⌘/Ctrl+B đậm, I nghiêng, U gạch chân;
+  **Tab** thụt lề bullet): đậm/nghiêng/gạch chân, màu chữ & tô nền, danh sách + thụt lề nhiều
+  cấp, liên kết. Mỗi ngày **một ghi chú**, lưu **độc lập với phiên** (ngày không có hoạt động
+  vẫn ghi được; import/xoá phiên không làm mất ghi chú), và **hiện lại** ở mục *Nhật ký* của
+  tuần/tháng tương ứng.
 - **Phân bổ thời gian** (biểu đồ tròn) và **Danh sách phiên** (STT · Bắt đầu – Kết thúc · Độ dài · Danh mục).
 - **Ngày này năm trước**: khớp **cùng ngày/tháng ở các năm trước** (gộp từ cả phiên lẫn ghi chú);
   mỗi năm hiện số liệu nhanh (Giờ · Số phiên · TB) và ghi chú nếu có. Mục này dày dần theo thời gian.
@@ -187,17 +195,33 @@ Xem lại **một ngày cụ thể**. Vì dữ liệu nạp thủ công (không 
 ### 5. 🗂️ Báo cáo theo dự án
 Tập trung vào **một Nhóm (Danh mục) hoặc một Dự án** chọn ở ô thả xuống.
 Trong danh sách, mỗi lựa chọn được ghi rõ *“· Nhóm”* hay *“· Dự án”*, dự án con thụt vào
-dưới nhóm cha. Gồm: Tổng quan → Biểu đồ lịch → Xu hướng theo thời gian → Phân bố độ dài phiên → Bảng số liệu.
+dưới nhóm cha. Gồm: Tổng quan → (Nhật ký đọc, nếu khớp 1 cuốn sách đã đồng bộ Reminders) →
+Biểu đồ lịch → Xu hướng theo thời gian → Phân bố độ dài phiên → Bảng số liệu.
 
-Riêng khi chọn **nhóm sách đọc** (mặc định là nhóm `Reading`) có thêm mục **“Nhật ký đọc
-sách”** — hợp với các cuốn đọc tuần tự: mỗi cuốn (mỗi dự án) là một dòng *Bắt đầu / Gần nhất /
-Số ngày / Ngày đọc / Tổng giờ / Số phiên / Giờ·tuần / Trạng thái*, kèm **timeline trình tự đọc**
-và tóm tắt (số cuốn, TB giờ & ngày mỗi cuốn, cuốn ngốn nhiều giờ nhất…). Trạng thái *“Đang đọc /
-Đã xong”* suy ra tự động từ độ mới của phiên gần nhất. Tên nhóm và các dự án định kỳ cần loại
-trừ (vd `The Economist`) khai báo ở đầu `app.py` (`BOOKS_GROUP`, `BOOKS_EXCLUDE`). Mục này **chỉ
-tính toán để hiển thị, không tạo hay sửa dữ liệu** nên không ảnh hưởng tới sao lưu/khôi phục.
+Mục **“Nhật ký đọc”** chỉ hiện khi Dự án đang chọn khớp tên với 1 cuốn sách đã đồng bộ từ
+Apple Reminders (so tên Dự án với phần “Tên sách” trong “Tác giả - Tên sách”) — hiện trọn lịch
+sử phần/chương đã đọc của đúng cuốn đó, một dòng mỗi ngày (Thứ/ngày bên trái, tên các phần đã
+đọc bên phải), bấm vào Thứ/ngày để nhảy sang đúng Báo cáo ngày hôm đó. Xem mục
+[Đồng bộ lịch & đọc sách](#đồng-bộ-lịch--đọc-sách-tuỳ-chọn) để thiết lập.
 
-### 6. ⚙️ Chuẩn bị dữ liệu
+### 6. 📚 Nhật ký đọc sách
+Trang riêng dành cho việc đọc sách **theo trình tự, đọc dở rồi đọc tiếp**, **gộp 2 nguồn dữ
+liệu**: phiên tập trung Forest (mặc định gom mọi Dự án thuộc nhóm `Reading`) và phần/chương đã
+đọc đồng bộ từ **Apple Reminders**. Một cuốn sách chỉ cần có mặt ở **một trong hai nguồn** là
+đủ để lên trang — cột thuộc nguồn còn thiếu hiện dấu **“—”**. Mỗi cuốn là một dòng *Bắt đầu /
+Gần nhất / Số ngày / Ngày đọc / Tổng giờ / Số phiên / Giờ·tuần / Số phần đã đọc / Phần gần nhất
+/ Trạng thái*, kèm **timeline trình tự đọc** và tóm tắt (số cuốn, số phần đã đọc, TB giờ & ngày
+mỗi cuốn, cuốn ngốn nhiều giờ nhất…). Trạng thái *“Đang đọc / Đã xong”* suy ra tự động từ độ
+mới của hoạt động gần nhất (phiên Forest **hoặc** phần Reminders hoàn thành, lấy mốc gần hơn).
+Tên nhóm và các dự án định kỳ cần loại trừ (vd `The Economist`) khai báo ở đầu `app.py`
+(`BOOKS_GROUP`, `BOOKS_EXCLUDE`). Trang này **chỉ tính toán để hiển thị, không tạo hay sửa dữ
+liệu Forest** (dữ liệu Reminders được ghi khi bấm Đồng bộ ở mục Chuẩn bị dữ liệu, không phải ở
+trang này) nên không ảnh hưởng tới sao lưu/khôi phục theo cách khác các trang khác đang có.
+
+Ngoài trang riêng này, phần/chương đã đọc còn hiện xen kẽ ở **Báo cáo ngày** (box “Đọc sách”)
+và **Báo cáo tuần/tháng** (thẻ “Nhật ký đọc sách” riêng) — xem mục 4 và các mục 2-3 ở trên.
+
+### 7. ⚙️ Chuẩn bị dữ liệu
 Nơi bạn nạp và quản lý dữ liệu:
 1. **Dữ liệu đầu vào** — 2 nguồn dữ liệu, gộp chung một mục:
    - **Tải lên từ Forest**: tải file CSV xuất từ Forest. Ứng dụng tự nhận diện cột, chỉ giữ
@@ -206,8 +230,10 @@ Nơi bạn nạp và quản lý dữ liệu:
      thất bại, Y unset…") rồi mới cần bấm **Xác nhận cập nhật dữ liệu**; xong sẽ báo tóm tắt
      *"Đã thêm N phiên mới…"*. Nhờ vậy bạn có thể tải lại nhiều lần mà không sợ nhân đôi.
    - **Đồng bộ lịch** *(tuỳ chọn)*: kéo appointment từ 1 lịch Apple Calendar cụ thể (qua
-     CalDAV) về app, hiện kèm giờ bắt đầu ở Báo cáo ngày và Nhật ký. Xem mục
-     [Đồng bộ lịch Work](#đồng-bộ-lịch-work-tuỳ-chọn) để thiết lập.
+     CalDAV) về app, hiện kèm giờ bắt đầu ở Báo cáo ngày và Nhật ký.
+   - **Đồng bộ đọc sách** *(tuỳ chọn)*: kéo tiến độ đọc từ Apple Reminders (qua CalDAV) về app
+     — mỗi Reminder List là 1 cuốn sách, mỗi Reminder hoàn thành là 1 phần đã đọc. Xem mục
+     [Đồng bộ lịch & đọc sách](#đồng-bộ-lịch--đọc-sách-tuỳ-chọn) để thiết lập cả 2 mục trên.
 2. **Phân loại** — gán **Dự án → Nhóm (Danh mục)** ngay trong **một bảng duy nhất**: chọn
    nhóm cho từng dự án ở cột *Nhóm*, gõ tên ở ô **"Tạo nhóm mới"** để thêm lựa chọn, để
    trống nghĩa là bỏ phân loại, rồi bấm **Lưu phân loại**. Phía trên có cảnh báo *"Còn N dự
@@ -220,7 +246,7 @@ Nơi bạn nạp và quản lý dữ liệu:
    từ chính file `.zip` đó, có xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ
    dữ liệu — cần tích xác nhận).
 
-### 7. ❓ Hướng dẫn
+### 8. ❓ Hướng dẫn
 Trang **Hướng dẫn & Giải thích** ngay trong app: giải thích chi tiết **mọi số liệu, biểu đồ và
 tính năng** (Số liệu tổng quan, các biểu đồ, Dòng thời gian trong ngày, Ghi chú, Nhật ký đọc sách,
 Chuẩn bị dữ liệu…), **kèm ảnh minh hoạ** cho từng phần và hộp **Mẹo** gợi ý cách dùng hữu ích.
@@ -286,30 +312,42 @@ khoảng 5 phút, không cần biết lập trình:
 
 ---
 
-## Đồng bộ lịch Work (tuỳ chọn)
+## Đồng bộ lịch & đọc sách (tuỳ chọn)
 
-Phần **"Đồng bộ lịch"** trong mục **"1. Dữ liệu đầu vào"** (tab Chuẩn bị dữ liệu) kéo appointment
-từ 1 lịch cụ thể trong Apple Calendar (mặc định tên `Work`) về app qua **CalDAV**, hiện kèm giờ
-bắt đầu ở Báo cáo ngày và Nhật ký. Mỗi lần đồng bộ cũng dọn sạch appointment đã bị xoá trên
-Apple Calendar khỏi app (không chỉ thêm mới). Tính năng này **không bắt buộc** — bỏ qua nếu
-không dùng, phần còn lại của app vẫn hoạt động bình thường.
+Mục **"1. Dữ liệu đầu vào"** (tab Chuẩn bị dữ liệu) có 2 tính năng đồng bộ tuỳ chọn qua
+**CalDAV**, dùng chung 1 tài khoản iCloud:
+
+- **Đồng bộ lịch**: kéo appointment từ 1 lịch cụ thể trong Apple Calendar (mặc định tên
+  `Work`) về app, hiện kèm giờ bắt đầu ở Báo cáo ngày và Nhật ký. Mỗi lần đồng bộ cũng dọn
+  sạch appointment đã bị xoá trên Apple Calendar khỏi app (không chỉ thêm mới).
+- **Đồng bộ đọc sách**: kéo tiến độ đọc từ Apple Reminders về app — mỗi **Reminder List** tên
+  "Tác giả - Tên sách" là 1 cuốn sách, mỗi **Reminder đã tick hoàn thành** trong list đó là 1
+  phần/chương đã đọc. List không có dấu "-" trong tên sẽ bị bỏ qua. Mỗi lần đồng bộ luôn kéo
+  **toàn bộ** rồi thay thế hoàn toàn dữ liệu cũ (không cần chọn khoảng ngày) — phần bạn xoá/bỏ
+  tick trên điện thoại cũng biến mất khỏi app.
+
+Cả 2 đều **không bắt buộc** — bỏ qua nếu không dùng, phần còn lại của app vẫn hoạt động bình
+thường.
 
 1. Vào **appleid.apple.com** → đăng nhập → **Sign-In and Security** → **App-Specific
    Passwords** → tạo mới, đặt tên bất kỳ (vd `forest-dashboard`). Copy chuỗi mật khẩu hiện ra
    (dạng `xxxx-xxxx-xxxx-xxxx`) — **đây không phải mật khẩu Apple ID thật**, chỉ dùng riêng cho
-   kết nối này, có thể thu hồi bất kỳ lúc nào mà không ảnh hưởng tài khoản chính.
-2. Chạy đoạn SQL `create table work_calendar...` trong file
-   [`supabase_schema.sql`](supabase_schema.sql) (nếu đã chạy cả file lúc thiết lập Supabase
-   thì bảng này đã có sẵn, không cần chạy lại).
+   kết nối này, có thể thu hồi bất kỳ lúc nào mà không ảnh hưởng tài khoản chính. Dùng chung
+   1 App-Specific Password cho cả 2 tính năng, không cần tạo riêng.
+2. Chạy đoạn SQL tạo bảng mới trong file [`supabase_schema.sql`](supabase_schema.sql) (nếu đã
+   chạy cả file lúc thiết lập Supabase thì các bảng này đã có sẵn, không cần chạy lại):
+   - `create table work_calendar...` — cho Đồng bộ lịch.
+   - `create table reading_log...` — cho Đồng bộ đọc sách.
 3. Thêm 3 giá trị vào `.streamlit/secrets.toml` (local) và Secrets của app trên Streamlit
-   Cloud (production):
+   Cloud (production) — dùng chung cho cả 2 tính năng, không cần thêm secret riêng cho đọc sách:
    ```toml
    ICLOUD_USERNAME = "your_apple_id@example.com"
    ICLOUD_APP_PASSWORD = "xxxx-xxxx-xxxx-xxxx"   # mật khẩu ứng dụng vừa tạo ở bước 1
    ICLOUD_WORK_CALENDAR = "Work"                  # đổi nếu lịch bạn đặt tên khác
    ```
-4. Mở app → tab **Chuẩn bị dữ liệu** → mục **"1. Dữ liệu đầu vào"** → phần **"Đồng bộ lịch"** →
-   chọn khoảng ngày → bấm **"Đồng bộ ngay"**.
+4. Mở app → tab **Chuẩn bị dữ liệu** → mục **"1. Dữ liệu đầu vào"**:
+   - Phần **"Đồng bộ lịch"** → chọn khoảng ngày → bấm **"Đồng bộ ngay"**.
+   - Phần **"Đồng bộ đọc sách"** → bấm **"Đồng bộ ngay"** (không cần chọn khoảng ngày).
 
 > ⚠️ Mật khẩu ứng dụng chỉ nên dùng cho đúng mục đích này. Nếu nghi ngờ bị lộ, thu hồi ngay
 > tại appleid.apple.com và tạo mật khẩu mới, không ảnh hưởng gì tới tài khoản Apple ID chính.
@@ -332,8 +370,8 @@ streamlit run app.py
 `.streamlit/secrets.toml`, app sẽ báo lỗi rõ ràng ngay khi mở thay vì crash khó hiểu.
 
 Thư viện sử dụng (xem `requirements.txt`): **Streamlit**, **pandas**, **Plotly**, **Altair**,
-**supabase-py**, **caldav** (chỉ dùng khi bật đồng bộ lịch Work). Cấu hình giao diện (màu nền,
-màu nhấn, font) nằm ở `.streamlit/config.toml`.
+**supabase-py**, **caldav** (chỉ dùng khi bật đồng bộ lịch/đọc sách). Cấu hình giao diện (màu
+nền, màu nhấn, font) nằm ở `.streamlit/config.toml`.
 
 ---
 
