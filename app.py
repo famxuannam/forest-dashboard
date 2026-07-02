@@ -1789,12 +1789,6 @@ def render_on_this_day(sel, df_all):
     rows_html = ''
     for y in years:
         wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
-        if y in stats:
-            hrs, ss = stats[y]
-            avg = (hrs * 60 / ss) if ss else 0
-            chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
-        else:
-            chips = "<span style='font-size:13px;color:#aeaeb2;'>Không có phiên tập trung</span>"
         cal_html = ''
         if y in events:
             _cchips = ''.join(
@@ -1803,19 +1797,22 @@ def render_on_this_day(sel, df_all):
                 for _, r in events[y].iterrows())
             cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{_cchips}</div>"
         read_html = _book_chips_html(reading[y]) if y in reading else ''
-        note_block = (f"<div class='note-html'>{notes[y]}</div>" if notes.get(y) else
-                      "<span style='font-size:13px;color:#aeaeb2;'>(không có ghi chú)</span>")
+        chips_html = ''
+        if y in stats:
+            hrs, ss = stats[y]
+            avg = (hrs * 60 / ss) if ss else 0
+            _chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
+            chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
+        note_block = f"<div class='note-html'>{notes[y]}</div>" if notes.get(y) else ''
         rows_html += (
             "<div class='jrow'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
-            f"<div><div style='margin-bottom:6px;'>{chips}</div>{cal_html}{read_html}{note_block}</div>"
+            f"<div>{cal_html}{read_html}{chips_html}{note_block}</div>"
             "</div>"
         )
-    foot_html = (f"<div class='otd-foot'>Khớp theo ngày <b>{d:02d}/{m:02d}</b> ở các năm trước. "
-                 "Mục này sẽ dày dần theo thời gian.</div>")
     with st.container(border=True, key="jcard_otd"):
-        st.markdown(f"<div class='jrows'>{rows_html}</div>{foot_html}", unsafe_allow_html=True)
+        st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
 def render_calendar_grid(scope_df, full_df):
@@ -2464,8 +2461,6 @@ st.markdown(
     .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
     .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
-    .otd-foot { font-size: 12px; color: #86868b; padding-top: 12px; }
-    .otd-foot b { color: #1d1d1f; }
     .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
