@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import altair as alt
 import colorsys
 import re
+from itertools import groupby
 from html import escape as html_escape
 from datetime import date, timedelta
 from streamlit_quill import st_quill
@@ -1392,6 +1393,13 @@ DTBL_CSS = """
 .dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:#ffffff; z-index:1; }
 .dtbl thead th.lbl { z-index:3; background:#f5f5f7; }
+/* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
+   (Tuần/Tháng) đứng dưới -- cả 2 đều "dính" khi cuộn dọc, xếp chồng đúng vị trí bằng top. */
+.dtbl thead tr.yr th { top:0; font-size:10px; color:#9a9aa0; background:#eef0f2; border-bottom:1px solid rgba(0,0,0,0.06); }
+.dtbl thead tr.wk th { top:22px; }
+.dtbl th.yrspan { text-align:center; border-right:1px solid rgba(0,0,0,0.08); }
+.dtbl th.yrspan:last-child { border-right:none; }
+.dtbl thead tr.yr th.lbl { z-index:3; background:#eef0f2; }
 .dtbl tr.cat td { font-weight:700; color:#1d1d1f; border-top:1px solid rgba(0,0,0,0.07); }
 .dtbl tr.cat td.lbl { background:#ffffff; }
 .dtbl tr.proj td { color:#6e6e73; }
@@ -1447,7 +1455,16 @@ def render_data_table(df, time_col):
         return out
 
     _my = _periods_multiyear(cols)
-    head = ''.join(f'<th>{period_label(c, _my)}</th>' for c in cols)
+    # Nhiều năm -> tách năm ra 1 hàng header phụ (gộp theo colspan) thay vì lặp hậu tố năm
+    # ở từng cột -> đỡ rối khi có nhiều cột. period_label(c, False) vì năm đã hiện riêng.
+    head = ''.join(f'<th>{period_label(c, False)}</th>' for c in cols)
+    if _my:
+        yr_groups = [(yr, len(list(g))) for yr, g in groupby(cols, key=lambda c: str(c).split('-')[0])]
+        yr_head = ''.join(f'<th class="yrspan" colspan="{n}">{yr}</th>' for yr, n in yr_groups)
+        thead_html = (f'<tr class="yr"><th class="lbl"></th>{yr_head}<th></th></tr>'
+                      f'<tr class="wk"><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>')
+    else:
+        thead_html = f'<tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>'
     rows_html = ''
     for c in sorted(cat.index):
         c_vals = [float(cat.loc[c][col]) for col in cols]
@@ -1468,7 +1485,7 @@ def render_data_table(df, time_col):
 
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr></thead>
+<thead>{thead_html}</thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -1647,13 +1664,23 @@ def frag_heatmap(scope_df, key):
 
 @st.fragment
 def frag_data_table(scope_df, key_prefix):
-    """Mục Bảng số liệu (Thống kê chung): khoảng thời gian + xem theo Tuần/Tháng."""
+    """Mục Bảng số liệu (Thống kê chung): khoảng thời gian + xem theo Tuần/Tháng.
+    "Xem theo" mặc định thông minh theo Khoảng thời gian đang chọn (30/90 ngày -> Tuần đủ
+    chi tiết mà không quá nhiều cột; 6 tháng/1 năm/Tất cả -> Tháng để tránh bảng quá nhiều
+    cột hẹp) -- vẫn đổi tay được. Key riêng theo từng khoảng thời gian (không dùng chung 1
+    key cố định) để mỗi khoảng nhớ đúng lựa chọn thủ công của khoảng đó, đồng thời khoảng
+    mới chưa từng chọn luôn khởi tạo lại đúng mặc định thông minh thay vì kẹt theo lựa chọn
+    cũ của khoảng trước."""
     cc1, cc2 = st.columns([5, 2])
     with cc1:
-        df_tbl = range_radio(scope_df, key=f"{key_prefix}_range")
+        range_label = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()),
+                                            default="90 ngày", key=f"{key_prefix}_range") or "90 ngày"
+        df_tbl = filter_by_range(scope_df, range_label)
     with cc2:
-        view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tuần", key=f"{key_prefix}_view")
-    view_opt = view_opt or "Tuần"
+        smart_default = "Tuần" if range_label in ("30 ngày", "90 ngày") else "Tháng"
+        view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default=smart_default,
+                                         key=f"{key_prefix}_view_{range_label}")
+    view_opt = view_opt or smart_default
     render_data_table(df_tbl, 'Tuần' if view_opt == "Tuần" else 'Tháng')
 
 
