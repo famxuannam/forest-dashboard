@@ -16,6 +16,7 @@ Giao diện theo phong cách iOS/macOS: tối giản, dùng thẻ kính mờ và
 - [Hướng dẫn sử dụng theo từng trang](#hướng-dẫn-sử-dụng-theo-từng-trang)
 - [Quy trình bắt đầu nhanh](#quy-trình-bắt-đầu-nhanh)
 - [Thiết lập Supabase (bắt buộc)](#thiết-lập-supabase-bắt-buộc)
+- [Đồng bộ lịch Work (tuỳ chọn)](#đồng-bộ-lịch-work-tuỳ-chọn)
 - [Cài đặt & chạy ứng dụng](#cài-đặt--chạy-ứng-dụng)
 - [Câu hỏi thường gặp](#câu-hỏi-thường-gặp)
 
@@ -211,8 +212,12 @@ Nơi bạn nạp và quản lý dữ liệu:
    để sắp xếp**, **tích chọn nhiều dòng rồi xoá** từng phiên rác. Phiên đã xoá được ghi nhớ
    và **không bị nạp lại** khi tải file Forest mới (kể cả khi file đó vẫn còn phiên này).
 4. **Quản lý hệ thống** — **Sao lưu** (một nút *Tải bản sao lưu* → file `.zip` gồm dữ liệu,
-   phân loại, danh sách đã xoá **và ghi chú**), **Khôi phục** (nạp lại từ chính file `.zip` đó,
-   có xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ dữ liệu — cần tích xác nhận).
+   phân loại, danh sách đã xoá, ghi chú **và appointment lịch Work**), **Khôi phục** (nạp lại
+   từ chính file `.zip` đó, có xem trước nội dung + cảnh báo ghi đè), **Làm mới** (xoá toàn bộ
+   dữ liệu — cần tích xác nhận).
+5. **Đồng bộ lịch Work** *(tuỳ chọn)* — kéo appointment từ 1 lịch Apple Calendar cụ thể (qua
+   CalDAV) về app, hiện kèm giờ bắt đầu ở Báo cáo ngày và Nhật ký. Xem mục
+   [Đồng bộ lịch Work](#đồng-bộ-lịch-work-tuỳ-chọn) để thiết lập.
 
 ### 7. ❓ Hướng dẫn
 Trang **Hướng dẫn & Giải thích** ngay trong app: giải thích chi tiết **mọi số liệu, biểu đồ và
@@ -280,6 +285,35 @@ khoảng 5 phút, không cần biết lập trình:
 
 ---
 
+## Đồng bộ lịch Work (tuỳ chọn)
+
+Mục **"5. Đồng bộ lịch Work"** (tab Chuẩn bị dữ liệu) kéo appointment từ 1 lịch cụ thể trong
+Apple Calendar (mặc định tên `Work`) về app qua **CalDAV**, hiện kèm giờ bắt đầu ở Báo cáo
+ngày và Nhật ký. Tính năng này **không bắt buộc** — bỏ qua nếu không dùng, phần còn lại của
+app vẫn hoạt động bình thường.
+
+1. Vào **appleid.apple.com** → đăng nhập → **Sign-In and Security** → **App-Specific
+   Passwords** → tạo mới, đặt tên bất kỳ (vd `forest-dashboard`). Copy chuỗi mật khẩu hiện ra
+   (dạng `xxxx-xxxx-xxxx-xxxx`) — **đây không phải mật khẩu Apple ID thật**, chỉ dùng riêng cho
+   kết nối này, có thể thu hồi bất kỳ lúc nào mà không ảnh hưởng tài khoản chính.
+2. Chạy đoạn SQL `create table work_calendar...` trong file
+   [`supabase_schema.sql`](supabase_schema.sql) (nếu đã chạy cả file lúc thiết lập Supabase
+   thì bảng này đã có sẵn, không cần chạy lại).
+3. Thêm 3 giá trị vào `.streamlit/secrets.toml` (local) và Secrets của app trên Streamlit
+   Cloud (production):
+   ```toml
+   ICLOUD_USERNAME = "your_apple_id@example.com"
+   ICLOUD_APP_PASSWORD = "xxxx-xxxx-xxxx-xxxx"   # mật khẩu ứng dụng vừa tạo ở bước 1
+   ICLOUD_WORK_CALENDAR = "Work"                  # đổi nếu lịch bạn đặt tên khác
+   ```
+4. Mở app → tab **Chuẩn bị dữ liệu** → mục **"5. Đồng bộ lịch Work"** → chọn khoảng ngày → bấm
+   **"Đồng bộ ngay"**.
+
+> ⚠️ Mật khẩu ứng dụng chỉ nên dùng cho đúng mục đích này. Nếu nghi ngờ bị lộ, thu hồi ngay
+> tại appleid.apple.com và tạo mật khẩu mới, không ảnh hưởng gì tới tài khoản Apple ID chính.
+
+---
+
 ## Cài đặt & chạy ứng dụng
 
 Yêu cầu: **Python 3.9+** và đã hoàn tất [Thiết lập Supabase](#thiết-lập-supabase-bắt-buộc) ở trên.
@@ -296,7 +330,8 @@ streamlit run app.py
 `.streamlit/secrets.toml`, app sẽ báo lỗi rõ ràng ngay khi mở thay vì crash khó hiểu.
 
 Thư viện sử dụng (xem `requirements.txt`): **Streamlit**, **pandas**, **Plotly**, **Altair**,
-**supabase-py**. Cấu hình giao diện (màu nền, màu nhấn, font) nằm ở `.streamlit/config.toml`.
+**supabase-py**, **caldav** (chỉ dùng khi bật đồng bộ lịch Work). Cấu hình giao diện (màu nền,
+màu nhấn, font) nằm ở `.streamlit/config.toml`.
 
 ---
 
