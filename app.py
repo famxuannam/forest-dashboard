@@ -497,6 +497,30 @@ def save_reading_log_bulk(df):
     st.cache_data.clear()
 
 
+def parse_reading_log_shortcut_csv(uploaded):
+    """Đọc file do Shortcut "Xuất tiến độ đọc" (xem tab Hướng dẫn) tạo ra -- dùng khi Reminder
+    List chỉ lưu "Trên iPhone của tôi" (không nằm trong iCloud) nên Đồng bộ đọc sách qua CalDAV
+    không thấy được (CalDAV chỉ đọc được dữ liệu đã có trên iCloud), còn Shortcuts đọc thẳng từ
+    máy nên thấy đủ. Định dạng: mỗi dòng "list|title|completed_date" (dấu '|', KHÔNG phải dấu
+    phẩy, vì tiêu đề reminder có thể chứa dấu phẩy), dòng đầu là header đúng 3 tên cột trên. Trả
+    về (df, stats, missing_cols) cùng khuôn cột (Ngày hoàn thành, Sách (gốc), Tiêu đề phần) mà
+    save_reading_log_bulk() cần -- gọi thẳng hàm đó sau khi người dùng xác nhận, y hệt luồng
+    Khôi phục từ bản sao lưu."""
+    df = pd.read_csv(uploaded, sep='|', dtype=str)
+    need = {'list', 'title', 'completed_date'}
+    missing = sorted(need - set(df.columns))
+    cols = ['Ngày hoàn thành', 'Sách (gốc)', 'Tiêu đề phần']
+    if missing:
+        return pd.DataFrame(columns=cols), {'raw': len(df), 'valid': 0}, missing
+    stats = {'raw': len(df)}
+    df = df.rename(columns={'list': 'Sách (gốc)', 'title': 'Tiêu đề phần', 'completed_date': 'Ngày hoàn thành'})
+    df['Ngày hoàn thành'] = pd.to_datetime(df['Ngày hoàn thành'], format='ISO8601', errors='coerce')
+    df = df[df['Ngày hoàn thành'].notna() & df['Sách (gốc)'].notna()
+            & (df['Tiêu đề phần'].astype(str).str.strip() != '')]
+    stats['valid'] = len(df)
+    return df[cols].reset_index(drop=True), stats, []
+
+
 def parse_forest_csv(uploaded):
     """Đọc & chuẩn hoá CSV xuất từ Forest. Trả về (df_sạch, stats, missing_cols).
     stats gồm: raw (tổng dòng), failed (phiên thất bại), unset (unset/rỗng), valid (hợp lệ)."""
@@ -3043,6 +3067,29 @@ elif nav == "Chuẩn bị dữ liệu":
                 time.sleep(1)
                 st.rerun()
 
+        st.caption("Reminder List chỉ lưu \"Trên iPhone của tôi\" (không nằm trong iCloud) sẽ "
+                   "KHÔNG thấy được qua CalDAV ở trên — dùng Shortcuts để xuất file rồi tải lên "
+                   "đây thay thế (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
+        rl_file = st.file_uploader("Tải lên file từ Shortcuts (.csv/.txt)", type=["csv", "txt"], key="rl_shortcut_file")
+        if rl_file:
+            rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(rl_file)
+            if rl_missing:
+                st.error("File thiếu cột: " + ", ".join(rl_missing) + " — cần đúng 3 cột "
+                          "'list|title|completed_date' (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
+            elif rl_df.empty:
+                st.warning("Không đọc được dòng hợp lệ nào trong file.")
+            else:
+                st.caption(f"Đọc được **{rl_stats['valid']}**/{rl_stats['raw']} dòng hợp lệ. Xem trước:")
+                _rl_prev = rl_df.head(8).copy()
+                _rl_prev['Ngày hoàn thành'] = _rl_prev['Ngày hoàn thành'].dt.strftime('%Y-%m-%d %H:%M')
+                st.dataframe(_rl_prev, width='stretch', hide_index=True)
+                st.caption("Xác nhận sẽ **thay thế toàn bộ** dữ liệu Đọc sách hiện có bằng nội dung file này.")
+                if st.button("Xác nhận nạp dữ liệu", type="primary", key="rl_shortcut_confirm"):
+                    save_reading_log_bulk(rl_df)
+                    st.success(f"Đã nạp {rl_df['Sách (gốc)'].nunique()} cuốn sách, {len(rl_df)} phần đã đọc.")
+                    time.sleep(1)
+                    st.rerun()
+
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
@@ -3496,7 +3543,14 @@ elif nav == "Hướng dẫn":
         "Tên sách\" được coi là 1 cuốn sách, mỗi **Reminder đã tick hoàn thành** trong list đó là 1 phần/chương đã "
         "đọc — List không có dấu \"-\" trong tên sẽ bị bỏ qua (không tính là sách). Khác Đồng bộ lịch, mục này "
         "không cần chọn khoảng ngày vì luôn kéo **toàn bộ** rồi thay thế hoàn toàn dữ liệu cũ — phần bạn xoá/bỏ "
-        "tick trên điện thoại cũng biến mất khỏi app ở lần đồng bộ tiếp theo.",
+        "tick trên điện thoại cũng biến mất khỏi app ở lần đồng bộ tiếp theo. **Lưu ý quan trọng**: CalDAV chỉ "
+        "đọc được Reminder List đã lưu **trong tài khoản iCloud** — list chỉ lưu \"Trên iPhone của tôi\" (cục bộ, "
+        "chưa đồng bộ iCloud) sẽ không bao giờ hiện ra dù bấm đồng bộ bao nhiêu lần. Nếu rơi vào trường hợp này, "
+        "dùng ô **\"Tải lên file từ Shortcuts\"** ngay bên dưới thay thế: tạo 1 Shortcut trên iPhone (Ứng dụng "
+        "Shortcuts) đọc thẳng dữ liệu Reminders trên máy (không qua iCloud nên thấy được cả list cục bộ), xuất ra "
+        "file text mỗi dòng dạng `list|title|completed_date` (dòng đầu là header đúng 3 tên cột này, phân tách "
+        "bằng dấu `|` chứ không phải dấu phẩy vì tiêu đề reminder có thể chứa dấu phẩy), rồi tải file đó lên đây — "
+        "app đọc và **thay thế toàn bộ** dữ liệu Đọc sách y hệt như khi Đồng bộ ngay qua CalDAV.",
         tip="Với **Tải lên từ Forest**: cứ xuất CSV mới bất cứ khi nào cần rồi tải lên thẳng, không cần lọc hay cắt "
             "bớt file trước — phiên đã có từ lần tải trước sẽ không bị nhân đôi, và những phiên bạn đã chủ động xoá "
             "cũng sẽ không bị nạp lại. Với **Đồng bộ lịch/đọc sách**: cần tạo **App-Specific Password** tại "
