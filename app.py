@@ -365,6 +365,10 @@ def sync_work_calendar(start_date, end_date):
     win_start = datetime.combine(start_date, datetime.min.time())
     win_end = datetime.combine(end_date, datetime.min.time())
     events = cal.date_search(start=win_start, end=win_end, expand=True)
+    # Dedupe theo (uid, start_time) TRƯỚC khi ghi -- với khoảng ngày dài, CalDAV có thể trả trùng
+    # lặp cho sự kiện lặp lại (vd sự kiện gốc và occurrence đã sửa cùng rơi vào 1 mốc giờ sau khi
+    # chuẩn hoá), nếu chèn thô sẽ vỡ khoá chính (uid, start_time) ngay trong cùng 1 lô insert.
+    seen = set()
     recs = []
     for ev in events:
         comp = ev.icalendar_component
@@ -374,13 +378,20 @@ def sync_work_calendar(start_date, end_date):
         title = str(comp.get('SUMMARY', '')).strip()
         if not title:
             continue
-        recs.append({"uid": str(comp.get('UID')), "start_time": _fmt_ts(dtstart), "title": title})
+        uid, start_s = str(comp.get('UID')), _fmt_ts(dtstart)
+        key = (uid, start_s)
+        if key in seen:
+            continue
+        seen.add(key)
+        recs.append({"uid": uid, "start_time": start_s, "title": title})
     sb = _get_supabase()
     # Xoá TRƯỚC khi chèn -- nếu chèn trước rồi mới xoá theo khoảng thì sẽ xoá luôn dòng vừa chèn.
     sb.table("work_calendar").delete() \
         .gte("start_time", _fmt_ts(win_start)).lt("start_time", _fmt_ts(win_end)).execute()
+    # upsert (không phải insert thô) -- lớp an toàn bổ sung phòng khi vẫn còn sót dòng trùng
+    # khoá chính do lệch thời điểm xoá/chèn (đồng bộ 2 lần gần nhau, v.v.).
     for i in range(0, len(recs), 500):
-        sb.table("work_calendar").insert(recs[i:i + 500]).execute()
+        sb.table("work_calendar").upsert(recs[i:i + 500], on_conflict="uid,start_time").execute()
     st.cache_data.clear()
     return len(recs), None
 
