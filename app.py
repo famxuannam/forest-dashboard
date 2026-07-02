@@ -14,6 +14,7 @@ import re
 from html import escape as html_escape
 from datetime import date, timedelta
 from streamlit_quill import st_quill
+from supabase import create_client
 
 # Thanh công cụ cho ô soạn ghi chú (Quill): đậm/nghiêng/gạch chân, màu chữ & nền,
 # danh sách + thụt lề, liên kết, xoá định dạng. (Không bật chèn ảnh để tránh phình notes.csv.)
@@ -85,10 +86,16 @@ def _note_is_empty(html):
     return txt.strip() == ""
 
 # --- CẤU HÌNH ---
+# Tên file dùng làm tên thành viên bên trong .zip Sao lưu/Khôi phục (mục "Quản lý hệ thống")
+# -- dữ liệu thật luôn nằm trên Supabase, các tên này không còn là đường dẫn đọc/ghi local.
 DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
+
+@st.cache_resource
+def _get_supabase():
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # "Nhật ký đọc sách": chỉ hiện cho nhóm sách đọc tuần tự (sửa tên ở đây nếu khác).
 # BOOKS_EXCLUDE = các dự án định kỳ (vd tạp chí) -> không tính như một cuốn sách.
@@ -147,53 +154,101 @@ def build_color_map(names):
     return {name: colors[i] for i, name in enumerate(names)}
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
-# --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
+# --- CÁC HÀM XỬ LÝ DỮ LIỆU (đọc/ghi qua Supabase) ---
+# save_* dùng ngữ nghĩa "ghi đè toàn bộ" (xoá hết rồi insert lại) để khớp hành vi các nơi gọi.
 @st.cache_data
 def load_db():
-    if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        rename_dict = {'Start Time': 'Thời gian bắt đầu', 'End Time': 'Thời gian kết thúc', 'Project': 'Dự án', 'Tag': 'Dự án', 'Duration (Min)': 'Thời lượng (Phút)'}
-        df.rename(columns={k: v for k, v in rename_dict.items() if k in df.columns}, inplace=True)
-        return df
-    return pd.DataFrame(columns=["Thời gian bắt đầu", "Thời gian kết thúc", "Dự án", "Thời lượng (Phút)"])
+    sb = _get_supabase()
+    res = sb.table("sessions").select("start_time,end_time,project,duration_min").execute()
+    cols = ["Thời gian bắt đầu", "Thời gian kết thúc", "Dự án", "Thời lượng (Phút)"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(res.data).rename(columns={
+        "start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc",
+        "project": "Dự án", "duration_min": "Thời lượng (Phút)"})
+    # Chuẩn hoá chuỗi giờ Supabase trả về (ISO 8601) về đúng dạng "YYYY-MM-DD HH:MM:SS"
+    # như trước đây -> mọi chỗ parse/so khớp chuỗi phía sau không cần đổi gì.
+    for c in ["Thời gian bắt đầu", "Thời gian kết thúc"]:
+        df[c] = pd.to_datetime(df[c]).dt.strftime("%Y-%m-%d %H:%M:%S")
+    return df[cols]
+
+def _sb_delete_all(table, not_null_col):
+    """Xoá toàn bộ 1 bảng Supabase. Postgrest yêu cầu delete() phải kèm điều kiện lọc ->
+    dùng "not_null_col IS NOT NULL" (luôn đúng vì cột đó là NOT NULL) làm điều kiện chắc chắn
+    khớp mọi dòng, không phụ thuộc kiểu dữ liệu/giá trị cụ thể của bảng."""
+    _get_supabase().table(table).delete().not_.is_(not_null_col, "null").execute()
 
 def save_db(df):
-    df.to_csv(DB_FILE, index=False)
+    sb = _get_supabase()
+    _sb_delete_all("sessions", "id")
+    recs = [
+        {"start_time": str(r["Thời gian bắt đầu"]), "end_time": str(r["Thời gian kết thúc"]),
+         "project": str(r["Dự án"]), "duration_min": int(r["Thời lượng (Phút)"])}
+        for r in df.to_dict("records")
+    ]
+    for i in range(0, len(recs), 500):  # chèn theo lô, tránh request quá lớn
+        sb.table("sessions").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
 
 @st.cache_data
 def load_mapping():
-    if os.path.exists(MAPPING_FILE):
-        df = pd.read_csv(MAPPING_FILE)
-        rename_dict = {'Project': 'Dự án', 'Tag': 'Dự án', 'Category': 'Danh mục'}
-        df.rename(columns={k: v for k, v in rename_dict.items() if k in df.columns}, inplace=True)
-        return df
-    return pd.DataFrame(columns=["Dự án", "Danh mục"])
+    sb = _get_supabase()
+    res = sb.table("mapping").select("project,category").execute()
+    cols = ["Dự án", "Danh mục"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(res.data).rename(columns={"project": "Dự án", "category": "Danh mục"})[cols]
 
 def save_mapping(df):
-    df.to_csv(MAPPING_FILE, index=False)
+    sb = _get_supabase()
+    _sb_delete_all("mapping", "project")
+    if not df.empty:
+        recs = [{"project": str(r["Dự án"]), "category": str(r["Danh mục"])} for r in df.to_dict("records")]
+        sb.table("mapping").insert(recs).execute()
     st.cache_data.clear()
 
 @st.cache_data
 def load_deleted():
     """Danh sách phiên đã xoá (theo khoá thời gian bắt đầu + kết thúc, dạng chuỗi)."""
-    if os.path.exists(DELETED_FILE):
-        return pd.read_csv(DELETED_FILE, dtype=str)
-    return pd.DataFrame(columns=["Thời gian bắt đầu", "Thời gian kết thúc"])
+    sb = _get_supabase()
+    res = sb.table("deleted_sessions").select("start_time,end_time").execute()
+    cols = ["Thời gian bắt đầu", "Thời gian kết thúc"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(res.data).rename(columns={"start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc"})
+    for c in cols:
+        df[c] = pd.to_datetime(df[c]).dt.strftime("%Y-%m-%d %H:%M:%S")
+    return df[cols].astype(str)
 
 def add_deleted(keys_df):
     """Gộp thêm các khoá thời gian vào danh sách đã xoá (keys_df có 2 cột thời gian)."""
     keys = keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].astype(str)
-    both = pd.concat([load_deleted(), keys]).drop_duplicates()
-    both.to_csv(DELETED_FILE, index=False)
+    sb = _get_supabase()
+    recs = [{"start_time": r["Thời gian bắt đầu"], "end_time": r["Thời gian kết thúc"]} for r in keys.to_dict("records")]
+    if recs:
+        sb.table("deleted_sessions").upsert(recs, on_conflict="start_time,end_time").execute()
+    st.cache_data.clear()
+
+def save_deleted(df):
+    """Ghi đè toàn bộ danh sách đã xoá (dùng khi Khôi phục từ bản sao lưu)."""
+    sb = _get_supabase()
+    _sb_delete_all("deleted_sessions", "start_time")
+    if not df.empty:
+        recs = [{"start_time": str(r["Thời gian bắt đầu"]), "end_time": str(r["Thời gian kết thúc"])}
+                for r in df.to_dict("records")]
+        for i in range(0, len(recs), 500):
+            sb.table("deleted_sessions").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
 
 @st.cache_data
 def load_notes():
     """Ghi chú/nhật ký theo ngày: cột Ngày (YYYY-MM-DD) + Ghi chú (text)."""
-    if os.path.exists(NOTES_FILE):
-        return pd.read_csv(NOTES_FILE, dtype=str).fillna("")
-    return pd.DataFrame(columns=["Ngày", "Ghi chú"])
+    sb = _get_supabase()
+    res = sb.table("notes").select("note_date,note").execute()
+    cols = ["Ngày", "Ghi chú"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(res.data).rename(columns={"note_date": "Ngày", "note": "Ghi chú"})[cols].astype(str)
 
 def get_note(day):
     nd = load_notes()
@@ -203,12 +258,23 @@ def get_note(day):
 def save_note(day, text):
     """Lưu/sửa ghi chú của một ngày; nội dung rỗng = xoá ghi chú ngày đó."""
     key = str(day)
-    nd = load_notes()
-    nd = nd[nd['Ngày'].astype(str) != key]
     text = "" if _note_is_empty(text) else str(text).strip()
+    sb = _get_supabase()
     if text:
-        nd = pd.concat([nd, pd.DataFrame([{"Ngày": key, "Ghi chú": text}])], ignore_index=True)
-    nd.to_csv(NOTES_FILE, index=False)
+        sb.table("notes").upsert({"note_date": key, "note": text}, on_conflict="note_date").execute()
+    else:
+        sb.table("notes").delete().eq("note_date", key).execute()
+    st.cache_data.clear()
+
+def save_notes_bulk(df):
+    """Ghi đè toàn bộ ghi chú (dùng khi Khôi phục từ bản sao lưu)."""
+    sb = _get_supabase()
+    _sb_delete_all("notes", "note_date")
+    if not df.empty:
+        recs = [{"note_date": str(r["Ngày"]), "note": str(r["Ghi chú"])} for r in df.to_dict("records")
+                if str(r["Ghi chú"]).strip()]
+        if recs:
+            sb.table("notes").insert(recs).execute()
     st.cache_data.clear()
 
 
@@ -1592,6 +1658,17 @@ def frag_period_table(scope_df, key):
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
+try:
+    _has_supabase_secrets = bool(st.secrets.get("SUPABASE_URL")) and bool(st.secrets.get("SUPABASE_KEY"))
+except Exception:
+    _has_supabase_secrets = False
+if not _has_supabase_secrets:
+    st.error(
+        "**Chưa cấu hình Supabase.** App cần `SUPABASE_URL` và `SUPABASE_KEY` trong "
+        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example` và mục "
+        "\"Thiết lập Supabase (bắt buộc)\" trong README) để đọc/ghi dữ liệu.")
+    st.stop()
+
 st.markdown(
     """
     <style>
@@ -2531,12 +2608,14 @@ elif nav == "Chuẩn bị dữ liệu":
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
-            if os.path.exists(DB_FILE):
+            db_now = load_db()
+            if not db_now.empty:
                 _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
-                    for _fn in [DB_FILE, MAPPING_FILE, DELETED_FILE, NOTES_FILE]:
-                        if os.path.exists(_fn):
-                            _z.write(_fn, arcname=os.path.basename(_fn))
+                    for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
+                                      (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes())]:
+                        if not _df.empty:
+                            _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
                                    f"forest_backup_{_today}.zip", "application/zip")
             else:
@@ -2578,9 +2657,9 @@ elif nav == "Chuẩn bị dữ liệu":
                     if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
                     if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
                     if DELETED_FILE in names:
-                        with open(DELETED_FILE, "wb") as _f: _f.write(_z.read(DELETED_FILE))
+                        save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
                     if NOTES_FILE in names:
-                        with open(NOTES_FILE, "wb") as _f: _f.write(_z.read(NOTES_FILE))
+                        save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -2589,12 +2668,12 @@ elif nav == "Chuẩn bị dữ liệu":
             st.subheader("Làm mới")
             confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu")
             if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete):
-                if os.path.exists(DB_FILE): os.remove(DB_FILE)
-                if os.path.exists(MAPPING_FILE): os.remove(MAPPING_FILE)
-                if os.path.exists(DELETED_FILE): os.remove(DELETED_FILE)
-                if os.path.exists(NOTES_FILE): os.remove(NOTES_FILE)
+                _sb_delete_all("sessions", "id")
+                _sb_delete_all("mapping", "project")
+                _sb_delete_all("deleted_sessions", "start_time")
+                _sb_delete_all("notes", "note_date")
                 st.cache_data.clear()
-                st.success("Đã xoá toàn bộ dữ liệu cục bộ!")
+                st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
 
@@ -2876,9 +2955,9 @@ elif nav == "Hướng dẫn":
         "để dễ phân biệt giữa nhiều bản sao lưu theo thời gian.\n"
         "- **Khôi phục**: tải một file .zip đã sao lưu trước đó lên để phục hồi lại **đúng nguyên trạng** tại thời "
         "điểm sao lưu — dùng khi chuyển sang máy mới, đổi trình duyệt, hoặc muốn quay lại một mốc dữ liệu cũ.\n"
-        "- **Làm mới**: xoá **toàn bộ** dữ liệu đang lưu cục bộ để bắt đầu lại từ đầu — thao tác này không thể hoàn "
+        "- **Làm mới**: xoá **toàn bộ** dữ liệu app đang lưu trữ để bắt đầu lại từ đầu — thao tác này không thể hoàn "
         "tác nên bắt buộc phải tick ô xác nhận trước khi thực hiện.",
-        tip="Vì dữ liệu chạy hoàn toàn **cục bộ trên máy/trình duyệt hiện tại**, không tự đồng bộ lên đâu cả, nên "
-            "nên tải bản sao lưu **định kỳ** (vd mỗi lần vừa import dữ liệu mới xong) — đây là cách duy nhất đảm bảo "
-            "không mất lịch sử tập trung khi đổi máy, xoá cache trình duyệt, hoặc chuyển môi trường chạy app.",
+        tip="Dữ liệu được lưu trên Supabase (bền vững qua các lần khởi động lại/redeploy), nhưng vẫn nên tải bản "
+            "sao lưu **định kỳ** (vd mỗi lần vừa import dữ liệu mới xong) làm lớp an toàn thứ hai, phòng trường "
+            "hợp thao tác nhầm hoặc sự cố ngoài ý muốn.",
         where="Chuẩn bị dữ liệu → Quản lý hệ thống")
