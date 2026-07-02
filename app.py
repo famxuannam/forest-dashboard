@@ -14,6 +14,7 @@ import re
 from itertools import groupby
 from html import escape as html_escape
 from datetime import date, datetime, timedelta
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 from streamlit_quill import st_quill
 from supabase import create_client
@@ -318,10 +319,13 @@ def _find_work_calendar():
     return None
 
 def sync_work_calendar(start_date, end_date):
-    """Kéo appointment lịch Work trong [start_date, end_date] (kể cả sự kiện lặp lại, tự khai
-    triển qua expand=True), chuẩn hoá giờ về naive local wall-clock theo APP_TZ, upsert vào
-    Supabase theo (uid, start_time) -- an toàn khi đồng bộ lại cùng khoảng ngày (không trùng).
-    Trả về (số dòng đã đồng bộ, thông báo lỗi hoặc None)."""
+    """Kéo appointment lịch Work trong [start_date, end_date) (kể cả sự kiện lặp lại, tự khai
+    triển qua expand=True), chuẩn hoá giờ về naive local wall-clock theo APP_TZ. Mỗi lần đồng bộ
+    THAY THẾ toàn bộ appointment trong đúng khoảng đã kéo về (xoá cũ trong khoảng đó rồi chèn lại
+    từ CalDAV) thay vì chỉ upsert -- nhờ vậy appointment bạn đã xoá trên Apple Calendar cũng biến
+    mất khỏi app ở lần đồng bộ tiếp theo, không còn tồn đọng mãi. Dùng đúng 2 mốc giờ
+    (win_start/win_end) cho cả date_search() lẫn filter xoá để phạm vi xoá khớp chính xác phạm vi
+    đã kéo về. Trả về (số dòng đã đồng bộ, thông báo lỗi hoặc None)."""
     if not _has_icloud_secrets():
         return 0, "Chưa cấu hình ICLOUD_USERNAME/ICLOUD_APP_PASSWORD trong secrets."
     try:
@@ -330,8 +334,9 @@ def sync_work_calendar(start_date, end_date):
         return 0, f"Không kết nối được tới iCloud: {e}"
     if cal is None:
         return 0, f"Không tìm thấy lịch '{st.secrets.get('ICLOUD_WORK_CALENDAR', 'Work')}' trong tài khoản."
-    events = cal.date_search(start=datetime.combine(start_date, datetime.min.time()),
-                              end=datetime.combine(end_date, datetime.min.time()), expand=True)
+    win_start = datetime.combine(start_date, datetime.min.time())
+    win_end = datetime.combine(end_date, datetime.min.time())
+    events = cal.date_search(start=win_start, end=win_end, expand=True)
     recs = []
     for ev in events:
         comp = ev.icalendar_component
@@ -343,8 +348,11 @@ def sync_work_calendar(start_date, end_date):
             continue
         recs.append({"uid": str(comp.get('UID')), "start_time": _fmt_ts(dtstart), "title": title})
     sb = _get_supabase()
+    # Xoá TRƯỚC khi chèn -- nếu chèn trước rồi mới xoá theo khoảng thì sẽ xoá luôn dòng vừa chèn.
+    sb.table("work_calendar").delete() \
+        .gte("start_time", _fmt_ts(win_start)).lt("start_time", _fmt_ts(win_end)).execute()
     for i in range(0, len(recs), 500):
-        sb.table("work_calendar").upsert(recs[i:i + 500], on_conflict="uid,start_time").execute()
+        sb.table("work_calendar").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
     return len(recs), None
 
@@ -582,11 +590,20 @@ def period_stepper(periods, key, fmt, current=None):
     return st.session_state[pk]
 
 def day_picker(active_days):
-    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề + lịch chọn ngày + nút ngày gần nhất."""
+    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề + lịch chọn ngày + nút ngày gần nhất.
+    Đọc query param ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách "nav" đã làm ở
+    st.query_params["nav"]) -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày."""
     pk = "day_pick"
     lo, hi = active_days[0], active_days[-1]
     if pk not in st.session_state:
-        st.session_state[pk] = hi
+        _qd = st.query_params.get("day")
+        _parsed = None
+        if _qd:
+            try:
+                _parsed = date.fromisoformat(_qd)
+            except ValueError:
+                _parsed = None
+        st.session_state[pk] = _parsed if _parsed else hi
     st.session_state[pk] = min(max(st.session_state[pk], lo), hi)
     sel = st.session_state[pk]
 
@@ -1255,38 +1272,23 @@ def render_day_timeline(day_df, sel, df_all):
 """, unsafe_allow_html=True)
 
 
-def render_work_calendar_box(day):
-    """Box appointment lịch Work trong ngày `day` (nếu có), đặt phía trên Ghi chú ngày. Im
-    lặng không render gì nếu ngày đó không có appointment nào -- không dùng expander riêng
-    để tránh phải đánh số lại các mục expander khác trong trang."""
-    wc = load_work_calendar()
-    if wc.empty:
-        return
-    day_events = wc[wc['Thời gian bắt đầu'].dt.date == day].sort_values('Thời gian bắt đầu')
-    if day_events.empty:
-        return
-    chips = ''.join(
-        f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
-        f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
-        for _, r in day_events.iterrows()
-    )
-    st.markdown(
-        "<div class='glass-card' style='padding:14px 18px;margin-bottom:14px;'>"
-        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;"
-        "letter-spacing:0.5px;margin-bottom:8px;'>Lịch Work</div>"
-        f"<div>{chips}</div></div>",
-        unsafe_allow_html=True)
-
-
 @st.fragment
 def render_note_editor(day):
-    """Ghi chú một ngày, gói trong thẻ. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
+    """Thẻ 2 cột cho một ngày: Thứ/ngày bên trái (giống bố cục .jrows của Nhật ký tuần/tháng,
+    dù ở đây chỉ có đúng 1 "dòng"), cột phải gồm chip appointment lịch (nếu có, trước đây là
+    box "Lịch Work" riêng) rồi tới ghi chú. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
     trống) kèm một nút; bấm nút mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
 
     Bọc trong @st.fragment: ô soạn Quill gửi nội dung về server mỗi lần gõ phím, nếu
     không cô lập thì cả trang Báo cáo ngày chạy lại mỗi ký tự -> giao diện giật. Là
     fragment nên mỗi lần gõ chỉ phần ghi chú này vẽ lại; các st.rerun() bên dưới cũng
-    chỉ rerun trong fragment (đủ vì không phần nào khác trên trang phụ thuộc ghi chú)."""
+    chỉ rerun trong fragment (đủ vì không phần nào khác trên trang phụ thuộc ghi chú).
+
+    Cột trái/phải dựng bằng st.columns() thật (không phải HTML tĩnh như .jrows) vì cột phải
+    chứa widget Streamlit thật (Quill, nút) không thể nhét vào 1 chuỗi HTML. Bọc trong
+    st.container(key="note_row") RIÊNG (không style trực tiếp lên note_card) vì note_card ở
+    chế độ soạn còn có 1 st.columns() khác cho 3 nút Cập nhật/Huỷ/Xoá -- style chung theo
+    note_card sẽ vô tình kẻ vạch trước nút đó."""
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
@@ -1297,50 +1299,69 @@ def render_note_editor(day):
         st.session_state[edit_key] = True
 
     with st.container(border=True, key="note_card"):
-        if not st.session_state.get(edit_key, False):
-            # Chế độ xem: chỉ ghi chú + 1 nút
-            if cur:
-                with st.container(key="note_saved"):
-                    st.markdown(cur, unsafe_allow_html=True)
-                if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
-                    _enter_edit()
-                    st.rerun()
-            else:
-                st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
-                            unsafe_allow_html=True)
-                if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
-                             key=f"note_addbtn_{day}"):
-                    _enter_edit()
-                    st.rerun()
-        else:
-            # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
-            content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
-                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
-            style_quill()
-            c1, c2, _, c4 = st.columns([2, 2, 2, 3])
-            with c1:
-                if st.button("Cập nhật", icon=":material/check:", type="primary",
-                             key=f"note_save_{day}", use_container_width=True):
-                    save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
-                    st.session_state[edit_key] = False
-                    st.rerun()
-            with c2:
-                if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}",
-                             use_container_width=True):
-                    st.session_state[edit_key] = False
-                    st.rerun()
-            with c4:
-                if cur and st.button("Xoá ghi chú", icon=":material/delete:",
-                                     key=f"note_del_{day}", use_container_width=True):
-                    save_note(day, "")
-                    st.session_state[edit_key] = False
-                    st.rerun()
+        with st.container(key="note_row"):
+            c_date, c_body = st.columns([1, 5])
+            with c_date:
+                vn_dow = VN_DAYS.get(pd.Timestamp(day).day_name(), "")
+                st.markdown(f"<div class='jdate'><div class='jdowbig'>{vn_dow}</div>"
+                            f"<div class='jdm'>{day:%d/%m}</div></div>", unsafe_allow_html=True)
+            with c_body:
+                wc = load_work_calendar()
+                if not wc.empty:
+                    day_events = wc[wc['Thời gian bắt đầu'].dt.date == day].sort_values('Thời gian bắt đầu')
+                    if not day_events.empty:
+                        chips = ''.join(
+                            f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+                            f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+                            for _, r in day_events.iterrows()
+                        )
+                        st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
+
+                if not st.session_state.get(edit_key, False):
+                    # Chế độ xem: chỉ ghi chú + 1 nút
+                    if cur:
+                        with st.container(key="note_saved"):
+                            st.markdown(cur, unsafe_allow_html=True)
+                        if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
+                            _enter_edit()
+                            st.rerun()
+                    else:
+                        st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
+                                    unsafe_allow_html=True)
+                        if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
+                                     key=f"note_addbtn_{day}"):
+                            _enter_edit()
+                            st.rerun()
+                else:
+                    # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
+                    content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
+                                       placeholder="Viết vài dòng về ngày này…", key=quill_key)
+                    style_quill()
+                    c1, c2, _, c4 = st.columns([2, 2, 2, 3])
+                    with c1:
+                        if st.button("Cập nhật", icon=":material/check:", type="primary",
+                                     key=f"note_save_{day}", use_container_width=True):
+                            save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                    with c2:
+                        if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}",
+                                     use_container_width=True):
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                    with c4:
+                        if cur and st.button("Xoá ghi chú", icon=":material/delete:",
+                                             key=f"note_del_{day}", use_container_width=True):
+                            save_note(day, "")
+                            st.session_state[edit_key] = False
+                            st.rerun()
 
 
 def render_notes_journal(period_key, kind):
-    """Liệt kê (chỉ đọc) ghi chú + appointment lịch Work của các ngày thuộc một kỳ (tuần/tháng)
+    """Liệt kê (chỉ đọc) ghi chú + appointment lịch của các ngày thuộc một kỳ (tuần/tháng)
     -- một dòng cho mỗi ngày có ghi chú HOẶC có appointment (hợp/union 2 nguồn), không chỉ
-    giới hạn ở ngày đã có ghi chú viết tay như trước.
+    giới hạn ở ngày đã có ghi chú viết tay như trước. Ô Thứ/ngày mỗi dòng là link nhảy sang
+    đúng Báo cáo ngày hôm đó.
     Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
     cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
     hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
@@ -1379,10 +1400,14 @@ def render_notes_journal(period_key, kind):
         note_html = ''
         if d in note_days:
             note_html = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
+        # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
+        # trong day_picker() -- xem chú thích ở đó).
+        _href = f"?nav={quote('Báo cáo ngày')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
+            f"<a class='jdate-link' href='{_href}'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
-            f"<div class='jdm'>{d:%d/%m}</div></div>"
+            f"<div class='jdm'>{d:%d/%m}</div></div></a>"
             f"<div>{chips_html}{note_html}</div>"
             "</div>"
         )
@@ -2078,10 +2103,17 @@ st.markdown(
     .jrows .jrow { display: grid; grid-template-columns: 1fr 5fr; align-items: start;
         column-gap: 10px; padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
     .jrows .jrow:last-child { border-bottom: none; }
-    .jrows .jrow > .jdate { border-right: 1px solid rgba(0,0,0,0.08); padding-right: 10px; }
+    .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link {
+        border-right: 1px solid rgba(0,0,0,0.08); padding-right: 10px;
+    }
+    /* Ô Thứ/ngày trong Nhật ký là link (nhảy sang Báo cáo ngày đúng ngày đó) -> bỏ màu xanh/
+       gạch chân mặc định của <a>, giữ nguyên hình thức cũ; không áp cho .jdate trần (dùng ở
+       "Ngày này năm trước" và thẻ Ghi chú ngày -- tự link về chính trang đang xem là vô nghĩa). */
+    .jrows .jrow > a.jdate-link { display: block; text-decoration: none; color: inherit; cursor: pointer; }
+    .jrows .jrow > a.jdate-link:hover .jdowbig { color: #00a3ad; }
     @media (max-width: 640px) {
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
-        .jrows .jrow > .jdate { border-right: none; padding-right: 0; }
+        .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: #00a3ad; letter-spacing: -0.5px; line-height: 1; }
@@ -2093,6 +2125,14 @@ st.markdown(
     .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
+    /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
+       thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
+       không thể gói trong unsafe_allow_html. [data-testid="stColumn"] là cột do Streamlit tự
+       dựng bên trong container key="note_row". */
+    .st-key-note_row [data-testid="stColumn"]:first-child { border-right: 1px solid rgba(0,0,0,0.08); }
+    @media (max-width: 640px) {
+        .st-key-note_row [data-testid="stColumn"]:first-child { border-right: none; }
+    }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
     </style>
@@ -2451,7 +2491,6 @@ elif nav == "Báo cáo ngày":
 
         if day_df.empty:
             st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
-            render_work_calendar_box(sel)
             with st.expander("Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
             with st.expander("Ngày này năm trước", expanded=False):
@@ -2511,7 +2550,6 @@ elif nav == "Báo cáo ngày":
                 render_session_bar(day_df)
                 render_day_timeline(day_df, sel, df)
 
-            render_work_calendar_box(sel)
             with st.expander("2. Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
 
@@ -2644,7 +2682,8 @@ elif nav == "Nhật ký đọc sách":
 # TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
 elif nav == "Chuẩn bị dữ liệu":
-    with st.expander("1. Tải lên từ Forest", expanded=True):
+    with st.expander("1. Dữ liệu đầu vào", expanded=True):
+        st.subheader("Tải lên từ Forest")
         _msg = st.session_state.pop('import_msg', None)
         if _msg:
             st.success(_msg)
@@ -2698,6 +2737,29 @@ elif nav == "Chuẩn bị dữ liệu":
                             f"Đã thêm {added} phiên mới (bỏ {dup} trùng, {stats['failed']} thất bại, "
                             f"{stats['unset']} unset{_extra}){rng if added else ''}.")
                         st.rerun()
+
+        st.divider()
+        st.subheader("Đồng bộ lịch")
+        sc1, sc2 = st.columns([3, 1])
+        with sc1:
+            sync_range = st.segmented_control("Khoảng đồng bộ (quanh hôm nay)",
+                                               ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
+                                               default="-90 / +90 ngày", key="wc_range")
+        sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
+        with sc2:
+            st.write("")
+            if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
+                _start = date.today() - timedelta(days=sync_days)
+                _end = date.today() + timedelta(days=sync_days)
+                with st.spinner("Đang kết nối iCloud..."):
+                    _n, _err = sync_work_calendar(_start, _end)
+                if _err:
+                    st.error(_err)
+                else:
+                    st.success(f"Đã đồng bộ {_n} appointment (từ {_start:%d/%m/%Y} đến {_end:%d/%m/%Y}).")
+                    time.sleep(1)
+                    st.rerun()
+
     with st.expander("2. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
@@ -2821,7 +2883,7 @@ elif nav == "Chuẩn bị dữ liệu":
                         if NOTES_FILE in names:
                             parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
                         if WORK_CALENDAR_FILE in names:
-                            parts.append(f"Lịch Work **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
+                            parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -2860,30 +2922,6 @@ elif nav == "Chuẩn bị dữ liệu":
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
-
-    with st.expander("5. Đồng bộ lịch Work", expanded=True):
-        st.caption("Kéo appointment từ lịch **Work** trong Apple Calendar về app (qua CalDAV) — "
-                   "cần cấu hình `ICLOUD_USERNAME`/`ICLOUD_APP_PASSWORD` trong secrets trước "
-                   "(xem README mục thiết lập).")
-        sc1, sc2 = st.columns([3, 1])
-        with sc1:
-            sync_range = st.segmented_control("Khoảng đồng bộ (quanh hôm nay)",
-                                               ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
-                                               default="-90 / +90 ngày", key="wc_range")
-        sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
-        with sc2:
-            st.write("")
-            if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
-                _start = date.today() - timedelta(days=sync_days)
-                _end = date.today() + timedelta(days=sync_days)
-                with st.spinner("Đang kết nối iCloud..."):
-                    _n, _err = sync_work_calendar(_start, _end)
-                if _err:
-                    st.error(_err)
-                else:
-                    st.success(f"Đã đồng bộ {_n} appointment (từ {_start:%d/%m/%Y} đến {_end:%d/%m/%Y}).")
-                    time.sleep(1)
-                    st.rerun()
 
 # ==========================================
 # TAB HƯỚNG DẪN
@@ -3080,21 +3118,24 @@ elif nav == "Hướng dẫn":
         where="Báo cáo ngày → Tổng quan ngày")
     guide_item(
         "note_editor.png", "Ghi chú ngày (nhật ký)",
-        "Mỗi ngày ghi được đúng **một ghi chú** dạng nhật ký tự do — không giới hạn độ dài, không cần gắn với phiên "
-        "tập trung nào. Mặc định trang chỉ hiển thị nội dung đã lưu (nếu có) cùng nút **Thêm/Sửa ghi chú**; bấm vào "
-        "nút này mới mở ra trình soạn thảo đầy đủ, tránh chiếm chỗ màn hình khi chỉ muốn đọc lại.\n\n"
+        "Thẻ **2 cột**: bên trái là Thứ/ngày, bên phải là appointment lịch (nếu có, đồng bộ từ mục *Dữ liệu đầu "
+        "vào*) rồi tới ghi chú — cùng bố cục với mục *Nhật ký* ở Báo cáo tuần/tháng, dù ở Báo cáo ngày chỉ có "
+        "đúng 1 dòng. Mỗi ngày ghi được đúng **một ghi chú** dạng nhật ký tự do — không giới hạn độ dài, không cần "
+        "gắn với phiên tập trung nào. Mặc định trang chỉ hiển thị nội dung đã lưu (nếu có) cùng nút **Thêm/Sửa ghi "
+        "chú**; bấm vào nút này mới mở ra trình soạn thảo đầy đủ, tránh chiếm chỗ màn hình khi chỉ muốn đọc lại.\n\n"
         "- Trình soạn thảo hỗ trợ **định dạng rich text** đầy đủ: chữ đậm/nghiêng/gạch chân, đổi màu chữ và tô nền, "
         "danh sách gạch đầu dòng hoặc đánh số kèm **thụt lề nhiều cấp**, và chèn liên kết. Vài phím tắt quen thuộc "
         "vẫn dùng được: **⌘/Ctrl + B** để in đậm, **Tab** để thụt lề một mục trong danh sách, **Shift+Tab** để lùi lề.\n"
         "- Ghi chú được lưu **hoàn toàn độc lập với dữ liệu phiên**: một ngày không có phiên tập trung nào vẫn ghi "
         "chú được bình thường (vd để note lý do nghỉ), và việc nạp thêm dữ liệu mới hay xoá phiên trong danh sách đã "
         "xoá **không bao giờ làm mất ghi chú** đã lưu của ngày đó.\n"
-        "- Ghi chú của mọi ngày trong kỳ sẽ **tự động hiện lại** gộp thành danh sách ở mục *Nhật ký* của đúng "
-        "tuần/tháng chứa ngày đó — không cần mở lại từng ngày để đọc.",
+        "- Ghi chú (và appointment lịch) của mọi ngày trong kỳ sẽ **tự động hiện lại** gộp thành danh sách ở mục "
+        "*Nhật ký* của đúng tuần/tháng chứa ngày đó — không cần mở lại từng ngày để đọc. Bấm vào ô Thứ/ngày của "
+        "một dòng bất kỳ trong *Nhật ký* sẽ **nhảy thẳng sang đúng Báo cáo ngày** hôm đó.",
         tip="Ghi vài dòng ngắn mỗi ngày, kể cả chỉ 1-2 câu, sẽ tích luỹ thành một kho ngữ cảnh rất giá trị: khi xem "
             "lại báo cáo tuần/tháng hay đối chiếu 'Ngày này năm trước', bạn có cả bối cảnh (đang bận gì, tâm trạng "
             "ra sao) đi kèm con số, thay vì chỉ có số giờ trần trụi không nói lên tại sao.",
-        where="Báo cáo ngày → Ghi chú ngày")
+        where="Báo cáo ngày → Ghi chú ngày · Báo cáo tuần/tháng → Nhật ký")
     with st.container(border=True, key="guide_otd"):
         st.markdown(
             "Ngoài dòng thời gian và ghi chú, Báo cáo ngày còn có mục **Ngày này năm trước**: app tự động dò và "
@@ -3128,18 +3169,27 @@ elif nav == "Hướng dẫn":
 
     st.markdown("### Chuẩn bị dữ liệu")
     guide_item(
-        "prep_upload.png", "Tải lên từ Forest",
-        "Đây là nơi duy nhất **nạp dữ liệu mới** vào app: tải lên file **CSV xuất trực tiếp từ app Forest** (mục "
-        "xuất dữ liệu trong Forest, không cần chỉnh sửa gì trước). App tự nhận diện các cột cần thiết (Tag/Project "
-        "tương ứng Dự án, Start Time/End Time để tính thời lượng và ngày giờ, cột Is Success để lọc), **tự động bỏ "
-        "qua các phiên thất bại và các dòng gắn tag 'unset'** (không có dự án cụ thể), rồi gộp toàn bộ phiên hợp lệ "
-        "vào dữ liệu đang có sẵn theo cơ chế **chống trùng lặp** dựa trên thời điểm diễn ra của từng phiên.\n\n"
-        "- Sau khi tải lên, app báo rõ ràng đã đọc được bao nhiêu phiên hợp lệ và đã bỏ qua bao nhiêu (thất bại/"
-        "trùng lặp/unset), để bạn yên tâm biết chính xác điều gì vừa xảy ra với dữ liệu của mình.",
-        tip="Cứ xuất CSV mới từ Forest bất cứ khi nào cần rồi tải lên thẳng, không cần lọc hay cắt bớt file trước — "
-            "phiên đã có từ lần tải trước sẽ không bị nhân đôi, và những phiên bạn đã chủ động xoá (trong danh sách "
-            "đã xoá) cũng sẽ không bị nạp lại dù vẫn còn trong file CSV mới.",
-        where="Chuẩn bị dữ liệu → Tải lên từ Forest")
+        "prep_data_input.png", "Dữ liệu đầu vào",
+        "Hai nguồn dữ liệu, gộp chung một mục:\n\n"
+        "- **Tải lên từ Forest**: nơi duy nhất **nạp dữ liệu phiên tập trung** vào app — tải lên file **CSV xuất "
+        "trực tiếp từ app Forest** (mục xuất dữ liệu trong Forest, không cần chỉnh sửa gì trước). App tự nhận diện "
+        "các cột cần thiết (Tag/Project tương ứng Dự án, Start Time/End Time để tính thời lượng và ngày giờ, cột "
+        "Is Success để lọc), **tự động bỏ qua các phiên thất bại và các dòng gắn tag 'unset'** (không có dự án cụ "
+        "thể), rồi gộp toàn bộ phiên hợp lệ vào dữ liệu đang có sẵn theo cơ chế **chống trùng lặp** dựa trên thời "
+        "điểm diễn ra của từng phiên. Sau khi tải lên, app báo rõ ràng đã đọc được bao nhiêu phiên hợp lệ và đã bỏ "
+        "qua bao nhiêu (thất bại/trùng lặp/unset).\n"
+        "- **Đồng bộ lịch** *(tuỳ chọn)*: kéo các appointment (cuộc hẹn/họp) từ lịch **\"Work\"** trong Apple "
+        "Calendar về app qua **CalDAV** — kết nối trực tiếp tài khoản iCloud, không cần xuất file thủ công. Sau khi "
+        "đồng bộ, appointment hiện dưới dạng chip (giờ bắt đầu + tiêu đề) ngay trong thẻ **Ghi chú ngày** (Báo cáo "
+        "ngày) và xen kẽ vào từng dòng ngày ở mục *Nhật ký* (Báo cáo tuần/tháng), kể cả ngày không có ghi chú viết "
+        "tay. Mỗi lần đồng bộ cũng **dọn sạch appointment đã bị xoá** trên Apple Calendar khỏi app, không chỉ thêm "
+        "mới — nên kết quả luôn khớp đúng lịch thật tại thời điểm đồng bộ.",
+        tip="Với **Tải lên từ Forest**: cứ xuất CSV mới bất cứ khi nào cần rồi tải lên thẳng, không cần lọc hay cắt "
+            "bớt file trước — phiên đã có từ lần tải trước sẽ không bị nhân đôi, và những phiên bạn đã chủ động xoá "
+            "cũng sẽ không bị nạp lại. Với **Đồng bộ lịch**: cần tạo **App-Specific Password** tại appleid.apple.com "
+            "và điền vào secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, mục \"Đồng bộ lịch "
+            "Work\"); chưa cấu hình thì mục này chỉ báo lỗi khi bấm nút, không ảnh hưởng phần còn lại của app.",
+        where="Chuẩn bị dữ liệu → Dữ liệu đầu vào")
     guide_item(
         "prep_classify.png", "Phân loại",
         "Nơi gán **Danh mục (nhóm lớn)** cho từng **Dự án** (chính là mỗi tag riêng biệt trong Forest). Ví dụ có "
@@ -3169,17 +3219,3 @@ elif nav == "Hướng dẫn":
             "sao lưu **định kỳ** (vd mỗi lần vừa import dữ liệu mới xong) làm lớp an toàn thứ hai, phòng trường "
             "hợp thao tác nhầm hoặc sự cố ngoài ý muốn.",
         where="Chuẩn bị dữ liệu → Quản lý hệ thống")
-    guide_item(
-        "prep_work_calendar.png", "Đồng bộ lịch Work",
-        "Kéo các appointment (cuộc hẹn/họp) từ lịch **\"Work\"** trong Apple Calendar về app qua "
-        "**CalDAV** — kết nối trực tiếp tài khoản iCloud, không cần xuất file thủ công. Sau khi đồng "
-        "bộ, các appointment hiện ở hai nơi:\n\n"
-        "- **Báo cáo ngày**: một khối **Lịch Work** hiện các appointment trong ngày (giờ bắt đầu + "
-        "tiêu đề), đặt ngay phía trên Ghi chú ngày.\n"
-        "- **Báo cáo tuần/tháng** (mục Nhật ký): appointment của mỗi ngày được xen kẽ vào đúng dòng "
-        "ngày đó, kể cả những ngày không có ghi chú viết tay.",
-        tip="Tính năng tuỳ chọn — cần tạo **App-Specific Password** tại appleid.apple.com và điền vào "
-            "secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, mục \"Đồng bộ lịch "
-            "Work\"). Chưa cấu hình thì mục này chỉ báo lỗi khi bấm nút, không ảnh hưởng phần còn lại "
-            "của app.",
-        where="Chuẩn bị dữ liệu → Đồng bộ lịch Work")
