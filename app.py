@@ -1339,37 +1339,58 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         + (f"<span class='rtl-yr'>’{m.year % 100:02d}</span>" if multiyear and m.month == 1 else "")
         + '</span>' for m in months)
 
+    names_html = ''.join(f'<div class="rtl-name">{html_escape(str(r["Cuốn sách"]))}</div>'
+                         for _, r in t.iterrows())
+
     bars_html = ''
     for _, r in t.iterrows():
         left = _pct(r['Bắt đầu'])
         width = max((pd.Timestamp(r['Gần nhất']) - pd.Timestamp(r['Bắt đầu'])).days + 1, 1) / total * 100
         cls = 'reading' if r['Trạng thái'] == labels['ongoing'] else 'done'
-        bars_html += (f'<div class="rtl-row"><div class="rtl-name">{html_escape(str(r["Cuốn sách"]))}</div>'
-                      f'<div class="rtl-track">{grid_html}'
-                      f'<div class="rtl-bar {cls}" style="left:{left:.3f}%;width:{width:.3f}%"></div></div></div>')
+        bars_html += (f'<div class="rtl-track">{grid_html}'
+                      f'<div class="rtl-bar {cls}" style="left:{left:.3f}%;width:{width:.3f}%"></div></div>')
 
+    # Cột tên rộng hơn (144 -> 200px) để đỡ cắt bớt tên dài. TÁCH HẲN thành 2 khối cạnh nhau
+    # (KHÔNG dùng position:sticky) -- đã test thực nghiệm (isolated HTML + Playwright) xác nhận
+    # sticky trên con trực tiếp của display:grid/flex KHÔNG dính khi cuộn ngang trong môi trường
+    # Streamlit thật (dù CSS hợp lệ, computed style đúng "sticky", vẫn di chuyển theo scroll --
+    # tái hiện được trong isolated test nhưng KHÔNG tái hiện được khi thử lại bên ngoài Streamlit,
+    # nên nghi có tương tác lạ với cách Streamlit dựng DOM; không đáng để tiếp tục điều tra sâu).
+    # Cột tên đứng NGOÀI vùng cuộn (không có overflow ngang) nên không cần sticky vẫn luôn hiện;
+    # chỉ khối track (bên phải) có overflow-x:auto riêng, bề rộng TỐI THIỂU theo số tháng
+    # (70px/tháng, tối thiểu 320px) -- càng nhiều tháng càng rộng hơn khung nhìn, tự sinh thanh
+    # cuộn ngang thay vì bị nén dẹt khó đọc khi khoảng thời gian dài.
+    name_w = 200
+    track_min = max(len(months) * 70, 320)
     st.markdown(f"""
 <style>
 .rtl-card{{background:#fff;border:1px solid #d1d1d6;border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
-.rtl-legend{{display:flex;gap:16px;margin:0 0 10px 152px;font-size:12px;color:#6e6e73;}}
+.rtl-legend{{display:flex;gap:16px;margin:0 0 10px {name_w + 8}px;font-size:12px;color:#6e6e73;}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
-.rtl-row{{display:grid;grid-template-columns:144px 1fr;align-items:center;height:32px;}}
-.rtl-name{{font-size:13px;font-weight:600;color:#1d1d1f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
-.rtl-track{{position:relative;height:32px;}}
+.rtl-body{{display:flex;align-items:flex-start;}}
+.rtl-names{{flex:0 0 {name_w}px;width:{name_w}px;}}
+.rtl-name{{height:32px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#1d1d1f;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
+.rtl-scroll{{flex:1 1 auto;overflow-x:auto;min-width:0;}}
+.rtl-track{{position:relative;height:32px;min-width:{track_min}px;}}
 .rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
 .rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .rtl-bar.done{{background:#aeaeb2;}}
 .rtl-bar.reading{{background:#00a3ad;}}
-.rtl-axis{{display:grid;grid-template-columns:144px 1fr;margin-top:3px;}}
-.rtl-ticks{{position:relative;height:16px;}}
+.rtl-ticks{{position:relative;height:16px;min-width:{track_min}px;margin-top:3px;}}
 .rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
 .rtl-yr{{color:#c7c7cc;margin-left:1px;}}
 </style>
 <div class="rtl-card">
 <div class="card-label">Dòng thời gian</div>
 <div class="rtl-legend"><span><i style="background:#00a3ad;"></i>{labels['ongoing']}</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+<div class="rtl-body">
+<div class="rtl-names">{names_html}</div>
+<div class="rtl-scroll">
 {bars_html}
-<div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
+<div class="rtl-ticks">{axis_html}</div>
+</div>
+</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1493,8 +1514,9 @@ def render_note_editor(day):
     chứa widget Streamlit thật (Quill, nút) không thể nhét vào 1 chuỗi HTML. Bọc trong
     st.container(key="note_row") RIÊNG (không style trực tiếp lên note_card) vì note_card ở
     chế độ soạn còn có 1 st.columns() khác cho 3 nút Cập nhật/Huỷ/Xoá -- style chung theo
-    note_card sẽ vô tình kẻ vạch trước nút đó. KHÔNG bọc viền glass-card quanh note_card (đã bỏ
-    theo yêu cầu người dùng) -- container chỉ còn dùng để scope CSS 2 cột."""
+    note_card sẽ vô tình kẻ vạch trước nút đó. Thẻ ngoài VẪN có viền/bóng glass-card như Nhật
+    ký (border=True) -- yêu cầu "bỏ khung" trước đó chỉ nói tới khung TEAL riêng bao quanh
+    NỘI DUNG ghi chú đã lưu (.st-key-note_saved cũ), không phải khung của cả thẻ."""
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
@@ -1504,7 +1526,7 @@ def render_note_editor(day):
         st.session_state.pop(quill_key, None)
         st.session_state[edit_key] = True
 
-    with st.container(key="note_card"):
+    with st.container(border=True, key="note_card"):
         with st.container(key="note_row"):
             c_date, c_body = st.columns([1, 5])
             with c_date:
@@ -1639,10 +1661,14 @@ def render_notes_journal(period_key, kind):
 
 
 def _book_chips_html(day_g):
-    """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách kèm nhãn tên sách (1 ngày có
-    thể có phần từ nhiều cuốn). Dùng chung cho render_reading_box và _reading_rows_html."""
+    """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
+    có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
+    người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
+    Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html."""
     out = ''
-    for book, g in day_g.groupby('Cuốn sách', sort=False):
+    groups = list(day_g.groupby('Cuốn sách', sort=False))
+    groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
+    for book, g in groups:
         parts = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                         for _, r in g.sort_values('Ngày hoàn thành').iterrows())
         out += f"<div style='margin-bottom:6px;'><span class='rl-book'>{html_escape(book)}</span>{parts}</div>"
@@ -2320,29 +2346,28 @@ st.markdown(
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
     }
 
-    /* ===== Ghi chú ngày: hộp hiển thị ghi chú đã lưu / trạng thái trống ===== */
-    .st-key-note_saved { background: rgba(0,163,173,0.05); border: 1px solid rgba(0,163,173,0.12);
-        border-left: 3px solid #00a3ad; border-radius: 10px; padding: 2px 14px; }
+    /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
+       cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
+       khung (viền chấm) để phân biệt rõ với có nội dung. ===== */
     .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
         border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
 
     /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
     .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
     .note-html p, .st-key-note_saved p { margin: 4px 0; }
-    .note-html ul, .note-html ol { margin: 4px 0; padding-left: 22px; }
+    .note-html ul, .note-html ol, .st-key-note_saved ul, .st-key-note_saved ol { margin: 4px 0; padding-left: 22px; }
     /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
-    .note-html > :first-child { margin-top: 0 !important; }
-    .note-html > :last-child { margin-bottom: 0 !important; }
+    .note-html > :first-child, .st-key-note_saved > :first-child { margin-top: 0 !important; }
+    .note-html > :last-child, .st-key-note_saved > :last-child { margin-bottom: 0 !important; }
     .note-html a, .st-key-note_saved a { color: #00a3ad; }
     /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
     .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
     .ql-indent-5 { padding-left: 10em; } .ql-indent-6 { padding-left: 12em; }
 
-    /* ===== Container có viền (nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card =====
-       KHÔNG áp cho note_card (Ghi chú ngày, Báo cáo ngày) -- đã bỏ khung theo yêu cầu người
-       dùng, container đó giờ chỉ dùng để scope CSS 2 cột, không viền/bóng/nền riêng. */
-    [class*="st-key-jcard"], [class*="st-key-guide"] {
+    /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước, hướng dẫn) trông
+       như glass-card ===== */
+    .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
         border-radius: 16px !important;
         border-color: #d1d1d6 !important;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
