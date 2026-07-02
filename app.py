@@ -97,16 +97,43 @@ MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
-READING_LOG_FILE = "reading_log.csv"  # phần sách đã đọc, đồng bộ từ Apple Reminders (VTODO)
+READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 
 @st.cache_resource
 def _get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # "Nhật ký đọc sách": chỉ hiện cho nhóm sách đọc tuần tự (sửa tên ở đây nếu khác).
-# BOOKS_EXCLUDE = các dự án định kỳ (vd tạp chí) -> không tính như một cuốn sách.
+# BOOKS_EXCLUDE = các dự án định kỳ (vd tạp chí) hoặc không phải sách (vd Gundam, xem tab riêng)
+# -> không tính như một cuốn sách.
 BOOKS_GROUP = "Reading"
-BOOKS_EXCLUDE = {"The Economist"}
+BOOKS_EXCLUDE = {"The Economist", "Gundam"}
+
+# Tag Dự án trên Forest khi bấm giờ xem Gundam -- không có Dự án riêng theo từng series, chỉ 1
+# tag chung này; xem _assign_gundam_sessions() để biết cách suy ra series đang xem theo ngày.
+GUNDAM_TAG = "Gundam"
+
+# render_reading_log() dùng chung cho tab "Nhật ký đọc sách" (mặc định) và tab "Gundam" (truyền
+# labels=GUNDAM_LABELS) -- chỉ khác nhau ở CHỮ hiển thị, không khác logic tính toán. Tên cột nội
+# bộ trong DataFrame (vd 'Cuốn sách', 'Trạng thái') giữ nguyên bất kể labels nào đang dùng.
+READING_LABELS = dict(
+    item_col="Cuốn sách", count_label="Số cuốn", days_label="Ngày đọc",
+    parts_label="Số phần đã đọc", part_recent_label="Phần gần nhất", part_word="phần",
+    verb="đọc", ongoing="Đang đọc", empty_msg="Chưa có dữ liệu sách trong nhóm này.",
+    detail_label="Chi tiết từng cuốn", timeslot_label="Khung giờ đọc",
+    timeslot_best="Hay đọc nhất", streak_label="Chuỗi đọc", pace_days_label="Số ngày đọc",
+    pace_pct_label="% ngày có đọc", avg_hr_label="TB giờ/cuốn", avg_days_label="TB ngày/cuốn",
+    fastest_label="Đọc nhanh nhất",
+)
+GUNDAM_LABELS = dict(
+    READING_LABELS, item_col="Series", count_label="Số series", days_label="Ngày xem",
+    parts_label="Số tập đã xem", part_recent_label="Tập gần nhất", part_word="tập",
+    verb="xem", ongoing="Đang xem", empty_msg="Chưa có dữ liệu Gundam trong nhóm này.",
+    detail_label="Chi tiết từng series", timeslot_label="Khung giờ xem",
+    timeslot_best="Hay xem nhất", streak_label="Chuỗi xem", pace_days_label="Số ngày xem",
+    pace_pct_label="% ngày có xem", avg_hr_label="TB giờ/series", avg_days_label="TB ngày/series",
+    fastest_label="Xem nhanh nhất",
+)
 
 # Tên thứ tiếng Việt (dùng chung mọi nơi)
 VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
@@ -383,16 +410,18 @@ def save_work_calendar_bulk(df):
     st.cache_data.clear()
 
 
-# --- ĐỒNG BỘ ĐỌC SÁCH (Apple Reminders qua CalDAV/VTODO) ---
-# Dùng chung kết nối iCloud với Đồng bộ lịch Work (cùng secrets ICLOUD_*) -- không cần thêm
-# secret nào mới. Mỗi Reminder List = 1 cuốn sách (tên "Tác giả - Tên sách"), mỗi Reminder đã
-# hoàn thành trong list đó = 1 phần/chương đã đọc.
+# --- ĐỌC SÁCH / GUNDAM (từ Apple Reminders qua Shortcuts, xem parse_reading_log_shortcut_csv) ---
+# Mỗi Reminder List = 1 cuốn sách/series (tên "Tác giả - Tên sách" hoặc "Gundam - Tên series"),
+# mỗi Reminder đã hoàn thành trong list đó = 1 phần/chương/tập đã đọc/xem. Trước đây thử đồng bộ
+# thẳng qua CalDAV nhưng Reminder List lưu "Trên iPhone của tôi" (không nằm iCloud) sẽ không bao
+# giờ thấy được qua CalDAV -- đã bỏ hẳn nhánh đó, chỉ còn tải file Shortcut xuất (đọc thẳng dữ
+# liệu trên máy nên thấy đủ, không phân biệt iCloud/cục bộ).
 
 def _book_title(list_name):
     """"Tác giả - Tên sách" -> "Tên sách": tách theo '-' ĐẦU TIÊN, ưu tiên " - " (có khoảng
     trắng, đúng quy ước người dùng), fallback '-' trần nếu list đặt tên không chuẩn. Không có
-    dấu '-' nào -> coi cả tên là tiêu đề (không khớp được Dự án Forest nào -- xem
-    sync_reading_log() vì sao list dạng này bị bỏ qua khi đồng bộ)."""
+    dấu '-' nào -> coi cả tên là tiêu đề. Cũng dùng cho list Gundam ("Gundam - Tên series" ->
+    "Tên series")."""
     s = str(list_name).strip()
     if ' - ' in s:
         return s.split(' - ', 1)[1].strip()
@@ -400,75 +429,13 @@ def _book_title(list_name):
         return s.split('-', 1)[1].strip()
     return s
 
-def sync_reading_log():
-    """Kéo TOÀN BỘ Reminder List có VTODO (mỗi list = 1 cuốn sách), chỉ lấy Reminder đã hoàn
-    thành (STATUS=='COMPLETED'), chuẩn hoá COMPLETED về naive local wall-clock theo APP_TZ
-    (cùng lý do đã ghi ở sync_work_calendar). Không có khái niệm "khoảng ngày" cho todos (khác
-    date_search của event) nên mỗi lần đồng bộ THAY THẾ HOÀN TOÀN bảng reading_log (xoá sạch rồi
-    chèn lại) -- đơn giản hơn windowed-delete của lịch Work, và tự động phản ánh đúng việc xoá
-    reminder/list trên điện thoại. CHỈ đồng bộ list có tên dạng "X - Y" (khớp quy ước "Tác giả -
-    Tên sách") -- bỏ qua Reminder List khác (vd "Việc vặt", "Mua sắm") để chúng không lẫn vào
-    thành "sách giả" (vì _book_title() sẽ lấy cả tên khi không có dấu '-'). Trả về (số cuốn, số
-    phần, thông báo lỗi hoặc None).
 
-    Khi kết nối thành công nhưng ra 0 cuốn/0 phần, TRẢ VỀ THÔNG TIN CHẨN ĐOÁN thay vì im lặng
-    (liệt kê từng lịch tìm thấy trên tài khoản + lý do bị bỏ qua) -- không tự vào được tài khoản
-    iCloud thật của người dùng để debug trực tiếp nên cần app tự "kể lại" những gì nó thấy."""
-    if not _has_icloud_secrets():
-        return 0, 0, "Chưa cấu hình ICLOUD_USERNAME/ICLOUD_APP_PASSWORD trong secrets."
-    try:
-        cals = _get_caldav_client().principal().calendars()
-    except Exception as e:
-        return 0, 0, f"Không kết nối được tới iCloud: {e}"
-    if not cals:
-        return 0, 0, "Kết nối iCloud thành công nhưng không tìm thấy lịch/danh sách nào trên tài khoản này."
-    recs, books = [], set()
-    diag = []  # (tên lịch, thành phần hỗ trợ, lý do bị bỏ qua hoặc kết quả)
-    for cal in cals:
-        try:
-            comps = list(cal.get_supported_components())
-        except Exception as e:
-            diag.append((str(getattr(cal, 'name', None) or '(không tên)'), '?', f"lỗi đọc thành phần hỗ trợ: {e}"))
-            continue
-        name = str(cal.name or '').strip() or '(không tên)'
-        comps_s = ','.join(str(c) for c in comps) or '(không rõ)'
-        if 'VTODO' not in comps:
-            diag.append((name, comps_s, "không hỗ trợ Nhắc việc (VTODO) -- có thể là lịch sự kiện thường"))
-            continue
-        if name == '(không tên)' or '-' not in name:
-            diag.append((name, comps_s, "hỗ trợ Nhắc việc nhưng tên không có dấu '-' -> bỏ qua theo quy ước \"Tác giả - Tên sách\""))
-            continue
-        try:
-            todos = cal.get_todos(include_completed=True)
-        except Exception as e:
-            diag.append((name, comps_s, f"lỗi tải danh sách reminder: {e}"))
-            continue
-        n_before = len(recs)
-        for td in todos:
-            comp = td.icalendar_component
-            if str(comp.get('STATUS', '')).upper() != 'COMPLETED':
-                continue
-            completed = comp.get('COMPLETED')
-            title = str(comp.get('SUMMARY', '')).strip()
-            if completed is None or not title:
-                continue
-            dt = completed.dt
-            if isinstance(dt, datetime) and dt.tzinfo is not None:
-                dt = dt.astimezone(APP_TZ).replace(tzinfo=None)
-            recs.append({"uid": str(comp.get('UID')), "completed_date": _fmt_ts(dt),
-                         "book": name, "title": title})
-            books.add(name)
-        n_done = len(recs) - n_before
-        diag.append((name, comps_s, f"{len(todos)} reminder (tính cả chưa hoàn thành), {n_done} đã hoàn thành hợp lệ"))
-    if not books:
-        _lines = " · ".join(f"'{n}' ({c}): {note}" for n, c, note in diag)
-        return 0, 0, f"Kết nối thành công, đã quét {len(diag)} lịch/danh sách nhưng không có phần nào khớp — {_lines}"
-    sb = _get_supabase()
-    _sb_delete_all("reading_log", "uid")
-    for i in range(0, len(recs), 500):
-        sb.table("reading_log").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
-    return len(books), len(recs), None
+def _is_gundam_list(list_name):
+    """Reminder List series Gundam (không phải sách) được đặt tên "Gundam - Tên series" theo
+    quy ước -- nhận diện qua tiền tố "gundam" (không phân biệt hoa/thường) để loại khỏi tab
+    Sách và đưa vào tab Gundam riêng."""
+    return str(list_name).strip().lower().startswith('gundam')
+
 
 @st.cache_data
 def load_reading_log():
@@ -484,8 +451,8 @@ def load_reading_log():
     return df[cols + ["Cuốn sách"]]
 
 def save_reading_log_bulk(df):
-    """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu) -- y hệt save_work_calendar_bulk: sinh
-    uid tạm theo thứ tự dòng, lần "Đồng bộ đọc sách" thật tiếp theo sẽ tự chèn lại đúng uid gốc."""
+    """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu, hoặc khi tải file Shortcut ở mục "Tải
+    lên từ Reminder") -- y hệt save_work_calendar_bulk: sinh uid tạm theo thứ tự dòng."""
     sb = _get_supabase()
     _sb_delete_all("reading_log", "uid")
     if not df.empty:
@@ -498,24 +465,42 @@ def save_reading_log_bulk(df):
 
 
 def parse_reading_log_shortcut_csv(uploaded):
-    """Đọc file do Shortcut "Xuất tiến độ đọc" (xem tab Hướng dẫn) tạo ra -- dùng khi Reminder
-    List chỉ lưu "Trên iPhone của tôi" (không nằm trong iCloud) nên Đồng bộ đọc sách qua CalDAV
-    không thấy được (CalDAV chỉ đọc được dữ liệu đã có trên iCloud), còn Shortcuts đọc thẳng từ
-    máy nên thấy đủ. Định dạng: mỗi dòng "list|title|completed_date" (dấu '|', KHÔNG phải dấu
-    phẩy, vì tiêu đề reminder có thể chứa dấu phẩy), dòng đầu là header đúng 3 tên cột trên. Trả
-    về (df, stats, missing_cols) cùng khuôn cột (Ngày hoàn thành, Sách (gốc), Tiêu đề phần) mà
-    save_reading_log_bulk() cần -- gọi thẳng hàm đó sau khi người dùng xác nhận, y hệt luồng
+    """Đọc file do Shortcut "Xuất tiến độ đọc" (xem tab Hướng dẫn) tạo ra -- đây là nguồn DUY
+    NHẤT để nạp dữ liệu Đọc sách/Gundam vào app (không còn nhánh CalDAV, vì CalDAV chỉ đọc được
+    Reminder List đã lưu trong iCloud, còn Shortcuts đọc thẳng dữ liệu trên máy nên thấy đủ cả
+    list "Trên iPhone của tôi"). Định dạng: mỗi dòng "list|title|completed_date" (dấu '|'), dòng đầu là
+    header đúng 3 tên cột trên. KHÔNG dùng pd.read_csv(sep='|') vì tiêu đề reminder (vd tiêu đề
+    copy nguyên từ 1 video YouTube) có thể tự chứa dấu '|' -- 1 dòng dữ liệu thật đã gặp đúng ca
+    này (link ...FULL MOVIE | Daniel Defoe | Classic Literature Adventure - YouTube) khiến
+    read_csv 'Expected 3 fields, saw 6' và crash cả file. Tách thủ công: '|' ĐẦU tiên tách
+    "list" (tên list tự đặt, không chứa '|'), '|' CUỐI tách "completed_date" (định dạng ngày
+    giờ cố định, không chứa '|'), phần CÒN LẠI ở giữa luôn là "title" dù có bao nhiêu dấu '|'.
+    Trả về (df, stats, missing_cols) cùng khuôn cột (Ngày hoàn thành, Sách (gốc), Tiêu đề phần)
+    mà save_reading_log_bulk() cần -- gọi thẳng hàm đó sau khi người dùng xác nhận, y hệt luồng
     Khôi phục từ bản sao lưu."""
-    df = pd.read_csv(uploaded, sep='|', dtype=str)
-    need = {'list', 'title', 'completed_date'}
-    missing = sorted(need - set(df.columns))
+    raw = uploaded.read() if hasattr(uploaded, 'read') else uploaded
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8')
+    lines = raw.splitlines()
     cols = ['Ngày hoàn thành', 'Sách (gốc)', 'Tiêu đề phần']
+    need = ['list', 'title', 'completed_date']
+    if not lines:
+        return pd.DataFrame(columns=cols), {'raw': 0, 'valid': 0}, need
+    header = [h.strip() for h in lines[0].split('|')]
+    missing = [c for c in need if c not in header]
     if missing:
-        return pd.DataFrame(columns=cols), {'raw': len(df), 'valid': 0}, missing
-    stats = {'raw': len(df)}
-    df = df.rename(columns={'list': 'Sách (gốc)', 'title': 'Tiêu đề phần', 'completed_date': 'Ngày hoàn thành'})
+        return pd.DataFrame(columns=cols), {'raw': len(lines) - 1, 'valid': 0}, missing
+    rows = []
+    for line in lines[1:]:
+        if not line.strip() or line.count('|') < 2:
+            continue
+        book, rest = line.split('|', 1)
+        title, completed = rest.rsplit('|', 1)
+        rows.append({'Sách (gốc)': book, 'Tiêu đề phần': title, 'Ngày hoàn thành': completed})
+    stats = {'raw': len(lines) - 1}
+    df = pd.DataFrame(rows, columns=['Sách (gốc)', 'Tiêu đề phần', 'Ngày hoàn thành'])
     df['Ngày hoàn thành'] = pd.to_datetime(df['Ngày hoàn thành'], format='ISO8601', errors='coerce')
-    df = df[df['Ngày hoàn thành'].notna() & df['Sách (gốc)'].notna()
+    df = df[df['Ngày hoàn thành'].notna() & df['Sách (gốc)'].astype(str).str.strip().ne('')
             & (df['Tiêu đề phần'].astype(str).str.strip() != '')]
     stats['valid'] = len(df)
     return df[cols].reset_index(drop=True), stats, []
@@ -1154,15 +1139,42 @@ def _weekday_avg(scope_df):
     return (by / wd_count).reindex(DAYS_ORDER).dropna()
 
 
-def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14):
+def _assign_gundam_sessions(gundam_sessions, rl_gundam):
+    """Gán mỗi phiên Forest tag GUNDAM_TAG vào đúng series đang xem hôm đó -- Forest không có
+    Dự án riêng theo từng series Gundam, chỉ 1 tag chung, nên phải suy ra. Quy tắc: mỗi ngày có
+    phiên Gundam, tìm lần hoàn thành reminder (ở BẤT KỲ series nào) GẦN NHẤT về mặt thời gian
+    (trước hoặc sau ngày đó) trong rl_gundam, gán cả ngày đó cho series của lần hoàn thành gần
+    nhất -- dùng pd.merge_asof(direction='nearest') có sẵn trong pandas. Trả về df cùng khuôn
+    cột với gundam_sessions, cột 'Dự án' được GHI ĐÈ thành tên series suy ra được."""
+    if gundam_sessions.empty or rl_gundam.empty:
+        return gundam_sessions.iloc[0:0]
+    # .astype('datetime64[ns]') ép cả 2 vế về CÙNG độ chính xác -- pandas >=3 coi datetime64[s]
+    # (từ .dt.normalize()) và datetime64[us]/[ns] (từ pd.to_datetime trên cột date) là 2 kiểu
+    # khác nhau, merge_asof() sẽ ném MergeError nếu lệch nhau, không tự nới lỏng như trước.
+    marks = (rl_gundam.sort_values('Ngày hoàn thành')
+             .assign(_d=lambda d: d['Ngày hoàn thành'].dt.normalize().astype('datetime64[ns]'))
+             .drop_duplicates('_d', keep='first')[['_d', 'Cuốn sách']]
+             .sort_values('_d'))
+    left = gundam_sessions.assign(
+        _d=pd.to_datetime(gundam_sessions['Ngày']).astype('datetime64[ns]')).sort_values('_d')
+    merged = pd.merge_asof(left, marks, on='_d', direction='nearest')
+    merged['Dự án'] = merged['Cuốn sách']
+    return merged.drop(columns=['_d', 'Cuốn sách'])
+
+
+def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS):
     """Bảng + timeline + tóm tắt cho từng cuốn sách (đọc tuần tự), GỘP 2 nguồn: phiên Forest
     (nhóm Danh mục = Reading) và phần đã đọc đồng bộ từ Apple Reminders (reading_log_df). Một
     cuốn sách chỉ cần có mặt ở MỘT trong 2 nguồn là đủ để lên bảng -- cột thuộc nguồn còn thiếu
     hiện '—'. Trạng thái Đang đọc/Đã xong dựa trên hoạt động GẦN NHẤT của CẢ 2 nguồn (lấy max
     của ngày phiên Forest gần nhất và ngày hoàn thành reminder gần nhất).
-    Chỉ đọc & tính toán -> không đụng tới dữ liệu lưu trữ."""
+    Chỉ đọc & tính toán -> không đụng tới dữ liệu lưu trữ.
+
+    Dùng chung cho tab "Nhật ký đọc sách" (labels=READING_LABELS, mặc định) và tab "Gundam"
+    (labels=GUNDAM_LABELS) -- chỉ khác CHỮ hiển thị, tên cột nội bộ (vd 'Cuốn sách', 'Trạng
+    thái') giữ nguyên bất kể labels nào đang dùng."""
     if df_books.empty and reading_log_df.empty:
-        st.info("Chưa có dữ liệu sách trong nhóm này.")
+        st.info(labels['empty_msg'])
         return
 
     forest_books = set(df_books['Dự án'].unique()) if not df_books.empty else set()
@@ -1184,7 +1196,10 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         start = min(d for d in (f_start, r_start) if pd.notna(d))
         last = max(d for d in (f_last, r_last) if pd.notna(d))
 
-        span_days = int((f_last - f_start).days) + 1 if has_forest else float('nan')
+        # Số ngày = khoảng cách Bắt đầu-Gần nhất theo HỢP 2 nguồn (không chỉ has_forest) -- để
+        # sách chỉ theo dõi qua Reminders (chưa bấm giờ Forest) cũng tính được số ngày đọc thay
+        # vì luôn ra NaN.
+        span_days = int((pd.Timestamp(last) - pd.Timestamp(start)).days) + 1
         hrs = g['Thời lượng (Phút)'].sum() / 60 if has_forest else float('nan')
         per_week = (hrs / max(span_days / 7, 1 / 7)) if has_forest else float('nan')
         ongoing = (pd.Timestamp(latest_overall) - last).days <= recency_days if pd.notna(latest_overall) else False
@@ -1196,12 +1211,12 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             'Giờ/tuần': round(per_week, 1) if has_forest else float('nan'),
             'Số phần đã đọc': len(r) if has_rl else float('nan'),
             'Phần gần nhất': r.sort_values('Ngày hoàn thành').iloc[-1]['Tiêu đề phần'] if has_rl else None,
-            'Trạng thái': 'Đang đọc' if ongoing else 'Đã xong',
+            'Trạng thái': labels['ongoing'] if ongoing else 'Đã xong',
         })
     t = pd.DataFrame(rows).sort_values('Bắt đầu').reset_index(drop=True)
 
     done = t[t['Trạng thái'] == 'Đã xong']
-    reading = t[t['Trạng thái'] == 'Đang đọc']
+    reading = t[t['Trạng thái'] == labels['ongoing']]
 
     # Số liệu đầu mục: panel thẻ giống "Tổng quan", chia 3 nhóm dọc
     _today = date.today()
@@ -1211,7 +1226,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         _h = scope['Thời lượng (Phút)'].sum() / 60
         _nd = scope['Ngày'].nunique()
         return [
-            {"k": "Số cuốn", "v": f"{scope['Dự án'].nunique()}"},
+            {"k": labels['count_label'], "v": f"{scope['Dự án'].nunique()}"},
             {"k": "Số giờ", "v": f"{_h:.1f}h"},
             {"k": "TB giờ/ngày", "v": f"{_h / _nd:.1f}h" if _nd else "—"},
         ]
@@ -1229,8 +1244,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     _span = 0 if df_books.empty else (pd.Timestamp(df_books['Ngày'].max()) - pd.Timestamp(df_books['Ngày'].min())).days + 1
 
     _hr = _explode_session_hours(df_books, 'Dự án').groupby('Khung giờ')['giờ'].sum()
-    _sec_timeslot = {"label": "Khung giờ đọc", "chips": [
-        {"k": "Hay đọc nhất", "v": f"{int(_hr.idxmax())}h"},
+    _sec_timeslot = {"label": labels['timeslot_label'], "chips": [
+        {"k": labels['timeslot_best'], "v": f"{int(_hr.idxmax())}h"},
         {"k": "Buổi mạnh nhất", "v": f"{_hr.groupby(_buoi_of).sum().idxmax()}"},
     ]} if (len(_hr) and _hr.sum() > 0) else {"label": "", "chips": []}
 
@@ -1241,11 +1256,11 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     if len(done):
         _has_hrs = done['Tổng giờ'].notna().any()
         _has_days = done['Số ngày'].notna().any()
-        _chips_done = [{"k": "Số cuốn", "v": f"{len(done)}"}]
+        _chips_done = [{"k": labels['count_label'], "v": f"{len(done)}"}]
         if _has_hrs:
-            _chips_done.append({"k": "TB giờ/cuốn", "v": f"{done['Tổng giờ'].mean():.1f}h"})
+            _chips_done.append({"k": labels['avg_hr_label'], "v": f"{done['Tổng giờ'].mean():.1f}h"})
         if _has_days:
-            _chips_done.append({"k": "TB ngày/cuốn", "v": f"{done['Số ngày'].mean():.0f}"})
+            _chips_done.append({"k": labels['avg_days_label'], "v": f"{done['Số ngày'].mean():.0f}"})
         _grp_summary.append({"label": "Đã xong", "chips": _chips_done})
         _highlight = []
         if _has_hrs:
@@ -1253,13 +1268,13 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             _highlight.append({"k": "Nhiều giờ nhất", "v": f"{top['Cuốn sách']} ({top['Tổng giờ']:.1f}h)"})
         if _has_days:
             fast = done.loc[done['Số ngày'].idxmin()]
-            _highlight.append({"k": "Đọc nhanh nhất", "v": f"{fast['Cuốn sách']} ({int(fast['Số ngày'])} ngày)"})
+            _highlight.append({"k": labels['fastest_label'], "v": f"{fast['Cuốn sách']} ({int(fast['Số ngày'])} ngày)"})
         if _highlight:
             _grp_summary.append({"label": "Nổi bật", "chips": _highlight})
     if len(reading):
-        _grp_summary.append({"label": "Đang đọc", "chips": [
+        _grp_summary.append({"label": labels['ongoing'], "chips": [
             {"k": r['Cuốn sách'],
-             "v": f"{r['Tổng giờ']:.1f}h" if pd.notna(r['Tổng giờ']) else f"{int(r['Số phần đã đọc'])} phần",
+             "v": f"{r['Tổng giờ']:.1f}h" if pd.notna(r['Tổng giờ']) else f"{int(r['Số phần đã đọc'])} {labels['part_word']}",
              "hl": True}
             for _, r in reading.iterrows()
         ]})
@@ -1267,9 +1282,9 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
-            {"label": "Số cuốn", "value": f"{len(t)}"},
+            {"label": labels['count_label'], "value": f"{len(t)}"},
             {"label": "Tổng giờ", "value": f"{t['Tổng giờ'].sum():.1f}h"},
-            {"label": "Số phần đã đọc", "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
+            {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
         ],
         groups=[{"label": "Tổng kết", "sections": _grp_summary}],
     )
@@ -1278,14 +1293,14 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     render_stat_panel(
         hero_items=[],
         groups=[{"label": "Hoạt động", "sections": [
-            {"label": "Chuỗi đọc", "chips": [
+            {"label": labels['streak_label'], "chips": [
                 {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
                 {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
                 {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
             ]},
             {"label": "Đều đặn", "chips": [
-                {"k": "Số ngày đọc", "v": f"{s_read['total']}"},
-                {"k": "% ngày có đọc", "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
+                {"k": labels['pace_days_label'], "v": f"{s_read['total']}"},
+                {"k": labels['pace_pct_label'], "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
             ]},
             {"label": "Nhịp gần đây", "chips": [
                 {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
@@ -1328,7 +1343,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     for _, r in t.iterrows():
         left = _pct(r['Bắt đầu'])
         width = max((pd.Timestamp(r['Gần nhất']) - pd.Timestamp(r['Bắt đầu'])).days + 1, 1) / total * 100
-        cls = 'reading' if r['Trạng thái'] == 'Đang đọc' else 'done'
+        cls = 'reading' if r['Trạng thái'] == labels['ongoing'] else 'done'
         bars_html += (f'<div class="rtl-row"><div class="rtl-name">{html_escape(str(r["Cuốn sách"]))}</div>'
                       f'<div class="rtl-track">{grid_html}'
                       f'<div class="rtl-bar {cls}" style="left:{left:.3f}%;width:{width:.3f}%"></div></div></div>')
@@ -1352,7 +1367,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 </style>
 <div class="rtl-card">
 <div class="card-label">Dòng thời gian</div>
-<div class="rtl-legend"><span><i style="background:#00a3ad;"></i>Đang đọc</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+<div class="rtl-legend"><span><i style="background:#00a3ad;"></i>{labels['ongoing']}</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 {bars_html}
 <div class="rtl-axis"><div></div><div class="rtl-ticks">{axis_html}</div></div>
 </div>
@@ -1368,7 +1383,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
     rows_html = ''
     for _, r in t.iterrows():
-        s_col = '#00a3ad' if r['Trạng thái'] == 'Đang đọc' else '#86868b'
+        s_col = '#00a3ad' if r['Trạng thái'] == labels['ongoing'] else '#86868b'
         start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
         last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
         rows_html += '<tr class="prow">'
@@ -1384,9 +1399,9 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         rows_html += '</tr>'
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap" style="margin-top:14px;">
-<div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">Chi tiết từng cuốn</div>
+<div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">{labels['detail_label']}</div>
 <table class="dtbl">
-<thead><tr><th class="lbl">Cuốn sách</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>Ngày đọc</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>Số phần đã đọc</th><th class="txt">Phần gần nhất</th><th class="txt">Trạng thái</th></tr></thead>
+<thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -1464,9 +1479,10 @@ def render_day_timeline(day_df, sel, df_all):
 @st.fragment
 def render_note_editor(day):
     """Thẻ 2 cột cho một ngày: Thứ/ngày bên trái (giống bố cục .jrows của Nhật ký tuần/tháng,
-    dù ở đây chỉ có đúng 1 "dòng"), cột phải gồm chip appointment lịch (nếu có, trước đây là
-    box "Lịch Work" riêng) rồi tới ghi chú. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái
-    trống) kèm một nút; bấm nút mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
+    dù ở đây chỉ có đúng 1 "dòng"), cột phải theo thứ tự cố định: chip lịch (kèm heading nhỏ
+    "Lịch") → chip đọc sách/Gundam (tự nhóm+gắn nhãn theo cuốn/series qua _book_chips_html())
+    → ghi chú. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái trống) kèm một nút; bấm nút
+    mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
 
     Bọc trong @st.fragment: ô soạn Quill gửi nội dung về server mỗi lần gõ phím, nếu
     không cô lập thì cả trang Báo cáo ngày chạy lại mỗi ký tự -> giao diện giật. Là
@@ -1477,7 +1493,8 @@ def render_note_editor(day):
     chứa widget Streamlit thật (Quill, nút) không thể nhét vào 1 chuỗi HTML. Bọc trong
     st.container(key="note_row") RIÊNG (không style trực tiếp lên note_card) vì note_card ở
     chế độ soạn còn có 1 st.columns() khác cho 3 nút Cập nhật/Huỷ/Xoá -- style chung theo
-    note_card sẽ vô tình kẻ vạch trước nút đó."""
+    note_card sẽ vô tình kẻ vạch trước nút đó. KHÔNG bọc viền glass-card quanh note_card (đã bỏ
+    theo yêu cầu người dùng) -- container chỉ còn dùng để scope CSS 2 cột."""
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
@@ -1487,7 +1504,7 @@ def render_note_editor(day):
         st.session_state.pop(quill_key, None)
         st.session_state[edit_key] = True
 
-    with st.container(border=True, key="note_card"):
+    with st.container(key="note_card"):
         with st.container(key="note_row"):
             c_date, c_body = st.columns([1, 5])
             with c_date:
@@ -1504,7 +1521,14 @@ def render_note_editor(day):
                             f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
                             for _, r in day_events.iterrows()
                         )
-                        st.markdown(f"<div style='margin-bottom:6px;'>{chips}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>",
+                                    unsafe_allow_html=True)
+
+                rl = load_reading_log()
+                if not rl.empty:
+                    day_rl = rl[rl['Ngày hoàn thành'].dt.date == day]
+                    if not day_rl.empty:
+                        st.markdown(_book_chips_html(day_rl), unsafe_allow_html=True)
 
                 if not st.session_state.get(edit_key, False):
                     # Chế độ xem: chỉ ghi chú + 1 nút
@@ -1547,10 +1571,13 @@ def render_note_editor(day):
 
 
 def render_notes_journal(period_key, kind):
-    """Liệt kê (chỉ đọc) ghi chú + appointment lịch của các ngày thuộc một kỳ (tuần/tháng)
-    -- một dòng cho mỗi ngày có ghi chú HOẶC có appointment (hợp/union 2 nguồn), không chỉ
-    giới hạn ở ngày đã có ghi chú viết tay như trước. Ô Thứ/ngày mỗi dòng là link nhảy sang
-    đúng Báo cáo ngày hôm đó.
+    """Liệt kê (chỉ đọc) ghi chú + appointment lịch + phần đọc sách/Gundam của các ngày thuộc
+    một kỳ (tuần/tháng) -- một dòng cho mỗi ngày có ÍT NHẤT 1 trong 3 nguồn (hợp/union), không
+    chỉ giới hạn ở ngày đã có ghi chú viết tay. Mỗi dòng theo thứ tự cố định: chip Lịch (kèm
+    heading nhỏ "Lịch") → chip đọc sách (tự nhóm+gắn nhãn theo từng cuốn/series qua
+    _book_chips_html()) → ghi chú. Không lọc Gundam khỏi nguồn đọc sách ở đây -- đây là nhật ký
+    chung của cả app, không riêng tab Sách. Ô Thứ/ngày mỗi dòng là link nhảy sang đúng Báo cáo
+    ngày hôm đó.
     Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
     cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
     hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
@@ -1568,16 +1595,22 @@ def render_notes_journal(period_key, kind):
         wc = wc.assign(_d=wc['Thời gian bắt đầu'].dt.normalize())
         wc = wc[_in_period(wc['_d'])]
 
+    rl = load_reading_log()
+    if not rl.empty:
+        rl = rl.assign(_d=rl['Ngày hoàn thành'].dt.normalize())
+        rl = rl[_in_period(rl['_d'])]
+
     note_days = set(nd['_d']) if not nd.empty else set()
     event_days = set(wc['_d']) if not wc.empty else set()
-    days = sorted(note_days | event_days)
+    reading_days = set(rl['_d']) if not rl.empty else set()
+    days = sorted(note_days | event_days | reading_days)
     if not days:
-        st.caption("Chưa có ghi chú hoặc appointment nào trong kỳ này.")
+        st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong kỳ này.")
         return
 
     rows_html = ''
     for d in days:
-        chips_html = ''
+        cal_html = ''
         if d in event_days:
             day_events = wc[wc['_d'] == d].sort_values('Thời gian bắt đầu')
             chips = ''.join(
@@ -1585,7 +1618,8 @@ def render_notes_journal(period_key, kind):
                 f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
                 for _, r in day_events.iterrows()
             )
-            chips_html = f"<div style='margin-bottom:6px;'>{chips}</div>"
+            cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>"
+        read_html = _book_chips_html(rl[rl['_d'] == d]) if d in reading_days else ''
         note_html = ''
         if d in note_days:
             note_html = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
@@ -1597,7 +1631,7 @@ def render_notes_journal(period_key, kind):
             f"<a class='jdate-link' href='{_href}'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m}</div></div></a>"
-            f"<div>{chips_html}{note_html}</div>"
+            f"<div>{cal_html}{read_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_journal"):
@@ -1636,44 +1670,6 @@ def _reading_rows_html(rl_df, label_book=True):
             f"<div>{chips_html}</div></div>"
         )
     return rows_html
-
-
-def render_reading_journal(period_key, kind):
-    """Thẻ 'Nhật ký đọc sách' (Báo cáo tuần/tháng) -- song song render_notes_journal() nhưng
-    nguồn dữ liệu khác hẳn (reading_log thay vì notes+work_calendar), nên TÁCH THẺ RIÊNG (đã
-    chốt với người dùng) thay vì gộp chung vào Nhật ký -- 1 ngày có thể đọc nhiều sách/chương,
-    dễ chật nếu nhét chung với ghi chú + lịch."""
-    def _in_period(dt_series):
-        return (dt_series.dt.strftime('%Y-%m') == period_key) if kind == 'month' \
-            else (dt_series.dt.strftime('%G-W%V') == period_key)
-    rl = load_reading_log()
-    if not rl.empty:
-        rl = rl[_in_period(rl['Ngày hoàn thành'])]
-    if rl.empty:
-        st.caption("Chưa có phần sách nào hoàn thành trong kỳ này.")
-        return
-    with st.container(border=True, key="jcard_reading"):
-        st.markdown(f"<div class='jrows'>{_reading_rows_html(rl)}</div>", unsafe_allow_html=True)
-
-
-def render_reading_box(day):
-    """Box 'Đọc sách' (Báo cáo ngày) -- KHÔNG gộp vào note_card (khác lịch Work đã gộp vào Ghi
-    chú ngày trước đó trong phiên), vì nguồn dữ liệu khác hẳn, tách biệt trực quan cho rõ (đã
-    chốt với người dùng). Không dùng expander (giữ nguyên số thứ tự các mục khác); im lặng
-    không render gì nếu ngày đó không có phần nào -- đúng vị trí render_work_calendar_box() cũ
-    từng đứng trước khi bị gộp vào Ghi chú ngày."""
-    rl = load_reading_log()
-    if rl.empty:
-        return
-    day_rl = rl[rl['Ngày hoàn thành'].dt.date == day]
-    if day_rl.empty:
-        return
-    st.markdown(
-        "<div class='glass-card' style='padding:14px 18px;margin-bottom:14px;'>"
-        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;"
-        "letter-spacing:0.5px;margin-bottom:8px;'>Đọc sách</div>"
-        f"<div>{_book_chips_html(day_rl)}</div></div>",
-        unsafe_allow_html=True)
 
 
 def render_on_this_day(sel, df_all):
@@ -2343,8 +2339,10 @@ st.markdown(
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
     .ql-indent-5 { padding-left: 10em; } .ql-indent-6 { padding-left: 12em; }
 
-    /* ===== Container có viền (ghi chú, nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card ===== */
-    .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
+    /* ===== Container có viền (nhật ký, ngày này năm trước, hướng dẫn) trông như glass-card =====
+       KHÔNG áp cho note_card (Ghi chú ngày, Báo cáo ngày) -- đã bỏ khung theo yêu cầu người
+       dùng, container đó giờ chỉ dùng để scope CSS 2 cột, không viền/bóng/nền riêng. */
+    [class*="st-key-jcard"], [class*="st-key-guide"] {
         border-radius: 16px !important;
         border-color: #d1d1d6 !important;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
@@ -2419,10 +2417,11 @@ NAV = {
     "Báo cáo ngày": ":material/today:",
     "Báo cáo theo dự án": ":material/category:",
     "Nhật ký đọc sách": ":material/menu_book:",
+    "Gundam": ":material/smart_toy:",
     "Chuẩn bị dữ liệu": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
-# Nhãn ngắn để 8 tab vừa 1 hàng (key trang giữ nguyên).
+# Nhãn ngắn để các tab vừa 1 hàng (key trang giữ nguyên).
 NAV_SHORT = {
     "Thống kê chung": "Tổng quan",
     "Báo cáo tháng": "Tháng",
@@ -2430,6 +2429,7 @@ NAV_SHORT = {
     "Báo cáo ngày": "Ngày",
     "Báo cáo theo dự án": "Dự án",
     "Nhật ký đọc sách": "Sách",
+    "Gundam": "Gundam",
     "Chuẩn bị dữ liệu": "Dữ liệu",
     "Hướng dẫn": "Trợ giúp",
 }
@@ -2631,19 +2631,17 @@ elif nav == "Báo cáo tháng":
                 with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
             with st.expander("2. Nhật ký", expanded=True):
                 render_notes_journal(selected_month, 'month')
-            with st.expander("3. Nhật ký đọc sách", expanded=True):
-                render_reading_journal(selected_month, 'month')
-            with st.expander("4. Phân bổ thời gian", expanded=False):
+            with st.expander("3. Phân bổ thời gian", expanded=False):
                 frag_pie(df_m, "rad_tab3", "Danh mục")
-            with st.expander("5. Xu hướng theo thời gian", expanded=False):
+            with st.expander("4. Xu hướng theo thời gian", expanded=False):
                 frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
-            with st.expander("6. Xu hướng tập trung theo khung giờ", expanded=False):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
                 frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
-            with st.expander("7. Giờ tập trung theo thứ", expanded=False):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=False):
                 render_dayhour_heatmap(df_m)
-            with st.expander("8. Phân bố độ dài phiên", expanded=False):
+            with st.expander("7. Phân bố độ dài phiên", expanded=False):
                 render_session_histogram(df_m)
-            with st.expander("9. Bảng số liệu", expanded=False):
+            with st.expander("8. Bảng số liệu", expanded=False):
                 render_detail_table(df_m)
 # ==========================================
 # TAB BÁO CÁO TUẦN
@@ -2719,19 +2717,17 @@ elif nav == "Báo cáo tuần":
                 with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
             with st.expander("2. Nhật ký", expanded=True):
                 render_notes_journal(selected_week, 'week')
-            with st.expander("3. Nhật ký đọc sách", expanded=True):
-                render_reading_journal(selected_week, 'week')
-            with st.expander("4. Phân bổ thời gian", expanded=False):
+            with st.expander("3. Phân bổ thời gian", expanded=False):
                 frag_pie(df_w, "rad_tab4", "Danh mục")
-            with st.expander("5. Xu hướng theo thời gian", expanded=False):
+            with st.expander("4. Xu hướng theo thời gian", expanded=False):
                 frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-            with st.expander("6. Xu hướng tập trung theo khung giờ", expanded=False):
+            with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
                 frag_hourly(df_w, "hour_w", "Danh mục", with_range=False)
-            with st.expander("7. Giờ tập trung theo thứ", expanded=False):
+            with st.expander("6. Giờ tập trung theo thứ", expanded=False):
                 render_dayhour_heatmap(df_w)
-            with st.expander("8. Phân bố độ dài phiên", expanded=False):
+            with st.expander("7. Phân bố độ dài phiên", expanded=False):
                 render_session_histogram(df_w)
-            with st.expander("9. Bảng số liệu", expanded=False):
+            with st.expander("8. Bảng số liệu", expanded=False):
                 render_detail_table(df_w)
 # ==========================================
 # TAB BÁO CÁO NGÀY
@@ -2760,7 +2756,6 @@ elif nav == "Báo cáo ngày":
 
         if day_df.empty:
             st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
-            render_reading_box(sel)
             with st.expander("Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
             with st.expander("Ngày này năm trước", expanded=False):
@@ -2820,7 +2815,6 @@ elif nav == "Báo cáo ngày":
                 render_session_bar(day_df)
                 render_day_timeline(day_df, sel, df)
 
-            render_reading_box(sel)
             with st.expander("2. Ghi chú ngày", expanded=True):
                 render_note_editor(sel)
 
@@ -2960,19 +2954,42 @@ elif nav == "Nhật ký đọc sách":
     # nhờ đã bỏ early-return columnless ở prep_analysis_data()).
     books_df = df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]
     rl_all = load_reading_log()
-    if books_df.empty and rl_all.empty:
-        st.info(f"Chưa có dữ liệu sách trong nhóm '{BOOKS_GROUP}' và chưa đồng bộ đọc sách từ "
+    # Loại Reminder List Gundam (tên "Gundam - ...") -- có tab riêng, không tính vào tab Sách.
+    rl_books = rl_all[~rl_all['Sách (gốc)'].map(_is_gundam_list)] if not rl_all.empty else rl_all
+    if books_df.empty and rl_books.empty:
+        st.info(f"Chưa có dữ liệu sách trong nhóm '{BOOKS_GROUP}' và chưa có dữ liệu đọc sách từ "
                 f"Reminders. Gán Danh mục '{BOOKS_GROUP}' cho các dự án sách ở trang Chuẩn bị "
-                f"dữ liệu, hoặc đồng bộ ở mục 'Đồng bộ đọc sách'.")
+                f"dữ liệu, hoặc tải file ở mục 'Tải lên từ Reminder'.")
     else:
         # Chuẩn hoá cả 2 ứng viên về pd.Timestamp trước khi so sánh -- max() thô giữa
-        # datetime.date (cột 'Ngày' của df) và Timestamp (cột 'Ngày hoàn thành' của rl_all) sẽ
+        # datetime.date (cột 'Ngày' của df) và Timestamp (cột 'Ngày hoàn thành' của rl_books) sẽ
         # lỗi TypeError (pandas không cho so sánh trực tiếp 2 kiểu này).
         _cands = [pd.Timestamp(v) for v in [df['Ngày'].max() if not df.empty else None,
-                                            rl_all['Ngày hoàn thành'].max() if not rl_all.empty else None]
+                                            rl_books['Ngày hoàn thành'].max() if not rl_books.empty else None]
                  if v is not None and pd.notna(v)]
         latest_overall = max(_cands) if _cands else None
-        render_reading_log(books_df, latest_overall, rl_all)
+        render_reading_log(books_df, latest_overall, rl_books)
+# ==========================================
+# TRANG: GUNDAM
+# ==========================================
+elif nav == "Gundam":
+    # Reminder List Gundam (tên "Gundam - Tên series") + phiên Forest tag GUNDAM_TAG -- Forest
+    # không có Dự án riêng theo từng series nên phải suy ra qua _assign_gundam_sessions()
+    # (ghép mỗi ngày có phiên Gundam với lần hoàn thành reminder gần nhất, xem docstring hàm đó).
+    rl_all_g = load_reading_log()
+    rl_gundam = rl_all_g[rl_all_g['Sách (gốc)'].map(_is_gundam_list)] if not rl_all_g.empty else rl_all_g
+    gundam_sessions = df[df['Dự án'] == GUNDAM_TAG] if not df.empty else df
+    if rl_gundam.empty and gundam_sessions.empty:
+        st.info(f"Chưa có dữ liệu Gundam. Đổi tên Reminder List thành \"Gundam - Tên series\" "
+                f"rồi tải lên ở mục 'Tải lên từ Reminder', hoặc gán tag \"{GUNDAM_TAG}\" cho "
+                f"phiên Forest khi xem.")
+    else:
+        gundam_df = _assign_gundam_sessions(gundam_sessions, rl_gundam)
+        _cands_g = [pd.Timestamp(v) for v in [gundam_df['Ngày'].max() if not gundam_df.empty else None,
+                                               rl_gundam['Ngày hoàn thành'].max() if not rl_gundam.empty else None]
+                    if v is not None and pd.notna(v)]
+        latest_overall_g = max(_cands_g) if _cands_g else None
+        render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS)
 # ==========================================
 # TAB CHUẨN BỊ DỮ LIỆU
 # ==========================================
@@ -3056,20 +3073,11 @@ elif nav == "Chuẩn bị dữ liệu":
                     st.rerun()
 
         st.divider()
-        st.subheader("Đồng bộ đọc sách")
-        if st.button("Đồng bộ ngay", type="primary", key="rl_sync_btn"):
-            with st.spinner("Đang kết nối iCloud..."):
-                _nb, _npart, _rl_err = sync_reading_log()
-            if _rl_err:
-                st.error(_rl_err)
-            else:
-                st.success(f"Đã đồng bộ {_nb} cuốn sách, {_npart} phần đã đọc.")
-                time.sleep(1)
-                st.rerun()
-
-        st.caption("Reminder List chỉ lưu \"Trên iPhone của tôi\" (không nằm trong iCloud) sẽ "
-                   "KHÔNG thấy được qua CalDAV ở trên — dùng Shortcuts để xuất file rồi tải lên "
-                   "đây thay thế (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
+        st.subheader("Tải lên từ Reminder")
+        st.caption("Tạo 1 Shortcut trên iPhone/Mac xuất tiến độ đọc sách/xem Gundam từ Apple "
+                   "Reminders ra file `reading_log.csv` rồi tải lên đây (xem hướng dẫn tạo "
+                   "Shortcut trong tab Hướng dẫn). Mỗi lần tải lên sẽ **thay thế toàn bộ** dữ "
+                   "liệu cũ bằng nội dung file mới.")
         rl_file = st.file_uploader("Tải lên file từ Shortcuts (.csv/.txt)", type=["csv", "txt"], key="rl_shortcut_file")
         if rl_file:
             rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(rl_file)
@@ -3278,14 +3286,15 @@ elif nav == "Hướng dẫn":
             "cây thành công = một *phiên tập trung*) rồi trình bày lại dưới nhiều góc nhìn để bạn tự đối chiếu với "
             "chính mình theo thời gian. Toàn bộ dữ liệu chạy **cục bộ trên máy bạn**, không đồng bộ lên đâu cả — vì "
             "vậy mục *Sao lưu* ở trang Chuẩn bị dữ liệu khá quan trọng nếu bạn đổi máy hoặc xoá trình duyệt.\n\n"
-            "Thanh điều hướng trên cùng gồm 6 trang:\n\n"
+            "Thanh điều hướng trên cùng gồm 8 trang:\n\n"
             "- **Thống kê chung** — bức tranh toàn bộ lịch sử, không giới hạn theo kỳ; nơi tốt nhất để nhìn xu hướng dài hạn.\n"
             "- **Báo cáo tháng / tuần / ngày** — đào sâu một kỳ cụ thể, có bộ chọn kỳ riêng (tháng/tuần/ngày muốn xem), "
-            "kèm thêm mục *Nhật ký* (ghi chú đã lưu trong kỳ) và ở Báo cáo ngày còn có *Ngày này năm trước*.\n"
+            "kèm thêm mục *Nhật ký* (ghi chú + lịch + phần đọc sách đã lưu trong kỳ) và ở Báo cáo ngày còn có *Ngày này năm trước*.\n"
             "- **Báo cáo theo dự án** — giống Thống kê chung nhưng lọc theo đúng một Nhóm hoặc Dự án bạn chọn, hữu ích "
             "khi muốn soi riêng một môn/kỹ năng đang theo đuổi.\n"
             "- **Nhật ký đọc sách** — trang riêng cho việc đọc sách tuần tự: theo dõi cuốn nào đang đọc dở, cuốn nào xong, "
             "nhịp đọc mỗi tuần.\n"
+            "- **Gundam** — y hệt Nhật ký đọc sách nhưng cho các series anime Gundam đang xem.\n"
             "- **Chuẩn bị dữ liệu** — nơi duy nhất *ghi* dữ liệu: nạp file CSV xuất từ Forest, gán Danh mục cho từng Dự án, "
             "sao lưu/khôi phục/làm mới; mọi trang còn lại đều chỉ *đọc*.\n\n"
             "Trong mỗi trang báo cáo, các mục được xếp trong những khối có thể **mở/thu gọn** (bấm vào tiêu đề để đóng/mở); "
@@ -3488,38 +3497,57 @@ elif nav == "Hướng dẫn":
         "reading_log.png", "Nhật ký đọc sách",
         "Trang riêng dành cho việc đọc các cuốn sách **theo trình tự, đọc dở rồi đọc tiếp**, **gộp 2 nguồn dữ "
         "liệu**: phiên tập trung Forest (mặc định gom mọi Dự án thuộc nhóm `Reading`, khác với các dự án lặp định "
-        "kỳ như đọc báo/tạp chí không tính là 'một cuốn') và phần/chương đã đọc đồng bộ từ **Apple Reminders** "
-        "(xem mục *Dữ liệu đầu vào*). Một cuốn sách chỉ cần có mặt ở **một trong hai nguồn** là đủ để lên trang — "
-        "cột thuộc nguồn còn thiếu hiện dấu **\"—\"**. Trang gồm 3 phần: số liệu tổng ở trên cùng, một **timeline "
-        "trình tự đọc** thể hiện thứ tự các cuốn đã/đang đọc (khối màu xanh teal = đang đọc dở, khối xám = đã đọc "
+        "kỳ như đọc báo/tạp chí không tính là 'một cuốn') và phần/chương đã đọc nạp từ **Apple Reminders** (xem "
+        "mục *Dữ liệu đầu vào*). Một cuốn sách chỉ cần có mặt ở **một trong hai nguồn** là đủ để lên trang — cột "
+        "thuộc nguồn còn thiếu hiện dấu **\"—\"**. Reminder List tên bắt đầu bằng \"Gundam\" **không tính vào "
+        "trang này** — có tab **Gundam** riêng. Trang gồm 3 phần: số liệu tổng ở trên cùng, một **timeline trình "
+        "tự đọc** thể hiện thứ tự các cuốn đã/đang đọc (khối màu xanh teal = đang đọc dở, khối xám = đã đọc "
         "xong), và bảng chi tiết liệt kê từng cuốn với các cột:\n\n"
-        "- **Bắt đầu / Gần nhất**: ngày hoạt động sớm nhất/gần nhất cho cuốn đó, tính theo **cả 2 nguồn** (phiên "
-        "Forest hoặc phần Reminders hoàn thành, lấy mốc sớm/muộn hơn).\n"
-        "- **Số ngày / Ngày đọc / Tổng giờ / Số phiên / Giờ tuần**: các số liệu theo phiên Forest — hiện \"—\" nếu "
-        "cuốn đó chỉ theo dõi qua Reminders, chưa có phiên Forest nào.\n"
+        "- **Bắt đầu / Gần nhất / Số ngày**: ngày hoạt động sớm nhất/gần nhất và số ngày giữa 2 mốc đó cho cuốn "
+        "đó, tính theo **cả 2 nguồn** (phiên Forest hoặc phần Reminders hoàn thành, lấy mốc sớm/muộn hơn) — luôn "
+        "tính được kể cả với cuốn chỉ theo dõi qua Reminders, chưa từng bấm giờ Forest.\n"
+        "- **Ngày đọc / Tổng giờ / Số phiên / Giờ tuần**: các số liệu theo phiên Forest — hiện \"—\" nếu cuốn đó "
+        "chỉ theo dõi qua Reminders, chưa có phiên Forest nào.\n"
         "- **Số phần đã đọc / Phần gần nhất**: số phần/chương đã tick hoàn thành trong Reminders và tên phần gần "
-        "nhất — hiện \"—\" nếu cuốn đó chưa đồng bộ Reminders.\n"
+        "nhất — hiện \"—\" nếu cuốn đó chưa có dữ liệu Reminders.\n"
         "- **Trạng thái**: *Đang đọc* nếu có hoạt động (phiên Forest **hoặc** phần Reminders hoàn thành) trong "
         "khoảng ~2 tuần gần nhất, ngược lại tự động chuyển thành *Đã xong* — không cần tự đánh dấu tay.",
         tip="Nếu có dự án đọc định kỳ không phải sách (vd tạp chí, báo hàng ngày) đang bị lẫn vào trang này, loại nó "
             "ra bằng cấu hình `BOOKS_GROUP`/`BOOKS_EXCLUDE` ở đầu file `app.py`. Lưu ý trang này **chỉ đọc, không "
-            "ghi** — mọi thao tác chỉnh sửa dữ liệu (phân loại, xoá phiên, đồng bộ Reminders…) đều thực hiện ở "
+            "ghi** — mọi thao tác chỉnh sửa dữ liệu (phân loại, xoá phiên, nạp lại Reminders…) đều thực hiện ở "
             "trang Chuẩn bị dữ liệu.",
         where="Trang Nhật ký đọc sách")
     guide_item(
         "reading_journal.png", "Đọc sách (Báo cáo ngày/tuần/tháng/dự án)",
-        "Phần/chương sách đã đọc (đồng bộ từ Apple Reminders) còn hiện xen kẽ vào các trang báo cáo khác, tách "
-        "biệt hẳn với ghi chú/lịch Work vì là nguồn dữ liệu khác:\n\n"
-        "- **Báo cáo ngày**: một khối **Đọc sách** hiện các phần đã đọc trong ngày (nhóm theo tên sách nếu đọc "
-        "nhiều cuốn cùng ngày), đặt phía trên Ghi chú ngày.\n"
-        "- **Báo cáo tuần/tháng**: thẻ **Nhật ký đọc sách** riêng (không gộp vào Nhật ký ghi chú+lịch) — một dòng "
-        "cho mỗi ngày có phần hoàn thành trong kỳ, bấm vào Thứ/ngày để nhảy sang đúng Báo cáo ngày hôm đó.\n"
-        "- **Báo cáo theo dự án**: khi Dự án đang xem khớp tên với 1 cuốn sách đã đồng bộ Reminders (so tên Dự án "
-        "với phần \"Tên sách\" trong \"Tác giả - Tên sách\"), thêm mục **Nhật ký đọc** hiện trọn lịch sử phần đã "
-        "đọc của đúng cuốn đó.",
-        tip="Cần đồng bộ ở mục *Đồng bộ đọc sách* (Chuẩn bị dữ liệu → Dữ liệu đầu vào) trước — chưa đồng bộ lần nào "
-            "thì các mục trên đơn giản không hiện gì, không ảnh hưởng phần còn lại của trang.",
-        where="Báo cáo ngày → Đọc sách · Báo cáo tuần/tháng → Nhật ký đọc sách · Báo cáo theo dự án → Nhật ký đọc")
+        "Phần/chương sách (và Gundam) đã đọc/xem (nạp từ Apple Reminders) còn hiện xen kẽ vào các trang báo cáo "
+        "khác, gộp chung với ghi chú/lịch Work theo thứ tự cố định **Lịch → Đọc sách → Ghi chú**:\n\n"
+        "- **Báo cáo ngày**: thẻ **Ghi chú ngày** (không còn khung viền quanh thẻ) hiện lần lượt chip lịch (kèm "
+        "nhãn nhỏ \"Lịch\"), chip các phần đã đọc trong ngày (nhóm theo tên sách/series nếu đọc nhiều cuốn cùng "
+        "ngày), rồi mới tới ghi chú.\n"
+        "- **Báo cáo tuần/tháng**: gộp thẳng vào thẻ **Nhật ký** (không còn thẻ riêng) — mỗi dòng ngày theo cùng "
+        "thứ tự Lịch → Đọc sách → Ghi chú, hiện cho mọi ngày có ít nhất 1 trong 3 nguồn, bấm vào Thứ/ngày để nhảy "
+        "sang đúng Báo cáo ngày hôm đó.\n"
+        "- **Báo cáo theo dự án**: khi Dự án đang xem khớp tên với 1 cuốn sách đã có dữ liệu Reminders (so tên "
+        "Dự án với phần \"Tên sách\" trong \"Tác giả - Tên sách\"), thêm mục **Nhật ký đọc** hiện trọn lịch sử "
+        "phần đã đọc của đúng cuốn đó.",
+        tip="Cần tải file ở mục *Tải lên từ Reminder* (Chuẩn bị dữ liệu → Dữ liệu đầu vào) trước — chưa tải lần "
+            "nào thì các mục trên đơn giản không hiện gì, không ảnh hưởng phần còn lại của trang.",
+        where="Báo cáo ngày → Ghi chú ngày · Báo cáo tuần/tháng → Nhật ký · Báo cáo theo dự án → Nhật ký đọc")
+    guide_item(
+        "gundam.png", "Gundam",
+        "Tab riêng cho việc xem các series anime Gundam, dựng y hệt cấu trúc trang **Nhật ký đọc sách** (số liệu "
+        "tổng, timeline trình tự xem, bảng chi tiết từng series) nhưng đổi chữ cho đúng ngữ cảnh (\"series\" thay "
+        "\"cuốn sách\", \"xem\"/\"tập\" thay \"đọc\"/\"phần\"). Nguồn dữ liệu:\n\n"
+        "- **Reminder List tên \"Gundam - Tên series\"** (vd \"Gundam - Gundam Wing\") — mỗi list là 1 series, "
+        "mỗi Reminder đã tick hoàn thành là 1 tập đã xem, nạp qua mục *Tải lên từ Reminder* giống hệt sách.\n"
+        "- **Phiên Forest gắn tag \"Gundam\"** — vì không tách Dự án riêng theo từng series, app tự **suy ra series "
+        "đang xem của mỗi ngày có phiên Gundam** bằng cách ghép với lần hoàn thành reminder (ở bất kỳ series nào) "
+        "**gần ngày đó nhất** (trước hoặc sau). Ví dụ đang xem dở Gundam Wing thì mọi phiên Forest tag Gundam ở "
+        "những ngày gần các lần tick hoàn thành tập Gundam Wing sẽ được tính vào series đó.",
+        tip="Vì thời gian Forest được SUY RA theo ngày gần nhất chứ không tách chính xác theo series, số giờ mỗi "
+            "series chỉ mang tính tương đối — chính xác nhất khi xem lần lượt từng series (không xen kẽ nhiều "
+            "series trong cùng vài ngày).",
+        where="Trang Gundam")
 
     st.markdown("### Chuẩn bị dữ liệu")
     guide_item(
@@ -3538,25 +3566,18 @@ elif nav == "Hướng dẫn":
         "ngày) và xen kẽ vào từng dòng ngày ở mục *Nhật ký* (Báo cáo tuần/tháng), kể cả ngày không có ghi chú viết "
         "tay. Mỗi lần đồng bộ cũng **dọn sạch appointment đã bị xoá** trên Apple Calendar khỏi app, không chỉ thêm "
         "mới — nên kết quả luôn khớp đúng lịch thật tại thời điểm đồng bộ.\n"
-        "- **Đồng bộ đọc sách** *(tuỳ chọn)*: kéo tiến độ đọc từ **Apple Reminders** về app qua CalDAV — dùng "
-        "chung tài khoản iCloud với Đồng bộ lịch, không cần thêm secret nào. Mỗi **Reminder List** tên \"Tác giả - "
-        "Tên sách\" được coi là 1 cuốn sách, mỗi **Reminder đã tick hoàn thành** trong list đó là 1 phần/chương đã "
-        "đọc — List không có dấu \"-\" trong tên sẽ bị bỏ qua (không tính là sách). Khác Đồng bộ lịch, mục này "
-        "không cần chọn khoảng ngày vì luôn kéo **toàn bộ** rồi thay thế hoàn toàn dữ liệu cũ — phần bạn xoá/bỏ "
-        "tick trên điện thoại cũng biến mất khỏi app ở lần đồng bộ tiếp theo. **Lưu ý quan trọng**: CalDAV chỉ "
-        "đọc được Reminder List đã lưu **trong tài khoản iCloud** — list chỉ lưu \"Trên iPhone của tôi\" (cục bộ, "
-        "chưa đồng bộ iCloud) sẽ không bao giờ hiện ra dù bấm đồng bộ bao nhiêu lần. Nếu rơi vào trường hợp này, "
-        "dùng ô **\"Tải lên file từ Shortcuts\"** ngay bên dưới thay thế: tạo 1 Shortcut trên iPhone (Ứng dụng "
-        "Shortcuts) đọc thẳng dữ liệu Reminders trên máy (không qua iCloud nên thấy được cả list cục bộ), xuất ra "
-        "file text mỗi dòng dạng `list|title|completed_date` (dòng đầu là header đúng 3 tên cột này, phân tách "
-        "bằng dấu `|` chứ không phải dấu phẩy vì tiêu đề reminder có thể chứa dấu phẩy), rồi tải file đó lên đây — "
-        "app đọc và **thay thế toàn bộ** dữ liệu Đọc sách y hệt như khi Đồng bộ ngay qua CalDAV.",
+        "- **Tải lên từ Reminder** *(tuỳ chọn)*: nạp tiến độ đọc sách/xem Gundam từ **Apple Reminders** — tải lên "
+        "file `list|title|completed_date` do 1 Shortcut trên iPhone/Mac xuất ra (xem mục *Gundam* và *Nhật ký đọc "
+        "sách* phía trên để biết quy ước đặt tên list, cách tạo Shortcut xem hướng dẫn cụ thể trong README). Mỗi "
+        "**Reminder List** là 1 cuốn sách/series, mỗi **Reminder đã tick hoàn thành** trong list đó là 1 phần/tập "
+        "đã đọc/xem. Không cần kết nối iCloud/CalDAV gì — Shortcut đọc thẳng dữ liệu Reminders trên máy nên thấy "
+        "được cả list chỉ lưu \"Trên iPhone của tôi\" (cục bộ, không đồng bộ iCloud). Mỗi lần tải file lên sẽ "
+        "**thay thế toàn bộ** dữ liệu cũ bằng nội dung file mới — an toàn khi Reminders có thay đổi giữa các lần.",
         tip="Với **Tải lên từ Forest**: cứ xuất CSV mới bất cứ khi nào cần rồi tải lên thẳng, không cần lọc hay cắt "
             "bớt file trước — phiên đã có từ lần tải trước sẽ không bị nhân đôi, và những phiên bạn đã chủ động xoá "
-            "cũng sẽ không bị nạp lại. Với **Đồng bộ lịch/đọc sách**: cần tạo **App-Specific Password** tại "
-            "appleid.apple.com và điền vào secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, "
-            "mục \"Đồng bộ lịch & đọc sách\"); chưa cấu hình thì 2 mục này chỉ báo lỗi khi bấm nút, không ảnh "
-            "hưởng phần còn lại của app.",
+            "cũng sẽ không bị nạp lại. Với **Đồng bộ lịch**: cần tạo **App-Specific Password** tại appleid.apple.com "
+            "và điền vào secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, mục \"Đồng bộ lịch & "
+            "đọc sách\"); chưa cấu hình thì mục này chỉ báo lỗi khi bấm nút, không ảnh hưởng phần còn lại của app.",
         where="Chuẩn bị dữ liệu → Dữ liệu đầu vào")
     guide_item(
         "prep_classify.png", "Phân loại",
