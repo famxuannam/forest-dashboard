@@ -1,0 +1,14 @@
+# File CSV Forest / dữ liệu dùng để migrate sang Supabase (không phải mã nguồn, không cần
+# commit -- app không còn đọc/ghi các file này lúc chạy).
+database.csv
+mapping.csv
+deleted.csv
+notes.csv
+*.csv
+
+# Khoá Supabase thật (dùng .streamlit/secrets.toml.example làm mẫu)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
