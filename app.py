@@ -156,6 +156,13 @@ PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': Tru
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU (đọc/ghi qua Supabase) ---
 # save_* dùng ngữ nghĩa "ghi đè toàn bộ" (xoá hết rồi insert lại) để khớp hành vi các nơi gọi.
+def _fmt_ts(v):
+    """Chuẩn hoá 1 giá trị giờ (chuỗi hoặc Timestamp, có/không giây lẻ) về đúng 1 định dạng
+    cố định "YYYY-MM-DD HH:MM:SS" (bỏ giây lẻ) trước khi ghi vào Supabase -- các nguồn ghi
+    khác nhau (nạp CSV mới cho ra Timestamp có giây lẻ, dữ liệu cũ đã là chuỗi không giây lẻ)
+    nếu không chuẩn hoá sẽ lệch định dạng nhau, làm hỏng bước đọc lại (xem load_db)."""
+    return pd.Timestamp(v).strftime("%Y-%m-%d %H:%M:%S")
+
 @st.cache_data
 def load_db():
     sb = _get_supabase()
@@ -167,9 +174,11 @@ def load_db():
         "start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc",
         "project": "Dự án", "duration_min": "Thời lượng (Phút)"})
     # Chuẩn hoá chuỗi giờ Supabase trả về (ISO 8601) về đúng dạng "YYYY-MM-DD HH:MM:SS"
-    # như trước đây -> mọi chỗ parse/so khớp chuỗi phía sau không cần đổi gì.
+    # như trước đây -> mọi chỗ parse/so khớp chuỗi phía sau không cần đổi gì. format='ISO8601'
+    # (thay vì để pandas tự đoán 1 định dạng cố định từ vài dòng đầu) vì dữ liệu cũ có thể có
+    # dòng có/không giây lẻ lẫn nhau -- suy đoán 1 định dạng chung sẽ lỗi ở dòng lệch định dạng.
     for c in ["Thời gian bắt đầu", "Thời gian kết thúc"]:
-        df[c] = pd.to_datetime(df[c]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        df[c] = pd.to_datetime(df[c], format='ISO8601').dt.strftime("%Y-%m-%d %H:%M:%S")
     return df[cols]
 
 def _sb_delete_all(table, not_null_col):
@@ -182,7 +191,7 @@ def save_db(df):
     sb = _get_supabase()
     _sb_delete_all("sessions", "id")
     recs = [
-        {"start_time": str(r["Thời gian bắt đầu"]), "end_time": str(r["Thời gian kết thúc"]),
+        {"start_time": _fmt_ts(r["Thời gian bắt đầu"]), "end_time": _fmt_ts(r["Thời gian kết thúc"]),
          "project": str(r["Dự án"]), "duration_min": int(r["Thời lượng (Phút)"])}
         for r in df.to_dict("records")
     ]
@@ -217,14 +226,15 @@ def load_deleted():
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(res.data).rename(columns={"start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc"})
     for c in cols:
-        df[c] = pd.to_datetime(df[c]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        df[c] = pd.to_datetime(df[c], format='ISO8601').dt.strftime("%Y-%m-%d %H:%M:%S")
     return df[cols].astype(str)
 
 def add_deleted(keys_df):
     """Gộp thêm các khoá thời gian vào danh sách đã xoá (keys_df có 2 cột thời gian)."""
-    keys = keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].astype(str)
+    keys = keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]]
     sb = _get_supabase()
-    recs = [{"start_time": r["Thời gian bắt đầu"], "end_time": r["Thời gian kết thúc"]} for r in keys.to_dict("records")]
+    recs = [{"start_time": _fmt_ts(r["Thời gian bắt đầu"]), "end_time": _fmt_ts(r["Thời gian kết thúc"])}
+            for r in keys.to_dict("records")]
     if recs:
         sb.table("deleted_sessions").upsert(recs, on_conflict="start_time,end_time").execute()
     st.cache_data.clear()
@@ -234,7 +244,7 @@ def save_deleted(df):
     sb = _get_supabase()
     _sb_delete_all("deleted_sessions", "start_time")
     if not df.empty:
-        recs = [{"start_time": str(r["Thời gian bắt đầu"]), "end_time": str(r["Thời gian kết thúc"])}
+        recs = [{"start_time": _fmt_ts(r["Thời gian bắt đầu"]), "end_time": _fmt_ts(r["Thời gian kết thúc"])}
                 for r in df.to_dict("records")]
         for i in range(0, len(recs), 500):
             sb.table("deleted_sessions").insert(recs[i:i + 500]).execute()
@@ -2510,8 +2520,12 @@ elif nav == "Chuẩn bị dữ liệu":
                         before = len(db)
                         rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
                         combined = pd.concat([db, df_new])
-                        combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].astype(str)
-                        combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].astype(str)
+                        # _fmt_ts (không phải .astype(str) thô) -> chuẩn hoá về cùng 1 định dạng
+                        # "YYYY-MM-DD HH:MM:SS" bất kể cột đang là chuỗi (từ db cũ) hay Timestamp
+                        # (từ df_new mới parse) -> drop_duplicates nhận đúng phiên trùng dù nguồn
+                        # gốc có/không giây lẻ, tránh chèn trùng khi nạp lại cùng file Forest.
+                        combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
+                        combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
                         combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
                         added = len(combined) - before
                         dup = stats['valid'] - skipped_deleted - added
