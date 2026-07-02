@@ -501,21 +501,39 @@ def parse_reading_log_shortcut_csv(uploaded):
     """Đọc file do Shortcut "Xuất tiến độ đọc" (xem tab Hướng dẫn) tạo ra -- dùng khi Reminder
     List chỉ lưu "Trên iPhone của tôi" (không nằm trong iCloud) nên Đồng bộ đọc sách qua CalDAV
     không thấy được (CalDAV chỉ đọc được dữ liệu đã có trên iCloud), còn Shortcuts đọc thẳng từ
-    máy nên thấy đủ. Định dạng: mỗi dòng "list|title|completed_date" (dấu '|', KHÔNG phải dấu
-    phẩy, vì tiêu đề reminder có thể chứa dấu phẩy), dòng đầu là header đúng 3 tên cột trên. Trả
-    về (df, stats, missing_cols) cùng khuôn cột (Ngày hoàn thành, Sách (gốc), Tiêu đề phần) mà
-    save_reading_log_bulk() cần -- gọi thẳng hàm đó sau khi người dùng xác nhận, y hệt luồng
+    máy nên thấy đủ. Định dạng: mỗi dòng "list|title|completed_date" (dấu '|'), dòng đầu là
+    header đúng 3 tên cột trên. KHÔNG dùng pd.read_csv(sep='|') vì tiêu đề reminder (vd tiêu đề
+    copy nguyên từ 1 video YouTube) có thể tự chứa dấu '|' -- 1 dòng dữ liệu thật đã gặp đúng ca
+    này (link ...FULL MOVIE | Daniel Defoe | Classic Literature Adventure - YouTube) khiến
+    read_csv 'Expected 3 fields, saw 6' và crash cả file. Tách thủ công: '|' ĐẦU tiên tách
+    "list" (tên list tự đặt, không chứa '|'), '|' CUỐI tách "completed_date" (định dạng ngày
+    giờ cố định, không chứa '|'), phần CÒN LẠI ở giữa luôn là "title" dù có bao nhiêu dấu '|'.
+    Trả về (df, stats, missing_cols) cùng khuôn cột (Ngày hoàn thành, Sách (gốc), Tiêu đề phần)
+    mà save_reading_log_bulk() cần -- gọi thẳng hàm đó sau khi người dùng xác nhận, y hệt luồng
     Khôi phục từ bản sao lưu."""
-    df = pd.read_csv(uploaded, sep='|', dtype=str)
-    need = {'list', 'title', 'completed_date'}
-    missing = sorted(need - set(df.columns))
+    raw = uploaded.read() if hasattr(uploaded, 'read') else uploaded
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8')
+    lines = raw.splitlines()
     cols = ['Ngày hoàn thành', 'Sách (gốc)', 'Tiêu đề phần']
+    need = ['list', 'title', 'completed_date']
+    if not lines:
+        return pd.DataFrame(columns=cols), {'raw': 0, 'valid': 0}, need
+    header = [h.strip() for h in lines[0].split('|')]
+    missing = [c for c in need if c not in header]
     if missing:
-        return pd.DataFrame(columns=cols), {'raw': len(df), 'valid': 0}, missing
-    stats = {'raw': len(df)}
-    df = df.rename(columns={'list': 'Sách (gốc)', 'title': 'Tiêu đề phần', 'completed_date': 'Ngày hoàn thành'})
+        return pd.DataFrame(columns=cols), {'raw': len(lines) - 1, 'valid': 0}, missing
+    rows = []
+    for line in lines[1:]:
+        if not line.strip() or line.count('|') < 2:
+            continue
+        book, rest = line.split('|', 1)
+        title, completed = rest.rsplit('|', 1)
+        rows.append({'Sách (gốc)': book, 'Tiêu đề phần': title, 'Ngày hoàn thành': completed})
+    stats = {'raw': len(lines) - 1}
+    df = pd.DataFrame(rows, columns=['Sách (gốc)', 'Tiêu đề phần', 'Ngày hoàn thành'])
     df['Ngày hoàn thành'] = pd.to_datetime(df['Ngày hoàn thành'], format='ISO8601', errors='coerce')
-    df = df[df['Ngày hoàn thành'].notna() & df['Sách (gốc)'].notna()
+    df = df[df['Ngày hoàn thành'].notna() & df['Sách (gốc)'].astype(str).str.strip().ne('')
             & (df['Tiêu đề phần'].astype(str).str.strip() != '')]
     stats['valid'] = len(df)
     return df[cols].reset_index(drop=True), stats, []
