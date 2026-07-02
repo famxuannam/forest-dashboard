@@ -409,24 +409,41 @@ def sync_reading_log():
     reminder/list trên điện thoại. CHỈ đồng bộ list có tên dạng "X - Y" (khớp quy ước "Tác giả -
     Tên sách") -- bỏ qua Reminder List khác (vd "Việc vặt", "Mua sắm") để chúng không lẫn vào
     thành "sách giả" (vì _book_title() sẽ lấy cả tên khi không có dấu '-'). Trả về (số cuốn, số
-    phần, thông báo lỗi hoặc None)."""
+    phần, thông báo lỗi hoặc None).
+
+    Khi kết nối thành công nhưng ra 0 cuốn/0 phần, TRẢ VỀ THÔNG TIN CHẨN ĐOÁN thay vì im lặng
+    (liệt kê từng lịch tìm thấy trên tài khoản + lý do bị bỏ qua) -- không tự vào được tài khoản
+    iCloud thật của người dùng để debug trực tiếp nên cần app tự "kể lại" những gì nó thấy."""
     if not _has_icloud_secrets():
         return 0, 0, "Chưa cấu hình ICLOUD_USERNAME/ICLOUD_APP_PASSWORD trong secrets."
     try:
         cals = _get_caldav_client().principal().calendars()
     except Exception as e:
         return 0, 0, f"Không kết nối được tới iCloud: {e}"
+    if not cals:
+        return 0, 0, "Kết nối iCloud thành công nhưng không tìm thấy lịch/danh sách nào trên tài khoản này."
     recs, books = [], set()
+    diag = []  # (tên lịch, thành phần hỗ trợ, lý do bị bỏ qua hoặc kết quả)
     for cal in cals:
         try:
-            if 'VTODO' not in cal.get_supported_components():
-                continue
-            list_name = str(cal.name or '').strip()
-            if not list_name or '-' not in list_name:
-                continue
-            todos = cal.get_todos(include_completed=True)
-        except Exception:
+            comps = list(cal.get_supported_components())
+        except Exception as e:
+            diag.append((str(getattr(cal, 'name', None) or '(không tên)'), '?', f"lỗi đọc thành phần hỗ trợ: {e}"))
             continue
+        name = str(cal.name or '').strip() or '(không tên)'
+        comps_s = ','.join(str(c) for c in comps) or '(không rõ)'
+        if 'VTODO' not in comps:
+            diag.append((name, comps_s, "không hỗ trợ Nhắc việc (VTODO) -- có thể là lịch sự kiện thường"))
+            continue
+        if name == '(không tên)' or '-' not in name:
+            diag.append((name, comps_s, "hỗ trợ Nhắc việc nhưng tên không có dấu '-' -> bỏ qua theo quy ước \"Tác giả - Tên sách\""))
+            continue
+        try:
+            todos = cal.get_todos(include_completed=True)
+        except Exception as e:
+            diag.append((name, comps_s, f"lỗi tải danh sách reminder: {e}"))
+            continue
+        n_before = len(recs)
         for td in todos:
             comp = td.icalendar_component
             if str(comp.get('STATUS', '')).upper() != 'COMPLETED':
@@ -439,8 +456,13 @@ def sync_reading_log():
             if isinstance(dt, datetime) and dt.tzinfo is not None:
                 dt = dt.astimezone(APP_TZ).replace(tzinfo=None)
             recs.append({"uid": str(comp.get('UID')), "completed_date": _fmt_ts(dt),
-                         "book": list_name, "title": title})
-            books.add(list_name)
+                         "book": name, "title": title})
+            books.add(name)
+        n_done = len(recs) - n_before
+        diag.append((name, comps_s, f"{len(todos)} reminder (tính cả chưa hoàn thành), {n_done} đã hoàn thành hợp lệ"))
+    if not books:
+        _lines = " · ".join(f"'{n}' ({c}): {note}" for n, c, note in diag)
+        return 0, 0, f"Kết nối thành công, đã quét {len(diag)} lịch/danh sách nhưng không có phần nào khớp — {_lines}"
     sb = _get_supabase()
     _sb_delete_all("reading_log", "uid")
     for i in range(0, len(recs), 500):
