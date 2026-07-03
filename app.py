@@ -1290,7 +1290,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             for _, r in reading.iterrows()
         ]})
 
-    _tab_overview, _tab_detail = st.tabs(["Tổng quan", "Chi tiết"])
+    _tab_overview, _tab_detail = st.tabs([":material/bar_chart: Tổng quan", ":material/search: Chi tiết"],
+                                          key="rl_view_tabs")
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -2472,6 +2473,18 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
+    /* Cùng ý căn giữa như trên, áp cho 2 thanh chọn sub-tab: "Chọn kỳ xem" (Báo cáo) và
+       Tổng quan/Chi tiết (Sách, Gundam). Khác nút nav chính (label đã ẩn), "Chọn kỳ xem" còn
+       hiện nhãn -> stButtonGroup ở đây bọc CẢ label lẫn hàng nút trên cùng 1 hàng ngang, nên
+       phải chuyển sang xếp dọc (label trên, hàng nút dưới) rồi mới căn giữa được từng phần. */
+    .st-key-bc_sub_picker { width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] {
+        display: flex !important; flex-direction: column !important; align-items: center !important;
+        width: 100% !important;
+    }
+    .st-key-bc_sub_picker [role="radiogroup"] { justify-content: center !important; flex-wrap: wrap !important; }
+    .st-key-rl_view_tabs [data-baseweb="tab-list"] { justify-content: center !important; }
+
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa */
     .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
@@ -2639,73 +2652,20 @@ else:
 if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
     st.session_state["nav"] = _q if _q in NAV else "Thống kê chung"
-nav = st.session_state["nav"]
+
+nav = st.segmented_control(
+    "Trang", list(NAV.keys()),
+    format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
+    key="nav", label_visibility="collapsed",
+)
+if not nav:
+    nav = "Thống kê chung"
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
 # Sub-page của "Báo cáo" (Tháng/Tuần/Ngày/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
-# cho phép link dropdown trên nav VÀ link "nhảy tới ngày" cùng dùng chung 1 cơ chế.
+# cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
 BAOCAO_SUBS = ["Tháng", "Tuần", "Ngày", "Dự án"]
-# SVG icon tay (không dùng shortcode :material/...: được vì icon nằm trong <div>/<a> lồng
-# trong 1 khối HTML lớn hơn -- đã kiểm chứng thực nghiệm: shortcode CHỈ tự render khi là thẻ
-# <a>/<span> rời, KHÔNG lồng trong <div> cha (Streamlit chuyển sang chế độ HTML thô, bỏ qua
-# xử lý shortcode). Dùng SVG primitive đơn giản (rect/line/circle) thay vì path phức tạp để
-# chắc chắn đúng hình dạng mà không cần tra path Material Symbols gốc.
-_SVG_SUMMARIZE = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-                   "stroke-width='1.8' stroke-linecap='round'><rect x='5' y='3' width='14' height='18' rx='2'/>"
-                   "<line x1='8' y1='8' x2='16' y2='8'/><line x1='8' y1='12' x2='16' y2='12'/>"
-                   "<line x1='8' y1='16' x2='13' y2='16'/></svg>")
-# 5 icon còn lại của nav bar chính -- CŨNG phải là SVG (không dùng shortcode :material/...: được)
-# vì toàn bộ <nav class='app-nav'> là 1 khối <div>/<nav> lớn bọc ngoài mọi mục, kể cả các thẻ
-# <a> "rời" bên trong nó -- đã kiểm chứng thực nghiệm: hễ CẢ CHUỖI markdown truyền vào bắt đầu
-# hoặc chứa 1 thẻ block-level (<div>/<nav>) thì Streamlit chuyển toàn bộ sang chế độ HTML thô,
-# bỏ qua xử lý shortcode dù thẻ <a> bên trong về mặt cú pháp vẫn "rời".
-_SVG_BARCHART = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-                  "stroke-width='1.8' stroke-linecap='round'><line x1='5' y1='20' x2='5' y2='12'/>"
-                  "<line x1='12' y1='20' x2='12' y2='6'/><line x1='19' y1='20' x2='19' y2='15'/></svg>")
-_SVG_BOOK = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-             "stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>"
-             "<path d='M4 5.5c2.2-1 5-1 8 .5v13c-3-1.5-5.8-1.5-8-.5z'/>"
-             "<path d='M20 5.5c-2.2-1-5-1-8 .5v13c3-1.5 5.8-1.5 8-.5z'/></svg>")
-_SVG_ROBOT = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-              "stroke-width='1.8' stroke-linecap='round'><rect x='4' y='8' width='16' height='12' rx='3'/>"
-              "<line x1='12' y1='4' x2='12' y2='8'/><circle cx='12' cy='4' r='1.1' fill='currentColor' stroke='none'/>"
-              "<circle cx='9' cy='14' r='1.3' fill='currentColor' stroke='none'/>"
-              "<circle cx='15' cy='14' r='1.3' fill='currentColor' stroke='none'/></svg>")
-_SVG_SETTINGS = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-                  "stroke-width='1.8' stroke-linecap='round'><circle cx='12' cy='12' r='3.2'/>"
-                  "<line x1='12' y1='3' x2='12' y2='6'/><line x1='12' y1='18' x2='12' y2='21'/>"
-                  "<line x1='3' y1='12' x2='6' y2='12'/><line x1='18' y1='12' x2='21' y2='12'/>"
-                  "<line x1='5.6' y1='5.6' x2='7.7' y2='7.7'/><line x1='16.3' y1='16.3' x2='18.4' y2='18.4'/>"
-                  "<line x1='5.6' y1='18.4' x2='7.7' y2='16.3'/><line x1='16.3' y1='7.7' x2='18.4' y2='5.6'/></svg>")
-_SVG_HELP = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-             "stroke-width='1.8'><circle cx='12' cy='12' r='9'/>"
-             "<text x='12' y='16.5' font-size='11.5' text-anchor='middle' stroke='none' fill='currentColor' "
-             "font-weight='700'>?</text></svg>")
-NAV_ICONS = {
-    "Thống kê chung": _SVG_BARCHART, "Báo cáo": _SVG_SUMMARIZE, "Nhật ký đọc sách": _SVG_BOOK,
-    "Gundam": _SVG_ROBOT, "Chuẩn bị dữ liệu": _SVG_SETTINGS, "Hướng dẫn": _SVG_HELP,
-}
-_SVG_MONTH = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-              "stroke-width='1.8' stroke-linecap='round'><rect x='4' y='5' width='16' height='15' rx='2'/>"
-              "<line x1='4' y1='10' x2='20' y2='10'/><line x1='8' y1='3' x2='8' y2='6.5'/>"
-              "<line x1='16' y1='3' x2='16' y2='6.5'/></svg>")
-_SVG_WEEK = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-             "stroke-width='1.8' stroke-linecap='round'><rect x='4' y='5' width='16' height='15' rx='2'/>"
-             "<line x1='4' y1='10' x2='20' y2='10'/><line x1='9.3' y1='10' x2='9.3' y2='20'/>"
-             "<line x1='14.7' y1='10' x2='14.7' y2='20'/></svg>")
-_SVG_TODAY = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-              "stroke-width='1.8' stroke-linecap='round'><rect x='4' y='5' width='16' height='15' rx='2'/>"
-              "<line x1='4' y1='10' x2='20' y2='10'/><rect x='9' y='13' width='6' height='4' rx='1' fill='currentColor' stroke='none'/></svg>")
-_SVG_PROJECT = ("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' "
-                "stroke-width='1.8' stroke-linecap='round'><rect x='4' y='4' width='6.5' height='6.5' rx='1.3'/>"
-                "<rect x='13.5' y='4' width='6.5' height='6.5' rx='1.3'/>"
-                "<rect x='4' y='13.5' width='6.5' height='6.5' rx='1.3'/>"
-                "<rect x='13.5' y='13.5' width='6.5' height='6.5' rx='1.3'/></svg>")
-BAOCAO_SUB_ICONS = {"Tháng": _SVG_MONTH, "Tuần": _SVG_WEEK, "Ngày": _SVG_TODAY, "Dự án": _SVG_PROJECT}
-# Bản shortcode (không phải SVG) -- dùng riêng cho format_func của st.segmented_control (hàng
-# "Chọn kỳ xem" trong trang), vì widget đó KHÔNG hỗ trợ unsafe_allow_html/SVG thô trong nhãn,
-# chỉ nhận text/shortcode markdown -- khác hẳn dropdown trên nav (HTML thô, cần SVG ở trên).
 BAOCAO_SUB_ICONS_MD = {"Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
                         "Ngày": ":material/today:", "Dự án": ":material/category:"}
 if "bc_sub" not in st.session_state:
@@ -2716,55 +2676,12 @@ if nav == "Báo cáo":
 elif "sub" in st.query_params:
     del st.query_params["sub"]
 
-# Nav bar HTML/CSS tự viết (thay st.segmented_control cũ -- không thể nhúng dropdown vào 1 nút
-# của widget đó). Mỗi lần bấm tải lại trang (khác segmented_control chuyển mượt không tải lại)
-# -- đánh đổi đã chốt với người dùng để đổi lấy khả năng có dropdown hover kiểu menu 2 lớp.
-# Toàn bộ 6 icon dùng SVG tay (NAV_ICONS) thay vì shortcode :material/...: (xem lý do ở khối
-# SVG phía trên -- cả khối <nav class='app-nav'> là 1 wrapper block-level nên shortcode không
-# tự render được dù các thẻ <a> con về cú pháp vẫn "rời").
-st.markdown("""
-<style>
-.app-nav { display:flex; justify-content:center; flex-wrap:wrap; gap:4px; margin-bottom:18px; }
-.nav-link { padding:10px 18px; border-radius:20px; font-weight:600; font-size:14.5px;
-    color:#3a3a3c; text-decoration:none !important; display:inline-flex; align-items:center; gap:6px;
-    white-space:nowrap; }
-.nav-link:hover { background:rgba(0,163,173,0.08); }
-.nav-link.active { background:#00a3ad; color:#fff; box-shadow:0 2px 5px rgba(0,163,173,0.3); }
-.nav-item { position:relative; display:inline-block; }
-.nav-dropdown { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%);
-    background:#fff; border:1px solid #d1d1d6; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.12);
-    padding:6px; padding-top:10px; margin-top:-4px; min-width:150px; z-index:50; text-align:left; }
-.nav-item.has-dd:hover .nav-dropdown { display:block; }
-.dd-item { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:8px;
-    color:#3a3a3c; text-decoration:none !important; font-size:14px; white-space:nowrap; }
-.dd-item:hover { background:rgba(0,163,173,0.08); }
-.dd-item.active { color:#00a3ad; font-weight:700; }
-@media (max-width: 640px) { .nav-dropdown { display:none !important; } }
-</style>
-""", unsafe_allow_html=True)
-
-_bc_sub_now = st.session_state["bc_sub"]
-_nav_parts = []
-for _k in NAV:
-    _active = ' active' if nav == _k else ''
-    if _k == "Báo cáo":
-        _dd = ''.join(
-            f"<a class='dd-item{' active' if _bc_sub_now == _s else ''}' target='_self' "
-            f"href='?nav={quote(_k)}&sub={quote(_s)}'>{BAOCAO_SUB_ICONS[_s]}{_s}</a>"
-            for _s in BAOCAO_SUBS)
-        _nav_parts.append(
-            f"<div class='nav-item has-dd'><a class='nav-link{_active}' target='_self' href='?nav={quote(_k)}'>"
-            f"{NAV_ICONS[_k]} {NAV_SHORT[_k]}</a><div class='nav-dropdown'>{_dd}</div></div>")
-    else:
-        _nav_parts.append(f"<a class='nav-link{_active}' target='_self' href='?nav={quote(_k)}'>{NAV_ICONS[_k]} {NAV_SHORT[_k]}</a>")
-st.markdown(f"<nav class='app-nav'>{''.join(_nav_parts)}</nav>", unsafe_allow_html=True)
-
 
 def render_day_report(df):
-    """Nội dung mục "Ngày" trong trang "Báo cáo" (chọn qua nav dropdown hoặc segmented_control
-    "Chọn kỳ xem", đọc/ghi state qua st.session_state["bc_sub"] + ?sub=). Tách thành hàm riêng
-    vì day-jump link (?nav=Báo cáo&sub=Ngày&day=...) tự nhiên dẫn vào đúng nhánh này, không cần
-    cơ chế bypass riêng nào."""
+    """Nội dung mục "Ngày" trong trang "Báo cáo" (chọn qua segmented_control "Chọn kỳ xem",
+    đọc/ghi state qua st.session_state["bc_sub"] + ?sub=). Tách thành hàm riêng vì day-jump
+    link (?nav=Báo cáo&sub=Ngày&day=...) tự nhiên dẫn vào đúng nhánh này, không cần cơ chế
+    bypass riêng nào."""
     if df.empty:
         st.info("Chưa có dữ liệu. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
         return
@@ -3620,11 +3537,9 @@ elif nav == "Hướng dẫn":
             "- **Báo cáo** — gộp 4 góc nhìn theo kỳ: **Tháng** / **Tuần** / **Ngày** (đào sâu một kỳ cụ thể, có bộ chọn "
             "kỳ riêng, kèm mục *Nhật ký* — ghi chú + lịch + phần đọc sách đã lưu trong kỳ — và ở mục Ngày còn có *Ngày "
             "này năm trước*), và **Dự án** (giống Thống kê chung nhưng lọc theo đúng một Nhóm hoặc Dự án bạn chọn, mặc "
-            "định chưa chọn sẵn gì, hữu ích khi muốn soi riêng một môn/kỹ năng đang theo đuổi). Di chuột vào **Báo "
-            "cáo** trên thanh điều hướng để hiện menu thả xuống nhảy thẳng tới đúng kỳ; trên điện thoại (không hover "
-            "được) hoặc khi đã ở sẵn trong trang, dùng hàng nút **Chọn kỳ xem** ngay dưới tiêu đề để đổi nhanh giữa 4 "
-            "kỳ mà không cần quay lại thanh điều hướng. Bấm vào Thứ/ngày của 1 dòng trong *Nhật ký* sẽ nhảy thẳng "
-            "sang đúng kỳ **Ngày** của ngày đó.\n"
+            "định chưa chọn sẵn gì, hữu ích khi muốn soi riêng một môn/kỹ năng đang theo đuổi). Dùng hàng nút **Chọn "
+            "kỳ xem** ngay dưới tiêu đề trang để đổi nhanh giữa 4 kỳ, không cần tải lại trang. Bấm vào Thứ/ngày của "
+            "1 dòng trong *Nhật ký* sẽ nhảy thẳng sang đúng kỳ **Ngày** của ngày đó.\n"
             "- **Nhật ký đọc sách** — trang riêng cho việc đọc sách tuần tự, chia 2 sub-tab: **Tổng quan** (số liệu "
             "tổng, timeline trình tự đọc, bảng chi tiết mọi cuốn) và **Chi tiết** (chọn đúng 1 cuốn để xem sâu: số "
             "liệu hero, nhật ký đọc, biểu đồ lịch theo số phần/ngày, bảng số liệu từng ngày).\n"
