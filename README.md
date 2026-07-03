@@ -16,6 +16,7 @@ Giao diện theo phong cách iOS/macOS: tối giản, dùng thẻ kính mờ và
 - [Hướng dẫn sử dụng theo từng trang](#hướng-dẫn-sử-dụng-theo-từng-trang)
 - [Quy trình bắt đầu nhanh](#quy-trình-bắt-đầu-nhanh)
 - [Thiết lập Supabase (bắt buộc)](#thiết-lập-supabase-bắt-buộc)
+- [Đăng nhập Google (tuỳ chọn)](#đăng-nhập-google-tuỳ-chọn)
 - [Đồng bộ lịch & đọc sách (tuỳ chọn)](#đồng-bộ-lịch--đọc-sách-tuỳ-chọn)
 - [Tuỳ chỉnh giao diện (tuỳ chọn)](#tuỳ-chỉnh-giao-diện-tuỳ-chọn)
 - [Cài đặt & chạy ứng dụng](#cài-đặt--chạy-ứng-dụng)
@@ -308,10 +309,11 @@ khoảng 5 phút, không cần biết lập trình:
    trên vào `SUPABASE_URL` / `SUPABASE_KEY` (file này đã có trong `.gitignore`, không commit
    lên git).
 
-> ⚠️ Vì app không có lớp đăng nhập, ai có URL app cũng xem/sửa được dữ liệu — chỉ nên chia sẻ
-> URL app với người bạn tin tưởng. Project Supabase free tier cũng tự "ngủ" (pause) sau
-> khoảng 7 ngày không có hoạt động API; mở app lên gặp lỗi kết nối thì vào dashboard Supabase
-> bấm un-pause (không mất dữ liệu, mất khoảng 1 phút).
+> ⚠️ Mặc định app không có lớp đăng nhập, ai có URL app cũng xem/sửa được dữ liệu — chỉ nên
+> chia sẻ URL app với người bạn tin tưởng, hoặc bật đăng nhập Google ở mục
+> [Đăng nhập Google (tuỳ chọn)](#đăng-nhập-google-tuỳ-chọn) bên dưới. Project Supabase free
+> tier cũng tự "ngủ" (pause) sau khoảng 7 ngày không có hoạt động API; mở app lên gặp lỗi kết
+> nối thì vào dashboard Supabase bấm un-pause (không mất dữ liệu, mất khoảng 1 phút).
 
 ### Deploy lên Streamlit Community Cloud (miễn phí)
 
@@ -320,6 +322,44 @@ khoảng 5 phút, không cần biết lập trình:
 3. Ở phần **Secrets** của app, dán `SUPABASE_URL` và `SUPABASE_KEY` (nội dung giống file
    `secrets.toml` ở bước 5 phía trên). Streamlit Cloud tự cài `requirements.txt`, không cần
    cấu hình gì thêm.
+
+---
+
+## Đăng nhập Google (tuỳ chọn)
+
+App vốn không có lớp đăng nhập — nếu bạn không phiền việc "ai có URL cũng vào được" thì có thể
+bỏ qua mục này. Nếu muốn khoá app chỉ cho đúng 1 tài khoản Google của bạn (khuyến nghị khi deploy
+lên Streamlit Cloud, vì URL là công khai), làm theo các bước sau — khoảng 10 phút, không cần biết
+lập trình:
+
+1. Vào **[console.cloud.google.com](https://console.cloud.google.com)** → đăng nhập bằng Gmail
+   của bạn → tạo project mới (đặt tên bất kỳ, vd `forest-dashboard`).
+2. Vào **APIs & Services → OAuth consent screen**: chọn **User Type = External** → điền App
+   name/support email/developer email (đều dùng Gmail của bạn) → Save qua các bước còn lại. Ở
+   mục **Test users**, bấm **Add users** → thêm đúng Gmail của bạn. App ở trạng thái "Testing"
+   (chưa submit Google duyệt công khai) nên **chỉ email trong danh sách Test users mới đăng
+   nhập được** — đây là lớp khoá chính, người khác dù biết URL app cũng không đăng nhập được.
+3. Vào **Credentials → Create Credentials → OAuth client ID**: Application type = **Web
+   application**. Ở **Authorized redirect URIs**, thêm đúng:
+   `https://<tên-app-của-bạn>.streamlit.app/oauth2callback` (thêm cả
+   `http://localhost:8501/oauth2callback` nếu có chạy thử ở máy local). Bấm **Create** → copy
+   **Client ID** và **Client secret** hiện ra (chỉ xem được 1 lần lúc này).
+4. Điền vào `.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`):
+   ```toml
+   ALLOWED_EMAIL = "gmail-cua-ban@gmail.com"
+
+   [auth]
+   redirect_uri = "https://<tên-app-của-bạn>.streamlit.app/oauth2callback"
+   cookie_secret = "một chuỗi ngẫu nhiên dài, tự nghĩ ra, dùng để ký cookie phiên đăng nhập"
+   client_id = "<Client ID vừa copy>"
+   client_secret = "<Client secret vừa copy>"
+   server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
+   ```
+   Nếu deploy Streamlit Cloud, dán y hệt các dòng trên vào phần **Secrets** của app trên đó.
+5. Mở lại app: sẽ hiện màn hình "Đăng nhập bằng Google" trước khi vào được nội dung. Đăng xuất ở
+   nút cuối mục **"5. Quản lý hệ thống"** (tab Tuỳ biến).
+
+Không điền mục `[auth]` này thì app chạy như cũ, không có cổng đăng nhập nào.
 
 ---
 

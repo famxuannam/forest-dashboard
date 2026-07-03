@@ -2418,6 +2418,38 @@ def frag_period_table(scope_df, key):
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
+# Đăng nhập Google (tuỳ chọn) -- chỉ bật khi có mục [auth] trong secrets (xem
+# .streamlit/secrets.toml.example). Không cấu hình thì app chạy như cũ, không cổng đăng nhập nào
+# (tiện cho chạy thử local/mock) -- nhưng NẾU đã cấu hình [auth] thì bắt buộc phải có luôn
+# ALLOWED_EMAIL, không được để "đăng nhập được nhưng ai vào cũng lọt" (an toàn theo kiểu mặc định
+# chặn khi cấu hình dở dang, thay vì mặc định mở).
+try:
+    _auth_configured = bool(st.secrets.get("auth", {}).get("client_id"))
+except Exception:
+    _auth_configured = False
+if _auth_configured:
+    if not st.secrets.get("ALLOWED_EMAIL"):
+        st.error(
+            "**Cấu hình đăng nhập chưa đầy đủ.** Đã có mục `[auth]` nhưng thiếu `ALLOWED_EMAIL` "
+            "trong secrets -- không xác định được ai được phép vào app. Xem README.")
+        st.stop()
+    if not st.user.is_logged_in:
+        st.markdown(
+            "<div style='max-width:420px;margin:15vh auto 24px;text-align:center;'>"
+            "<div style='font-size:2.2rem;font-weight:700;letter-spacing:-0.5px;margin-bottom:6px;'>"
+            "Forest Dashboard</div>"
+            "<div style='color:#6e6e73;'>Đăng nhập để tiếp tục.</div></div>",
+            unsafe_allow_html=True)
+        _login_col = st.columns([1, 1, 1])[1]
+        with _login_col:
+            st.button("Đăng nhập bằng Google", icon=":material/login:", type="primary",
+                       use_container_width=True, on_click=st.login)
+        st.stop()
+    if st.user.email != st.secrets["ALLOWED_EMAIL"]:
+        st.error(f"Tài khoản **{st.user.email}** không có quyền truy cập app này.")
+        st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout)
+        st.stop()
+
 try:
     _has_supabase_secrets = bool(st.secrets.get("SUPABASE_URL")) and bool(st.secrets.get("SUPABASE_KEY"))
 except Exception:
@@ -3743,6 +3775,11 @@ elif nav == "Tuỳ biến":
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
+
+        if _auth_configured:
+            st.divider()
+            st.caption(f"Đăng nhập với **{st.user.email}**")
+            st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="auth_logout_btn")
 
 # ==========================================
 # TAB HƯỚNG DẪN
