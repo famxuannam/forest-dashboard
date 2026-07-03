@@ -2655,8 +2655,11 @@ st.markdown(
     }
     /* Khung lịch bật lên (data-baseweb="popover") -- dùng outline chứ không phải border: nội
        dung trắng bên trong popover có cùng kích thước với chính nó và vẽ đè lên trên, che mất
-       border thường; outline không tham gia box model nên không bị che. */
-    [data-baseweb="popover"] {
+       border thường; outline không tham gia box model nên không bị che. Chỉ áp cho popover có
+       chứa lịch (:has([data-baseweb="calendar"])) -- tức các ô chọn ngày -- KHÔNG áp cho danh
+       sách lựa chọn của st.selectbox thường (cùng dùng data-baseweb="popover" nhưng không có
+       lịch bên trong). */
+    [data-baseweb="popover"]:has([data-baseweb="calendar"]) {
         outline: 1.5px solid var(--accent) !important;
         outline-offset: -1px;
     }
