@@ -59,10 +59,25 @@ QUILL_CSS = """
 
 def style_quill():
     """Bơm QUILL_CSS vào trong iframe của Quill (cùng origin). Lặp lại định kỳ vì mỗi
-    lần Streamlit rerun, iframe bị tạo lại và mất style. Chỉ gọi khi đang mở ô soạn."""
+    lần Streamlit rerun, iframe bị tạo lại và mất style. Chỉ gọi khi đang mở ô soạn.
+    Iframe không thấy được :root CSS var của trang chính -> ở dark mode phải tự thay thế
+    literal + bơm thêm rule riêng (icon toolbar Quill mặc định stroke/fill đen, vô hình
+    trên nền tối nếu không override)."""
+    _quill_css = QUILL_CSS.replace("#00a3ad", ACCENT)
+    if IS_DARK:
+        _quill_css = (
+            _quill_css.replace("#fafafa", "#2c2c2e")
+            .replace("#e2e2e7", "#3a3a3c")
+            .replace("#1d1d1f", "#f2f2f7")
+            .replace("#aeaeb2", "#636366")
+            + "\n.ql-editor { background:#1c1c1e; }"
+            + "\n.ql-snow .ql-stroke { stroke:#d1d1d6; }"
+            + "\n.ql-snow .ql-fill { fill:#d1d1d6; }"
+            + "\n.ql-snow .ql-picker { color:#d1d1d6; }"
+        )
     js = (
         "<script>\n"
-        "const CSS = " + json.dumps(QUILL_CSS.replace("#00a3ad", ACCENT)) + ";\n"
+        "const CSS = " + json.dumps(_quill_css) + ";\n"
         "function applyQuillCss(){\n"
         "  try{\n"
         "    const frames = window.parent.document.querySelectorAll('iframe');\n"
@@ -230,6 +245,16 @@ def _darken(hexcode, factor=0.72):
     return _hsl_hex(hue, s, l * factor)
 
 
+def _brighten(hexcode, target_l=0.68):
+    """Bản sáng hơn (giữ hue/saturation, kéo lightness lên tối thiểu target_l) -- đối xứng với
+    _darken() nhưng cho DARK MODE: nền tint accent trong dark mode tối hơn nền light, nên
+    chữ/icon đặt trên đó cần SÁNG hơn accent gốc để đọc được, thay vì tối hơn."""
+    h = hexcode.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hue, l, s = colorsys.rgb_to_hls(r, g, b)
+    return _hsl_hex(hue, s, max(l, target_l))
+
+
 def _readable_text(hexcode):
     """Chữ trắng hay đen đọc rõ hơn trên nền màu này (độ chói YIQ) -- dùng cho tên màu hiện
     ngay trên nút accent (mục "4. Giao diện"), tự thích ứng khi thêm/bớt preset sau này."""
@@ -266,6 +291,18 @@ def save_setting(key, value):
         return False
 
 
+# Cờ dark mode -- đọc st.context.theme.type (Streamlit 1.58+, đã xác nhận có sẵn Ở CẤP MODULE,
+# TRƯỚC cả st.set_page_config(), vì được gửi kèm ngay trong request rerun từ trình duyệt, không
+# phải lấy lazy). Tự bọc lỗi vì cũng là tính năng optional (bản Streamlit cũ hơn không có
+# st.context.theme) -- lỗi/None -> coi là light, không crash app. Caveat CHÍNH THỨC của
+# Streamlit (github issue #11920): giá trị có thể sai/None ở LẦN LOAD ĐẦU TIÊN của session, và
+# trễ đúng 1 rerun khi người dùng đổi theme qua menu Settings ⋮ -- chấp nhận được (tự đúng lại
+# ngay rerun kế tiếp), không có cách nào khắc phục vì Streamlit không có API đổi theme runtime.
+try:
+    IS_DARK = st.context.theme.type == "dark"
+except Exception:
+    IS_DARK = False
+
 # Accent (màu nhấn) đang chọn -- fallback Teal mặc định nếu chưa từng chọn hoặc lỗi. PHẢI tính
 # TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó là câu lệnh cấp module chạy ngay khi
 # import, sớm hơn cả st.set_page_config()/cổng kiểm tra secrets Supabase.
@@ -274,14 +311,26 @@ if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi t
     _accent_hex = "#00a3ad"
 ACCENT = _accent_hex
 ACCENT_RGB = _hex_rgb_str(ACCENT)
-ACCENT_DARK = _darken(ACCENT)
+# ACCENT_DARK = "accent tương phản trên nền tint accent nhạt". Ở dark mode, nền tint đó lại
+# TỐI hơn nền light -> cần chữ/icon SÁNG hơn accent gốc thay vì tối hơn, nên đổi hàm theo IS_DARK
+# (khác bản light-only trước đây luôn gọi _darken). Tên biến/tên CSS var --accent-dark giữ
+# nguyên -- mọi nơi đang dùng (chip.tw, guide alert, NUDGE_TONES "good") tự đúng cả 2 chế độ.
+ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
 
 
-def _teal_shades(n, l_lo=0.90, l_hi=0.26):
+def _teal_shades(n, l_lo=None, l_hi=None):
     """Sinh n sắc độ teal (cùng hue với accent #00a3ad) từ nhạt (l_lo) đến đậm (l_hi)
     -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, Giờ tập trung theo thứ, thanh Phân bổ
-    độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng."""
+    độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
+    Mặc định (không truyền l_lo/l_hi) ĐẢO CHIỀU ramp khi dark: trên nền tối, teal L thấp
+    (đậm ở light) gần như tàng hình còn L cao (nhạt ở light) nổi bật nhất -- nếu giữ nguyên
+    chiều, "nhiều giờ" sẽ trông như "ít giờ". Dark dùng dải sáng hơn hẳn (0.22->0.72, mờ tối
+    -> sáng rực) thay vì lật ngược y hệt dải light (sẽ ra màu quá tối, khó phân biệt nền)."""
+    if l_lo is None:
+        l_lo = 0.22 if IS_DARK else 0.90
+    if l_hi is None:
+        l_hi = 0.72 if IS_DARK else 0.26
     return [_hsl_hex(TEAL_HUE, 0.75, l_lo + (l_hi - l_lo) * i / (n - 1)) for i in range(n)]
 
 
@@ -696,9 +745,10 @@ def prep_analysis_data():
 
 def add_total_labels(fig, df, x_col, y_col):
     totals = df.groupby(x_col)[y_col].sum().reset_index()
+    _txt = "#f2f2f7" if IS_DARK else "#1d1d1f"
     fig.add_trace(go.Scatter(
         x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].round(1).astype(str),
-        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color="#1d1d1f", size=13)
+        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=_txt, size=13)
     ))
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
@@ -715,7 +765,7 @@ def add_ma_overlay(fig, scope_df, window=7):
     ma = daily.rolling(window, min_periods=1).mean()
     fig.add_trace(go.Scatter(
         x=list(ma.index), y=list(ma.values), mode='lines',
-        line=dict(color='#1d1d1f', width=2.5, dash='dot'),
+        line=dict(color=("#f2f2f7" if IS_DARK else "#1d1d1f"), width=2.5, dash='dot'),
         name=f'TB động {window} ngày'
     ))
     return fig
@@ -744,9 +794,10 @@ def add_week_dividers(fig, dates):
         return fig
     dmin, dmax = s.min().normalize(), s.max().normalize()
     first_mon = dmin + pd.Timedelta(days=(0 - dmin.dayofweek) % 7)  # Thứ Hai đầu tiên
+    _line_col = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
     d = first_mon
     while d <= dmax + pd.Timedelta(days=1):
-        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color="rgba(0,0,0,0.18)")
+        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color=_line_col)
         d += pd.Timedelta(days=7)
     fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
     return fig
@@ -756,7 +807,10 @@ def format_plotly_fig(fig, is_pie=False):
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="#1d1d1f"),
+        # KHÔNG đặt color tường minh ở đây -- theme="streamlit" (mặc định, mọi call site
+        # st.plotly_chart trong app) tự lấy đúng textColor từ config theme đang active
+        # ([theme]/[theme.dark]) cho phần chữ KHÔNG bị override tường minh ở nơi khác.
+        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif"),
         # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
         legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
         # r=28: chừa chỗ cho nhãn trục hoành CUỐI (vd '28/06') -> không bị tràn/cắt chữ ở
@@ -765,8 +819,10 @@ def format_plotly_fig(fig, is_pie=False):
         xaxis=dict(automargin=True),
     )
     if is_pie:
-        # Đường viền trắng phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer)
-        fig.update_traces(marker=dict(line=dict(color='#ffffff', width=2)),
+        # Đường viền phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer) -- khớp
+        # màu nền thẻ (--card) đổi theo IS_DARK để viền "hoà" vào nền thay vì luôn trắng cứng.
+        _pie_line = "#2c2c2e" if IS_DARK else "#ffffff"
+        fig.update_traces(marker=dict(line=dict(color=_pie_line, width=2)),
                           hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
     else:
         fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
@@ -969,13 +1025,13 @@ def _clip_card(note):
     st.markdown(
         f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
         f"align-items:center; flex-wrap:wrap; gap:6px 10px;'>"
-        f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;"
+        f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;"
         f"letter-spacing:0.5px;white-space:nowrap;'>"
         f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' "
-        f"fill='#86868b' style='vertical-align:-2px;margin-right:5px;'>"
+        f"fill='var(--text-2)' style='vertical-align:-2px;margin-right:5px;'>"
         f"<path d='M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 15.5V20H8v-2.5l4-4 4 4zM8 6.5V4h8v2.5l-4 4-4-4z'/>"
         f"</svg>Kỳ chưa kết thúc</span>"
-        f"<span style='font-size:14px;color:#1d1d1f;'>{note}</span>"
+        f"<span style='font-size:14px;color:var(--text);'>{note}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -1042,23 +1098,23 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
 
 def render_top_3(df, col_name, title, week_key=None, n=3):
     if df.empty:
-        html_list = "<p style='color:#86868b; font-size: 14px;'>Không có dữ liệu</p>"
+        html_list = "<p style='color:var(--text-2); font-size: 14px;'>Không có dữ liệu</p>"
     else:
         top3 = df.groupby(col_name)['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(n)
         # Thời gian của từng nhóm/dự án trong tuần này (nếu được yêu cầu)
         wk = {}
         if week_key is not None and 'Tuần' in df.columns:
             wk = (df[df['Tuần'] == week_key].groupby(col_name)['Thời lượng (Phút)'].sum() / 60).to_dict()
-        html_list = "<ul style='margin:0; padding-left: 20px; color: #1d1d1f; font-size: 15px; line-height: 1.6;'>"
+        html_list = "<ul style='margin:0; padding-left: 20px; color: var(--text); font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
             wsuf = f" <span style='color:{ACCENT}; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
             html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
         html_list += "</ul>"
-    
+
     html = f"""
     <div class="glass-card" style="height: 100%;">
-        <p style="margin: 0 0 12px 0; font-size: 13px; color: #86868b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
+        <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
         {html_list}
     </div>
     """
@@ -1094,17 +1150,17 @@ def render_session_bar(df):
             continue
         pct = c / n * 100
         lbl = f"{pct:.0f}%" if pct >= 9 else ""
-        fg = "#fff" if col in _SESSION_COLORS[3:] else "#1d1d1f"
+        fg = _readable_text(col)
         seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
                 f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
     legend = ""
     for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:#1d1d1f;'>"
+        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:var(--text);'>"
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
-                   f"{name} <span style='color:#86868b;'>{rng}</span> · <b>{c}</b></span>")
+                   f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
-        "<div style='font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
+        "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
         f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
@@ -1131,22 +1187,25 @@ def render_session_histogram(df):
         marker_cornerradius=6, cliponaxis=False,  # bo góc trên + bóng (CSS) không bị cắt — đồng bộ các cột khác
         customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
     ))
+    _threshold_col = "#6ea8ff" if IS_DARK else "#0a52c4"
+    _avg_col = "#f2f2f7" if IS_DARK else "#1d1d1f"
     for t in LEN_THRESHOLDS:
         if start < t <= top:
-            fig.add_vline(x=t, line=dict(color='#0a52c4', width=1.5, dash='dot'))
+            fig.add_vline(x=t, line=dict(color=_threshold_col, width=1.5, dash='dot'))
     avg = d.mean()
     if start <= avg <= top + step:
-        fig.add_vline(x=avg, line=dict(color='#1d1d1f', width=2, dash='dash'),
+        fig.add_vline(x=avg, line=dict(color=_avg_col, width=2, dash='dash'),
                       annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
-                      annotation_font=dict(size=12, color='#1d1d1f'))
+                      annotation_font=dict(size=12, color=_avg_col))
     fig.update_layout(
         height=300, margin=dict(l=10, r=10, t=24, b=10), bargap=0.06, showlegend=False,
         xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
                    tickvals=[10, 20, 30, 40, 50, 60],
                    ticktext=['10', '20', '30', '40', '50', '60+'],
                    tickfont=dict(size=12), showgrid=False),
-        yaxis=dict(title='Số phiên', tickfont=dict(size=12), gridcolor='rgba(0,0,0,0.06)'),
-        plot_bgcolor='white', paper_bgcolor='white',
+        yaxis=dict(title='Số phiên', tickfont=dict(size=12),
+                   gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
     )
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
@@ -1227,15 +1286,15 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     if tot.max() > 0:
         peak_h = int(tot.idxmax())
         strong_buoi = tot.groupby(_buoi_of).sum().idxmax()
-        _lbl = "font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
-        _val = "font-size:17px;color:#1d1d1f;font-weight:600;"
+        _lbl = "font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
+        _val = "font-size:17px;color:var(--text);font-weight:600;"
         st.markdown(
             "<div class='glass-card' style='display:flex;flex-wrap:wrap;justify-content:center;align-items:center;"
             "gap:6px 16px;max-width:900px;margin:8px auto 0 auto;padding:12px 18px;'>"
             f"<span style='{_lbl}'>Giờ tập trung nhất</span>"
             f"<span style='{_val}'>{peak_h}h</span>"
-            f"<span style='font-size:13px;color:#86868b;'>(TB {tot.max():.1f}h/ngày)</span>"
-            "<span style='color:#d2d2d7;'>·</span>"
+            f"<span style='font-size:13px;color:var(--text-2);'>(TB {tot.max():.1f}h/ngày)</span>"
+            "<span style='color:var(--text-4);'>·</span>"
             f"<span style='{_lbl}'>Buổi mạnh nhất</span>"
             f"<span style='{_val}'>{strong_buoi}</span>"
             "</div>",
@@ -1272,11 +1331,11 @@ def render_dayhour_heatmap(scope_df):
         color=alt.Color('TB:Q', scale=alt.Scale(range=[_teal_shades(7)[0], _teal_shades(7)[-1]]), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
                  alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
-    ).properties(width=alt.Step(54), height=alt.Step(26), background='white').configure_view(strokeWidth=0)
+    ).properties(width=alt.Step(54), height=alt.Step(26), background='transparent').configure_view(strokeWidth=0)
     # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
-    # background='white' ở properties(): Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền
-    # trang, không phải trắng) -> nếu không ép, phần "ở giữa" (canvas SVG) sẽ lệch tông với phần
-    # đệm/viền thẻ trắng bao quanh (CSS chỉ chỉnh được phần đệm, không chỉnh được nền SVG).
+    # background='transparent' ở properties(): Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu
+    # nền trang, không phải trong suốt) -> để trong suốt cho nền thẻ bọc ngoài (--card, đổi theo
+    # IS_DARK) lộ ra, tránh canvas SVG lệch tông với phần đệm/viền thẻ bao quanh.
     st.altair_chart(chart, width='content')
 
 
@@ -1294,9 +1353,14 @@ def _streak_stats(streak_df):
     return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
 
 
-NUDGE_TONES = {"good": (f"rgba({ACCENT_RGB},0.12)", ACCENT_DARK),  # đồng bộ accent
-               "warn": ("rgba(255,149,0,0.15)", "#a85d00"),      # cam (giữ nguyên, tránh nhầm với "good")
-               "neutral": ("rgba(255,59,48,0.12)", "#c50a00")}   # đỏ (đối lập accent, chuỗi đã đứt)
+NUDGE_TONES = {
+    "good": (f"rgba({ACCENT_RGB},0.12)", ACCENT_DARK),  # đồng bộ accent, tự đúng cả 2 chế độ
+    # "warn"/"neutral": nền tint tối hơn + chữ ĐẬM hơn (đọc được trên nền light) không còn đủ
+    # tương phản trên nền tối -> dark cần chữ SÁNG hơn thay vì tối hơn (cùng lý do ACCENT_DARK
+    # đổi ngữ nghĩa ở trên).
+    "warn": (("rgba(255,159,10,0.18)", "#ffb340") if IS_DARK else ("rgba(255,149,0,0.15)", "#a85d00")),
+    "neutral": (("rgba(255,69,58,0.16)", "#ff8a80") if IS_DARK else ("rgba(255,59,48,0.12)", "#c50a00")),
+}
 
 
 def _streak_nudge(s):
@@ -1562,26 +1626,26 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     track_min = max(len(months) * 70, 320)
     st.markdown(f"""
 <style>
-.rtl-card{{background:#fff;border:1px solid #d1d1d6;border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
-.rtl-legend{{display:flex;gap:16px;margin:0 0 10px {name_w + 8}px;font-size:12px;color:#6e6e73;}}
+.rtl-card{{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
+.rtl-legend{{display:flex;gap:16px;margin:0 0 10px {name_w + 8}px;font-size:12px;color:var(--text-2);}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-body{{display:flex;align-items:flex-start;}}
 .rtl-names{{flex:0 0 {name_w}px;width:{name_w}px;}}
-.rtl-name{{height:32px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#1d1d1f;
+.rtl-name{{height:32px;display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--text);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}}
 .rtl-scroll{{flex:1 1 auto;overflow-x:auto;min-width:0;}}
 .rtl-track{{position:relative;height:32px;min-width:{track_min}px;}}
-.rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
+.rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
 .rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
-.rtl-bar.done{{background:#aeaeb2;}}
+.rtl-bar.done{{background:var(--text-3);}}
 .rtl-bar.reading{{background:{ACCENT};}}
 .rtl-ticks{{position:relative;height:16px;min-width:{track_min}px;margin-top:3px;}}
-.rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
-.rtl-yr{{color:#c7c7cc;margin-left:1px;}}
+.rtl-tick{{position:absolute;font-size:11px;color:var(--text-2);white-space:nowrap;}}
+.rtl-yr{{color:var(--text-4);margin-left:1px;}}
 </style>
 <div class="rtl-card">
 <div class="card-label">Dòng thời gian</div>
-<div class="rtl-legend"><span><i style="background:{ACCENT};"></i>{labels['ongoing']}</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+<div class="rtl-legend"><span><i style="background:{ACCENT};"></i>{labels['ongoing']}</span><span><i style="background:var(--text-3);"></i>Đã xong</span></div>
 <div class="rtl-body">
 <div class="rtl-names">{names_html}</div>
 <div class="rtl-scroll">
@@ -1602,7 +1666,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
     rows_html = ''
     for _, r in t.iterrows():
-        s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else '#86868b'
+        s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
         start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
         last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
         rows_html += '<tr class="prow">'
@@ -1721,7 +1785,7 @@ def render_reading_calendar_grid(rl_detail_df, labels):
     def _lvl(n):
         return 0 if n <= 0 else min(int(n), 5)
     cal_data['lvl'] = cal_data[labels['parts_label']].map(_lvl)
-    LVL_COLORS = ["#e5e5ea"] + _teal_shades(5)
+    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5)
 
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
@@ -1734,15 +1798,18 @@ def render_reading_calendar_grid(rl_detail_df, labels):
         color=alt.Color('lvl:O', scale=alt.Scale(domain=list(range(6)), range=LVL_COLORS), legend=None),
         tooltip=cal_tooltip
     )
+    # Chữ số ngày trắng/xám trên ô đậm/nhạt -- ramp teal ĐẢO CHIỀU khi dark (xem _teal_shades)
+    # nên điều kiện sáng/tối của chữ cũng phải đảo theo: dark, lvl cao = ô SÁNG rực -> chữ tối.
+    _txt_hi, _txt_lo = ("#1c1c1e", "#98989d") if IS_DARK else ("#ffffff", "#a7a7ac")
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        color=alt.condition("datum.lvl >= 4", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        color=alt.condition("datum.lvl >= 4", alt.value(_txt_hi), alt.value(_txt_lo)),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
         padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
-        background='white',
+        background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
@@ -1793,18 +1860,18 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:#fff;border:1px solid #d1d1d6;border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
-.dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:#aeaeb2;}}
-.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);background:#fcfcfd;}}
+.dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
+.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
 .dtl-typ{{position:absolute;top:0;bottom:0;}}
-.dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.06);}}
+.dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
 .dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
-.dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:#86868b;}}
-.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:#3a3a3c;}}
+.dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
+.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--text);}}
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
-.dtl-ttl{{font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
+.dtl-ttl{{font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
 </style>
 <div class="dtl-card">
 <div class="dtl-ttl">Dòng thời gian trong ngày</div>
@@ -2119,14 +2186,14 @@ def render_on_this_day(sel, df_all):
     years = sorted(set(stats) | set(notes) | set(events) | set(reading), reverse=True)
     if not years:
         _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
-                "fill='#c7c7cc'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
+                "fill='var(--text-4)'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
                 "2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/></svg>")
         st.markdown(
             "<div class='glass-card' style='padding:22px 18px;text-align:center;'>"
             f"<div style='margin-bottom:8px;'>{_cal}</div>"
-            "<div style='font-size:1.0rem;font-weight:600;color:#1d1d1f;'>"
+            "<div style='font-size:1.0rem;font-weight:600;color:var(--text);'>"
             f"Chưa có dữ liệu ngày {d:02d}/{m:02d} ở các năm trước</div>"
-            "<div style='font-size:13px;color:#86868b;margin-top:4px;'>"
+            "<div style='font-size:13px;color:var(--text-2);margin-top:4px;'>"
             "Mục này sẽ dày dần theo thời gian — cứ ghi chú &amp; tích lũy mỗi ngày.</div></div>",
             unsafe_allow_html=True)
         return
@@ -2198,7 +2265,7 @@ def render_calendar_grid(scope_df, full_df):
         if h < 6: return 6
         return 7
     cal_data['lvl'] = cal_data['Số giờ'].map(_cal_lvl)
-    LVL_COLORS = ["#e5e5ea"] + _teal_shades(7)
+    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(7)
 
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
                   axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False,
@@ -2211,48 +2278,50 @@ def render_calendar_grid(scope_df, full_df):
         color=alt.Color('lvl:O', scale=alt.Scale(domain=list(range(8)), range=LVL_COLORS), legend=None),
         tooltip=cal_tooltip
     )
+    # lvl 6,7 (2 bậc teal đậm nhất ở light) đủ tối để cần chữ trắng, còn lại chữ xám mờ. Ramp teal
+    # ĐẢO CHIỀU khi dark (xem _teal_shades) -> điều kiện sáng/tối của chữ cũng đảo theo.
+    _txt_hi, _txt_lo = ("#1c1c1e", "#98989d") if IS_DARK else ("#ffffff", "#a7a7ac")
     text = base.mark_text(baseline='middle', fontSize=10).encode(
         text='day:Q',
-        # lvl 6,7 (2 bậc teal đậm nhất) đã đủ tối để cần chữ trắng, còn lại chữ xám mờ
-        color=alt.condition("datum.lvl >= 6", alt.value('#ffffff'), alt.value('#a7a7ac')),
+        color=alt.condition("datum.lvl >= 6", alt.value(_txt_hi), alt.value(_txt_lo)),
         tooltip=cal_tooltip
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
         # padding phải bù cho vùng nhãn thứ bên trái -> lưới căn giữa trong thẻ
         padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
-        # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng)
-        # -> ép trắng khớp với nền thẻ bọc ngoài, tránh có viền lệch tông quanh lưới.
-        background='white',
+        # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng) -> để
+        # trong suốt cho nền thẻ bọc ngoài (--card, đổi theo IS_DARK) lộ ra, tránh viền lệch tông.
+        background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
 
 
 DTBL_CSS = """
 <style>
-.dtbl-wrap { overflow:auto; max-height:560px; border-radius:16px; border:1px solid #d1d1d6; background:#ffffff; box-shadow:0 1px 1px rgba(0,0,0,0.02); }
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:16px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
 .dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:#f5f5f7; color:#86868b; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid rgba(0,0,0,0.1); }
-.dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:#ffffff; z-index:1; }
-.dtbl thead th.lbl { z-index:3; background:#f5f5f7; }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--bg); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
+.dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
+.dtbl thead th.lbl { z-index:3; background:var(--bg); }
 /* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
    (Tuần/Tháng) đứng dưới -- cả 2 đều "dính" khi cuộn dọc, xếp chồng đúng vị trí bằng top. */
-.dtbl thead tr.yr th { top:0; font-size:10px; color:#9a9aa0; background:#eef0f2; border-bottom:1px solid rgba(0,0,0,0.06); }
+.dtbl thead tr.yr th { top:0; font-size:10px; color:var(--text-2); background:var(--chip); border-bottom:1px solid var(--divider); }
 .dtbl thead tr.wk th { top:22px; }
-.dtbl th.yrspan { text-align:center; border-right:1px solid rgba(0,0,0,0.08); }
+.dtbl th.yrspan { text-align:center; border-right:1px solid var(--divider); }
 .dtbl th.yrspan:last-child { border-right:none; }
-.dtbl thead tr.yr th.lbl { z-index:3; background:#eef0f2; }
-.dtbl tr.cat td { font-weight:700; color:#1d1d1f; border-top:1px solid rgba(0,0,0,0.07); }
-.dtbl tr.cat td.lbl { background:#ffffff; }
-.dtbl tr.proj td { color:#6e6e73; }
-.dtbl tr.proj td.lbl { padding-left:34px; color:#86868b; font-weight:400; }
-.dtbl td.zero { color:#cfcfd4; }
-.dtbl td.tot { border-left:1px solid rgba(0,0,0,0.08); font-weight:600; color:#1d1d1f; }
-.dtbl tr.proj td.tot { font-weight:500; color:#6e6e73; }
+.dtbl thead tr.yr th.lbl { z-index:3; background:var(--chip); }
+.dtbl tr.cat td { font-weight:700; color:var(--text); border-top:1px solid var(--divider); }
+.dtbl tr.cat td.lbl { background:var(--card); }
+.dtbl tr.proj td { color:var(--text-2); }
+.dtbl tr.proj td.lbl { padding-left:34px; color:var(--text-2); font-weight:400; }
+.dtbl td.zero { color:var(--text-4); }
+.dtbl td.tot { border-left:1px solid var(--divider); font-weight:600; color:var(--text); }
+.dtbl tr.proj td.tot { font-weight:500; color:var(--text-2); }
 .dtbl th.txt, .dtbl td.txt { text-align:left; }
-.dtbl tr.prow td { color:#3a3a3c; font-weight:400; border-top:1px solid rgba(0,0,0,0.05); }
-.dtbl tr.prow td.lbl { color:#aeaeb2; font-weight:500; }
+.dtbl tr.prow td { color:var(--text); font-weight:400; border-top:1px solid var(--divider); }
+.dtbl tr.prow td.lbl { color:var(--text-3); font-weight:500; }
 </style>
 """
 
@@ -2411,7 +2480,7 @@ def guide_item(img, title, body_md, tip=None, where=None):
     """Một mục trong trang Hướng dẫn: ảnh minh hoạ + giải thích chi tiết (+ mẹo)."""
     with st.container(border=True, key=f"guide_{img}"):
         if where:
-            st.markdown(f"<div style='font-size:11px;font-weight:700;color:#86868b;"
+            st.markdown(f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
                         f"text-transform:uppercase;letter-spacing:.5px;'>{where}</div>",
                         unsafe_allow_html=True)
         st.markdown(f"#### {title}")
@@ -2432,7 +2501,7 @@ def guide_update(pr_no, title, bullets):
     guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2)."""
     with st.container(border=True, key=f"guide_update_{pr_no}"):
         st.markdown(
-            f"<div style='font-size:11px;font-weight:700;color:#86868b;"
+            f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
             f"text-transform:uppercase;letter-spacing:.5px;'>PR #{pr_no}</div>",
             unsafe_allow_html=True)
         st.markdown(f"#### {title}")
@@ -2567,11 +2636,14 @@ if _auth_configured:
             "trong secrets -- không xác định được ai được phép vào app. Xem README.")
         st.stop()
     if not st.user.is_logged_in:
+        # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
+        # dùng var(--text-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal theo IS_DARK.
+        _login_txt2 = "#98989d" if IS_DARK else "#6e6e73"
         st.markdown(
             "<div style='max-width:420px;margin:15vh auto 24px;text-align:center;'>"
             "<div style='font-size:2.2rem;font-weight:700;letter-spacing:-0.5px;margin-bottom:6px;'>"
             "Forest Dashboard</div>"
-            "<div style='color:#6e6e73;'>Đăng nhập để tiếp tục.</div></div>",
+            f"<div style='color:{_login_txt2};'>Đăng nhập để tiếp tục.</div></div>",
             unsafe_allow_html=True)
         _login_col = st.columns([1, 1, 1])[1]
         with _login_col:
@@ -2594,8 +2666,26 @@ if not _has_supabase_secrets:
         "\"Thiết lập Supabase (bắt buộc)\" trong README) để đọc/ghi dữ liệu.")
     st.stop()
 
+# Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
+# con + f-string HTML rải rác) -- (light, dark), bảng dark theo đúng systemGray của Apple (app
+# đã tình cờ dùng đúng các mã hex đó ở light: #d1d1d6=gray4, #e5e5ea=gray5, #aeaeb2=gray2,
+# #c7c7cc=gray3...) nên có sẵn cặp tương ứng chuẩn, không phải tự chế màu mới.
+_TOK = {
+    "bg":      ("#f5f5f7", "#1c1c1e"),
+    "card":    ("#ffffff", "#2c2c2e"),
+    "card-tl": ("rgba(255,255,255,0.8)", "rgba(58,58,60,0.8)"),   # nền input mờ (date/select)
+    "text":    ("#1d1d1f", "#f2f2f7"),
+    "text-2":  ("#86868b", "#98989d"),   # nhãn phụ (gộp cả #6e6e73/#9a9aa0 cũ)
+    "text-3":  ("#aeaeb2", "#636366"),   # nhãn mờ (gộp cả #a7a7ac cũ)
+    "text-4":  ("#c7c7cc", "#48484a"),   # rất mờ (gộp cả #cfcfd4/#d2d2d7 cũ)
+    "border":  ("#d1d1d6", "#3a3a3c"),
+    "chip":    ("#f0f1f4", "#3a3a3c"),   # nền chip (gộp cả #f7f7f9/#eef0f2/#fafafa cũ)
+    "divider": ("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)"),   # gộp mọi rgba(0,0,0,0.05-0.14)
+}
+_root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
-    f"<style>:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};}}</style>",
+    f"<style>:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
 
@@ -2608,21 +2698,21 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .stApp {
-        background-color: #f5f5f7;
+        background-color: var(--bg);
     }
     
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
     .glass-card {
-        background: #fff;
-        border: 1px solid #d1d1d6;
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 16px;
         padding: 20px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
-    
-    h1, h2, h3 { color: #1d1d1f !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
-    hr { border-color: rgba(0,0,0,0.08) !important; }
+
+    h1, h2, h3 { color: var(--text) !important; font-weight: 600 !important; letter-spacing: -0.5px !important; }
+    hr { border-color: var(--divider) !important; }
     
     div[data-testid="stButton"] button[kind="primary"] {
         background-color: var(--accent) !important;
@@ -2640,29 +2730,29 @@ st.markdown(
     }
     
     div[data-testid="stButton"] button[kind="secondary"] {
-        background-color: white !important;
+        background-color: var(--card) !important;
         color: var(--accent) !important;
         border-radius: 8px !important;
-        border: 1px solid #d1d1d6 !important;
+        border: 1px solid var(--border) !important;
         font-weight: 500 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
     }
     div[data-testid="stButton"] button { width: 100%; }
-    
+
     .stSelectbox > div > div, .stTextInput > div > div > input {
         border-radius: 8px !important;
-        border: 1px solid #d1d1d6 !important;
-        background-color: rgba(255,255,255,0.8) !important;
+        border: 1px solid var(--border) !important;
+        background-color: var(--card-tl) !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
-    
+
     [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
         margin: 0 auto !important;
-        background: #fff;
-        border: 1px solid #d1d1d6;
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 16px;
         padding: 14px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
@@ -2684,28 +2774,28 @@ st.markdown(
 
     /* ===== Bảng tổng quan gọn (hero + chip) ===== */
     .stat-panel .sp-hero { display: flex; flex-wrap: wrap; }
-    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid rgba(0,0,0,0.07); }
+    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid var(--divider); }
     .stat-panel .sp-hi:first-child { padding-left: 2px; }
     .stat-panel .sp-hi:last-child { border-right: none; }
-    .stat-panel .sp-l { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: #1d1d1f; }
+    .stat-panel .sp-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
     /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
     .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
-    .stat-panel .sp-sub { font-size: 11px; color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
+    .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
     .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
     @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
-    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: #f0f1f4; }
-    .stat-panel .chip .ck { color: #86868b; }
-    .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
+    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: var(--chip); }
+    .stat-panel .chip .ck { color: var(--text-2); }
+    .stat-panel .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw { background: rgba(var(--accent-rgb),0.10); }
-    .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
+    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
     .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
     .stat-panel .chip.tw .ck { color: var(--accent-dark); }
     .stat-panel .chip.tw .cv { color: var(--accent); }
-    .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
+    .section-hd { font-size: 15px; font-weight: 700; color: var(--text); margin: 22px 0 6px; letter-spacing: -0.2px; }
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
     .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
@@ -2724,7 +2814,7 @@ st.markdown(
     }
     [data-testid="stExpander"] summary {
         padding: 8px 2px !important;
-        border-bottom: 2px solid #d1d1d6 !important;
+        border-bottom: 2px solid var(--border) !important;
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
@@ -2739,7 +2829,7 @@ st.markdown(
         font-size: 1.35rem !important;
         font-weight: 600 !important;
         letter-spacing: -0.4px !important;
-        color: #1d1d1f !important;
+        color: var(--text) !important;
     }
     [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; }
 
@@ -2768,7 +2858,7 @@ st.markdown(
     .st-key-bc_sub_picker button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
-        color: #6e6e73 !important; padding: 8px 4px !important; margin: 0 14px !important;
+        color: var(--text-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
     .st-key-bc_sub_picker button[kind="segmented_controlActive"] {
         background: transparent !important; color: var(--accent) !important; font-weight: 600 !important;
@@ -2806,8 +2896,8 @@ st.markdown(
        body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
        áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
     div[data-testid="stDateInput"] [data-baseweb="input"] {
-        background: rgba(255,255,255,0.8) !important;
-        border: 1px solid #d1d1d6 !important;
+        background: var(--card-tl) !important;
+        border: 1px solid var(--border) !important;
         border-radius: 8px !important;
         box-shadow: none !important;
     }
@@ -2883,11 +2973,11 @@ st.markdown(
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
        cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
        khung (viền chấm) để phân biệt rõ với có nội dung. ===== */
-    .note-empty { font-size: 14px; color: #86868b; background: #f7f7f9;
-        border: 1px dashed rgba(0,0,0,0.14); border-radius: 10px; padding: 13px 15px; }
+    .note-empty { font-size: 14px; color: var(--text-2); background: var(--chip);
+        border: 1px dashed var(--divider); border-radius: 10px; padding: 13px 15px; }
 
     /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
-    .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: #1d1d1f; }
+    .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: var(--text); }
     .st-key-note_saved [data-testid="stMarkdownContainer"],
     .st-key-note_saved [data-testid="stMarkdownContainer"] p,
     .st-key-note_saved [data-testid="stMarkdownContainer"] li { font-size: 14.5px !important; line-height: 1.6 !important; }
@@ -2906,9 +2996,9 @@ st.markdown(
        như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
         border-radius: 16px !important;
-        border-color: #d1d1d6 !important;
+        border-color: var(--border) !important;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
-        background: #fff !important;
+        background: var(--card) !important;
     }
     /* Box "mẹo" trong tab Hướng dẫn: nền tông teal (accent), thay vì xanh dương mặc định
        của st.info() -> chỉ áp trong các thẻ guide_*, không đụng st.info() ở nơi khác. */
@@ -2922,10 +3012,10 @@ st.markdown(
        khoảng cách quanh đường kẻ lệch nhau dù CSS đặt padding bằng nhau, do JS tính sẵn
        chiều cao hàng theo layout ban đầu, không cập nhật lại khi nội dung dài tràn khung). */
     .jrows .jrow { display: grid; grid-template-columns: 1fr 5fr; align-items: start;
-        column-gap: 10px; padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+        column-gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
     .jrows .jrow:last-child { border-bottom: none; }
     .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link {
-        border-right: 1px solid rgba(0,0,0,0.08); padding-right: 10px;
+        border-right: 1px solid var(--divider); padding-right: 10px;
     }
     /* Ô Thứ/ngày trong Nhật ký là link (nhảy sang Báo cáo ngày đúng ngày đó) -> bỏ màu xanh/
        gạch chân mặc định của <a>, giữ nguyên hình thức cũ; không áp cho .jdate trần (dùng ở
@@ -2938,21 +3028,21 @@ st.markdown(
     }
     .jdate { text-align: center; }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
-    .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
-    .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
-    .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
-    .jchip { display: inline-block; background: #f0f1f4; border-radius: 10px; padding: 5px 11px;
+    .jdate .jdow { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 6px; }
+    .jdate .jdowbig { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+    .jdate .jdm { font-size: 13px; color: var(--text-2); font-weight: 500; margin-top: 2px; }
+    .jchip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
-    .jchip .ck { color: #86868b; } .jchip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
+    .jchip .ck { color: var(--text-2); } .jchip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     /* Nhãn tên sách phía trên chip các phần đã đọc (box Đọc sách, Nhật ký đọc sách) -- nhại
        đúng pattern nhãn nhỏ đã dùng cho where= của guide_item và box "Lịch Work" cũ. */
-    .rl-book { display: block; font-size: 11px; font-weight: 700; color: #86868b;
+    .rl-book { display: block; font-size: 11px; font-weight: 700; color: var(--text-2);
         text-transform: uppercase; letter-spacing: .5px; margin: 0 0 4px 2px; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. [data-testid="stColumn"] là cột do Streamlit tự
        dựng bên trong container key="note_row". */
-    .st-key-note_row [data-testid="stColumn"]:first-child { border-right: 1px solid rgba(0,0,0,0.08); }
+    .st-key-note_row [data-testid="stColumn"]:first-child { border-right: 1px solid var(--divider); }
     @media (max-width: 640px) {
         .st-key-note_row [data-testid="stColumn"]:first-child { border-right: none; }
     }
@@ -3046,17 +3136,17 @@ def render_day_report(df):
     day_df = df[df['Ngày'] == sel]
     vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
 
-    _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' "
+    _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
             "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
     _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
     st.markdown(
         "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
         "flex-wrap:wrap;gap:6px 12px;'>"
-        "<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+        "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
         f"{_evt}Ngày đang xem</span>"
-        f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:#86868b;'>{_sub}</span></div>",
+        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
+        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>",
         unsafe_allow_html=True)
 
     if day_df.empty:
@@ -3180,11 +3270,11 @@ elif nav == "Báo cáo":
                     st.markdown(
                         f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
                         f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
-                        f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-                        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
+                        f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+                        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
                         f"Cập nhật gần nhất</span>"
-                        f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{format_relative(last_dt)}</span>"
-                        f"<span style='font-size:13px;color:#86868b;'>({abs_str})</span>"
+                        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{format_relative(last_dt)}</span>"
+                        f"<span style='font-size:13px;color:var(--text-2);'>({abs_str})</span>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -3797,7 +3887,7 @@ elif nav == "Tuỳ biến":
             # Tổng quan: thẻ căn giữa
             st.markdown(
                 f"<div class='glass-card' style='padding:10px 18px;margin-bottom:14px;text-align:center;'>"
-                f"<span style='font-size:14px;color:#1d1d1f;'>Tổng <b>{len(db_base)}</b> phiên · "
+                f"<span style='font-size:14px;color:var(--text);'>Tổng <b>{len(db_base)}</b> phiên · "
                 f"từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}</span></div>",
                 unsafe_allow_html=True)
             disp_db = db_base.copy()
@@ -3834,7 +3924,7 @@ elif nav == "Tuỳ biến":
                 with st.container(key="db_pag"):
                     st.pagination(num_pages, key="db_page")
                 st.markdown(
-                    f"<div style='text-align:center;font-size:13px;color:#86868b;margin-top:2px;'>"
+                    f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
     with st.expander("4. Giao diện", expanded=True):
@@ -3848,7 +3938,7 @@ elif nav == "Tuỳ biến":
                 _idx = _row_start + _i
                 _key = f"accent_sw_{_idx}"
                 _selected = _hex == ACCENT
-                _border = "#1d1d1f" if _selected else "transparent"
+                _border = "var(--text)" if _selected else "transparent"
                 _txt_color = _readable_text(_hex)
                 _label = f"✓ {_name}" if _selected else _name
                 # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
@@ -4326,7 +4416,13 @@ elif nav == "Hướng dẫn":
             "chống việc Streamlit dựng lại iframe làm mất style đã tiêm.\n\n"
             "Nếu bảng `settings` chưa được tạo trên Supabase, hoặc giá trị lưu trong đó bị hỏng, app **tự rơi "
             "về màu Teal mặc định** thay vì báo lỗi hay crash — tính năng đổi màu hoàn toàn tuỳ chọn, không có "
-            "nó app vẫn chạy bình thường với đúng màu gốc từ trước tới nay.",
+            "nó app vẫn chạy bình thường với đúng màu gốc từ trước tới nay.\n\n"
+            "**Chế độ tối (dark mode)**: app tự đổi giao diện tối/sáng theo đúng cài đặt hệ thống của thiết bị "
+            "(hoặc theo lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu đã tự đổi khác "
+            "với hệ thống) — **không có nút bật/tắt riêng trong app**, vì Streamlit chưa cho phép đổi theme "
+            "bằng code lúc đang chạy, chỉ đọc được theme hiện tại để tự tô đúng màu theo. Toàn bộ nút, thẻ, "
+            "biểu đồ, bảng nhiệt, ô ghi chú đều có phiên bản màu riêng cho chế độ tối; màu accent đang chọn vẫn "
+            "giữ nguyên và tự sáng/tối lại cho hợp với nền mới.",
             tip="3 màu đầu tiên (Hồng đào/Cam cháy/Vàng nắng) cố ý gần tông với 2 trạng thái cảnh báo cố định "
                 "trong app (cam = chuỗi đang treo, đỏ = chuỗi đã đứt) — nếu chọn 1 trong 3 màu này làm accent, "
                 "2 trạng thái cảnh báo đó sẽ trông gần giống màu accent hơn bình thường. Đánh đổi này đã được "
@@ -4354,6 +4450,15 @@ elif nav == "Hướng dẫn":
     with _guide_tabs[4]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(133, "Thêm chế độ tối (dark mode)", [
+            "Toàn bộ giao diện — nút, thẻ, thanh điều hướng, bảng số liệu, ô ghi chú, biểu đồ và bảng nhiệt "
+            "(Biểu đồ lịch, Giờ tập trung theo thứ, Thanh phân bố độ dài phiên) — giờ có phiên bản màu riêng "
+            "cho chế độ tối, tự chọn theo cài đặt hệ thống/menu ⋮ của Streamlit.",
+            "Dải màu teal của các bảng nhiệt tự **đảo chiều độ sáng** ở chế độ tối (nhạt→đậm thay vì "
+            "đậm→nhạt) để \"càng nhiều giờ càng nổi bật\" vẫn đúng trên nền tối, thay vì bị đảo ngược ý nghĩa.",
+            "Màu accent đang chọn vẫn giữ nguyên và tự đổi sắc độ cho hợp với nền tối/sáng.",
+            "Xem thêm giải thích ở mục **4. Giao diện** của tab Tổng quan trong Hướng dẫn.",
+        ])
         guide_update(132, "Thêm Báo cáo Năm, sửa so sánh kỳ dở dang, Tìm kiếm, nhắc sao lưu", [
             "**Báo cáo → Năm** (mục mới, giữa Tổng quan và Tháng) — bản tổng kết 1 năm cụ thể kiểu \"Year in "
             "Review\", gồm 4 mục: Tổng quan (kèm so sánh năm trước/trung bình), Biểu đồ lịch trọn năm, Đọc sách "
