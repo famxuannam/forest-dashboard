@@ -2473,16 +2473,21 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
-    /* Cùng ý căn giữa như trên, áp cho 2 thanh chọn sub-tab: "Chọn kỳ xem" (Báo cáo) và
-       Tổng quan/Chi tiết (Sách, Gundam). Khác nút nav chính (label đã ẩn), "Chọn kỳ xem" còn
-       hiện nhãn -> stButtonGroup ở đây bọc CẢ label lẫn hàng nút trên cùng 1 hàng ngang, nên
-       phải chuyển sang xếp dọc (label trên, hàng nút dưới) rồi mới căn giữa được từng phần. */
+    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) --
+       label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav ở trên. Đổi
+       thêm dáng nút từ pill sang tab gạch chân (giống Tổng quan/Chi tiết ở Sách/Gundam) cho gọn
+       và nhất quán, thay vì nền đặc teal như nav chính. */
     .st-key-bc_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] {
-        display: flex !important; flex-direction: column !important; align-items: center !important;
-        width: 100% !important;
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+    .st-key-bc_sub_picker button {
+        background: transparent !important; border: none !important; border-radius: 0 !important;
+        border-bottom: 2px solid transparent !important; box-shadow: none !important;
+        color: #6e6e73 !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
-    .st-key-bc_sub_picker [role="radiogroup"] { justify-content: center !important; flex-wrap: wrap !important; }
+    .st-key-bc_sub_picker button[kind="segmented_controlActive"] {
+        background: transparent !important; color: #00a3ad !important; font-weight: 600 !important;
+        border-bottom-color: #00a3ad !important; box-shadow: none !important;
+    }
     .st-key-rl_view_tabs [data-baseweb="tab-list"] { justify-content: center !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
@@ -2620,7 +2625,7 @@ NAV = {
     "Thống kê chung": ":material/bar_chart:",
     "Báo cáo": ":material/summarize:",
     "Nhật ký đọc sách": ":material/menu_book:",
-    "Gundam": ":material/smart_toy:",
+    "Gundam": ":material/shield:",
     "Chuẩn bị dữ liệu": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
@@ -2667,7 +2672,7 @@ st.query_params["nav"] = nav
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
 BAOCAO_SUBS = ["Tháng", "Tuần", "Ngày", "Dự án"]
 BAOCAO_SUB_ICONS_MD = {"Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
-                        "Ngày": ":material/today:", "Dự án": ":material/category:"}
+                        "Ngày": ":material/today:", "Dự án": ":material/work:"}
 if "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
     st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tháng"
@@ -2896,7 +2901,7 @@ elif nav == "Báo cáo":
     _sub_pick = st.segmented_control(
         "Chọn kỳ xem", BAOCAO_SUBS,
         format_func=lambda x: f"{BAOCAO_SUB_ICONS_MD[x]} {x}",
-        default=st.session_state["bc_sub"], key="bc_sub_picker")
+        default=st.session_state["bc_sub"], key="bc_sub_picker", label_visibility="collapsed")
     if _sub_pick and _sub_pick != st.session_state["bc_sub"]:
         st.session_state["bc_sub"] = _sub_pick
     bc_sub = st.session_state["bc_sub"]
