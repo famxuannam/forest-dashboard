@@ -2632,6 +2632,28 @@ st.markdown(
     [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
 
+    /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch nâng cao)
+       mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
+       đang chọn, khiến hộp trông lệch tông so với hộp chọn kỳ cạnh nó (period_stepper, dùng
+       st.selectbox, viền xám trung tính #d1d1d6/nền trắng mờ). Đồng bộ lại viền/nền theo đúng
+       kiểu selectbox, còn màu ngày đang chọn trong lịch bật lên đổi theo accent. Lịch bật lên
+       (data-baseweb="calendar") được BaseWeb mount ra ngoài container widget (portal ở cấp
+       body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
+       áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
+    div[data-testid="stDateInput"] [data-baseweb="input"] {
+        background: rgba(255,255,255,0.8) !important;
+        border: 1px solid #d1d1d6 !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+    }
+    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
+    }
+    [data-baseweb="calendar"] [role="gridcell"][aria-label^="Selected"]::after {
+        background: var(--accent) !important;
+    }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
