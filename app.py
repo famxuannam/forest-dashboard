@@ -12,7 +12,7 @@ import altair as alt
 import colorsys
 import re
 from itertools import groupby
-from html import escape as html_escape
+from html import escape as html_escape, unescape as html_unescape
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -88,6 +88,23 @@ def _note_is_empty(html):
         return True
     txt = re.sub(r"<[^>]+>", "", str(html)).replace("&nbsp;", " ").replace(" ", " ")
     return txt.strip() == ""
+
+
+def _note_plain_text(html_content):
+    """Text thuần từ ghi chú Quill: bỏ thẻ HTML + giải mã entity (&nbsp;, &amp;...) -- dùng để
+    tìm kiếm/trích đoạn, khác _note_is_empty() chỉ cần biết rỗng hay không nên chưa unescape."""
+    return re.sub(r"\s+", " ", html_unescape(re.sub(r"<[^>]+>", " ", str(html_content or "")))).strip()
+
+
+def _note_snippet(html_content, query, radius=60):
+    """Đoạn trích văn bản thuần quanh từ khớp đầu tiên (dùng cho trang Tìm kiếm); không khớp
+    hoặc không có query thì trả về 120 ký tự đầu."""
+    txt = _note_plain_text(html_content)
+    idx = txt.lower().find(query.lower()) if query else -1
+    if idx == -1:
+        return txt[:120] + ("…" if len(txt) > 120 else "")
+    start, end = max(0, idx - radius), min(len(txt), idx + len(query) + radius)
+    return ("…" if start > 0 else "") + txt[start:end] + ("…" if end < len(txt) else "")
 
 # --- CẤU HÌNH ---
 # Tên file dùng làm tên thành viên bên trong .zip Sao lưu/Khôi phục (mục "Quản lý hệ thống")
@@ -671,6 +688,7 @@ def prep_analysis_data():
     db['Ngày'] = db['Thời gian bắt đầu'].dt.date
     db['Tháng'] = db['Thời gian bắt đầu'].dt.strftime('%Y-%m')
     db['Tuần'] = db['Thời gian bắt đầu'].dt.strftime('%G-W%V') # Tuần ISO, bắt đầu Thứ Hai
+    db['Năm'] = db['Thời gian bắt đầu'].dt.strftime('%Y')
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
     
     db['Thứ'] = db['Thời gian bắt đầu'].dt.day_name().map(VN_DAYS)
@@ -910,6 +928,57 @@ def _delta_t(delta, label):
         return None
     c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
     return (f"{_fmt_delta(delta)} {label}", c)
+
+
+def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None):
+    """Baseline so sánh cho hero deltas (Tháng/Tuần/Năm dùng chung) -- (prev_metrics, avg_metrics),
+    mỗi cái None hoặc {hrs,trees,hrs_day,trees_day,min_sess}. avg_metrics = trung bình các kỳ
+    KHÁC kỳ đang chọn (kỳ liền trước vẫn nằm trong pool trung bình, không loại trừ -- đúng hành
+    vi Tháng/Tuần đã có từ trước). elapsed_mask: Series[bool] cùng index df, hoặc None -- khi
+    kỳ đang xem CHƯA kết thúc (vd đang xem tháng/tuần/năm hiện tại), truyền mask lọc theo đúng
+    phần đã trôi qua (vd "N ngày đầu tháng") áp dụng cho CẢ 2 baseline, để không so kỳ dở dang
+    với 1 kỳ đầy đủ (nếu không sẽ ra kiểu "-38h vs Tháng trước" dù mới qua 3/31 ngày, vô nghĩa).
+    None nghĩa là kỳ đã khép hẳn, so full-vs-full như hành vi gốc."""
+    d = df if elapsed_mask is None else df[elapsed_mask]
+
+    def _metrics(sub):
+        if sub.empty:
+            return None
+        hrs, trees = sub['Thời lượng (Phút)'].sum() / 60, len(sub)
+        days = sub['Ngày'].nunique() or 1
+        return {"hrs": hrs, "trees": trees, "hrs_day": hrs / days, "trees_day": trees / days,
+                "min_sess": (hrs * 60) / trees if trees else None}
+
+    prev_m = _metrics(d[d[period_col] == prev_key])
+    others = d[d[period_col] != selected_key]
+    if others[period_col].nunique() > 0:
+        g = others.groupby(period_col)
+        hrs_o, trees_o, days_o = g['Thời lượng (Phút)'].sum() / 60, g.size(), g['Ngày'].nunique()
+        avg_m = {"hrs": hrs_o.mean(), "trees": trees_o.mean(), "hrs_day": (hrs_o / days_o).mean(),
+                 "trees_day": (trees_o / days_o).mean(), "min_sess": ((hrs_o * 60) / trees_o).mean()}
+    else:
+        avg_m = None
+    return prev_m, avg_m
+
+
+def _clip_card(note):
+    """Thẻ nhỏ giải thích khi so sánh kỳ bị cắt vì kỳ đang xem còn dở dang -- cùng khuôn thẻ
+    "Cập nhật gần nhất" (glass-card ngang, icon nhỏ + nhãn xám hoa + nội dung), thay vì 1 dòng
+    st.caption() trần trụi lạc quẻ giữa các thẻ số liệu. Icon đồng hồ cát (khác icon lịch sử của
+    thẻ "Cập nhật gần nhất") vì ý nghĩa gần với "đang tính" hơn."""
+    st.markdown(
+        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+        f"align-items:center; flex-wrap:wrap; gap:6px 10px;'>"
+        f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;"
+        f"letter-spacing:0.5px;white-space:nowrap;'>"
+        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' "
+        f"fill='#86868b' style='vertical-align:-2px;margin-right:5px;'>"
+        f"<path d='M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 15.5V20H8v-2.5l4-4 4 4zM8 6.5V4h8v2.5l-4 4-4-4z'/>"
+        f"</svg>Kỳ chưa kết thúc</span>"
+        f"<span style='font-size:14px;color:#1d1d1f;'>{note}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:20px;"):
@@ -1910,6 +1979,70 @@ def render_notes_journal(period_key, kind):
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
+def render_search():
+    """Tìm kiếm theo từ khoá trên CẢ 3 nguồn: ghi chú, lịch (tiêu đề appointment), sách/Gundam
+    (tên cuốn/series + tiêu đề phần) -- lọc trực tiếp trong Python trên text thuần, khối lượng
+    dữ liệu nhỏ (vài trăm dòng mỗi nguồn cho vài năm dùng app) nên không cần full-text search
+    phía Supabase. Kết quả gộp theo NGÀY (đúng 1 dòng cho mỗi ngày có ít nhất 1 nguồn khớp),
+    hiện ĐỦ CẢ 3 nguồn của ngày đó (không chỉ riêng phần khớp) để giữ nguyên ngữ cảnh cả ngày --
+    đúng khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú đã dùng ở Nhật ký."""
+    st.markdown("## Tìm kiếm")
+    q = st.text_input("Từ khoá", placeholder="Nhập từ khoá cần tìm trong ghi chú, lịch, sách/Gundam…", key="search_q")
+    if not q or len(q.strip()) < 2:
+        st.caption("Nhập ít nhất 2 ký tự để tìm.")
+        return
+    qq = q.strip()
+    pat = re.escape(qq)
+
+    nd = load_notes()
+    if not nd.empty:
+        nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce'),
+                        _plain=nd['Ghi chú'].map(_note_plain_text)).dropna(subset=['_d'])
+    wc = load_work_calendar()
+    if not wc.empty:
+        wc = wc.assign(_d=wc['Thời gian bắt đầu'].dt.normalize())
+    rl = load_reading_log()
+    if not rl.empty:
+        rl = rl.assign(_d=rl['Ngày hoàn thành'].dt.normalize())
+
+    note_hits = set(nd[nd['_plain'].str.contains(pat, case=False, na=False)]['_d']) if not nd.empty else set()
+    cal_hits = set(wc[wc['Tiêu đề'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not wc.empty else set()
+    rl_hits = set(rl[rl['Tiêu đề phần'].astype(str).str.contains(pat, case=False, na=False)
+                     | rl['Cuốn sách'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not rl.empty else set()
+
+    hit_days = sorted(note_hits | cal_hits | rl_hits, reverse=True)
+    if not hit_days:
+        st.info(f"Không tìm thấy kết quả nào chứa \"{q}\".")
+        return
+    st.caption(f"Tìm thấy {len(hit_days)} ngày khớp.")
+
+    rows_html = ''
+    for d in hit_days:
+        cal_html = ''
+        day_events = wc[wc['_d'] == d].sort_values('Thời gian bắt đầu') if not wc.empty else wc
+        if not day_events.empty:
+            chips = ''.join(
+                f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+                f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+                for _, r in day_events.iterrows())
+            cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>"
+        read_html = _book_chips_html(rl[rl['_d'] == d]) if not rl.empty and d in set(rl['_d']) else ''
+        note_html = ''
+        if not nd.empty and d in set(nd['_d']):
+            note_html = f"<div class='note-html'>{html_escape(_note_snippet(nd[nd['_d'] == d].iloc[0]['Ghi chú'], qq))}</div>"
+        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
+        rows_html += (
+            "<div class='jrow'>"
+            f"<a class='jdate-link' href='{_href}' target='_self'>"
+            f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
+            f"<div class='jdm'>{d:%d/%m/%Y}</div></div></a>"
+            f"<div>{cal_html}{read_html}{note_html}</div>"
+            "</div>"
+        )
+    with st.container(border=True, key="jcard_search"):
+        st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
+
+
 def _book_chips_html(day_g):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
@@ -2842,6 +2975,7 @@ NAV = {
     "Báo cáo": ":material/summarize:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/shield:",
+    "Tìm kiếm": ":material/search:",
     "Tuỳ biến": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
@@ -2851,6 +2985,7 @@ NAV_SHORT = {
     "Báo cáo": "Báo cáo",
     "Nhật ký đọc sách": "Sách",
     "Gundam": "Gundam",
+    "Tìm kiếm": "Tìm kiếm",
     "Tuỳ biến": "Tuỳ biến",
     "Hướng dẫn": "Trợ giúp",
 }
@@ -2886,9 +3021,10 @@ st.query_params["nav"] = nav
 
 # Sub-page của "Báo cáo" (Tổng quan/Tháng/Tuần/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
-BAOCAO_SUBS = ["Tổng quan", "Tháng", "Tuần", "Dự án"]
-BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Tháng": ":material/calendar_month:",
-                        "Tuần": ":material/calendar_view_week:", "Dự án": ":material/work:"}
+BAOCAO_SUBS = ["Tổng quan", "Năm", "Tháng", "Tuần", "Dự án"]
+BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Năm": ":material/celebration:",
+                        "Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
+                        "Dự án": ":material/work:"}
 if "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
     st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
@@ -3130,34 +3266,23 @@ elif nav == "Báo cáo":
             months = sorted(df['Tháng'].unique())
             selected_month = period_stepper(months, key="month", fmt=fmt_month, current=date.today().strftime('%Y-%m'))
             df_m = df[df['Tháng'] == selected_month]
-        
-            df_other_months = df[df['Tháng'] != selected_month]
-            if df_other_months['Tháng'].nunique() > 0:
-                g_om = df_other_months.groupby('Tháng')
-                hrs_om = g_om['Thời lượng (Phút)'].sum() / 60
-                trees_om = g_om.size()
-                days_om = g_om['Ngày'].nunique()
-                avg_hrs_month = hrs_om.mean()
-                avg_trees_month = trees_om.mean()
-                avg_hrs_day_month = (hrs_om / days_om).mean()
-                avg_trees_day_month = (trees_om / days_om).mean()
-                avg_min_sess_month = ((hrs_om * 60) / trees_om).mean()
-            else:
-                avg_hrs_month = avg_trees_month = avg_hrs_day_month = avg_trees_day_month = avg_min_sess_month = None
 
             y, m = map(int, selected_month.split('-'))
             prev_month_key = f"{y - 1:04d}-12" if m == 1 else f"{y:04d}-{m - 1:02d}"
-            df_prev_month = df[df['Tháng'] == prev_month_key]
-            if not df_prev_month.empty:
-                prev_hrs_month = df_prev_month['Thời lượng (Phút)'].sum() / 60
-                prev_trees_month = len(df_prev_month)
-                prev_days_month = df_prev_month['Ngày'].nunique() or 1
-                prev_hrs_day_month = prev_hrs_month / prev_days_month
-                prev_trees_day_month = prev_trees_month / prev_days_month
-                prev_min_sess_month = (prev_hrs_month * 60) / prev_trees_month if prev_trees_month else None
-            else:
-                prev_hrs_month = prev_trees_month = prev_hrs_day_month = prev_trees_day_month = prev_min_sess_month = None
-        
+
+            # Kỳ đang xem CHƯA kết thúc (đang là tháng hiện tại) -> cắt cả 2 baseline so sánh
+            # theo đúng phần đã trôi qua (vd "3 ngày đầu"), tránh so tổng dở dang với 1 tháng
+            # đầy đủ (nếu không sẽ ra kiểu "-38h vs Tháng trước" dù mới qua 3/31 ngày, vô nghĩa).
+            # Nhãn delta giữ NGẮN ("vs Tháng trước"/"vs Trung bình") dù có cắt hay không -- số
+            # ngày cắt chỉ nói 1 lần qua st.caption() bên dưới, tránh nhắc lại 5 lần (1 lần/hero
+            # item) làm chữ dài, tự xuống dòng lem nhem trong cột hẹp.
+            elapsed_mask_m, lbl_prev_m, lbl_avg_m, _clip_note_m = None, "vs Tháng trước", "vs Trung bình", None
+            if selected_month == date.today().strftime('%Y-%m'):
+                _d = date.today().day
+                elapsed_mask_m = df['Thời gian bắt đầu'].dt.day <= _d
+                _clip_note_m = f"So sánh chỉ tính {_d} ngày đầu của Tháng trước/các tháng khác cho công bằng."
+            prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
+
             if not df_m.empty:
                 with st.expander("1. Tổng quan", expanded=True):
                     curr_hrs = df_m['Thời lượng (Phút)'].sum() / 60
@@ -3166,27 +3291,27 @@ elif nav == "Báo cáo":
 
                     curr_hrs_day = curr_hrs / num_days_m
                     curr_trees_day = curr_trees / num_days_m
-
-                    delta1_hr = (curr_hrs - prev_hrs_month) if prev_hrs_month is not None else None
-                    delta2_hr = (curr_hrs - avg_hrs_month) if avg_hrs_month is not None else None
-                    delta1_hrd = (curr_hrs_day - prev_hrs_day_month) if prev_hrs_day_month is not None else None
-                    delta2_hrd = (curr_hrs_day - avg_hrs_day_month) if avg_hrs_day_month is not None else None
-
-                    delta1_tr = (curr_trees - prev_trees_month) if prev_trees_month is not None else None
-                    delta2_tr = (curr_trees - avg_trees_month) if avg_trees_month is not None else None
-                    delta1_trd = (curr_trees_day - prev_trees_day_month) if prev_trees_day_month is not None else None
-                    delta2_trd = (curr_trees_day - avg_trees_day_month) if avg_trees_day_month is not None else None
-
                     curr_min_sess = _avg_session_min(df_m)
-                    delta1_ms = (curr_min_sess - prev_min_sess_month) if prev_min_sess_month is not None else None
-                    delta2_ms = (curr_min_sess - avg_min_sess_month) if avg_min_sess_month is not None else None
 
+                    def _hd_m(cur_v, key):
+                        d1 = (cur_v - prev_m[key]) if prev_m and prev_m.get(key) is not None else None
+                        d2 = (cur_v - avg_m[key]) if avg_m and avg_m.get(key) is not None else None
+                        return d1, d2
+
+                    delta1_hr, delta2_hr = _hd_m(curr_hrs, "hrs")
+                    delta1_hrd, delta2_hrd = _hd_m(curr_hrs_day, "hrs_day")
+                    delta1_tr, delta2_tr = _hd_m(curr_trees, "trees")
+                    delta1_trd, delta2_trd = _hd_m(curr_trees_day, "trees_day")
+                    delta1_ms, delta2_ms = _hd_m(curr_min_sess, "min_sess")
+
+                    if _clip_note_m:
+                        _clip_card(_clip_note_m)
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, "h vs Tháng trước"), _delta_t(delta2_hr, "h vs Trung bình")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, "h vs Tháng trước"), _delta_t(delta2_hrd, "h vs Trung bình")] if d]},
-                        {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, "cây vs Tháng trước"), _delta_t(delta2_tr, "cây vs Trung bình")] if d]},
-                        {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, "cây vs Tháng trước"), _delta_t(delta2_trd, "cây vs Trung bình")] if d]},
-                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, "phút vs Tháng trước"), _delta_t(delta2_ms, "phút vs Trung bình")] if d]},
+                        {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, f"h {lbl_prev_m}"), _delta_t(delta2_hr, f"h {lbl_avg_m}")] if d]},
+                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, f"h {lbl_prev_m}"), _delta_t(delta2_hrd, f"h {lbl_avg_m}")] if d]},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, f"cây {lbl_prev_m}"), _delta_t(delta2_tr, f"cây {lbl_avg_m}")] if d]},
+                        {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, f"cây {lbl_prev_m}"), _delta_t(delta2_trd, f"cây {lbl_avg_m}")] if d]},
+                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, f"phút {lbl_prev_m}"), _delta_t(delta2_ms, f"phút {lbl_avg_m}")] if d]},
                     ])
                     render_session_bar(df_m)
 
@@ -3213,34 +3338,20 @@ elif nav == "Báo cáo":
             weeks = sorted(df['Tuần'].unique())
             selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=date.today().strftime('%G-W%V'))
             df_w = df[df['Tuần'] == selected_week]
-        
-            df_other_weeks = df[df['Tuần'] != selected_week]
-            if df_other_weeks['Tuần'].nunique() > 0:
-                g_ow = df_other_weeks.groupby('Tuần')
-                hrs_ow = g_ow['Thời lượng (Phút)'].sum() / 60
-                trees_ow = g_ow.size()
-                days_ow = g_ow['Ngày'].nunique()
-                avg_hrs_week = hrs_ow.mean()
-                avg_trees_week = trees_ow.mean()
-                avg_hrs_day_week = (hrs_ow / days_ow).mean()
-                avg_trees_day_week = (trees_ow / days_ow).mean()
-                avg_min_sess_week = ((hrs_ow * 60) / trees_ow).mean()
-            else:
-                avg_hrs_week = avg_trees_week = avg_hrs_day_week = avg_trees_day_week = avg_min_sess_week = None
 
             week_anchor = df_w['Thời gian bắt đầu'].min()
             prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
-            df_prev_week = df[df['Tuần'] == prev_week_key]
-            if not df_prev_week.empty:
-                prev_hrs_week = df_prev_week['Thời lượng (Phút)'].sum() / 60
-                prev_trees_week = len(df_prev_week)
-                prev_days_week = df_prev_week['Ngày'].nunique() or 1
-                prev_hrs_day_week = prev_hrs_week / prev_days_week
-                prev_trees_day_week = prev_trees_week / prev_days_week
-                prev_min_sess_week = (prev_hrs_week * 60) / prev_trees_week if prev_trees_week else None
-            else:
-                prev_hrs_week = prev_trees_week = prev_hrs_day_week = prev_trees_day_week = prev_min_sess_week = None
-        
+
+            # Kỳ đang xem CHƯA kết thúc (đang là tuần hiện tại) -> cắt cả 2 baseline so sánh
+            # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng.
+            # Nhãn delta giữ NGẮN (xem chú thích tương ứng ở nhánh Tháng).
+            elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = None, "vs Tuần trước", "vs Trung bình", None
+            if selected_week == date.today().strftime('%G-W%V'):
+                _dow = date.today().isoweekday()
+                elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
+                _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
+            prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
+
             if not df_w.empty:
                 with st.expander("1. Tổng quan", expanded=True):
                     curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
@@ -3249,27 +3360,27 @@ elif nav == "Báo cáo":
 
                     curr_hrs_day_w = curr_hrs_w / num_days_w
                     curr_trees_day_w = curr_trees_w / num_days_w
-
-                    d1_hr_w = (curr_hrs_w - prev_hrs_week) if prev_hrs_week is not None else None
-                    d2_hr_w = (curr_hrs_w - avg_hrs_week) if avg_hrs_week is not None else None
-                    d1_hrd_w = (curr_hrs_day_w - prev_hrs_day_week) if prev_hrs_day_week is not None else None
-                    d2_hrd_w = (curr_hrs_day_w - avg_hrs_day_week) if avg_hrs_day_week is not None else None
-
-                    d1_tr_w = (curr_trees_w - prev_trees_week) if prev_trees_week is not None else None
-                    d2_tr_w = (curr_trees_w - avg_trees_week) if avg_trees_week is not None else None
-                    d1_trd_w = (curr_trees_day_w - prev_trees_day_week) if prev_trees_day_week is not None else None
-                    d2_trd_w = (curr_trees_day_w - avg_trees_day_week) if avg_trees_day_week is not None else None
-
                     curr_min_sess_w = _avg_session_min(df_w)
-                    d1_ms_w = (curr_min_sess_w - prev_min_sess_week) if prev_min_sess_week is not None else None
-                    d2_ms_w = (curr_min_sess_w - avg_min_sess_week) if avg_min_sess_week is not None else None
 
+                    def _hd_w(cur_v, key):
+                        d1 = (cur_v - prev_w[key]) if prev_w and prev_w.get(key) is not None else None
+                        d2 = (cur_v - avg_w[key]) if avg_w and avg_w.get(key) is not None else None
+                        return d1, d2
+
+                    d1_hr_w, d2_hr_w = _hd_w(curr_hrs_w, "hrs")
+                    d1_hrd_w, d2_hrd_w = _hd_w(curr_hrs_day_w, "hrs_day")
+                    d1_tr_w, d2_tr_w = _hd_w(curr_trees_w, "trees")
+                    d1_trd_w, d2_trd_w = _hd_w(curr_trees_day_w, "trees_day")
+                    d1_ms_w, d2_ms_w = _hd_w(curr_min_sess_w, "min_sess")
+
+                    if _clip_note_w:
+                        _clip_card(_clip_note_w)
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, "h vs Tuần trước"), _delta_t(d2_hr_w, "h vs Trung bình")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, "h vs Tuần trước"), _delta_t(d2_hrd_w, "h vs Trung bình")] if d]},
-                        {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, "cây vs Tuần trước"), _delta_t(d2_tr_w, "cây vs Trung bình")] if d]},
-                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, "cây vs Tuần trước"), _delta_t(d2_trd_w, "cây vs Trung bình")] if d]},
-                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, "phút vs Tuần trước"), _delta_t(d2_ms_w, "phút vs Trung bình")] if d]},
+                        {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
+                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
+                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
+                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
                     ])
                     render_session_bar(df_w)
 
@@ -3395,6 +3506,82 @@ elif nav == "Báo cáo":
                     render_session_histogram(df_g)
                 with st.expander("5. Bảng số liệu", expanded=False):
                     frag_period_table(df_g, "view_grp")
+    elif bc_sub == "Năm":
+        if not df.empty:
+            years = sorted(df['Năm'].unique())
+            selected_year = period_stepper(years, key="year", fmt=lambda y: f"Năm {y}", current=str(date.today().year))
+            df_y = df[df['Năm'] == selected_year]
+            prev_year_key = str(int(selected_year) - 1)
+
+            # Kỳ đang xem CHƯA kết thúc (đang là năm hiện tại) -> cắt cả 2 baseline so sánh
+            # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần. Nhãn delta giữ
+            # NGẮN (xem chú thích tương ứng ở nhánh Tháng).
+            elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = None, "vs Năm trước", "vs Trung bình", None
+            if selected_year == str(date.today().year):
+                _doy = date.today().timetuple().tm_yday
+                elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
+                _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
+            prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
+
+            if not df_y.empty:
+                with st.expander("1. Tổng quan", expanded=True):
+                    curr_hrs_y = df_y['Thời lượng (Phút)'].sum() / 60
+                    curr_trees_y = len(df_y)
+                    num_days_y = df_y['Ngày'].nunique() or 1
+                    curr_hrs_day_y = curr_hrs_y / num_days_y
+                    curr_trees_day_y = curr_trees_y / num_days_y
+                    curr_min_sess_y = _avg_session_min(df_y)
+
+                    def _hd_y(cur_v, key):
+                        d1 = (cur_v - prev_y[key]) if prev_y and prev_y.get(key) is not None else None
+                        d2 = (cur_v - avg_y[key]) if avg_y and avg_y.get(key) is not None else None
+                        return d1, d2
+
+                    d1_hr_y, d2_hr_y = _hd_y(curr_hrs_y, "hrs")
+                    d1_hrd_y, d2_hrd_y = _hd_y(curr_hrs_day_y, "hrs_day")
+                    d1_tr_y, d2_tr_y = _hd_y(curr_trees_y, "trees")
+                    d1_trd_y, d2_trd_y = _hd_y(curr_trees_day_y, "trees_day")
+                    d1_ms_y, d2_ms_y = _hd_y(curr_min_sess_y, "min_sess")
+
+                    if _clip_note_y:
+                        _clip_card(_clip_note_y)
+                    render_stat_panel(hero_items=[
+                        {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
+                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
+                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
+                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
+                    ])
+                    render_session_bar(df_y)
+
+                    st.write("")
+                    c_top1_y, c_top2_y = st.columns(2)
+                    with c_top1_y: render_top_3(df_y, 'Danh mục', 'Top 3 Danh mục Năm')
+                    with c_top2_y: render_top_3(df_y, 'Dự án', 'Top 3 Dự án Năm')
+
+                with st.expander("2. Biểu đồ lịch", expanded=False):
+                    # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
+                    # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
+                    # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
+                    # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
+                    render_calendar_grid(df_y, df_y)
+
+                with st.expander("3. Đọc sách & Gundam trong năm", expanded=False):
+                    # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
+                    # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
+                    # phức tạp để tách ra cho 1 mục tổng kết năm.
+                    rl_y = load_reading_log()
+                    rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
+                    if rl_y.empty:
+                        st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
+                    else:
+                        render_stat_panel(hero_items=[
+                            {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
+                            {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
+                        ])
+
+                with st.expander("4. Bảng số liệu", expanded=False):
+                    render_detail_table(df_y)
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
     # nếu người dùng chỉ có dữ liệu đọc sách từ Reminders, chưa từng tải CSV Forest (an toàn
@@ -3437,6 +3624,8 @@ elif nav == "Gundam":
                     if v is not None and pd.notna(v)]
         latest_overall_g = max(_cands_g) if _cands_g else None
         render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS)
+elif nav == "Tìm kiếm":
+    render_search()
 # ==========================================
 # TAB TUỲ BIẾN
 # ==========================================
@@ -3688,6 +3877,15 @@ elif nav == "Tuỳ biến":
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
+            # Nhắc sao lưu: chỉ hiện ngay tại đây (không phải banner toàn app) -- đúng nơi và
+            # lúc người dùng hành động được ngay. Chưa từng sao lưu, hoặc lần gần nhất quá 30
+            # ngày, thì nhắc nhẹ.
+            _last_bk = _cached_settings().get("last_backup_at")
+            _days_since_bk = (date.today() - date.fromisoformat(_last_bk)).days if _last_bk else None
+            if _days_since_bk is None:
+                st.caption("Chưa sao lưu lần nào.")
+            elif _days_since_bk > 30:
+                st.caption(f"Lần sao lưu gần nhất: {_days_since_bk} ngày trước. Nên sao lưu định kỳ.")
             db_now = load_db()
             if not db_now.empty:
                 _buf = io.BytesIO()
@@ -3701,7 +3899,8 @@ elif nav == "Tuỳ biến":
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
-                                   f"forest_backup_{_today}.zip", "application/zip")
+                                   f"forest_backup_{_today}.zip", "application/zip",
+                                   on_click=lambda: save_setting("last_backup_at", _today))
             else:
                 st.caption("Chưa có dữ liệu để sao lưu.")
         with c2:
@@ -3806,11 +4005,12 @@ elif nav == "Hướng dẫn":
                 "qua Apple Reminders), rồi **nhìn lại** — bạn tập trung nhiều nhất vào khung giờ nào, thói quen "
                 "đang mạnh lên hay chùng xuống, một cuốn sách mất bao lâu để đọc xong. Toàn bộ app mang tính "
                 "**hồi cứu (retrospective)**, không phải một bộ đếm ngược hay thanh tiến độ.\n\n"
-                "Thanh điều hướng trên cùng có 6 mục:\n"
+                "Thanh điều hướng trên cùng có 7 mục:\n"
                 "- **Hôm nay** — trang mặc định khi mở app. Đúng như tên gọi: chỉ 1 ngày, thường là ngày bạn "
                 "đang xem đầu tiên mỗi lần mở app.\n"
-                "- **Báo cáo** — nhìn theo Tổng quan (toàn bộ lịch sử), Tháng, Tuần, hoặc theo Dự án.\n"
+                "- **Báo cáo** — nhìn theo Tổng quan (toàn bộ lịch sử), Năm, Tháng, Tuần, hoặc theo Dự án.\n"
                 "- **Sách** / **Gundam** — nhật ký đọc sách và xem Gundam, ghép từ 2 nguồn dữ liệu khác nhau.\n"
+                "- **Tìm kiếm** — tra lại ghi chú/lịch/sách·Gundam cũ theo từ khoá.\n"
                 "- **Tuỳ biến** — nơi nạp dữ liệu, phân loại Dự án, đổi màu accent, sao lưu/khôi phục.\n"
                 "- **Hướng dẫn** — chính là trang bạn đang xem.\n\n"
                 "Nhiều biểu đồ/bảng ở đây (\"Bảng số liệu tổng quan\", \"Biểu đồ lịch\", \"Bảng số liệu\"...) "
@@ -3945,10 +4145,23 @@ elif nav == "Hướng dẫn":
             where="Hôm nay → Ngày này năm trước")
 
         guide_item(
-            "baocao_kyxem.png", "Chọn kỳ xem — 4 lát cắt của Báo cáo",
-            "Thanh gạch chân ở đầu trang Báo cáo, chọn 1 trong 4 lát cắt:\n\n"
+            "search.png", "Tìm kiếm",
+            "Trang riêng trên thanh điều hướng, tra một từ khoá cùng lúc trên **cả 3 nguồn**: ghi chú, tiêu đề "
+            "lịch hẹn Work, và tên/phần sách·Gundam đã đọc·xem. Lọc trực tiếp trên text thuần trong trình duyệt "
+            "(không cần dịch vụ tìm kiếm riêng) nên gõ từ khoá xong bấm Enter là ra kết quả ngay.\n\n"
+            "Kết quả gộp theo **ngày** — mỗi ngày khớp hiện 1 dòng, nhưng hiện ĐỦ CẢ 3 nguồn của đúng ngày đó "
+            "(không chỉ riêng phần vừa khớp), để không mất ngữ cảnh: tìm \"họp nhóm\" ra đúng ngày có lịch hẹn "
+            "đó, dòng kết quả cũng hiện luôn ghi chú và sách đã đọc hôm đó nếu có. Bấm vào Thứ/ngày để nhảy "
+            "thẳng sang Hôm nay của đúng ngày đó, xem đầy đủ chi tiết.",
+            tip="Cần gõ ít nhất 2 ký tự mới bắt đầu tìm, tránh lọc ra gần như cả lịch sử ghi chú chỉ với 1 chữ.",
+            where="Tìm kiếm")
+
+        guide_item(
+            "baocao_kyxem.png", "Chọn kỳ xem — 5 lát cắt của Báo cáo",
+            "Thanh gạch chân ở đầu trang Báo cáo, chọn 1 trong 5 lát cắt:\n\n"
             "- **Tổng quan** — toàn bộ lịch sử đã nạp, không lọc theo kỳ nào; lát cắt mặc định khi vào trang, vì "
             "đây là bức tranh rộng nhất, hợp để bắt đầu.\n"
+            "- **Năm** — tổng kết 1 năm cụ thể kiểu \"Year in Review\", xem thêm ở mục riêng ngay bên dưới.\n"
             "- **Tháng** / **Tuần** — 2 lát cắt dùng chung đúng 1 cấu trúc 8 mục đánh số (chỉ khác đơn vị thời "
             "gian nhóm theo), có thêm bộ chọn kỳ cụ thể (tháng nào/tuần nào) và thẻ Nhật ký liệt kê từng ngày "
             "trong kỳ đó.\n"
@@ -3956,8 +4169,28 @@ elif nav == "Hướng dẫn":
             "riêng 1 việc thay vì cả bức tranh chung.\n\n"
             "Việc Tháng và Tuần dùng chung 1 khuôn 8 mục không phải trùng lặp code cho vui — đây là thiết kế "
             "\"trung lập theo kỳ\" (period-agnostic): cùng 1 bộ biểu đồ áp được cho bất kỳ độ dài kỳ nào, không "
-            "cần thiết kế riêng cho từng đơn vị thời gian.",
+            "cần thiết kế riêng cho từng đơn vị thời gian.\n\n"
+            "**Mục \"1. Tổng quan\" của Năm/Tháng/Tuần đều có 2 dòng so sánh nhỏ dưới mỗi số** — \"vs [Năm/"
+            "Tháng/Tuần] trước\" (đúng kỳ liền kề) và \"vs Trung bình\" (trung bình mọi kỳ khác, không tính kỳ "
+            "đang xem). Nếu kỳ đang xem là kỳ **hiện tại và chưa kết thúc** (vd mới qua 3 ngày đầu tháng), app "
+            "tự động cắt CẢ 2 baseline so sánh xuống đúng cùng số ngày đã trôi qua — 1 dòng caption nhỏ phía "
+            "trên bảng số liệu sẽ nói rõ khi nào việc cắt này đang diễn ra. Không có bước cắt này, so tổng 3 "
+            "ngày với tổng cả tháng trước sẽ luôn ra số âm rất lớn, trông như sụt giảm nghiêm trọng dù thực ra "
+            "chỉ vì tháng chưa đi hết.",
             where="Báo cáo")
+
+        guide_item(
+            "nam.png", "Báo cáo → Năm",
+            "Bản tổng kết 1 năm cụ thể, cố ý gọn hơn hẳn Tháng/Tuần (chỉ 4 mục thay vì 8) vì đây là trang xem "
+            "\"để có cảm giác tổng thể\" chứ không cần đào sâu từng biểu đồ:\n\n"
+            "1. **Tổng quan** — 5 số hero (Tổng thời gian, Thời gian/ngày, Số cây, Số cây/ngày, Thời gian/phiên) "
+            "kèm so sánh với năm trước/trung bình các năm khác, cộng Top 3 Danh mục và Top 3 Dự án trong năm.\n"
+            "2. **Biểu đồ lịch** — lưới nhiệt trọn năm đang chọn, không kéo dài sang năm khác (khác các trang "
+            "Báo cáo khác luôn hiện lưới tới tận hôm nay).\n"
+            "3. **Đọc sách & Gundam trong năm** — đếm nhanh số phần đã đọc/xem và số cuốn·series có hoạt động "
+            "trong năm, không đi sâu phân loại \"Đã xong/Đang đọc\" (xem chi tiết đầy đủ ở tab Sách/Gundam).\n"
+            "4. **Bảng số liệu** — bảng chi tiết theo Danh mục/Dự án của riêng năm đó.",
+            where="Báo cáo → Năm")
 
         guide_item(
             "pie.png", "Phân bổ thời gian",
@@ -4104,13 +4337,15 @@ elif nav == "Hướng dẫn":
             "prep_backup.png", "5. Quản lý hệ thống",
             "3 thao tác trên toàn bộ dữ liệu:\n\n"
             "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, lịch, sách/Gundam, cài đặt màu) thành "
-            "1 file .zip, tên tự kèm ngày giờ.\n"
+            "1 file .zip, tên tự kèm ngày giờ. App tự nhớ **ngày sao lưu gần nhất** (bảng `settings`) — nếu chưa "
+            "từng sao lưu, hoặc lần gần nhất đã quá 30 ngày, 1 dòng nhắc nhỏ hiện ngay phía trên nút này.\n"
             "- **Khôi phục** — tải 1 file .zip đã sao lưu để phục hồi đúng nguyên trạng tại thời điểm đó, dùng "
             "khi chuyển máy/trình duyệt hoặc muốn quay lại 1 mốc dữ liệu cũ.\n"
             "- **Làm mới** — xoá sạch toàn bộ dữ liệu để bắt đầu lại, bắt buộc tick ô xác nhận trước khi bấm vì "
             "thao tác không thể hoàn tác.",
             tip="Dữ liệu đã lưu bền vững trên Supabase (không mất khi khởi động lại/redeploy app), nhưng vẫn nên "
-                "tải bản sao lưu định kỳ (vd mỗi lần vừa nạp dữ liệu Forest mới) làm lớp an toàn thứ hai.",
+                "tải bản sao lưu định kỳ làm lớp an toàn thứ hai — dòng nhắc 30 ngày ở trên chính là để nhớ việc "
+                "này, không cần tự đặt lịch riêng.",
             where="Tuỳ biến → 5. Quản lý hệ thống")
 
     # ==========================================
@@ -4119,6 +4354,19 @@ elif nav == "Hướng dẫn":
     with _guide_tabs[4]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(132, "Thêm Báo cáo Năm, sửa so sánh kỳ dở dang, Tìm kiếm, nhắc sao lưu", [
+            "**Báo cáo → Năm** (mục mới, giữa Tổng quan và Tháng) — bản tổng kết 1 năm cụ thể kiểu \"Year in "
+            "Review\", gồm 4 mục: Tổng quan (kèm so sánh năm trước/trung bình), Biểu đồ lịch trọn năm, Đọc sách "
+            "& Gundam trong năm, Bảng số liệu.",
+            "**Sửa lỗi so sánh kỳ dở dang** — mục \"1. Tổng quan\" của Năm/Tháng/Tuần trước đây so tổng của kỳ "
+            "đang xem (có thể mới qua vài ngày) với TOÀN BỘ kỳ trước, ra những con số âm rất lớn và gây hiểu "
+            "lầm. Giờ khi kỳ đang xem là kỳ hiện tại còn dở dang, cả 2 baseline so sánh tự cắt theo đúng phần "
+            "đã trôi qua để so sánh công bằng, kèm 1 dòng caption nhỏ giải thích khi việc cắt này đang diễn ra.",
+            "**Tìm kiếm** (mục mới trên thanh điều hướng) — tra từ khoá cùng lúc trên ghi chú, tiêu đề lịch hẹn "
+            "Work, và tên/phần sách·Gundam đã đọc·xem, gộp kết quả theo ngày kèm đủ ngữ cảnh.",
+            "**Nhắc sao lưu** — Tuỳ biến → Quản lý hệ thống tự nhớ ngày sao lưu gần nhất, nhắc nhẹ khi chưa từng "
+            "sao lưu hoặc đã quá 30 ngày.",
+        ])
         guide_update(126, "Mở rộng bảng màu accent lên 14 màu, hiện tên màu trực tiếp trên nút", [
             "Mục \"1. Giao diện\" chuyển lên **đầu tiên** trong tab Tuỳ biến (trước cả Dữ liệu đầu vào), bỏ "
             "dòng chú thích thừa phía dưới bảng màu.",
