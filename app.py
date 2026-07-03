@@ -961,6 +961,26 @@ def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None
     return prev_m, avg_m
 
 
+def _clip_card(note):
+    """Thẻ nhỏ giải thích khi so sánh kỳ bị cắt vì kỳ đang xem còn dở dang -- cùng khuôn thẻ
+    "Cập nhật gần nhất" (glass-card ngang, icon nhỏ + nhãn xám hoa + nội dung), thay vì 1 dòng
+    st.caption() trần trụi lạc quẻ giữa các thẻ số liệu. Icon đồng hồ cát (khác icon lịch sử của
+    thẻ "Cập nhật gần nhất") vì ý nghĩa gần với "đang tính" hơn."""
+    st.markdown(
+        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+        f"align-items:center; flex-wrap:wrap; gap:6px 10px;'>"
+        f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;"
+        f"letter-spacing:0.5px;white-space:nowrap;'>"
+        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' "
+        f"fill='#86868b' style='vertical-align:-2px;margin-right:5px;'>"
+        f"<path d='M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 15.5V20H8v-2.5l4-4 4 4zM8 6.5V4h8v2.5l-4 4-4-4z'/>"
+        f"</svg>Kỳ chưa kết thúc</span>"
+        f"<span style='font-size:14px;color:#1d1d1f;'>{note}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:20px;"):
     """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
 
@@ -3260,7 +3280,7 @@ elif nav == "Báo cáo":
             if selected_month == date.today().strftime('%Y-%m'):
                 _d = date.today().day
                 elapsed_mask_m = df['Thời gian bắt đầu'].dt.day <= _d
-                _clip_note_m = f"Tháng này chưa kết thúc -- so sánh chỉ tính {_d} ngày đầu của Tháng trước/các tháng khác cho công bằng."
+                _clip_note_m = f"So sánh chỉ tính {_d} ngày đầu của Tháng trước/các tháng khác cho công bằng."
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
 
             if not df_m.empty:
@@ -3285,7 +3305,7 @@ elif nav == "Báo cáo":
                     delta1_ms, delta2_ms = _hd_m(curr_min_sess, "min_sess")
 
                     if _clip_note_m:
-                        st.caption(_clip_note_m)
+                        _clip_card(_clip_note_m)
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, f"h {lbl_prev_m}"), _delta_t(delta2_hr, f"h {lbl_avg_m}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, f"h {lbl_prev_m}"), _delta_t(delta2_hrd, f"h {lbl_avg_m}")] if d]},
@@ -3329,7 +3349,7 @@ elif nav == "Báo cáo":
             if selected_week == date.today().strftime('%G-W%V'):
                 _dow = date.today().isoweekday()
                 elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
-                _clip_note_w = f"Tuần này chưa kết thúc -- so sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
+                _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
@@ -3354,7 +3374,7 @@ elif nav == "Báo cáo":
                     d1_ms_w, d2_ms_w = _hd_w(curr_min_sess_w, "min_sess")
 
                     if _clip_note_w:
-                        st.caption(_clip_note_w)
+                        _clip_card(_clip_note_w)
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
@@ -3500,7 +3520,7 @@ elif nav == "Báo cáo":
             if selected_year == str(date.today().year):
                 _doy = date.today().timetuple().tm_yday
                 elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
-                _clip_note_y = f"Năm này chưa kết thúc -- so sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
+                _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
@@ -3524,7 +3544,7 @@ elif nav == "Báo cáo":
                     d1_ms_y, d2_ms_y = _hd_y(curr_min_sess_y, "min_sess")
 
                     if _clip_note_y:
-                        st.caption(_clip_note_y)
+                        _clip_card(_clip_note_y)
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
