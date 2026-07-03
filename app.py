@@ -161,18 +161,27 @@ MAC_COLORS = [
 ]
 
 
-# 8 lựa chọn màu accent (tab Tuỳ biến → "1. Giao diện"). Không trùng bất kỳ hue nào trong
-# MAC_COLORS (tránh nhầm với màu Danh mục/Dự án) và cách xa 2 tông cố định warn (~35°, cam) /
-# neutral (~3°, đỏ) ở NUDGE_TONES ít nhất 80° -- xem bảng khoảng cách hue đã tính khi lên kế hoạch.
+# 14 lựa chọn màu accent (tab Tuỳ biến → "1. Giao diện"), người dùng tự chọn từ bản mockup --
+# xếp theo thứ tự hue tăng dần (đỏ/cam/vàng -> xanh lá -> xanh dương -> tím) cho có thứ tự hợp
+# lý khi hiện thành lưới, riêng "Than chì" (gần như xám) xếp cuối vì không thuộc dải màu nào.
+# Lưu ý: 3 màu đầu (Hồng đào/Cam cháy/Vàng nắng) CỐ Ý trùng vùng tông app đang dùng cho cảnh báo
+# (cam, NUDGE_TONES "warn") / chuỗi đứt (đỏ, "neutral") -- người dùng đã xác nhận muốn có nhóm
+# màu này dù biết sẽ trông gần giống 2 trạng thái đó nếu chọn làm accent.
 ACCENT_PRESETS = {
-    "Xanh ngọc (Teal)": "#00a3ad",     # mặc định, giữ NGUYÊN màu hiện tại
+    "Hồng đào": "#e25a66",
+    "Cam cháy": "#dc6018",
+    "Vàng nắng": "#e7bf23",
     "Xanh lá (Green)": "#34c759",
     "Ngọc lục bảo (Jade)": "#00b386",
-    "Bạc hà (Mint)": "#00c7be",
+    "Bạc hà đậm": "#0a7671",
+    "Xanh ngọc (Teal)": "#00a3ad",      # mặc định, giữ NGUYÊN màu hiện tại
     "Xanh lơ (Cyan)": "#32ade6",
     "Xanh dương (Blue)": "#007aff",
+    "Navy đậm": "#203a6f",
     "Chàm (Indigo)": "#5856d6",
+    "Tím than": "#2d2768",
     "Tím (Purple)": "#af52de",
+    "Than chì": "#6c737a",
 }
 
 
@@ -202,6 +211,15 @@ def _darken(hexcode, factor=0.72):
     r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
     hue, l, s = colorsys.rgb_to_hls(r, g, b)
     return _hsl_hex(hue, s, l * factor)
+
+
+def _readable_text(hexcode):
+    """Chữ trắng hay đen đọc rõ hơn trên nền màu này (độ chói YIQ) -- dùng cho tên màu hiện
+    ngay trên nút accent (mục "1. Giao diện"), tự thích ứng khi thêm/bớt preset sau này."""
+    h = hexcode.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#1d1d1f" if luminance > 0.6 else "#ffffff"
 
 
 def load_settings():
@@ -3321,7 +3339,7 @@ elif nav == "Gundam":
 elif nav == "Tuỳ biến":
     with st.expander("1. Giao diện", expanded=True):
         _preset_items = list(ACCENT_PRESETS.items())
-        _per_row = 8
+        _per_row = 5
         _swatch_css = "<style>"
         for _row_start in range(0, len(_preset_items), _per_row):
             _row_items = _preset_items[_row_start:_row_start + _per_row]
@@ -3329,18 +3347,25 @@ elif nav == "Tuỳ biến":
             for _i, (_name, _hex) in enumerate(_row_items):
                 _idx = _row_start + _i
                 _key = f"accent_sw_{_idx}"
-                _border = "#1d1d1f" if _hex == ACCENT else "transparent"
+                _selected = _hex == ACCENT
+                _border = "#1d1d1f" if _selected else "transparent"
+                _txt_color = _readable_text(_hex)
+                _label = f"✓ {_name}" if _selected else _name
                 # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
                 # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
                 # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
-                # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong.
+                # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong. Tên màu
+                # hiện thẳng trên nút (không chỉ tooltip) -- màu chữ tự chọn trắng/đen theo độ
+                # chói nền (_readable_text) để luôn đọc rõ với 14 màu khác nhau.
                 _swatch_css += (
                     f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                    f"background:{_hex} !important; border:3px solid {_border} !important; "
-                    f"border-radius:50% !important; width:38px !important; height:38px !important; "
-                    f"padding:0 !important; }}")
+                    f"background:{_hex} !important; color:{_txt_color} !important; "
+                    f"border:3px solid {_border} !important; border-radius:12px !important; "
+                    f"width:100% !important; height:auto !important; min-height:48px !important; "
+                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
+                    f"white-space:normal !important; line-height:1.25 !important; }}")
                 with _cols[_i]:
-                    if st.button(" ", key=_key, help=_name):
+                    if st.button(_label, key=_key, use_container_width=True):
                         if _hex != ACCENT:
                             save_setting("accent_hex", _hex)
                             st.rerun()
