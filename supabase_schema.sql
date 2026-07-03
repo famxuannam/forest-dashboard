@@ -55,6 +55,14 @@ create table if not exists reading_log (
   primary key (uid, completed_date)
 );
 
+-- Cài đặt app dạng key/value (hiện dùng cho màu accent, xem mục "Giao diện" trong tab Tuỳ
+-- biến) -- optional: nếu bảng này chưa tồn tại hoặc Supabase lỗi, app tự rơi về mặc định
+-- (Teal), không crash (xem load_settings() trong app.py).
+create table if not exists settings (
+  key text primary key,
+  value text not null
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -64,6 +72,7 @@ alter table deleted_sessions enable row level security;
 alter table notes enable row level security;
 alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
+alter table settings enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -71,3 +80,4 @@ create policy "anon full access" on deleted_sessions for all using (true) with c
 create policy "anon full access" on notes for all using (true) with check (true);
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
+create policy "anon full access" on settings for all using (true) with check (true);

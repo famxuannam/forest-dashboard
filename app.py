@@ -62,7 +62,7 @@ def style_quill():
     lần Streamlit rerun, iframe bị tạo lại và mất style. Chỉ gọi khi đang mở ô soạn."""
     js = (
         "<script>\n"
-        "const CSS = " + json.dumps(QUILL_CSS) + ";\n"
+        "const CSS = " + json.dumps(QUILL_CSS.replace("#00a3ad", ACCENT)) + ";\n"
         "function applyQuillCss(){\n"
         "  try{\n"
         "    const frames = window.parent.document.querySelectorAll('iframe');\n"
@@ -98,6 +98,7 @@ DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá ->
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
+SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
 
 @st.cache_resource
 def _get_supabase():
@@ -160,13 +161,86 @@ MAC_COLORS = [
 ]
 
 
+# 8 lựa chọn màu accent (tab Tuỳ biến → "5. Giao diện"). Không trùng bất kỳ hue nào trong
+# MAC_COLORS (tránh nhầm với màu Danh mục/Dự án) và cách xa 2 tông cố định warn (~35°, cam) /
+# neutral (~3°, đỏ) ở NUDGE_TONES ít nhất 80° -- xem bảng khoảng cách hue đã tính khi lên kế hoạch.
+ACCENT_PRESETS = {
+    "Xanh ngọc (Teal)": "#00a3ad",     # mặc định, giữ NGUYÊN màu hiện tại
+    "Xanh lá (Green)": "#34c759",
+    "Ngọc lục bảo (Jade)": "#00b386",
+    "Bạc hà (Mint)": "#00c7be",
+    "Xanh lơ (Cyan)": "#32ade6",
+    "Xanh dương (Blue)": "#007aff",
+    "Chàm (Indigo)": "#5856d6",
+    "Tím (Purple)": "#af52de",
+}
+
+
 def _hsl_hex(h, s, l):
     """(hue, saturation, lightness) trong [0,1] -> mã màu hex."""
     r, g, b = colorsys.hls_to_rgb(h, l, s)
     return f"#{int(round(r * 255)):02x}{int(round(g * 255)):02x}{int(round(b * 255)):02x}"
 
 
-TEAL_HUE = 0.5096  # góc màu (hue) của accent #00a3ad, tính từ colorsys.rgb_to_hls
+def _hex_hue(hexcode):
+    """Mã hex -> hue [0,1] (colorsys.rgb_to_hls) -- suy TEAL_HUE động từ accent đang chọn."""
+    h = hexcode.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hue, _, _ = colorsys.rgb_to_hls(r, g, b)
+    return hue
+
+
+def _hex_rgb_str(hexcode):
+    h = hexcode.lstrip("#")
+    return f"{int(h[0:2],16)},{int(h[2:4],16)},{int(h[4:6],16)}"
+
+
+def _darken(hexcode, factor=0.72):
+    """Bản đậm hơn (giữ hue/saturation, giảm lightness) -- dùng cho chữ/icon trên nền accent
+    nhạt (NUDGE_TONES "good", chip .tw). factor=0.72 khớp #00767d hiện có khi input #00a3ad."""
+    h = hexcode.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hue, l, s = colorsys.rgb_to_hls(r, g, b)
+    return _hsl_hex(hue, s, l * factor)
+
+
+def load_settings():
+    """Đọc bảng settings (key/value) -> dict. Trả {} nếu lỗi/chưa cấu hình Supabase/chưa tạo
+    bảng -- tính năng optional, KHÔNG được làm crash app. Hàm này chạy Ở CẤP MODULE, rất sớm
+    (trước cả st.set_page_config()/cổng kiểm tra secrets bên dưới) vì ACCENT/TEAL_HUE phải có
+    giá trị trước khi _teal_shades() được gọi lần đầu (SESSION_BUCKETS) -- nên phải tự bọc lỗi
+    ở đây, không được dựa vào cổng secrets đã chạy trước nó."""
+    try:
+        res = _get_supabase().table("settings").select("key,value").execute()
+        return {r["key"]: r["value"] for r in (res.data or [])}
+    except Exception:
+        return {}
+
+
+@st.cache_data
+def _cached_settings():
+    return load_settings()
+
+
+def save_setting(key, value):
+    try:
+        _get_supabase().table("settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
+        st.cache_data.clear()
+        return True
+    except Exception:
+        return False
+
+
+# Accent (màu nhấn) đang chọn -- fallback Teal mặc định nếu chưa từng chọn hoặc lỗi. PHẢI tính
+# TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó là câu lệnh cấp module chạy ngay khi
+# import, sớm hơn cả st.set_page_config()/cổng kiểm tra secrets Supabase.
+_accent_hex = _cached_settings().get("accent_hex", "#00a3ad")
+if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi tay) -> fallback an toàn
+    _accent_hex = "#00a3ad"
+ACCENT = _accent_hex
+ACCENT_RGB = _hex_rgb_str(ACCENT)
+ACCENT_DARK = _darken(ACCENT)
+TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
 
 
 def _teal_shades(n, l_lo=0.90, l_hi=0.26):
@@ -318,6 +392,17 @@ def save_notes_bulk(df):
                 if str(r["Ghi chú"]).strip()]
         if recs:
             sb.table("notes").insert(recs).execute()
+    st.cache_data.clear()
+
+
+def save_settings_bulk(df):
+    """Ghi đè toàn bộ settings (dùng khi Khôi phục từ bản sao lưu)."""
+    sb = _get_supabase()
+    _sb_delete_all("settings", "key")
+    if not df.empty:
+        recs = [{"key": str(r["key"]), "value": str(r["value"])} for r in df.to_dict("records")]
+        if recs:
+            sb.table("settings").insert(recs).execute()
     st.cache_data.clear()
 
 
@@ -880,7 +965,7 @@ def render_top_3(df, col_name, title, week_key=None, n=3):
         html_list = "<ul style='margin:0; padding-left: 20px; color: #1d1d1f; font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
-            wsuf = f" <span style='color:#00a3ad; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
+            wsuf = f" <span style='color:{ACCENT}; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
             html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
         html_list += "</ul>"
     
@@ -1122,9 +1207,9 @@ def _streak_stats(streak_df):
     return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
 
 
-NUDGE_TONES = {"good": ("rgba(0,163,173,0.12)", "#00767d"),      # teal (đồng bộ accent)
+NUDGE_TONES = {"good": (f"rgba({ACCENT_RGB},0.12)", ACCENT_DARK),  # đồng bộ accent
                "warn": ("rgba(255,149,0,0.15)", "#a85d00"),      # cam (giữ nguyên, tránh nhầm với "good")
-               "neutral": ("rgba(255,59,48,0.12)", "#c50a00")}   # đỏ (đối lập teal, chuỗi đã đứt)
+               "neutral": ("rgba(255,59,48,0.12)", "#c50a00")}   # đỏ (đối lập accent, chuỗi đã đứt)
 
 
 def _streak_nudge(s):
@@ -1402,14 +1487,14 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
 .rtl-grid{{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.05);}}
 .rtl-bar{{position:absolute;top:7px;height:18px;border-radius:6px;min-width:6px;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .rtl-bar.done{{background:#aeaeb2;}}
-.rtl-bar.reading{{background:#00a3ad;}}
+.rtl-bar.reading{{background:{ACCENT};}}
 .rtl-ticks{{position:relative;height:16px;min-width:{track_min}px;margin-top:3px;}}
 .rtl-tick{{position:absolute;font-size:11px;color:#86868b;white-space:nowrap;}}
 .rtl-yr{{color:#c7c7cc;margin-left:1px;}}
 </style>
 <div class="rtl-card">
 <div class="card-label">Dòng thời gian</div>
-<div class="rtl-legend"><span><i style="background:#00a3ad;"></i>{labels['ongoing']}</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
+<div class="rtl-legend"><span><i style="background:{ACCENT};"></i>{labels['ongoing']}</span><span><i style="background:#aeaeb2;"></i>Đã xong</span></div>
 <div class="rtl-body">
 <div class="rtl-names">{names_html}</div>
 <div class="rtl-scroll">
@@ -1430,7 +1515,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
     rows_html = ''
     for _, r in t.iterrows():
-        s_col = '#00a3ad' if r['Trạng thái'] == labels['ongoing'] else '#86868b'
+        s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else '#86868b'
         start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
         last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
         rows_html += '<tr class="prow">'
@@ -1794,7 +1879,7 @@ def render_notes_journal(period_key, kind):
             note_html = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Ngày')}&day={d:%Y-%m-%d}"
+        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -1834,7 +1919,7 @@ def _reading_rows_html(rl_df, label_book=True):
         else:
             chips_html = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành').iterrows())
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Ngày')}&day={d:%Y-%m-%d}"
+        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -2032,7 +2117,7 @@ def _heat_cell(v, ref, extra_cls="", drop=False):
             return f'<td class="{cls}"{title}>{mark}</td>'
         return f'<td class="{(cls + " zero").strip()}">·</td>'
     a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
-    bg = f'background:rgba(0,163,173,{a:.2f});' if a > 0.02 else ''
+    bg = f'background:rgba({ACCENT_RGB},{a:.2f});' if a > 0.02 else ''
     cls_attr = f' class="{cls}"' if cls else ''
     return f'<td{cls_attr}{title} style="{bg}">{mark}{v:.1f}</td>'
 
@@ -2314,6 +2399,11 @@ if not _has_supabase_secrets:
     st.stop()
 
 st.markdown(
+    f"<style>:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};}}</style>",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
     """
     <style>
     /* Đặt font trên html/body để kế thừa xuống; KHÔNG đặt !important rộng
@@ -2339,13 +2429,13 @@ st.markdown(
     hr { border-color: rgba(0,0,0,0.08) !important; }
     
     div[data-testid="stButton"] button[kind="primary"] {
-        background-color: #00a3ad !important;
+        background-color: var(--accent) !important;
         color: white !important;
         border-radius: 8px !important;
         border: none !important;
         font-weight: 500 !important;
         padding: 6px 16px !important;
-        box-shadow: 0 2px 5px rgba(0,163,173,0.3) !important;
+        box-shadow: 0 2px 5px rgba(var(--accent-rgb),0.3) !important;
         transition: all 0.2s ease !important;
     }
     div[data-testid="stButton"] button[kind="primary"]:hover {
@@ -2355,7 +2445,7 @@ st.markdown(
     
     div[data-testid="stButton"] button[kind="secondary"] {
         background-color: white !important;
-        color: #00a3ad !important;
+        color: var(--accent) !important;
         border-radius: 8px !important;
         border: 1px solid #d1d1d6 !important;
         font-weight: 500 !important;
@@ -2413,16 +2503,16 @@ st.markdown(
     .stat-panel .chip .ck { color: #86868b; }
     .stat-panel .chip .cv { font-weight: 600; color: #1d1d1f; margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
-    .stat-panel .chip.tw { background: rgba(0,163,173,0.10); }
+    .stat-panel .chip.tw { background: rgba(var(--accent-rgb),0.10); }
     .stat-panel .sp-divider { border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
-    .stat-panel .chip.tw .ck { color: #00767d; }
-    .stat-panel .chip.tw .cv { color: #00a3ad; }
+    .stat-panel .chip.tw .ck { color: var(--accent-dark); }
+    .stat-panel .chip.tw .cv { color: var(--accent); }
     .section-hd { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 22px 0 6px; letter-spacing: -0.2px; }
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
-    .card-label { font-size: 11px; font-weight: 700; color: #00a3ad; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
+    .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -2442,13 +2532,13 @@ st.markdown(
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
-    [data-testid="stExpander"] summary:hover { border-bottom-color: #00a3ad !important; }
+    [data-testid="stExpander"] summary:hover { border-bottom-color: var(--accent) !important; }
     [data-testid="stExpander"] summary:hover svg,
-    [data-testid="stExpander"] summary:hover p { color: #00a3ad !important; }
+    [data-testid="stExpander"] summary:hover p { color: var(--accent) !important; }
     /* Mục đang mở: viền dưới + icon chevron chuyển màu accent để dễ nhận biết đang mở dù
        không hover; giữ màu chữ mặc định để không rối mắt khi nhiều mục cùng mở. */
-    [data-testid="stExpander"] details[open] > summary { border-bottom-color: #00a3ad !important; }
-    [data-testid="stExpander"] details[open] > summary svg { color: #00a3ad !important; }
+    [data-testid="stExpander"] details[open] > summary { border-bottom-color: var(--accent) !important; }
+    [data-testid="stExpander"] details[open] > summary svg { color: var(--accent) !important; }
     [data-testid="stExpander"] summary p {
         font-size: 1.35rem !important;
         font-weight: 600 !important;
@@ -2463,10 +2553,10 @@ st.markdown(
        Phân loại, Xem theo...) -> nền màu accent đặc + chữ/icon trắng + đổ bóng, đồng bộ với
        nút primary. */
     button[kind="segmented_controlActive"] {
-        background-color: #00a3ad !important;
+        background-color: var(--accent) !important;
         color: #fff !important;
-        border-color: #00a3ad !important;
-        box-shadow: 0 2px 5px rgba(0,163,173,0.3) !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 2px 5px rgba(var(--accent-rgb),0.3) !important;
     }
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
        Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
@@ -2485,8 +2575,8 @@ st.markdown(
         color: #6e6e73 !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
     .st-key-bc_sub_picker button[kind="segmented_controlActive"] {
-        background: transparent !important; color: #00a3ad !important; font-weight: 600 !important;
-        border-bottom-color: #00a3ad !important; box-shadow: none !important;
+        background: transparent !important; color: var(--accent) !important; font-weight: 600 !important;
+        border-bottom-color: var(--accent) !important; box-shadow: none !important;
     }
     .st-key-rl_view_tabs [data-baseweb="tab-list"] { justify-content: center !important; }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab (data-baseweb=
@@ -2551,7 +2641,7 @@ st.markdown(
     /* Bỏ lề trên/dưới ở phần tử đầu & cuối để ghi chú căn thẳng dòng đầu (không bị lệch khung) */
     .note-html > :first-child, .st-key-note_saved > :first-child { margin-top: 0 !important; }
     .note-html > :last-child, .st-key-note_saved > :last-child { margin-bottom: 0 !important; }
-    .note-html a, .st-key-note_saved a { color: #00a3ad; }
+    .note-html a, .st-key-note_saved a { color: var(--accent); }
     /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
     .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
     .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
@@ -2567,9 +2657,9 @@ st.markdown(
     }
     /* Box "mẹo" trong tab Hướng dẫn: nền tông teal (accent), thay vì xanh dương mặc định
        của st.info() -> chỉ áp trong các thẻ guide_*, không đụng st.info() ở nơi khác. */
-    [class*="st-key-guide"] [data-testid="stAlertContainer"] { background-color: rgba(0,163,173,0.10) !important; }
-    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] * { color: #00767d !important; }
-    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] svg { fill: #00767d !important; }
+    [class*="st-key-guide"] [data-testid="stAlertContainer"] { background-color: rgba(var(--accent-rgb),0.10) !important; }
+    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] * { color: var(--accent-dark) !important; }
+    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] svg { fill: var(--accent-dark) !important; }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
        Dựng bằng HTML tự thân (1 khối st.markdown duy nhất mỗi thẻ) thay vì st.columns()
@@ -2586,13 +2676,13 @@ st.markdown(
        gạch chân mặc định của <a>, giữ nguyên hình thức cũ; không áp cho .jdate trần (dùng ở
        "Ngày này năm trước" và thẻ Ghi chú ngày -- tự link về chính trang đang xem là vô nghĩa). */
     .jrows .jrow > a.jdate-link { display: block; text-decoration: none; color: inherit; cursor: pointer; }
-    .jrows .jrow > a.jdate-link:hover .jdowbig { color: #00a3ad; }
+    .jrows .jrow > a.jdate-link:hover .jdowbig { color: var(--accent); }
     @media (max-width: 640px) {
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
-    .jdate .jyear { font-size: 20px; font-weight: 700; color: #00a3ad; letter-spacing: -0.5px; line-height: 1; }
+    .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
     .jdate .jdm { font-size: 13px; color: #86868b; font-weight: 500; margin-top: 2px; }
@@ -2626,20 +2716,20 @@ st.markdown(
 # Thanh điều hướng 1 hàng phẳng (kiểu iOS segmented control), icon Material cho từng trang.
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
-    "Thống kê chung": ":material/bar_chart:",
+    "Hôm nay": ":material/today:",
     "Báo cáo": ":material/summarize:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/shield:",
-    "Chuẩn bị dữ liệu": ":material/settings:",
+    "Tuỳ biến": ":material/settings:",
     "Hướng dẫn": ":material/help:",
 }
 # Nhãn ngắn để các tab vừa 1 hàng (key trang giữ nguyên).
 NAV_SHORT = {
-    "Thống kê chung": "Tổng quan",
+    "Hôm nay": "Hôm nay",
     "Báo cáo": "Báo cáo",
     "Nhật ký đọc sách": "Sách",
     "Gundam": "Gundam",
-    "Chuẩn bị dữ liệu": "Dữ liệu",
+    "Tuỳ biến": "Tuỳ biến",
     "Hướng dẫn": "Trợ giúp",
 }
 
@@ -2660,7 +2750,7 @@ else:
 # Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác.
 if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
-    st.session_state["nav"] = _q if _q in NAV else "Thống kê chung"
+    st.session_state["nav"] = _q if _q in NAV else "Hôm nay"
 
 nav = st.segmented_control(
     "Trang", list(NAV.keys()),
@@ -2668,18 +2758,18 @@ nav = st.segmented_control(
     key="nav", label_visibility="collapsed",
 )
 if not nav:
-    nav = "Thống kê chung"
+    nav = "Hôm nay"
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
-# Sub-page của "Báo cáo" (Tháng/Tuần/Ngày/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
+# Sub-page của "Báo cáo" (Tổng quan/Tháng/Tuần/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
-BAOCAO_SUBS = ["Tháng", "Tuần", "Ngày", "Dự án"]
-BAOCAO_SUB_ICONS_MD = {"Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
-                        "Ngày": ":material/today:", "Dự án": ":material/work:"}
+BAOCAO_SUBS = ["Tổng quan", "Tháng", "Tuần", "Dự án"]
+BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Tháng": ":material/calendar_month:",
+                        "Tuần": ":material/calendar_view_week:", "Dự án": ":material/work:"}
 if "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
-    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tháng"
+    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
 if nav == "Báo cáo":
     st.query_params["sub"] = st.session_state["bc_sub"]
 elif "sub" in st.query_params:
@@ -2687,12 +2777,11 @@ elif "sub" in st.query_params:
 
 
 def render_day_report(df):
-    """Nội dung mục "Ngày" trong trang "Báo cáo" (chọn qua segmented_control "Chọn kỳ xem",
-    đọc/ghi state qua st.session_state["bc_sub"] + ?sub=). Tách thành hàm riêng vì day-jump
-    link (?nav=Báo cáo&sub=Ngày&day=...) tự nhiên dẫn vào đúng nhánh này, không cần cơ chế
-    bypass riêng nào."""
+    """Nội dung trang "Hôm nay" -- mục đầu tiên trên nav bar, trang mặc định khi mở app. Tách
+    thành hàm riêng (thay vì viết trực tiếp trong khối if nav=="Hôm nay":) vì day-jump link
+    (?nav=Hôm nay&day=...) tự nhiên dẫn vào đúng nhánh này, không cần cơ chế bypass riêng nào."""
     if df.empty:
-        st.info("Chưa có dữ liệu. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
+        st.info("Chưa có dữ liệu. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
         return
     active_days = sorted(df['Ngày'].dropna().unique())
     sel = day_picker(active_days)
@@ -2805,98 +2894,10 @@ def render_day_report(df):
 
 
 # ==========================================
-# TRANG: THỐNG KÊ CHUNG
+# TRANG: HÔM NAY
 # ==========================================
-if nav == "Thống kê chung":
-    if not df.empty:
-        with st.expander("1. Tổng quan", expanded=True):
-
-            last_dt = df['Thời gian kết thúc'].max()
-            if pd.notna(last_dt):
-                abs_str = pd.Timestamp(last_dt).strftime('%H:%M · %d/%m/%Y')
-                st.markdown(
-                    f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
-                    f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
-                    f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-                    f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
-                    f"Cập nhật gần nhất</span>"
-                    f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{format_relative(last_dt)}</span>"
-                    f"<span style='font-size:13px;color:#86868b;'>({abs_str})</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-            total_hrs = df['Thời lượng (Phút)'].sum() / 60
-            total_trees = len(df)
-            num_days = df['Ngày'].nunique() or 1
-            base_avg = total_hrs / num_days
-
-            # Phong độ 7 ngày gần đây so với mức trung bình của chính mình
-            recent7 = df[df['Ngày'] >= (date.today() - timedelta(days=6))]
-            r_days = recent7['Ngày'].nunique()
-            recent_chips = []
-            if r_days > 0:
-                r_avg = (recent7['Thời lượng (Phút)'].sum() / 60) / r_days
-                _delta = None
-                if base_avg > 0:
-                    _pct = (r_avg - base_avg) / base_avg * 100
-                    _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
-                    _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
-                recent_chips.append({"k": "Thời gian / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
-            recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
-
-            s_stat = _streak_stats(df)
-            by_wd = _weekday_avg(df)
-            _sections = [
-                {"label": "Trung bình (toàn thời gian)", "chips": [
-                    {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
-                    {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
-                    {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
-                ]},
-                {"label": "7 ngày gần đây", "chips": recent_chips},
-                {"label": "Chuỗi ngày", "chips": [
-                    {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
-                    {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
-                    {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
-                ]},
-            ]
-            if len(by_wd) and by_wd.max() > 0:
-                _sections.append({"label": "Theo thứ", "chips": [
-                    {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({by_wd.max():.1f}h)"},
-                    {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
-                ]})
-            _nud = _streak_nudge(s_stat)
-            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
-
-            render_stat_panel(
-                hero_items=[
-                    {"label": "Tổng thời gian", "value": f"{total_hrs:.1f}h"},
-                    {"label": "Số cây đã trồng", "value": f"{total_trees}"},
-                ],
-                sections=_sections,
-                footer=_footer,
-            )
-            render_session_bar(df)
-
-            st.write("")
-            c_top1, c_top2 = st.columns(2)
-            _wk_now = date.today().strftime('%G-W%V')
-            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
-            with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
-        with st.expander("2. Biểu đồ lịch", expanded=False):
-            frag_calendar(df, "range_cal")
-        with st.expander("3. Xu hướng theo thời gian", expanded=False):
-            frag_trend(df, "trend_main", "Danh mục")
-        with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
-            frag_hourly(df, "hour_main", "Danh mục")
-        with st.expander("5. Giờ tập trung theo thứ", expanded=False):
-            frag_heatmap(df, "range_heat")
-        with st.expander("6. Phân bố độ dài phiên", expanded=False):
-            render_session_histogram(df)
-        with st.expander("7. Bảng số liệu", expanded=False):
-            frag_data_table(df, "tbl_main")
-    else:
-        st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Chuẩn bị dữ liệu' để tải file lên.")
+if nav == "Hôm nay":
+    render_day_report(df)
 
 # ==========================================
 # TAB BÁO CÁO THÁNG
@@ -2911,7 +2912,98 @@ elif nav == "Báo cáo":
     bc_sub = st.session_state["bc_sub"]
     st.query_params["sub"] = bc_sub
 
-    if bc_sub == "Tháng":
+    if bc_sub == "Tổng quan":
+        if not df.empty:
+            with st.expander("1. Tổng quan", expanded=True):
+
+                last_dt = df['Thời gian kết thúc'].max()
+                if pd.notna(last_dt):
+                    abs_str = pd.Timestamp(last_dt).strftime('%H:%M · %d/%m/%Y')
+                    st.markdown(
+                        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+                        f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
+                        f"<span style='font-size:13px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+                        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#86868b' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
+                        f"Cập nhật gần nhất</span>"
+                        f"<span style='font-size:17px;color:#1d1d1f;font-weight:600;'>{format_relative(last_dt)}</span>"
+                        f"<span style='font-size:13px;color:#86868b;'>({abs_str})</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                total_hrs = df['Thời lượng (Phút)'].sum() / 60
+                total_trees = len(df)
+                num_days = df['Ngày'].nunique() or 1
+                base_avg = total_hrs / num_days
+
+                # Phong độ 7 ngày gần đây so với mức trung bình của chính mình
+                recent7 = df[df['Ngày'] >= (date.today() - timedelta(days=6))]
+                r_days = recent7['Ngày'].nunique()
+                recent_chips = []
+                if r_days > 0:
+                    r_avg = (recent7['Thời lượng (Phút)'].sum() / 60) / r_days
+                    _delta = None
+                    if base_avg > 0:
+                        _pct = (r_avg - base_avg) / base_avg * 100
+                        _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
+                        _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
+                    recent_chips.append({"k": "Thời gian / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
+                recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
+
+                s_stat = _streak_stats(df)
+                by_wd = _weekday_avg(df)
+                _sections = [
+                    {"label": "Trung bình (toàn thời gian)", "chips": [
+                        {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
+                        {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                        {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
+                    ]},
+                    {"label": "7 ngày gần đây", "chips": recent_chips},
+                    {"label": "Chuỗi ngày", "chips": [
+                        {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
+                        {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
+                        {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
+                    ]},
+                ]
+                if len(by_wd) and by_wd.max() > 0:
+                    _sections.append({"label": "Theo thứ", "chips": [
+                        {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({by_wd.max():.1f}h)"},
+                        {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
+                    ]})
+                _nud = _streak_nudge(s_stat)
+                _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
+
+                render_stat_panel(
+                    hero_items=[
+                        {"label": "Tổng thời gian", "value": f"{total_hrs:.1f}h"},
+                        {"label": "Số cây đã trồng", "value": f"{total_trees}"},
+                    ],
+                    sections=_sections,
+                    footer=_footer,
+                )
+                render_session_bar(df)
+
+                st.write("")
+                c_top1, c_top2 = st.columns(2)
+                _wk_now = date.today().strftime('%G-W%V')
+                with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
+                with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
+            with st.expander("2. Biểu đồ lịch", expanded=False):
+                frag_calendar(df, "range_cal")
+            with st.expander("3. Xu hướng theo thời gian", expanded=False):
+                frag_trend(df, "trend_main", "Danh mục")
+            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
+                frag_hourly(df, "hour_main", "Danh mục")
+            with st.expander("5. Giờ tập trung theo thứ", expanded=False):
+                frag_heatmap(df, "range_heat")
+            with st.expander("6. Phân bố độ dài phiên", expanded=False):
+                render_session_histogram(df)
+            with st.expander("7. Bảng số liệu", expanded=False):
+                frag_data_table(df, "tbl_main")
+        else:
+            st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
+
+    elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
             selected_month = period_stepper(months, key="month", fmt=fmt_month, current=date.today().strftime('%Y-%m'))
@@ -3077,8 +3169,6 @@ elif nav == "Báo cáo":
                     render_session_histogram(df_w)
                 with st.expander("8. Bảng số liệu", expanded=False):
                     render_detail_table(df_w)
-    elif bc_sub == "Ngày":
-        render_day_report(df)
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
@@ -3226,9 +3316,9 @@ elif nav == "Gundam":
         latest_overall_g = max(_cands_g) if _cands_g else None
         render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS)
 # ==========================================
-# TAB CHUẨN BỊ DỮ LIỆU
+# TAB TUỲ BIẾN
 # ==========================================
-elif nav == "Chuẩn bị dữ liệu":
+elif nav == "Tuỳ biến":
     with st.expander("1. Dữ liệu đầu vào", expanded=True):
         _tab_forest, _tab_cal, _tab_rem = st.tabs(["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
         with _tab_forest:
@@ -3445,10 +3535,12 @@ elif nav == "Chuẩn bị dữ liệu":
             if not db_now.empty:
                 _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
+                    _settings_df = pd.DataFrame(list(load_settings().items()), columns=["key", "value"])
                     for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
                                       (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes()),
                                       (WORK_CALENDAR_FILE, load_work_calendar()),
-                                      (READING_LOG_FILE, load_reading_log())]:
+                                      (READING_LOG_FILE, load_reading_log()),
+                                      (SETTINGS_FILE, _settings_df)]:
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
@@ -3480,6 +3572,8 @@ elif nav == "Chuẩn bị dữ liệu":
                             parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
                         if READING_LOG_FILE in names:
                             parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
+                        if SETTINGS_FILE in names:
+                            parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -3503,6 +3597,8 @@ elif nav == "Chuẩn bị dữ liệu":
                         save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
                     if READING_LOG_FILE in names:
                         save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
+                    if SETTINGS_FILE in names:
+                        save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -3517,10 +3613,36 @@ elif nav == "Chuẩn bị dữ liệu":
                 _sb_delete_all("notes", "note_date")
                 _sb_delete_all("work_calendar", "uid")
                 _sb_delete_all("reading_log", "uid")
+                _sb_delete_all("settings", "key")
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
+
+    with st.expander("5. Giao diện", expanded=True):
+        st.caption("Màu nhấn (accent) -- áp dụng ngay cho nút, biểu đồ đơn sắc, bảng nhiệt.")
+        _preset_items = list(ACCENT_PRESETS.items())
+        _cols = st.columns(len(_preset_items))
+        _swatch_css = "<style>"
+        for i, (_name, _hex) in enumerate(_preset_items):
+            _key = f"accent_sw_{i}"
+            _border = "#1d1d1f" if _hex == ACCENT else "transparent"
+            # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
+            # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
+            # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
+            # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong.
+            _swatch_css += (
+                f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                f"background:{_hex} !important; border:3px solid {_border} !important; "
+                f"border-radius:50% !important; width:38px !important; height:38px !important; "
+                f"padding:0 !important; }}")
+            with _cols[i]:
+                if st.button(" ", key=_key, help=_name):
+                    if _hex != ACCENT:
+                        save_setting("accent_hex", _hex)
+                        st.rerun()
+        _swatch_css += "</style>"
+        st.markdown(_swatch_css, unsafe_allow_html=True)
 
 # ==========================================
 # TAB HƯỚNG DẪN
