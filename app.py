@@ -2632,6 +2632,49 @@ st.markdown(
     [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
 
+    /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch nâng cao)
+       mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
+       đang chọn, khiến hộp trông lệch tông so với hộp chọn kỳ cạnh nó (period_stepper, dùng
+       st.selectbox, viền xám trung tính #d1d1d6/nền trắng mờ). Đồng bộ lại viền/nền theo đúng
+       kiểu selectbox, còn màu ngày đang chọn trong lịch bật lên đổi theo accent. Lịch bật lên
+       (data-baseweb="calendar") được BaseWeb mount ra ngoài container widget (portal ở cấp
+       body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
+       áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
+    div[data-testid="stDateInput"] [data-baseweb="input"] {
+        background: rgba(255,255,255,0.8) !important;
+        border: 1px solid #d1d1d6 !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+    }
+    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
+    }
+    [data-baseweb="calendar"] [role="gridcell"][aria-label^="Selected"]::after {
+        background: var(--accent) !important;
+    }
+    /* Khung lịch bật lên (data-baseweb="popover") -- dùng outline chứ không phải border: nội
+       dung trắng bên trong popover có cùng kích thước với chính nó và vẽ đè lên trên, che mất
+       border thường; outline không tham gia box model nên không bị che. Chỉ áp cho popover có
+       chứa lịch (:has([data-baseweb="calendar"])) -- tức các ô chọn ngày -- KHÔNG áp cho danh
+       sách lựa chọn của st.selectbox thường (cùng dùng data-baseweb="popover" nhưng không có
+       lịch bên trong). */
+    [data-baseweb="popover"]:has([data-baseweb="calendar"]) {
+        outline: 1.5px solid var(--accent) !important;
+        outline-offset: -1px;
+    }
+
+    /* Mọi hộp thả xuống (st.selectbox) trong app: viền đổi sang màu accent khi đang mở/focus,
+       cùng hiệu ứng đã làm cho hộp chọn ngày ở trên -- áp dụng chung 1 lần ở đây cho TẤT CẢ
+       selectbox (Kỳ ở period_stepper, "Chọn Nhóm hoặc Dự án", "Chọn để xem chi tiết"...) thay vì
+       lặp lại rule riêng cho từng nơi. Hộp bo viền nằm ở div con ĐẦU TIÊN bên trong
+       [data-baseweb="select"] (không có data-baseweb riêng để bám vào), nên chọn qua tổ hợp
+       :focus-within + > div. */
+    div[data-baseweb="select"]:focus-within > div {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
+    }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
