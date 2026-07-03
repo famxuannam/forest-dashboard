@@ -2293,6 +2293,19 @@ def guide_item(img, title, body_md, tip=None, where=None):
                 st.info(tip, icon=":material/lightbulb:")
 
 
+def guide_update(pr_no, title, bullets):
+    """Một mục trong tab "Cập nhật": không có ảnh (đổi UI qua nhiều bản nhỏ nên chụp ảnh sẽ lỗi
+    thời rất nhanh) -- chỉ tiêu đề + số PR + danh sách gạch đầu dòng, dùng chung khung thẻ với
+    guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2)."""
+    with st.container(border=True, key=f"guide_update_{pr_no}"):
+        st.markdown(
+            f"<div style='font-size:11px;font-weight:700;color:#86868b;"
+            f"text-transform:uppercase;letter-spacing:.5px;'>PR #{pr_no}</div>",
+            unsafe_allow_html=True)
+        st.markdown(f"#### {title}")
+        st.markdown("\n".join(f"- {b}" for b in bullets))
+
+
 # --- FRAGMENT: cô lập rerun cho từng mục biểu đồ có bộ điều khiển riêng ---
 # Khi đổi bộ lọc bên trong một mục, chỉ mục đó vẽ lại thay vì rerun cả trang
 # (nhanh hơn, nhất là trang nhiều dữ liệu/khi xem trên điện thoại).
@@ -2601,6 +2614,11 @@ st.markdown(
        "tab-border") -- không có ở "Chọn kỳ xem" (Báo cáo, dùng segmented_control tự dựng, không
        có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
     .st-key-rl_view_tabs [data-baseweb="tab-border"] { display: none !important; }
+
+    /* Sub-tab của trang Hướng dẫn -- cùng khuôn Tổng quan/Chi tiết (Sách/Gundam) ở trên, tái
+       dùng nguyên 2 rule để 3 nơi trong app nhất quán 1 kiểu "tab gạch chân". */
+    .st-key-guide_tabs [data-baseweb="tab-list"] { justify-content: center !important; flex-wrap: wrap !important; }
+    .st-key-guide_tabs [data-baseweb="tab-border"] { display: none !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa */
@@ -3680,341 +3698,375 @@ elif nav == "Hướng dẫn":
         "<div style='margin-bottom:6px;'>"
         "<div style='font-size:1.9rem;font-weight:700;letter-spacing:-0.5px;'>Hướng dẫn &amp; Giải thích</div>"
         "<div style='font-size:14.5px;color:#86868b;margin-top:2px;'>Mọi số liệu, biểu đồ và tính năng trong "
-        "app có ý nghĩa gì, đọc thế nào và dùng để làm gì — kèm ảnh minh hoạ.</div></div>",
+        "app có ý nghĩa gì, đọc thế nào, và vì sao được thiết kế như vậy — kèm ảnh minh hoạ.</div></div>",
         unsafe_allow_html=True)
 
-    st.markdown("### Tổng quan ứng dụng")
-    with st.container(border=True, key="guide_intro"):
-        st.markdown(
-            "Forest Tracker là công cụ **xem lại** (retrospective), không phải công cụ **đặt mục tiêu**: app không "
-            "chấm điểm, không nhắc nhở, không đặt KPI — chỉ lấy dữ liệu bạn đã có sẵn từ app **Forest** (mỗi lần trồng "
-            "cây thành công = một *phiên tập trung*) rồi trình bày lại dưới nhiều góc nhìn để bạn tự đối chiếu với "
-            "chính mình theo thời gian. Toàn bộ dữ liệu chạy **cục bộ trên máy bạn**, không đồng bộ lên đâu cả — vì "
-            "vậy mục *Sao lưu* ở trang Chuẩn bị dữ liệu khá quan trọng nếu bạn đổi máy hoặc xoá trình duyệt.\n\n"
-            "Thanh điều hướng trên cùng gồm 6 trang:\n\n"
-            "- **Thống kê chung** — bức tranh toàn bộ lịch sử, không giới hạn theo kỳ; nơi tốt nhất để nhìn xu hướng dài hạn.\n"
-            "- **Báo cáo** — gộp 4 góc nhìn theo kỳ: **Tháng** / **Tuần** / **Ngày** (đào sâu một kỳ cụ thể, có bộ chọn "
-            "kỳ riêng, kèm mục *Nhật ký* — ghi chú + lịch + phần đọc sách đã lưu trong kỳ — và ở mục Ngày còn có *Ngày "
-            "này năm trước*), và **Dự án** (giống Thống kê chung nhưng lọc theo đúng một Nhóm hoặc Dự án bạn chọn, mặc "
-            "định chưa chọn sẵn gì, hữu ích khi muốn soi riêng một môn/kỹ năng đang theo đuổi). Dùng hàng nút **Chọn "
-            "kỳ xem** ngay dưới tiêu đề trang để đổi nhanh giữa 4 kỳ, không cần tải lại trang. Bấm vào Thứ/ngày của "
-            "1 dòng trong *Nhật ký* sẽ nhảy thẳng sang đúng kỳ **Ngày** của ngày đó.\n"
-            "- **Nhật ký đọc sách** — trang riêng cho việc đọc sách tuần tự, chia 2 sub-tab: **Tổng quan** (số liệu "
-            "tổng, timeline trình tự đọc, bảng chi tiết mọi cuốn) và **Chi tiết** (chọn đúng 1 cuốn để xem sâu: số "
-            "liệu hero, nhật ký đọc, biểu đồ lịch theo số phần/ngày, bảng số liệu từng ngày).\n"
-            "- **Gundam** — y hệt Nhật ký đọc sách (cùng 2 sub-tab Tổng quan/Chi tiết) nhưng cho các series anime Gundam đang xem.\n"
-            "- **Chuẩn bị dữ liệu** — nơi duy nhất *ghi* dữ liệu: nạp file CSV xuất từ Forest, gán Danh mục cho từng Dự án, "
-            "sao lưu/khôi phục/làm mới; mọi trang còn lại đều chỉ *đọc*.\n\n"
-            "Trong mỗi trang báo cáo, các mục được xếp trong những khối có thể **mở/thu gọn** (bấm vào tiêu đề để đóng/mở); "
-            "mặc định chỉ mở sẵn mục *Tổng quan* (và *Nhật ký* nếu trang đó có) để trang gọn khi mới vào — mục nào đang mở "
-            "sẽ có viền dưới và icon mũi tên chuyển sang màu accent để dễ nhận ra. Hầu hết biểu đồ đều có **chú giải khi "
-            "di chuột (tooltip)** hiện số liệu chính xác của đúng điểm/ô đang trỏ vào, và nhiều biểu đồ có thanh điều "
-            "khiển riêng (khoảng thời gian, cách gộp, phân loại) đặt ngay phía trên — đổi bộ lọc chỉ vẽ lại đúng biểu đồ "
-            "đó, không load lại cả trang.")
+    _guide_tabs = st.tabs([
+        ":material/auto_awesome: Tổng quan",
+        ":material/summarize: Hôm nay & Báo cáo",
+        ":material/menu_book: Sách & Gundam",
+        ":material/tune: Tuỳ biến",
+        ":material/new_releases: Cập nhật",
+    ], key="guide_tabs")
 
-    st.markdown("### Số liệu tổng quan")
-    guide_item(
-        "stat_panel.png", "Bảng số liệu tổng quan",
-        "Thẻ đầu tiên của mọi trang báo cáo, gói toàn bộ con số quan trọng nhất của kỳ đang xem thành các nhóm chip "
-        "nhỏ, đọc lướt là nắm được bức tranh chung mà không cần cuộn xuống biểu đồ:\n\n"
-        "- **Tổng thời gian** & **Số cây đã trồng**: tổng giờ tập trung cộng dồn và tổng số phiên hợp lệ trong phạm vi "
-        "đang xem (mỗi phiên Forest trồng thành công = một cây, mỗi cây tương ứng đúng một dòng dữ liệu).\n"
-        "- **Trung bình (toàn thời gian)**: *Thời gian/ngày* và *Số cây/ngày* chia cho số ngày **có hoạt động** trong "
-        "phạm vi đang xem (bỏ qua ngày trống, không bị pha loãng bởi những ngày không trồng cây nào), còn **Thời gian/"
-        "phiên** là độ dài bình quân của một lần tập trung — con số này giúp nhận ra thói quen: phiên trung bình 20 "
-        "phút khác hẳn ý nghĩa với phiên trung bình 70 phút dù tổng giờ như nhau.\n"
-        "- **7 ngày gần đây**: so sánh nhịp *7 ngày vừa qua* với mức trung bình giờ/ngày của *toàn bộ lịch sử đang xem* — "
-        "gọi tắt là *thường lệ*. Ví dụ `+18% vs thường lệ` nghĩa là 7 ngày qua bạn tập trung nhiều hơn 18% so với mức "
-        "bình quân mọi khi của chính mình (màu xanh lá); số âm (màu đỏ) nghĩa là đang chùng xuống. Đi kèm là **Số ngày "
-        "hoạt động** trên 7 (vd 5/7) — biết được có bao nhiêu ngày trong tuần vừa rồi bạn *có* trồng cây, dù chỉ một cây.\n"
-        "- **Chuỗi ngày** (streak): *Tổng cộng* là tổng số ngày rời rạc từng có ít nhất một phiên trong toàn bộ lịch sử; "
-        "*Dài nhất* là kỷ lục chuỗi ngày liên tiếp có hoạt động (không đứt ngày nào); *Hiện tại* là chuỗi đang giữ tính tới "
-        "hôm nay — chuỗi này vẫn còn hiệu lực nếu lần hoạt động gần nhất là **hôm nay hoặc hôm qua** (chưa bấm sang ngày "
-        "thứ 2 liên tiếp không có gì), và sẽ về 0 ngay khi đứt quá 1 ngày.\n"
-        "- **Theo thứ**: trong 7 thứ của tuần, thứ nào có giờ trung bình mỗi lần hoạt động cao nhất (**Mạnh nhất**) và "
-        "thấp nhất (**Yếu nhất**) — trung bình này chỉ tính trên những lần đúng thứ đó có hoạt động (bỏ qua tuần nào "
-        "thứ đó bạn nghỉ), hữu ích để nhận ra ví dụ cuối tuần luôn là điểm yếu, hay giữa tuần mới là lúc sung sức nhất.",
-        tip="Theo dõi **Chuỗi hiện tại** mỗi ngày để giữ đà — chỉ cần một phiên ngắn cũng đủ giữ chuỗi không đứt. "
-            "Ở mục Tuần/Tháng của Báo cáo, các con số này còn kèm mũi tên **▲/▼** so sánh trực tiếp với kỳ liền trước và với "
-            "mức trung bình các kỳ, nên đọc nhanh được là kỳ này đang tốt lên hay đi xuống so với chính mình trước đó.",
-        where="Mọi trang báo cáo → đầu mục Tổng quan")
-    guide_item(
-        "session_bar.png", "Thanh phân bố độ dài phiên (gọn)",
-        "Một thanh ngang chia nhanh toàn bộ phiên trong phạm vi đang xem thành 5 nhóm theo độ dài, mỗi đoạn dài ngắn "
-        "tỉ lệ với số phiên thuộc nhóm đó và có ghi kèm % cùng số phiên cụ thể khi di chuột vào:\n\n"
-        "- **Tối thiểu (= 10′)** — đúng ngưỡng tối thiểu Forest công nhận một phiên hợp lệ, thường là phiên bị huỷ giữa "
-        "chừng rồi tính lại hoặc chủ đích chỉ tập trung rất ngắn.\n"
-        "- **Ngắn (< 25′)**, **Trung bình (25′–<50′)**, **Dài (50′–<90′)**, **Rất Dài (≥ 90′)** — các mốc 25/50/90 phút "
-        "không phải ngẫu nhiên: chúng trùng với các đường mốc trong biểu đồ *Phân bố độ dài phiên* chi tiết bên dưới.\n\n"
-        "Đọc nhanh: thanh nghiêng hẳn về bên trái (nhiều **Ngắn/Tối thiểu**) cho thấy phiên hay bị ngắt quãng, khó vào "
-        "sâu; nghiêng về bên phải (nhiều **Dài/Rất Dài**) cho thấy bạn thường vào được trạng thái tập trung sâu ('deep "
-        "work') mỗi khi đã bắt đầu.",
-        tip="Đây là bản rút gọn, đặt sẵn ngay trong mục Tổng quan để không phải cuộn xuống mới thấy nhịp phiên dài/ngắn. "
-            "Muốn xem chi tiết hơn — số phiên chính xác theo từng khoảng 5 phút, đường trung bình — hãy xem biểu đồ "
-            "**Phân bố độ dài phiên** đầy đủ ở mục Các biểu đồ bên dưới.",
-        where="Trong mục Tổng quan")
+    # ==========================================
+    # SUB-TAB: TỔNG QUAN
+    # ==========================================
+    with _guide_tabs[0]:
+        with st.container(border=True, key="guide_intro"):
+            st.markdown("#### Forest Dashboard là gì")
+            st.markdown(
+                "App này **không đặt mục tiêu và không nhắc nhở** — Forest (app trồng cây trên điện thoại) đã "
+                "làm việc đó rồi. Forest Dashboard chỉ làm một việc: lấy dữ liệu phiên tập trung bạn đã có (xuất "
+                "CSV từ Forest) cộng thêm 2 nguồn tuỳ chọn (lịch hẹn Work qua CalDAV, tiến độ đọc sách/xem Gundam "
+                "qua Apple Reminders), rồi **nhìn lại** — bạn tập trung nhiều nhất vào khung giờ nào, thói quen "
+                "đang mạnh lên hay chùng xuống, một cuốn sách mất bao lâu để đọc xong. Toàn bộ app mang tính "
+                "**hồi cứu (retrospective)**, không phải một bộ đếm ngược hay thanh tiến độ.\n\n"
+                "Thanh điều hướng trên cùng có 6 mục:\n"
+                "- **Hôm nay** — trang mặc định khi mở app. Đúng như tên gọi: chỉ 1 ngày, thường là ngày bạn "
+                "đang xem đầu tiên mỗi lần mở app.\n"
+                "- **Báo cáo** — nhìn theo Tổng quan (toàn bộ lịch sử), Tháng, Tuần, hoặc theo Dự án.\n"
+                "- **Sách** / **Gundam** — nhật ký đọc sách và xem Gundam, ghép từ 2 nguồn dữ liệu khác nhau.\n"
+                "- **Tuỳ biến** — nơi nạp dữ liệu, phân loại Dự án, đổi màu accent, sao lưu/khôi phục.\n"
+                "- **Hướng dẫn** — chính là trang bạn đang xem.\n\n"
+                "Nhiều biểu đồ/bảng ở đây (\"Bảng số liệu tổng quan\", \"Biểu đồ lịch\", \"Bảng số liệu\"...) "
+                "xuất hiện GIỐNG HỆT nhau ở nhiều trang báo cáo khác nhau — đây là lựa chọn thiết kế có chủ đích: "
+                "một bộ \"từ vựng hình ảnh\" dùng chung, để đọc quen 1 biểu đồ ở Hôm nay là đọc được y hệt biểu "
+                "đồ đó ở Báo cáo, Sách hay Gundam. Mục này liệt kê từng thành phần dùng chung đó **một lần duy "
+                "nhất**; sub-tab kế tiếp chỉ nói về phần khác biệt riêng của từng trang.")
 
-    st.markdown("### Các biểu đồ")
-    guide_item(
-        "calendar.png", "Biểu đồ lịch",
-        "Lưới ô kiểu lịch đóng góp của GitHub: mỗi ô vuông là **một ngày**, xếp thành các cột tuần chạy từ trái "
-        "(quá khứ) sang phải (hiện tại), mỗi cột 7 ô theo thứ tự Chủ Nhật → Thứ Bảy. Màu ô càng đậm thì tổng số giờ "
-        "tập trung trong ngày đó càng cao, chia theo 7 bậc màu teal đậm dần theo ngưỡng giờ **cố định** (dưới 0.5h, "
-        "0.5–1h, 1–2h, 2–3h, 3–4h, 4–6h, từ 6h trở lên) — nhờ vậy một ngày 5h luôn cùng một tông màu dù xem tháng "
-        "nào, so được công bằng giữa các khoảng thời gian khác nhau thay vì bị co giãn theo riêng dữ liệu đang lọc.\n\n"
-        "- Ô **trắng/nhạt nhất** = ngày hoàn toàn không có phiên nào (kể cả ngày trước khi bạn bắt đầu dùng Forest, "
-        "nếu nằm trong phạm vi đang xem, cũng hiện trắng).\n"
-        "- Một **dải ô đậm liên tiếp theo chiều dọc hoặc kéo dài nhiều cột** cho thấy chuỗi ngày làm việc đều, ít đứt quãng.\n"
-        "- Nhìn toàn cảnh cả lưới giúp phát hiện ngay các *giai đoạn*: một mảng đậm kéo dài vài tuần (đang chăm), xen "
-        "kẽ mảng nhạt (đang chùng, có thể trùng kỳ nghỉ/thi cử/ốm) — điều mà nhìn từng con số lẻ khó thấy được.",
-        tip="Di chuột vào một ô bất kỳ để xem chú giải hiện chính xác ngày (thứ, ngày/tháng/năm) và tổng số giờ của "
-            "ngày đó, kể cả những ngày rất nhạt màu mà mắt thường khó phân biệt với ô trắng hoàn toàn.",
-        where="Thống kê chung · Báo cáo → Dự án → Biểu đồ lịch")
-    guide_item(
-        "trend.png", "Xu hướng theo thời gian",
-        "Biểu đồ cột theo trục thời gian: chiều cao mỗi cột là **tổng thời gian tập trung** trong mốc đó, các cột "
-        "được tô màu xếp chồng (stacked) theo Danh mục hoặc Dự án để vừa thấy tổng vừa thấy cơ cấu bên trong.\n\n"
-        "- Thanh điều khiển ngay phía trên biểu đồ cho chỉnh 3 thứ độc lập: **khoảng thời gian** muốn xem, "
-        "**cách gộp** cột theo Ngày/Tuần/Tháng, và **phân loại** màu theo Danh mục (nhóm lớn) hay Dự án (chi tiết từng "
-        "tag Forest). Đổi bất kỳ lựa chọn nào chỉ vẽ lại đúng biểu đồ này, không ảnh hưởng phần còn lại của trang.\n"
-        "- Khi gộp theo **Ngày**, biểu đồ tự vẽ thêm một **đường trung bình động 7 ngày** (rolling average) đè lên "
-        "các cột — đường này làm mượt dao động ngày-qua-ngày (vốn rất nhiễu vì cuối tuần/ngày bận khác hẳn ngày rảnh) "
-        "để lộ ra xu hướng thật đang đi lên, đi ngang hay đi xuống.\n"
-        "- Đây là biểu đồ trả lời nhanh những câu hỏi kiểu: *'tháng này mình có đang đi lên không so với tháng trước?'*, "
-        "*'từ khi thêm dự án mới, thời gian cho dự án cũ có bị co lại không?'*, *'giai đoạn nào tổng thời gian tụt hẳn?'*",
-        where="Mọi trang báo cáo → Xu hướng theo thời gian")
-    guide_item(
-        "hourly.png", "Xu hướng tập trung theo khung giờ",
-        "Biểu đồ cột theo 24 khung giờ trong ngày (0h–23h), gộp toàn bộ phạm vi đang xem lại làm một: mỗi cột là "
-        "**trung bình số giờ mỗi ngày** bạn có phiên rơi vào đúng khung giờ đó (không phải tổng cộng dồn, nên biểu đồ "
-        "không bị lệch chỉ vì phạm vi xem dài hay ngắn), các cột xếp chồng màu theo phân loại; nền biểu đồ chia sẵn 4 "
-        "dải Sáng/Chiều/Tối/Khuya để dễ định vị.\n\n"
-        "- Cột càng cao = khung giờ bạn tập trung nhiều và đều nhất — có thể gọi là khung giờ 'năng suất' của riêng bạn.\n"
-        "- Ngay dưới biểu đồ có một dòng tóm tắt tự động nêu rõ **giờ tập trung nhất** (khung 1 tiếng cao điểm) và "
-        "**buổi mạnh nhất** (Sáng/Chiều/Tối/Khuya) trong đúng phạm vi đang xem, khỏi phải tự đọc trục.",
-        tip="Biết khung giờ mạnh nhất rồi thì nên chủ động **xếp việc khó/quan trọng nhất vào đúng lúc đó** — đừng để "
-            "'giờ vàng' trôi qua với những việc vặt có thể làm vào lúc khác.",
-        where="Mọi trang báo cáo → Xu hướng tập trung theo khung giờ")
-    guide_item(
-        "heatmap.png", "Giờ tập trung theo thứ",
-        "Bản đồ nhiệt dạng lưới **7 thứ (trục ngang) × 24 khung giờ (trục dọc)**: mỗi ô nhỏ ứng với đúng một cặp "
-        "(thứ, giờ), màu càng đậm thì trung bình số giờ/ngày bạn tập trung vào *đúng khung giờ đó của đúng thứ đó* "
-        "càng cao — khác hẳn biểu đồ khung giờ ở trên vốn gộp chung cả 7 ngày trong tuần lại.\n\n"
-        "- Dùng để tìm **'khung giờ vàng' riêng theo từng ngày trong tuần** — ví dụ nếu ô sáng sớm Thứ 2 đậm hẳn so "
-        "với sáng sớm các thứ khác, có thể vì đầu tuần bạn có thói quen vào việc sớm, còn cuối tuần lại ngủ nướng.\n"
-        "- Một **vùng nhạt màu kéo dài theo chiều dọc hoặc ngang** cho thấy khung giờ/ngày đó gần như luôn trống — "
-        "đây có thể là khoảng thời gian còn dư địa để tận dụng, hoặc đơn giản là khung giờ không phù hợp với lịch sinh "
-        "hoạt (vd giữa đêm) nên không cần cố ép.",
-        tip="Khác biểu đồ *Xu hướng tập trung theo khung giờ* (gộp cả tuần thành một con số cho mỗi giờ), bản đồ nhiệt "
-            "này **tách riêng theo từng thứ** — rất hữu ích nếu lịch sinh hoạt các ngày trong tuần của bạn khác nhau "
-            "rõ rệt (vd đi làm giờ hành chính các ngày thường, nhưng cuối tuần lại rảnh cả buổi sáng).",
-        where="Mọi trang báo cáo → Giờ tập trung theo thứ")
-    guide_item(
-        "histogram.png", "Phân bố độ dài phiên",
-        "Biểu đồ cột cho biết bạn thường tập trung theo **phiên ngắn hay phiên dài**, chi tiết hơn nhiều so với "
-        "thanh phân bố gọn ở mục Tổng quan. Mỗi cột là **số phiên** có độ dài rơi đúng vào một khoảng 5 phút (vd cột "
-        "'25–30′' đếm mọi phiên dài từ 25 đến dưới 30 phút), bắt đầu tính từ **10′** — độ dài tối thiểu để Forest "
-        "công nhận một phiên là hợp lệ (phiên ngắn hơn coi như thất bại/huỷ, không có trong dữ liệu).\n\n"
-        "- Ba **đường chấm dọc** đặt ở mốc 25′, 50′ và 90′ chính là ranh giới phân chia 4 nhóm Ngắn · Trung bình · "
-        "Dài · Rất dài — cùng bộ mốc với thanh phân bố gọn ở Tổng quan, nên hai biểu đồ luôn nhất quán với nhau.\n"
-        "- Một **đường gạch đứng** riêng biệt đánh dấu độ dài **trung bình cộng** của toàn bộ phiên trong phạm vi "
-        "đang xem — so đường này với hình dạng cột để biết trung bình đang bị kéo lệch bởi số ít phiên rất dài/rất "
-        "ngắn hay phản ánh đúng thói quen phổ biến nhất.",
-        tip="Cột dồn về **bên phải** (nhiều phiên dài) cho thấy bạn hay vào được trạng thái tập trung sâu ('deep "
-            "work') mỗi lần bắt đầu; cột dồn về **bên trái** (nhiều phiên ngắn, sát mốc 10–25′) cho thấy phiên hay bị "
-            "ngắt quãng giữa chừng — có thể do môi trường làm việc hay bị gián đoạn.",
-        where="Mọi trang báo cáo → Phân bố độ dài phiên")
-    guide_item(
-        "pie.png", "Phân bổ thời gian",
-        "Biểu đồ tròn chia **tỉ trọng tổng thời gian** trong phạm vi đang xem theo Danh mục hoặc Dự án — chọn xem "
-        "theo cấp nào bằng nút chuyển ngay trên biểu đồ. Mỗi miếng bánh tương ứng một nhóm/dự án, kèm nhãn phần trăm "
-        "và di chuột vào để xem thêm số giờ tuyệt đối.\n\n"
-        "- Cách nhanh nhất để trả lời *'trong kỳ này mình dành phần lớn thời gian cho việc gì?'* mà không cần cộng "
-        "số thủ công — miếng bánh càng lớn, việc đó càng chiếm ưu thế trong quỹ thời gian tập trung của bạn.\n"
-        "- Nếu một Danh mục có nhiều Dự án con nhỏ lẻ, xem ở cấp Danh mục sẽ gọn hơn; muốn biết đích xác dự án nào "
-        "trong nhóm đó đang 'ăn' nhiều thời gian nhất thì chuyển sang xem theo Dự án.",
-        tip="Đổi qua lại **Danh mục ↔ Dự án** để đi từ cái nhìn tổng quát (bức tranh lớn, ít miếng) tới chi tiết "
-            "(nhiều miếng nhỏ, thấy rõ từng đầu việc) mà không cần rời khỏi biểu đồ.",
-        where="Báo cáo → Tháng / Tuần / Ngày → Phân bổ thời gian")
-    guide_item(
-        "table.png", "Bảng số liệu",
-        "Một ma trận số liệu dạng bảng: hàng là **Danh mục hoặc Dự án**, cột là các **mốc thời gian** (Tuần hoặc "
-        "Tháng, tuỳ trang), mỗi ô giao giữa hàng và cột là tổng số giờ của đúng danh mục/dự án đó trong đúng mốc đó. "
-        "Nền mỗi ô được tô đậm/nhạt tương ứng với giá trị (càng nhiều giờ, nền càng đậm) để so sánh nhanh bằng mắt mà "
-        "không cần đọc từng con số; cột **Tổng** ở cuối cùng cộng dồn theo hàng.\n\n"
-        "- Bảng phù hợp để soi theo chiều **ngang** (một dự án qua nhiều kỳ liên tiếp — đang tăng, giảm hay ổn định?) "
-        "hoặc theo chiều **dọc** (trong một kỳ, những dự án nào đang chiếm nhiều thời gian nhất?).\n"
-        "- **Dấu ▾ màu đỏ** cạnh một ô đánh dấu kỳ đó **giảm mạnh** — trên 60% — so với kỳ liền trước của cùng dự "
-        "án/danh mục đó. Đây là tín hiệu cảnh báo sớm rất hữu ích: một dự án đang bị bỏ bê dần thường xuất hiện dấu "
-        "▾ vài kỳ liên tiếp trước khi biến mất hẳn khỏi bảng.",
-        tip="Cuộn ngang trong bảng để xem nhiều kỳ hơn cùng lúc; đây là biểu đồ hợp nhất để trả lời câu hỏi 'môn nào "
-            "đang tụt dần theo thời gian' vì nó cho thấy toàn bộ lịch sử của từng dự án trên cùng một hàng, thay vì "
-            "phải lật qua lại nhiều kỳ riêng lẻ.",
-        where="Mọi trang báo cáo → Bảng số liệu")
+        guide_item(
+            "stat_panel.png", "Bảng số liệu tổng quan",
+            "Mẫu **hero + nhóm chip** dùng ở gần như mọi trang: 1-2 con số lớn nhất ở trên cùng (vd Tổng giờ, "
+            "Số cây), rồi các nhóm số liệu phụ xếp thành hàng chip nhỏ bên dưới, mỗi nhóm có nhãn xám in hoa "
+            "(TRUNG BÌNH, 7 NGÀY GẦN ĐÂY, CHUỖI NGÀY...). Triết lý: tách rõ **cái quan trọng nhất** (hero, to, "
+            "đập vào mắt trước) khỏi **cái để tra cứu khi cần** (chip, nhỏ, đọc lướt qua vẫn được) — thay vì "
+            "một hàng metric phẳng ngang nhau khiến mắt không biết nhìn vào đâu trước.",
+            tip="Chip có viền teal đậm (class .tw, dùng đúng màu accent đang chọn) là chip đang \"active\"/nổi "
+                "bật — ví dụ trạng thái \"Đang đọc\" của 1 cuốn sách, hoặc chuỗi ngày hiện tại nếu đang giữ "
+                "kỷ lục.",
+            where="Hôm nay · Mọi trang Báo cáo · Sách · Gundam")
 
-    st.markdown("### Báo cáo")
-    guide_item(
-        "day_timeline.png", "Dòng thời gian trong ngày",
-        "Một trục ngang trải dài từ 0h đến 24h, tái hiện đúng những gì đã diễn ra trong một ngày cụ thể. Mỗi **khối "
-        "đậm màu** là một phiên tập trung thực tế, được tô theo màu của dự án và đặt đúng vị trí giờ nó bắt đầu/kết "
-        "thúc; nền phía sau chia sẵn các dải Sáng/Chiều/Tối để dễ định vị thời điểm trong ngày chỉ bằng mắt.\n\n"
-        "- **Vùng xám mờ** phủ phía sau các khối màu là khung giờ *điển hình của cùng thứ đó* — tức trung bình cộng "
-        "các ngày khác cùng thứ (vd nếu hôm đang xem là Thứ 3, vùng xám phản ánh giờ giấc tập trung thường thấy vào "
-        "các Thứ 3 khác trong lịch sử). So khối màu (thực tế hôm nay) với vùng xám (thói quen thường lệ) cho biết "
-        "ngay hôm nay bạn vào việc **đúng nhịp** như mọi khi hay **lệch nhịp** hẳn — sớm hơn, muộn hơn, hoặc trống "
-        "hẳn một khung giờ vốn hay hoạt động.\n"
-        "- Vì mỗi khối tô theo màu dự án, chỉ cần nhìn lướt qua trục là biết trong ngày đã chuyển đổi qua lại giữa "
-        "mấy đầu việc, và việc nào chiếm khung giờ nào.",
-        tip="Nhiều khối ngắn rải rác khắp trục = ngày bị phân mảnh, hay bị gián đoạn giữa các việc; ngược lại vài "
-            "khối dài nằm liền nhau = ngày tập trung sâu, ít bị ngắt quãng. Đây cũng là cách nhanh để phát hiện "
-            "'khoảng chết' — những đoạn trục trống hoàn toàn dù vùng xám phía sau cho thấy bình thường hay có hoạt động.",
-        where="Báo cáo → Ngày → Tổng quan ngày")
-    guide_item(
-        "note_editor.png", "Ghi chú ngày (nhật ký)",
-        "Thẻ **2 cột**: bên trái là Thứ/ngày, bên phải là appointment lịch (nếu có, đồng bộ từ mục *Dữ liệu đầu "
-        "vào*) rồi tới ghi chú — cùng bố cục với mục *Nhật ký* ở mục Tuần/Tháng, dù ở mục Ngày chỉ có "
-        "đúng 1 dòng. Mỗi ngày ghi được đúng **một ghi chú** dạng nhật ký tự do — không giới hạn độ dài, không cần "
-        "gắn với phiên tập trung nào. Mặc định trang chỉ hiển thị nội dung đã lưu (nếu có) cùng nút **Thêm/Sửa ghi "
-        "chú**; bấm vào nút này mới mở ra trình soạn thảo đầy đủ, tránh chiếm chỗ màn hình khi chỉ muốn đọc lại.\n\n"
-        "- Trình soạn thảo hỗ trợ **định dạng rich text** đầy đủ: chữ đậm/nghiêng/gạch chân, đổi màu chữ và tô nền, "
-        "danh sách gạch đầu dòng hoặc đánh số kèm **thụt lề nhiều cấp**, và chèn liên kết. Vài phím tắt quen thuộc "
-        "vẫn dùng được: **⌘/Ctrl + B** để in đậm, **Tab** để thụt lề một mục trong danh sách, **Shift+Tab** để lùi lề.\n"
-        "- Ghi chú được lưu **hoàn toàn độc lập với dữ liệu phiên**: một ngày không có phiên tập trung nào vẫn ghi "
-        "chú được bình thường (vd để note lý do nghỉ), và việc nạp thêm dữ liệu mới hay xoá phiên trong danh sách đã "
-        "xoá **không bao giờ làm mất ghi chú** đã lưu của ngày đó.\n"
-        "- Ghi chú (và appointment lịch) của mọi ngày trong kỳ sẽ **tự động hiện lại** gộp thành danh sách ở mục "
-        "*Nhật ký* của đúng tuần/tháng chứa ngày đó — không cần mở lại từng ngày để đọc. Bấm vào ô Thứ/ngày của "
-        "một dòng bất kỳ trong *Nhật ký* sẽ **nhảy thẳng sang đúng mục Ngày** của trang Báo cáo, đúng ngày đó.",
-        tip="Ghi vài dòng ngắn mỗi ngày, kể cả chỉ 1-2 câu, sẽ tích luỹ thành một kho ngữ cảnh rất giá trị: khi xem "
-            "lại báo cáo tuần/tháng hay đối chiếu 'Ngày này năm trước', bạn có cả bối cảnh (đang bận gì, tâm trạng "
-            "ra sao) đi kèm con số, thay vì chỉ có số giờ trần trụi không nói lên tại sao.",
-        where="Báo cáo → Ngày → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
-    with st.container(border=True, key="guide_otd"):
-        st.markdown(
-            "Ngoài dòng thời gian và ghi chú, mục Ngày còn có phần **Ngày này năm trước**: app tự động dò và "
-            "khớp **đúng ngày/tháng đó ở tất cả các năm trước** có dữ liệu (vd đang xem 15/3/2026 thì sẽ tìm mọi "
-            "15/3 của các năm 2023, 2024, 2025…), gộp lại cả phiên tập trung lẫn ghi chú của những ngày trùng khớp "
-            "đó. Với mỗi năm tìm được, mục này hiện nhanh 3 con số (Tổng giờ · Số phiên · Thời gian/phiên trung "
-            "bình) và toàn bộ nội dung ghi chú nếu ngày đó bạn có ghi. Nếu năm nào không có dữ liệu (chưa dùng "
-            "Forest, hoặc đúng ngày đó bạn không hoạt động), năm đó đơn giản sẽ không xuất hiện trong danh sách. "
-            "Mục này càng ngày càng phong phú theo thời gian — dữ liệu tích luỹ càng nhiều năm, càng có nhiều mốc "
-            "để so sánh 'năm nay so với đúng ngày này các năm trước thì sao', một dạng hoài niệm có số liệu đi kèm.")
+        guide_item(
+            "session_bar.png", "Thanh phân bố độ dài phiên",
+            "Một thanh ngang chia theo % thời lượng, xếp phiên tập trung vào 5 nhóm theo độ dài: **Tối thiểu** "
+            "(≤10 phút — đúng bằng mức tối thiểu Forest cho log 1 phiên), **Ngắn** (dưới 25 phút), **Trung bình** "
+            "(25 đến dưới 50 phút), **Dài** (50 đến dưới 90 phút), **Rất Dài** (từ 90 phút trở lên). 5 nhóm tô "
+            "bằng 5 sắc độ của **cùng một màu accent** (nhạt → đậm), đúng dải màu cũng dùng cho Biểu đồ lịch và "
+            "Giờ tập trung theo thứ bên dưới — chỉ khác cách trình bày (thanh % thay vì lưới ô).",
+            tip="Nhãn % chỉ hiện trên đoạn chiếm từ 9% thanh trở lên — đoạn quá mỏng bị ẩn nhãn để tránh chữ "
+                "chồng chéo, nhưng đoạn màu vẫn còn đó, di chuột vẫn xem được giá trị.",
+            where="Mọi trang Báo cáo · Sách · Gundam (mục Tổng quan)")
 
-    st.markdown("### Nhật ký đọc sách")
-    guide_item(
-        "reading_log.png", "Nhật ký đọc sách",
-        "Trang riêng dành cho việc đọc các cuốn sách **theo trình tự, đọc dở rồi đọc tiếp**, **gộp 2 nguồn dữ "
-        "liệu**: phiên tập trung Forest (mặc định gom mọi Dự án thuộc nhóm `Reading`, khác với các dự án lặp định "
-        "kỳ như đọc báo/tạp chí không tính là 'một cuốn') và phần/chương đã đọc nạp từ **Apple Reminders** (xem "
-        "mục *Dữ liệu đầu vào*). Một cuốn sách chỉ cần có mặt ở **một trong hai nguồn** là đủ để lên trang — cột "
-        "thuộc nguồn còn thiếu hiện dấu **\"—\"**. Reminder List tên bắt đầu bằng \"Gundam\" **không tính vào "
-        "trang này** — có tab **Gundam** riêng. Trang gồm 3 phần: số liệu tổng ở trên cùng, một **timeline trình "
-        "tự đọc** thể hiện thứ tự các cuốn đã/đang đọc (khối màu xanh teal = đang đọc dở, khối xám = đã đọc "
-        "xong), và bảng chi tiết liệt kê từng cuốn với các cột:\n\n"
-        "- **Bắt đầu / Gần nhất / Số ngày**: ngày hoạt động sớm nhất/gần nhất và số ngày giữa 2 mốc đó cho cuốn "
-        "đó, tính theo **cả 2 nguồn** (phiên Forest hoặc phần Reminders hoàn thành, lấy mốc sớm/muộn hơn) — luôn "
-        "tính được kể cả với cuốn chỉ theo dõi qua Reminders, chưa từng bấm giờ Forest.\n"
-        "- **Ngày đọc / Tổng giờ / Số phiên / Giờ tuần**: các số liệu theo phiên Forest — hiện \"—\" nếu cuốn đó "
-        "chỉ theo dõi qua Reminders, chưa có phiên Forest nào.\n"
-        "- **Số phần đã đọc / Phần gần nhất**: số phần/chương đã tick hoàn thành trong Reminders và tên phần gần "
-        "nhất — hiện \"—\" nếu cuốn đó chưa có dữ liệu Reminders.\n"
-        "- **Trạng thái**: *Đang đọc* nếu có hoạt động (phiên Forest **hoặc** phần Reminders hoàn thành) trong "
-        "khoảng ~2 tuần gần nhất, ngược lại tự động chuyển thành *Đã xong* — không cần tự đánh dấu tay.",
-        tip="Nếu có dự án đọc định kỳ không phải sách (vd tạp chí, báo hàng ngày) đang bị lẫn vào trang này, loại nó "
-            "ra bằng cấu hình `BOOKS_GROUP`/`BOOKS_EXCLUDE` ở đầu file `app.py`. Lưu ý trang này **chỉ đọc, không "
-            "ghi** — mọi thao tác chỉnh sửa dữ liệu (phân loại, xoá phiên, nạp lại Reminders…) đều thực hiện ở "
-            "trang Chuẩn bị dữ liệu.",
-        where="Trang Nhật ký đọc sách")
-    guide_item(
-        "reading_journal.png", "Đọc sách (Báo cáo → Ngày/Tuần/Tháng/Dự án)",
-        "Phần/chương sách (và Gundam) đã đọc/xem (nạp từ Apple Reminders) còn hiện xen kẽ vào các trang báo cáo "
-        "khác, gộp chung với ghi chú/lịch Work theo thứ tự cố định **Lịch → Đọc sách → Ghi chú**:\n\n"
-        "- **Mục Ngày**: thẻ **Ghi chú ngày** (không còn khung viền quanh thẻ) hiện lần lượt chip lịch (kèm "
-        "nhãn nhỏ \"Lịch\"), chip các phần đã đọc trong ngày (nhóm theo tên sách/series nếu đọc nhiều cuốn cùng "
-        "ngày), rồi mới tới ghi chú.\n"
-        "- **Mục Tuần/Tháng**: gộp thẳng vào thẻ **Nhật ký** (không còn thẻ riêng) — mỗi dòng ngày theo cùng "
-        "thứ tự Lịch → Đọc sách → Ghi chú, hiện cho mọi ngày có ít nhất 1 trong 3 nguồn, bấm vào Thứ/ngày để nhảy "
-        "sang đúng mục Ngày hôm đó.\n"
-        "- **Mục Dự án**: khi Dự án đang xem khớp tên với 1 cuốn sách đã có dữ liệu Reminders (so tên "
-        "Dự án với phần \"Tên sách\" trong \"Tác giả - Tên sách\"), thêm mục **Nhật ký đọc** hiện trọn lịch sử "
-        "phần đã đọc của đúng cuốn đó.",
-        tip="Cần tải file ở mục *Tải lên từ Reminder* (Chuẩn bị dữ liệu → Dữ liệu đầu vào) trước — chưa tải lần "
-            "nào thì các mục trên đơn giản không hiện gì, không ảnh hưởng phần còn lại của trang.",
-        where="Báo cáo → Ngày → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký · Báo cáo → Dự án → Nhật ký đọc")
-    guide_item(
-        "gundam.png", "Gundam",
-        "Tab riêng cho việc xem các series anime Gundam, dựng y hệt cấu trúc trang **Nhật ký đọc sách** (số liệu "
-        "tổng, timeline trình tự xem, bảng chi tiết từng series) nhưng đổi chữ cho đúng ngữ cảnh (\"series\" thay "
-        "\"cuốn sách\", \"xem\"/\"tập\" thay \"đọc\"/\"phần\"). Nguồn dữ liệu:\n\n"
-        "- **Reminder List tên \"Gundam - Tên series\"** (vd \"Gundam - Gundam Wing\") — mỗi list là 1 series, "
-        "mỗi Reminder đã tick hoàn thành là 1 tập đã xem, nạp qua mục *Tải lên từ Reminder* giống hệt sách.\n"
-        "- **Phiên Forest gắn tag \"Gundam\"** — vì không tách Dự án riêng theo từng series, app tự **suy ra series "
-        "đang xem của mỗi ngày có phiên Gundam** bằng cách ghép với lần hoàn thành reminder (ở bất kỳ series nào) "
-        "**gần ngày đó nhất** (trước hoặc sau). Ví dụ đang xem dở Gundam Wing thì mọi phiên Forest tag Gundam ở "
-        "những ngày gần các lần tick hoàn thành tập Gundam Wing sẽ được tính vào series đó.",
-        tip="Vì thời gian Forest được SUY RA theo ngày gần nhất chứ không tách chính xác theo series, số giờ mỗi "
-            "series chỉ mang tính tương đối — chính xác nhất khi xem lần lượt từng series (không xen kẽ nhiều "
-            "series trong cùng vài ngày).",
-        where="Trang Gundam")
+        guide_item(
+            "calendar.png", "Biểu đồ lịch",
+            "Lưới ô kiểu \"contribution graph\", mỗi ô là 1 ngày, càng đậm càng tập trung nhiều giờ. Thang màu "
+            "chia **8 bậc cố định theo mốc giờ tuyệt đối** — 0h, dưới 0.5h, 0.5-1h, 1-2h, 2-3h, 3-4h, 4-6h, và từ "
+            "6h trở lên — **không** co giãn theo dữ liệu đang xem. Đây là lựa chọn có chủ đích: nếu thang màu "
+            "tự co giãn theo max/min của khung thời gian đang xem, một ngày \"cày\" bất thường nhiều giờ sẽ kéo "
+            "thang giãn ra, làm mọi ngày bình thường khác trông nhạt đi như nhau — mất khả năng so sánh giữa "
+            "các đợt xem khác nhau. Mốc cố định giữ đúng ý nghĩa \"đậm bằng nhau = số giờ bằng nhau\" dù bạn "
+            "đang xem tháng nào.",
+            where="Báo cáo → Tổng quan · Báo cáo → Dự án")
 
-    st.markdown("### Chuẩn bị dữ liệu")
-    guide_item(
-        "prep_data_input.png", "Dữ liệu đầu vào",
-        "Ba nguồn dữ liệu, gộp chung một mục, mỗi nguồn một tab riêng cho gọn:\n\n"
-        "- **Tải lên từ Forest**: nơi duy nhất **nạp dữ liệu phiên tập trung** vào app — tải lên file **CSV xuất "
-        "trực tiếp từ app Forest** (mục xuất dữ liệu trong Forest, không cần chỉnh sửa gì trước). App tự nhận diện "
-        "các cột cần thiết (Tag/Project tương ứng Dự án, Start Time/End Time để tính thời lượng và ngày giờ, cột "
-        "Is Success để lọc), **tự động bỏ qua các phiên thất bại và các dòng gắn tag 'unset'** (không có dự án cụ "
-        "thể), rồi gộp toàn bộ phiên hợp lệ vào dữ liệu đang có sẵn theo cơ chế **chống trùng lặp** dựa trên thời "
-        "điểm diễn ra của từng phiên. Sau khi tải lên, app báo rõ ràng đã đọc được bao nhiêu phiên hợp lệ và đã bỏ "
-        "qua bao nhiêu (thất bại/trùng lặp/unset).\n"
-        "- **Đồng bộ lịch** *(tuỳ chọn)*: kéo các appointment (cuộc hẹn/họp) từ lịch **\"Work\"** trong Apple "
-        "Calendar về app qua **CalDAV** — kết nối trực tiếp tài khoản iCloud, không cần xuất file thủ công. Sau khi "
-        "đồng bộ, appointment hiện dưới dạng chip (giờ bắt đầu + tiêu đề) ngay trong thẻ **Ghi chú ngày** (Báo cáo "
-        "ngày) và xen kẽ vào từng dòng ngày ở mục *Nhật ký* (mục Tuần/Tháng của Báo cáo), kể cả ngày không có ghi chú viết "
-        "tay. Mỗi lần đồng bộ cũng **dọn sạch appointment đã bị xoá** trên Apple Calendar khỏi app, không chỉ thêm "
-        "mới — nên kết quả luôn khớp đúng lịch thật tại thời điểm đồng bộ. Có thêm 1 mục **Đồng bộ khoảng ngày khác "
-        "(nâng cao)** thu gọn sẵn — chọn tay Từ ngày/Đến ngày để lấp dữ liệu lịch cũ hơn (vd để phục vụ mục *Ngày "
-        "này năm trước*), không cần dùng thường xuyên.\n"
-        "- **Tải lên từ Reminder** *(tuỳ chọn)*: nạp tiến độ đọc sách/xem Gundam từ **Apple Reminders** — tải lên "
-        "file `list|title|completed_date` do 1 Shortcut trên iPhone/Mac xuất ra (xem mục *Gundam* và *Nhật ký đọc "
-        "sách* phía trên để biết quy ước đặt tên list, cách tạo Shortcut xem hướng dẫn cụ thể trong README). Mỗi "
-        "**Reminder List** là 1 cuốn sách/series, mỗi **Reminder đã tick hoàn thành** trong list đó là 1 phần/tập "
-        "đã đọc/xem. Không cần kết nối iCloud/CalDAV gì — Shortcut đọc thẳng dữ liệu Reminders trên máy nên thấy "
-        "được cả list chỉ lưu \"Trên iPhone của tôi\" (cục bộ, không đồng bộ iCloud). Mỗi lần tải file lên sẽ "
-        "**thay thế toàn bộ** dữ liệu cũ bằng nội dung file mới — an toàn khi Reminders có thay đổi giữa các lần.",
-        tip="Với **Tải lên từ Forest**: cứ xuất CSV mới bất cứ khi nào cần rồi tải lên thẳng, không cần lọc hay cắt "
-            "bớt file trước — phiên đã có từ lần tải trước sẽ không bị nhân đôi, và những phiên bạn đã chủ động xoá "
-            "cũng sẽ không bị nạp lại. Với **Đồng bộ lịch**: cần tạo **App-Specific Password** tại appleid.apple.com "
-            "và điền vào secrets của app trước khi dùng (xem hướng dẫn chi tiết trong README, mục \"Đồng bộ lịch & "
-            "đọc sách\"); chưa cấu hình thì mục này chỉ báo lỗi khi bấm nút, không ảnh hưởng phần còn lại của app.",
-        where="Chuẩn bị dữ liệu → Dữ liệu đầu vào")
-    guide_item(
-        "prep_classify.png", "Phân loại",
-        "Nơi gán **Danh mục (nhóm lớn)** cho từng **Dự án** (chính là mỗi tag riêng biệt trong Forest). Ví dụ có "
-        "thể gộp hai Dự án 'Lập trình' và 'Tiếng Anh' vào chung một Danh mục 'Học tập', trong khi Dự án 'Đọc sách' "
-        "lại thuộc Danh mục 'Giải trí' — việc phân nhóm này hoàn toàn tự do theo cách bạn muốn nhìn dữ liệu của mình.\n\n"
-        "- Để một Dự án **trống Danh mục** nghĩa là dự án đó tự đứng riêng như một nhóm của chính nó, không gộp "
-        "chung với dự án nào khác — phù hợp với các dự án đơn lẻ không cần nhóm.\n"
-        "- Việc phân loại này ảnh hưởng tới **mọi** biểu đồ và bảng trong toàn bộ app mỗi khi bạn chọn xem theo "
-        "**Danh mục** thay vì Dự án — đổi phân loại ở đây sẽ làm thay đổi cách các biểu đồ đó nhóm cột/miếng bánh/màu "
-        "sắc ngay từ lần xem tiếp theo, không cần nạp lại dữ liệu.",
-        tip="Đặt nhóm hợp lý ngay từ đầu, trước khi có quá nhiều dự án nhỏ lẻ, sẽ giúp các biểu đồ tổng hợp (như "
-            "biểu đồ tròn Phân bổ thời gian hay Xu hướng theo thời gian) gọn gàng và dễ đọc hơn hẳn — quá nhiều "
-            "danh mục nhỏ rời rạc sẽ làm biểu đồ rối mắt, khó nhìn ra bức tranh lớn.",
-        where="Chuẩn bị dữ liệu → Phân loại")
-    guide_item(
-        "prep_backup.png", "Sao lưu, khôi phục & làm mới",
-        "Mục quản lý toàn bộ vòng đời dữ liệu, gồm 3 thao tác:\n\n"
-        "- **Tải bản sao lưu**: đóng gói **toàn bộ** dữ liệu app đang lưu trữ thành **một file .zip** duy nhất — "
-        "bao gồm dữ liệu phiên tập trung, bảng phân loại Danh mục/Dự án, danh sách các phiên đã xoá (để tránh nạp "
-        "nhầm lại khi tải CSV mới từ Forest), và **toàn bộ ghi chú ngày** đã viết. Tên file tự kèm ngày giờ xuất "
-        "để dễ phân biệt giữa nhiều bản sao lưu theo thời gian.\n"
-        "- **Khôi phục**: tải một file .zip đã sao lưu trước đó lên để phục hồi lại **đúng nguyên trạng** tại thời "
-        "điểm sao lưu — dùng khi chuyển sang máy mới, đổi trình duyệt, hoặc muốn quay lại một mốc dữ liệu cũ.\n"
-        "- **Làm mới**: xoá **toàn bộ** dữ liệu app đang lưu trữ để bắt đầu lại từ đầu — thao tác này không thể hoàn "
-        "tác nên bắt buộc phải tick ô xác nhận trước khi thực hiện.",
-        tip="Dữ liệu được lưu trên Supabase (bền vững qua các lần khởi động lại/redeploy), nhưng vẫn nên tải bản "
-            "sao lưu **định kỳ** (vd mỗi lần vừa import dữ liệu mới xong) làm lớp an toàn thứ hai, phòng trường "
-            "hợp thao tác nhầm hoặc sự cố ngoài ý muốn.",
-        where="Chuẩn bị dữ liệu → Quản lý hệ thống")
+        guide_item(
+            "trend.png", "Xu hướng theo thời gian",
+            "Biểu đồ cột theo ngày/tuần/tháng (tuỳ trang), cộng 1 đường chấm đen: **trung bình động 7 ngày**. "
+            "Đường này tính trên đúng 7 ngày lịch liên tiếp — kể cả những ngày hoàn toàn không có phiên nào (tính "
+            "là 0 giờ trong công thức trung bình), chứ không phải 7 ngày *có hoạt động* gần nhất. Nhờ vậy đường "
+            "trung bình phản ánh đúng nhịp độ thực tế theo lịch: nghỉ liền vài ngày sẽ kéo đường đi xuống thấy "
+            "rõ, thay vì bị \"làm mượt\" đi vì chỉ đếm ngày có hoạt động. Chỉ xuất hiện ở biểu đồ theo Ngày "
+            "(không áp dụng khi nhóm theo Tuần/Tháng, vì lúc đó mỗi cột đã là 1 kỳ dài hơn 7 ngày rồi).",
+            where="Mọi trang Báo cáo · Sách · Gundam")
+
+        guide_item(
+            "hourly.png", "Xu hướng tập trung theo khung giờ",
+            "Biểu đồ đường theo 24 khung giờ trong ngày, cho biết bạn hay tập trung vào lúc nào — sáng sớm, "
+            "giữa trưa, hay khuya. Đọc chung với \"Giờ tập trung theo thứ\" bên dưới sẽ ra bức tranh đầy đủ: "
+            "biểu đồ này trả lời \"giờ nào\", còn biểu đồ kia trả lời \"giờ nào của thứ nào\".",
+            where="Mọi trang Báo cáo · Sách · Gundam")
+
+        guide_item(
+            "heatmap.png", "Giờ tập trung theo thứ",
+            "Lưới nhiệt 7×24 (7 thứ trong tuần × 24 giờ), càng đậm nghĩa là trung bình càng nhiều giờ tập trung "
+            "vào đúng khung giờ đó của đúng thứ đó. **Điểm quan trọng về cách tính trung bình**: mẫu số là số "
+            "ngày *có hoạt động* của đúng thứ đó trong khoảng đang xem, không phải tổng số lần thứ đó xuất hiện "
+            "trên lịch. Nếu 1 tháng có 4 Chủ Nhật nhưng bạn chỉ tập trung vào 2 trong số đó, trung bình được "
+            "chia cho 2 chứ không phải 4 — tránh những thứ ít hoạt động bị \"pha loãng\" trông nhạt hơn thực "
+            "tế chỉ vì có nhiều ngày trống xen giữa.",
+            where="Mọi trang Báo cáo · Sách · Gundam")
+
+        guide_item(
+            "histogram.png", "Phân bố độ dài phiên",
+            "Biểu đồ cột chia phiên tập trung thành các khoảng 5 phút một (10-15′, 15-20′... tới 55-60′), cộng "
+            "1 cột gộp cho mọi phiên từ 60 phút trở lên. Có 3 đường mốc chấm đứng tại 25′/50′/90′ (đúng 3 ranh "
+            "giới của \"Thanh phân bố độ dài phiên\" phía trên, để 2 biểu đồ đọc khớp nhau) và 1 đường gạch "
+            "ngang đánh dấu độ dài trung bình.",
+            where="Mọi trang Báo cáo · Sách · Gundam")
+
+        guide_item(
+            "table.png", "Bảng số liệu",
+            "Bảng chi tiết theo từng Danh mục/Dự án qua các kỳ, với ô được tô nền theo cường độ (heat cell) — "
+            "càng đậm càng nhiều giờ. Độ đậm tính theo **tỉ lệ giá trị ô đó so với giá trị lớn nhất trong CẢ "
+            "BẢNG** (không phải so với giá trị lớn nhất của riêng hàng đó), giới hạn ở mức 70% độ đục tối đa để "
+            "ô đậm nhất vẫn còn đọc được số bên trong; ô dưới 0.05 giờ hiện dấu chấm giữa \"·\" thay vì số 0 "
+            "cho gọn mắt. Cột \"Tổng\" ở cuối luôn để trắng, không tô — vì cột đó cộng dồn cả kỳ nên tất nhiên "
+            "luôn là số lớn nhất hàng, tô đậm nó sẽ không mang thêm thông tin gì. Dấu **▾** đỏ nhỏ cạnh 1 ô nghĩa "
+            "là kỳ đó giảm còn ≤40% so với kỳ liền trước (chỉ tính khi kỳ trước đạt ít nhất 1 giờ) — tín hiệu "
+            "sụt giảm rõ rệt, không phải dao động ngẫu nhiên.",
+            tip="Vì độ đậm so sánh trong TOÀN BẢNG chứ không phải trong từng hàng, một Dự án hoạt động ít vẫn "
+                "luôn nhạt màu hơn Dự án hoạt động nhiều — đây là điểm khác so với kiểu heatmap chuẩn hoá theo "
+                "hàng, giúp so sánh được độ lớn tuyệt đối giữa các Dự án chứ không chỉ giữa các kỳ trong 1 Dự án.",
+            where="Mọi trang Báo cáo · Sách · Gundam")
+
+    # ==========================================
+    # SUB-TAB: HÔM NAY & BÁO CÁO
+    # ==========================================
+    with _guide_tabs[1]:
+        with st.container(border=True, key="guide_hn_intro"):
+            st.markdown("#### Hôm nay là gì, Báo cáo là gì")
+            st.markdown(
+                "**Hôm nay** và **Báo cáo** đều xem cùng 1 nguồn dữ liệu (phiên Forest), chỉ khác **đơn vị thời "
+                "gian**: Hôm nay luôn đúng 1 ngày cụ thể, Báo cáo nhìn theo lát cắt rộng hơn — Tổng quan (toàn "
+                "bộ lịch sử, không giới hạn kỳ), Tháng, Tuần, hoặc lọc theo 1 Dự án/Nhóm. Trang \"Hôm nay\" "
+                "từng là 1 lát cắt bên trong Báo cáo (gọi là \"Ngày\") nhưng đã được tách ra thành mục **đầu "
+                "tiên, độc lập** trên thanh điều hướng — lý do rất thực tế: đây là trang được mở đầu tiên mỗi "
+                "ngày, tách riêng giúp vào thẳng nó mà không phải đi qua Báo cáo trước.")
+
+        guide_item(
+            "day_timeline.png", "Dòng thời gian trong ngày",
+            "Dải ngang biểu diễn 24 giờ của ngày đang xem, mỗi phiên tập trung vẽ thành 1 khối tại đúng vị trí "
+            "giờ nó diễn ra, tô màu theo Danh mục. Đọc trực quan hơn bảng liệt kê: nhìn một lần biết ngay buổi "
+            "sáng/chiều/tối hôm đó dồn vào việc gì, có bị ngắt quãng nhiều không.",
+            where="Hôm nay → Tổng quan ngày")
+
+        guide_item(
+            "note_editor.png", "Ghi chú ngày (nhật ký)",
+            "Thẻ 2 cột: cột trái là Thứ/ngày, cột phải gộp **3 nguồn** cho đúng ngày đó — chip lịch hẹn Work (nếu "
+            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó, và ô ghi chú tự do (trình soạn thảo "
+            "Quill, hỗ trợ chữ đậm/nghiêng/danh sách). Cùng 1 bố cục 2 cột này lặp lại ở thẻ **Nhật ký** của "
+            "Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất quán để không phải học lại "
+            "cách đọc.",
+            tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
+                "hơn, không tạo cảm giác đang điền vào 1 form.",
+            where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
+
+        guide_item(
+            "otd.png", "Ngày này năm trước",
+            "Với ngày đang xem, tìm lại đúng ngày/tháng đó ở **mọi năm trước** và gộp **4 nguồn** cùng lúc: "
+            "phiên Forest, ghi chú, lịch hẹn Work, và sách/Gundam đã đọc/xem — năm nào có ít nhất 1 trong 4 "
+            "nguồn thì hiện dòng cho năm đó, sắp xếp năm gần nhất lên trên. Không cần năm đó phải có ghi chú mới "
+            "hiện — chỉ cần có lịch hẹn hoặc đã đọc xong 1 chương cũng đủ để dòng năm đó xuất hiện. Mục này càng "
+            "dùng lâu càng dày dữ liệu, vì mỗi năm trôi qua lại có thêm 1 \"ngày này năm trước\" mới để so sánh.",
+            where="Hôm nay → Ngày này năm trước")
+
+        guide_item(
+            "baocao_kyxem.png", "Chọn kỳ xem — 4 lát cắt của Báo cáo",
+            "Thanh gạch chân ở đầu trang Báo cáo, chọn 1 trong 4 lát cắt:\n\n"
+            "- **Tổng quan** — toàn bộ lịch sử đã nạp, không lọc theo kỳ nào; lát cắt mặc định khi vào trang, vì "
+            "đây là bức tranh rộng nhất, hợp để bắt đầu.\n"
+            "- **Tháng** / **Tuần** — 2 lát cắt dùng chung đúng 1 cấu trúc 8 mục đánh số (chỉ khác đơn vị thời "
+            "gian nhóm theo), có thêm bộ chọn kỳ cụ thể (tháng nào/tuần nào) và thẻ Nhật ký liệt kê từng ngày "
+            "trong kỳ đó.\n"
+            "- **Dự án** — lọc toàn bộ báo cáo về đúng 1 Danh mục hoặc 1 Dự án đã chọn, dùng khi muốn xem sâu "
+            "riêng 1 việc thay vì cả bức tranh chung.\n\n"
+            "Việc Tháng và Tuần dùng chung 1 khuôn 8 mục không phải trùng lặp code cho vui — đây là thiết kế "
+            "\"trung lập theo kỳ\" (period-agnostic): cùng 1 bộ biểu đồ áp được cho bất kỳ độ dài kỳ nào, không "
+            "cần thiết kế riêng cho từng đơn vị thời gian.",
+            where="Báo cáo")
+
+        guide_item(
+            "pie.png", "Phân bổ thời gian",
+            "Biểu đồ tròn chia % thời lượng theo Danh mục trong đúng kỳ đang xem (Tháng hoặc Tuần) — trả lời "
+            "nhanh câu hỏi \"kỳ này thời gian dồn vào đâu nhiều nhất\" mà không cần đọc hết bảng số liệu chi "
+            "tiết bên dưới.",
+            where="Báo cáo → Tháng · Báo cáo → Tuần")
+
+        guide_item(
+            "baocao_duan.png", "Báo cáo theo Dự án",
+            "Chọn 1 Nhóm (Danh mục) hoặc 1 Dự án cụ thể từ danh sách thả xuống — mặc định **chưa chọn gì** khi "
+            "mới vào trang (không tự động hiện Dự án đầu tiên), buộc phải chủ động chọn để tránh nhầm đang xem "
+            "đúng Dự án mình muốn. Sau khi chọn, cấu trúc rút gọn còn 5 mục (bỏ Nhật ký và Phân bổ thời gian vì "
+            "không có khái niệm \"kỳ\" ở đây — đây là toàn bộ lịch sử của riêng Dự án đó) — dùng khi muốn theo "
+            "dõi tiến triển của 1 việc cụ thể xuyên suốt, ví dụ so Biểu đồ lịch của \"Deep Work\" tháng này với "
+            "tháng trước.",
+            where="Báo cáo → Dự án")
+
+    # ==========================================
+    # SUB-TAB: SÁCH & GUNDAM
+    # ==========================================
+    with _guide_tabs[2]:
+        with st.container(border=True, key="guide_rl_intro"):
+            st.markdown("#### 1 Reminder List = 1 cuốn sách/series")
+            st.markdown(
+                "Sách và Gundam đọc chung **một bảng dữ liệu** (`reading_log`, nạp từ file Apple Reminders xuất "
+                "qua Shortcuts) và chạy chung **một hàm hiển thị** — 2 trang tách biệt trên thanh điều hướng chỉ "
+                "khác nhau ở một bộ nhãn chữ (đọc/xem, phần/tập, sách/series...), không phải 2 đoạn code riêng.\n\n"
+                "Quy ước đặt tên: mỗi **Reminder List** trên điện thoại là 1 cuốn sách/series, đặt tên dạng "
+                "\"Tác giả - Tên sách\" (hoặc \"Gundam - Tên series\"); mỗi **Reminder đã tick hoàn thành** "
+                "trong list đó là 1 phần/chương/tập đã đọc/xem xong. App tách tên hiển thị bằng cách cắt theo "
+                "dấu **\"-\" đầu tiên** trong tên list, ưu tiên dạng có khoảng trắng \" - \" (fallback về dấu "
+                "\"-\" liền nếu không có khoảng trắng) — phần **sau** dấu gạch là tên hiển thị, phần **trước** "
+                "(tác giả, hoặc chữ \"Gundam\") bị bỏ. List nào có tên bắt đầu bằng chữ \"gundam\" (không "
+                "phân biệt hoa/thường) tự động được xếp vào trang Gundam thay vì Sách.")
+
+        guide_item(
+            "reading_log.png", "Tổng quan (Sách/Gundam)",
+            "Hero + chip theo nhóm (giống \"Bảng số liệu tổng quan\" ở sub-tab Tổng quan phía trước), cộng "
+            "thanh phân bố và dòng thời gian liệt kê từng cuốn/series theo tiến độ. Mỗi cuốn/series được ghép "
+            "từ **tối đa 2 nguồn**: phiên Forest (nếu tên Dự án Forest trùng khớp tên sách) và các phần đã tick "
+            "trong Reminders — 1 cuốn có thể chỉ có 1 trong 2 nguồn, hoặc cả 2 cùng lúc; ô nào thiếu dữ liệu vì "
+            "thiếu nguồn hiện dấu gạch ngang \"—\" thay vì để trống hay báo lỗi.",
+            where="Sách → Tổng quan · Gundam → Tổng quan")
+
+        guide_item(
+            "reading_detail.png", "Chi tiết (Sách/Gundam)",
+            "Chọn đúng 1 cuốn/series (mặc định chưa chọn gì) để xem sâu 4 mục: **1. Số liệu** (hero + nhóm chip "
+            "Mốc thời gian/Nhịp độ/Trạng thái riêng của cuốn đó), **2. Nhật ký đọc** (từng phần đã hoàn thành, "
+            "theo ngày), **3. Biểu đồ lịch** (tô đậm theo số phần đọc/ngày thay vì số giờ, vì \"1 ngày đọc 3 "
+            "chương\" có ý nghĩa hơn số giờ với sách chỉ theo dõi qua Reminders), **4. Bảng số liệu theo ngày**.\n\n"
+            "**Cách tính \"Số ngày\"** đáng chú ý riêng: lấy **hợp (union)** ngày sớm nhất và muộn nhất giữa CẢ "
+            "2 nguồn, không chỉ tính khi có phiên Forest — cuốn chỉ theo dõi qua Reminders vẫn ra đúng \"Số "
+            "ngày\" thay vì hiện trống. Cụ thể: nếu chỉ có Forest, lấy khoảng ngày của Forest; nếu chỉ có "
+            "Reminders, lấy khoảng ngày của Reminders; nếu có cả 2 (vd đang bấm giờ Forest rồi sau đó chuyển "
+            "sang chỉ tick Reminders), lấy ngày bắt đầu SỚM NHẤT và ngày kết thúc MUỘN NHẤT giữa 2 nguồn — trải "
+            "dài đúng theo thực tế đọc, không bị cắt cụt vì đổi cách theo dõi giữa chừng.",
+            where="Sách → Chi tiết · Gundam → Chi tiết")
+
+        guide_item(
+            "gundam.png", "Vì sao Gundam cần \"suy luận\" series",
+            "Forest chỉ có đúng 1 tag chung \"Gundam\" — không có Dự án riêng cho từng series như Rừng Na Uy "
+            "hay Harry Potter có thể trùng tên 1 Dự án Forest. Vậy khi bạn bấm giờ Forest với tag \"Gundam\", "
+            "app không có cách nào biết chắc bạn đang xem series nào **trừ khi suy luận từ dữ liệu Reminders**: "
+            "với mỗi ngày có phiên gắn tag Gundam, app tìm lần hoàn thành Reminder (ở BẤT KỲ series Gundam nào) "
+            "**gần ngày đó nhất về mặt thời gian** — có thể là trước hoặc sau, miễn là gần nhất — rồi gán cả "
+            "ngày đó cho đúng series của lần hoàn thành đó. Nếu bạn chỉ đang xem 1 series tại 1 thời điểm (kịch "
+            "bản phổ biến), suy luận này gần như luôn đúng; nếu xem xen kẽ nhiều series cùng lúc, ngày ở giữa 2 "
+            "lần hoàn thành sẽ được gán về phía gần hơn.",
+            tip="Không có \"không suy luận được\" — ngay cả phiên trước lần hoàn thành Reminder đầu tiên hoặc "
+                "sau lần cuối cùng vẫn được gán về mốc gần nhất hiện có (đầu hoặc cuối), không bị bỏ sót.",
+            where="Gundam")
+
+    # ==========================================
+    # SUB-TAB: TUỲ BIẾN
+    # ==========================================
+    with _guide_tabs[3]:
+        with st.container(border=True, key="guide_tb_intro"):
+            st.markdown("#### 5 mục của tab Tuỳ biến")
+            st.markdown(
+                "Mọi thứ điều khiển \"app trông ra sao\" và \"dữ liệu đến từ đâu\" đều gom về đúng 1 trang, "
+                "đánh số 1-5: **Giao diện** (màu accent), **Dữ liệu đầu vào** (nạp dữ liệu mới), **Phân loại** "
+                "(gán Dự án vào Nhóm), **Dữ liệu làm việc hiện tại** (xem/xoá phiên thô), **Quản lý hệ thống** "
+                "(sao lưu/khôi phục/làm mới). Mục Giao diện được xếp lên **đầu tiên** — trước cả việc nạp dữ "
+                "liệu — vì đây là tuỳ chỉnh nhẹ nhàng nhất, phù hợp làm bước đầu khi mới mở tab; các mục còn lại "
+                "nặng tính thao tác dữ liệu hơn, xếp sau.")
+
+        guide_item(
+            "giao_dien.png", "1. Giao diện — màu accent",
+            "14 màu để chọn, xếp theo thứ tự sắc độ (đỏ/cam/vàng → xanh lá → xanh dương → tím, cuối cùng là "
+            "\"Than chì\" gần như xám) cho dễ dò theo dải cầu vồng thay vì danh sách rối mắt. Bấm 1 màu là áp "
+            "dụng **ngay lập tức**, không cần nút \"Lưu\" riêng — màu được ghi vào Supabase (bảng `settings`) "
+            "nên vẫn giữ nguyên qua các lần mở lại app.\n\n"
+            "**1 màu accent chọn ra lan toả tới 3 nơi khác nhau, bằng 3 cơ chế khác nhau**:\n"
+            "- **Nút bấm/khung viền/chip** — qua biến CSS (`:root { --accent: ...; }`), toàn bộ stylesheet tham "
+            "chiếu tới biến này thay vì mã màu cứng.\n"
+            "- **Biểu đồ đơn sắc/bảng nhiệt** (Biểu đồ lịch, Giờ tập trung theo thứ, Thanh phân bố độ dài phiên, "
+            "heat cell của Bảng số liệu) — KHÔNG qua CSS, mà qua Python: màu accent được đổi thành 1 giá trị "
+            "**hue** (sắc độ trên vòng thuần sắc), rồi mọi dải màu này tự xoay theo đúng hue đó, giữ nguyên độ "
+            "bão hoà và khoảng độ sáng nhạt→đậm — nên đổi màu accent tự động đổi TẤT CẢ biểu đồ đơn sắc cùng "
+            "lúc, không cần sửa từng biểu đồ riêng.\n"
+            "- **Ô ghi chú (trình soạn thảo Quill)** — chạy trong 1 iframe riêng biệt, CSS của trang chính không "
+            "chạm tới được; app tự tiêm 1 đoạn `<style>` khác vào bên trong iframe đó, lặp lại mỗi 400ms để "
+            "chống việc Streamlit dựng lại iframe làm mất style đã tiêm.\n\n"
+            "Nếu bảng `settings` chưa được tạo trên Supabase, hoặc giá trị lưu trong đó bị hỏng, app **tự rơi "
+            "về màu Teal mặc định** thay vì báo lỗi hay crash — tính năng đổi màu hoàn toàn tuỳ chọn, không có "
+            "nó app vẫn chạy bình thường với đúng màu gốc từ trước tới nay.",
+            tip="3 màu đầu tiên (Hồng đào/Cam cháy/Vàng nắng) cố ý gần tông với 2 trạng thái cảnh báo cố định "
+                "trong app (cam = chuỗi đang treo, đỏ = chuỗi đã đứt) — nếu chọn 1 trong 3 màu này làm accent, "
+                "2 trạng thái cảnh báo đó sẽ trông gần giống màu accent hơn bình thường. Đánh đổi này đã được "
+                "chấp nhận để có đủ lựa chọn màu ấm, không phải giới hạn kỹ thuật.",
+            where="Tuỳ biến → 1. Giao diện")
+
+        guide_item(
+            "prep_data_input.png", "2. Dữ liệu đầu vào",
+            "3 tab con, chỉ hiện 1 tab tại 1 thời điểm cho gọn:\n\n"
+            "- **Tải lên từ Forest** — nạp file CSV xuất từ app Forest. Mỗi lần tải lên chỉ **thêm dữ liệu mới**, "
+            "tự động bỏ qua phiên trùng lặp (so theo giờ bắt đầu/kết thúc) và phiên đã từng bị xoá trước đó — "
+            "nạp lại cùng 1 file nhiều lần không sợ bị nhân đôi dữ liệu.\n"
+            "- **Đồng bộ lịch** — kéo lịch hẹn từ Apple Calendar (lịch \"Work\") qua CalDAV, khoảng ngày quanh "
+            "hôm nay chọn nhanh (±30/±90/±180 ngày) hoặc khoảng ngày tuỳ chỉnh cho việc lấp dữ liệu cũ (phục vụ "
+            "mục Ngày này năm trước).\n"
+            "- **Tải lên từ Reminder** — nạp file xuất từ Apple Reminders qua Shortcuts, mỗi lần tải lên **thay "
+            "thế toàn bộ** dữ liệu Sách/Gundam cũ (khác hẳn cách Forest CSV chỉ cộng thêm) — vì Reminders phản "
+            "ánh đúng trạng thái hiện tại của toàn bộ list, không phải 1 lát cắt thời gian như CSV Forest.",
+            where="Tuỳ biến → 2. Dữ liệu đầu vào")
+
+        guide_item(
+            "prep_classify.png", "3. Phân loại",
+            "Gán mỗi Dự án Forest vào 1 Nhóm (Danh mục) — vd Dự án \"Deep Work\"/\"Viết báo cáo\" cùng gán "
+            "vào Nhóm \"Công việc\". Nhóm dùng để gộp các biểu đồ/bảng theo cấp cao hơn Dự án đơn lẻ. Dự án "
+            "chưa gán Nhóm nào vẫn hoạt động bình thường (tự đứng riêng, không thuộc Nhóm nào) — phân loại là "
+            "tuỳ chọn để gọn báo cáo, không bắt buộc để app chạy được.",
+            where="Tuỳ biến → 3. Phân loại")
+
+        guide_item(
+            "prep_worktable.png", "4. Dữ liệu làm việc hiện tại",
+            "Bảng thô liệt kê từng phiên đã nạp (giờ bắt đầu/kết thúc, Dự án, thời lượng), phân trang 100 dòng "
+            "mỗi trang khi dữ liệu nhiều. Chọn 1 hoặc nhiều dòng rồi xoá — phiên bị xoá được ghi nhớ riêng (bảng "
+            "`deleted_sessions`) để nếu sau này nạp lại đúng file CSV cũ, phiên đó không tự động xuất hiện lại.",
+            where="Tuỳ biến → 4. Dữ liệu làm việc hiện tại")
+
+        guide_item(
+            "prep_backup.png", "5. Quản lý hệ thống",
+            "3 thao tác trên toàn bộ dữ liệu:\n\n"
+            "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, lịch, sách/Gundam, cài đặt màu) thành "
+            "1 file .zip, tên tự kèm ngày giờ.\n"
+            "- **Khôi phục** — tải 1 file .zip đã sao lưu để phục hồi đúng nguyên trạng tại thời điểm đó, dùng "
+            "khi chuyển máy/trình duyệt hoặc muốn quay lại 1 mốc dữ liệu cũ.\n"
+            "- **Làm mới** — xoá sạch toàn bộ dữ liệu để bắt đầu lại, bắt buộc tick ô xác nhận trước khi bấm vì "
+            "thao tác không thể hoàn tác.",
+            tip="Dữ liệu đã lưu bền vững trên Supabase (không mất khi khởi động lại/redeploy app), nhưng vẫn nên "
+                "tải bản sao lưu định kỳ (vd mỗi lần vừa nạp dữ liệu Forest mới) làm lớp an toàn thứ hai.",
+            where="Tuỳ biến → 5. Quản lý hệ thống")
+
+    # ==========================================
+    # SUB-TAB: CẬP NHẬT
+    # ==========================================
+    with _guide_tabs[4]:
+        st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
+
+        guide_update(126, "Mở rộng bảng màu accent lên 14 màu, hiện tên màu trực tiếp trên nút", [
+            "Mục \"1. Giao diện\" chuyển lên **đầu tiên** trong tab Tuỳ biến (trước cả Dữ liệu đầu vào), bỏ "
+            "dòng chú thích thừa phía dưới bảng màu.",
+            "Bảng màu accent mở rộng từ 8 lên **14 màu**, người dùng tự chọn qua 1 bản xem trước tương tác, xếp "
+            "theo thứ tự cầu vồng cho dễ dò.",
+            "Tên màu hiện thẳng trên nút bấm (không còn chỉ nằm ở tooltip khi rê chuột), kèm dấu ✓ đánh dấu màu "
+            "đang dùng; màu chữ trên nút tự đổi trắng/đen theo độ sáng nền để luôn đọc rõ.",
+        ])
+        guide_update(125, "Thêm trang \"Hôm nay\", đổi tên tab Dữ liệu, thêm màu accent (bản đầu)", [
+            "Trang \"Hôm nay\" ra đời — tách từ lát cắt \"Ngày\" trong Báo cáo, trở thành mục **đầu tiên và "
+            "mặc định** trên thanh điều hướng, vì đây là trang được mở đầu tiên mỗi ngày.",
+            "\"Tổng quan\" (toàn bộ lịch sử, không giới hạn kỳ) chuyển vào làm lát cắt đầu tiên của Báo cáo, "
+            "thay cho vị trí của \"Ngày\" cũ.",
+            "Đổi tên tab \"Chuẩn bị dữ liệu\" thành **\"Tuỳ biến\"**.",
+            "Thêm bộ chọn màu accent (phiên bản đầu, 8 màu) — áp dụng ngay cho nút, biểu đồ đơn sắc và bảng "
+            "nhiệt trên toàn app.",
+        ])
+        guide_update(124, "Sửa vạch kẻ thừa dưới tab Sách/Gundam", [
+            "Bỏ 1 vạch xám kẻ ngang mà Streamlit tự vẽ thêm bên dưới 2 tab \"Tổng quan/Chi tiết\" ở trang Sách "
+            "và Gundam, cho khớp đúng kiểu gạch chân đã dùng ở bộ chọn kỳ của Báo cáo (chỉ có 1 vạch ngắn dưới "
+            "mục đang chọn, không có vạch dài chạy hết chiều ngang).",
+        ])
+        guide_update(123, "Gọn bộ chọn kỳ của Báo cáo, đổi icon Gundam/Dự án", [
+            "Ẩn nhãn \"Chọn kỳ xem\" phía trên bộ chọn kỳ của Báo cáo cho gọn phần đầu trang.",
+            "Đổi kiểu nút của bộ chọn kỳ từ dạng viên thuốc (pill, nền đặc) sang gạch chân (underline tab), khớp "
+            "đúng phong cách Tổng quan/Chi tiết đang dùng ở Sách/Gundam.",
+            "Đổi icon Gundam từ hình robot sang khiên; đổi icon lát cắt Dự án từ thư mục sang cặp táp.",
+        ])
+        guide_update(122, "Quay lại thanh điều hướng dạng nút mượt, thêm icon cho Sách/Gundam", [
+            "Quay lại dùng thanh điều hướng dạng nút bấm mượt (segmented control) thay cho menu thả xuống khi "
+            "hover chuột — menu thả xuống làm cả trang tải lại mỗi lần bấm, bất tiện khi dùng thực tế.",
+            "Thêm icon Material cho 2 tab \"Tổng quan/Chi tiết\" ở cả trang Sách và Gundam.",
+            "Căn giữa cả 2 thanh chọn lát cắt (Báo cáo và Sách/Gundam) cho khớp với thanh điều hướng chính vốn "
+            "đã căn giữa từ trước.",
+        ])
