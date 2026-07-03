@@ -3319,7 +3319,35 @@ elif nav == "Gundam":
 # TAB TUỲ BIẾN
 # ==========================================
 elif nav == "Tuỳ biến":
-    with st.expander("1. Dữ liệu đầu vào", expanded=True):
+    with st.expander("1. Giao diện", expanded=True):
+        _preset_items = list(ACCENT_PRESETS.items())
+        _per_row = 8
+        _swatch_css = "<style>"
+        for _row_start in range(0, len(_preset_items), _per_row):
+            _row_items = _preset_items[_row_start:_row_start + _per_row]
+            _cols = st.columns(_per_row)
+            for _i, (_name, _hex) in enumerate(_row_items):
+                _idx = _row_start + _i
+                _key = f"accent_sw_{_idx}"
+                _border = "#1d1d1f" if _hex == ACCENT else "transparent"
+                # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
+                # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
+                # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
+                # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong.
+                _swatch_css += (
+                    f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background:{_hex} !important; border:3px solid {_border} !important; "
+                    f"border-radius:50% !important; width:38px !important; height:38px !important; "
+                    f"padding:0 !important; }}")
+                with _cols[_i]:
+                    if st.button(" ", key=_key, help=_name):
+                        if _hex != ACCENT:
+                            save_setting("accent_hex", _hex)
+                            st.rerun()
+        _swatch_css += "</style>"
+        st.markdown(_swatch_css, unsafe_allow_html=True)
+
+    with st.expander("2. Dữ liệu đầu vào", expanded=True):
         _tab_forest, _tab_cal, _tab_rem = st.tabs(["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
         with _tab_forest:
             _msg = st.session_state.pop('import_msg', None)
@@ -3443,13 +3471,13 @@ elif nav == "Tuỳ biến":
                         time.sleep(1)
                         st.rerun()
 
-    with st.expander("2. Phân loại", expanded=True):
+    with st.expander("3. Phân loại", expanded=True):
         db_current = load_db()
         mapping_df = load_mapping()
         all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
         cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Danh mục'])) if not mapping_df.empty else {}
         if not all_projs:
-            st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 1 trước.")
+            st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 2 trước.")
         else:
             existing_cats = sorted({str(v) for v in cur_map.values() if pd.notna(v) and str(v).strip()})
             unmapped = [p for p in all_projs if not (cur_map.get(p) and str(cur_map.get(p)).strip())]
@@ -3479,7 +3507,7 @@ elif nav == "Tuỳ biến":
                 nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
                 save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                 st.rerun()
-    with st.expander("3. Dữ liệu làm việc hiện tại", expanded=True):
+    with st.expander("4. Dữ liệu làm việc hiện tại", expanded=True):
         if not db_current.empty:
             db_base = db_current.reset_index(drop=True)
             _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
@@ -3526,7 +3554,7 @@ elif nav == "Tuỳ biến":
                     f"<div style='text-align:center;font-size:13px;color:#86868b;margin-top:2px;'>"
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
-    with st.expander("4. Quản lý hệ thống", expanded=True):
+    with st.expander("5. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
         _today = date.today().strftime('%Y-%m-%d')
         with c1:
@@ -3618,31 +3646,6 @@ elif nav == "Tuỳ biến":
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
                 st.rerun()
-
-    with st.expander("5. Giao diện", expanded=True):
-        st.caption("Màu nhấn (accent) -- áp dụng ngay cho nút, biểu đồ đơn sắc, bảng nhiệt.")
-        _preset_items = list(ACCENT_PRESETS.items())
-        _cols = st.columns(len(_preset_items))
-        _swatch_css = "<style>"
-        for i, (_name, _hex) in enumerate(_preset_items):
-            _key = f"accent_sw_{i}"
-            _border = "#1d1d1f" if _hex == ACCENT else "transparent"
-            # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
-            # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
-            # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
-            # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong.
-            _swatch_css += (
-                f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                f"background:{_hex} !important; border:3px solid {_border} !important; "
-                f"border-radius:50% !important; width:38px !important; height:38px !important; "
-                f"padding:0 !important; }}")
-            with _cols[i]:
-                if st.button(" ", key=_key, help=_name):
-                    if _hex != ACCENT:
-                        save_setting("accent_hex", _hex)
-                        st.rerun()
-        _swatch_css += "</style>"
-        st.markdown(_swatch_css, unsafe_allow_html=True)
 
 # ==========================================
 # TAB HƯỚNG DẪN
