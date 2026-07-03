@@ -2654,6 +2654,17 @@ st.markdown(
         background: var(--accent) !important;
     }
 
+    /* Mọi hộp thả xuống (st.selectbox) trong app: viền đổi sang màu accent khi đang mở/focus,
+       cùng hiệu ứng đã làm cho hộp chọn ngày ở trên -- áp dụng chung 1 lần ở đây cho TẤT CẢ
+       selectbox (Kỳ ở period_stepper, "Chọn Nhóm hoặc Dự án", "Chọn để xem chi tiết"...) thay vì
+       lặp lại rule riêng cho từng nơi. Hộp bo viền nằm ở div con ĐẦU TIÊN bên trong
+       [data-baseweb="select"] (không có data-baseweb riêng để bám vào), nên chọn qua tổ hợp
+       :focus-within + > div. */
+    div[data-baseweb="select"]:focus-within > div {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
+    }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
