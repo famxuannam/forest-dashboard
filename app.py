@@ -1290,7 +1290,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             for _, r in reading.iterrows()
         ]})
 
-    _tab_overview, _tab_detail = st.tabs([":material/bar_chart: Tổng quan", ":material/search: Chi tiết"])
+    _tab_overview, _tab_detail = st.tabs([":material/bar_chart: Tổng quan", ":material/search: Chi tiết"],
+                                          key="rl_view_tabs")
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -2471,6 +2472,18 @@ st.markdown(
        Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+
+    /* Cùng ý căn giữa như trên, áp cho 2 thanh chọn sub-tab: "Chọn kỳ xem" (Báo cáo) và
+       Tổng quan/Chi tiết (Sách, Gundam). Khác nút nav chính (label đã ẩn), "Chọn kỳ xem" còn
+       hiện nhãn -> stButtonGroup ở đây bọc CẢ label lẫn hàng nút trên cùng 1 hàng ngang, nên
+       phải chuyển sang xếp dọc (label trên, hàng nút dưới) rồi mới căn giữa được từng phần. */
+    .st-key-bc_sub_picker { width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] {
+        display: flex !important; flex-direction: column !important; align-items: center !important;
+        width: 100% !important;
+    }
+    .st-key-bc_sub_picker [role="radiogroup"] { justify-content: center !important; flex-wrap: wrap !important; }
+    .st-key-rl_view_tabs [data-baseweb="tab-list"] { justify-content: center !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa */
