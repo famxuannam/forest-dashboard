@@ -161,7 +161,7 @@ MAC_COLORS = [
 ]
 
 
-# 8 lựa chọn màu accent (tab Tuỳ biến → "5. Giao diện"). Không trùng bất kỳ hue nào trong
+# 8 lựa chọn màu accent (tab Tuỳ biến → "1. Giao diện"). Không trùng bất kỳ hue nào trong
 # MAC_COLORS (tránh nhầm với màu Danh mục/Dự án) và cách xa 2 tông cố định warn (~35°, cam) /
 # neutral (~3°, đỏ) ở NUDGE_TONES ít nhất 80° -- xem bảng khoảng cách hue đã tính khi lên kế hoạch.
 ACCENT_PRESETS = {
