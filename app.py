@@ -2675,6 +2675,13 @@ st.markdown(
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
 
+    /* Mọi st.tabs() trong app (Tổng quan/Chi tiết ở Sách & Gundam, "1. Dữ liệu đầu vào" ở Tuỳ
+       biến, sub-tab ở Hướng dẫn): tab đang chọn + vạch gạch chân mặc định lấy theo primaryColor
+       cứng trong .streamlit/config.toml (#00a3ad) chứ KHÔNG theo accent đang chọn -- override
+       lại bằng var(--accent) cho đồng bộ. */
+    [data-baseweb="tab"][aria-selected="true"] { color: var(--accent) !important; }
+    [data-baseweb="tab-highlight"] { background: var(--accent) !important; }
+
     /* ===== Tinh chỉnh riêng cho điện thoại (không ảnh hưởng desktop) ===== */
     @media (max-width: 640px) {
         h1 { font-size: 1.9rem !important; line-height: 1.15 !important; }
