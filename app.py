@@ -2987,13 +2987,17 @@ st.markdown(
     .note-html > :first-child, .st-key-note_saved > :first-child { margin-top: 0 !important; }
     .note-html > :last-child, .st-key-note_saved > :last-child { margin-bottom: 0 !important; }
     .note-html a, .st-key-note_saved a { color: var(--accent); }
-    /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) -- CẦN
-       !important: Streamlit tự đặt sẵn CSS cho <li> bên trong [data-testid="stMarkdownContainer"]
-       (độ đặc hiệu (0,1,1), cao hơn 1 class selector đơn (0,1,0)) nên rule padding-left thường
-       bị đè mất, khiến mọi bullet/số lồng nhau hiện phẳng thành 1 tầng dù HTML lưu đúng class. */
-    .ql-indent-1 { padding-left: 2.0em !important; } .ql-indent-2 { padding-left: 4.0em !important; }
-    .ql-indent-3 { padding-left: 6.0em !important; } .ql-indent-4 { padding-left: 8.0em !important; }
-    .ql-indent-5 { padding-left: 10em !important; } .ql-indent-6 { padding-left: 12em !important; }
+    /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>, KHÔNG lồng thật
+       <ul><ul>). Dùng margin-left (không phải padding-left): marker gốc trình duyệt
+       (list-style, khác Quill tự vẽ marker riêng trong ô soạn) định vị theo mép NGOÀI (margin)
+       của <li>, không theo mép đệm (padding) -- padding-left chỉ đẩy CHỮ, để trơ dấu chấm đứng
+       yên y hệt cấp 1 (đã xảy ra thực tế, xác nhận qua ảnh chụp). margin-left đẩy cả khối
+       marker + chữ. CẦN !important: Streamlit tự đặt sẵn CSS cho <li> bên trong
+       [data-testid="stMarkdownContainer"] (độ đặc hiệu (0,1,1), cao hơn 1 class selector đơn
+       (0,1,0)) nên rule của ta thường bị đè mất nếu không ép. */
+    .ql-indent-1 { margin-left: 2.0em !important; } .ql-indent-2 { margin-left: 4.0em !important; }
+    .ql-indent-3 { margin-left: 6.0em !important; } .ql-indent-4 { margin-left: 8.0em !important; }
+    .ql-indent-5 { margin-left: 10em !important; } .ql-indent-6 { margin-left: 12em !important; }
 
     /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước, hướng dẫn) trông
        như glass-card ===== */
