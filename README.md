@@ -442,6 +442,15 @@ bảng `settings` mới trong Supabase.
 Tính năng này hoàn toàn tuỳ chọn: nếu bảng `settings` chưa tồn tại hoặc Supabase gặp lỗi, app tự
 rơi về màu teal mặc định thay vì báo lỗi.
 
+### Chế độ tối (dark mode)
+
+App tự đổi giao diện tối/sáng theo cài đặt hệ thống của thiết bị đang mở app (hoặc theo lựa chọn
+thủ công trong menu **⋮ → Settings → Theme** ở góc phải trên cùng của Streamlit) — không có nút
+bật/tắt riêng bên trong app, vì Streamlit hiện chưa có API đổi theme bằng code lúc đang chạy.
+Toàn bộ nút, thẻ, thanh điều hướng, biểu đồ và bảng nhiệt đều có bảng màu riêng cho chế độ tối;
+màu accent đang chọn (mục trên) vẫn giữ nguyên và tự đổi sắc độ cho hợp với nền mới. Không cần
+cấu hình gì thêm — hoạt động ngay khi mở app.
+
 ---
 
 ## Cài đặt & chạy ứng dụng
