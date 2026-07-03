@@ -17,6 +17,7 @@ Giao diện theo phong cách iOS/macOS: tối giản, dùng thẻ kính mờ và
 - [Quy trình bắt đầu nhanh](#quy-trình-bắt-đầu-nhanh)
 - [Thiết lập Supabase (bắt buộc)](#thiết-lập-supabase-bắt-buộc)
 - [Đồng bộ lịch & đọc sách (tuỳ chọn)](#đồng-bộ-lịch--đọc-sách-tuỳ-chọn)
+- [Tuỳ chỉnh giao diện (tuỳ chọn)](#tuỳ-chỉnh-giao-diện-tuỳ-chọn)
 - [Cài đặt & chạy ứng dụng](#cài-đặt--chạy-ứng-dụng)
 - [Câu hỏi thường gặp](#câu-hỏi-thường-gặp)
 
@@ -385,6 +386,21 @@ Mục **"1. Dữ liệu đầu vào"** (tab Chuẩn bị dữ liệu) có 2 tín
    Reminder"** → chọn file vừa xuất → xem trước → **"Xác nhận nạp dữ liệu"** (thay thế toàn bộ
    dữ liệu Đọc sách/Gundam hiện có bằng nội dung file này — chạy lại Shortcut và tải lên bất cứ
    khi nào Reminders có thay đổi).
+
+---
+
+## Tuỳ chỉnh giao diện (tuỳ chọn)
+
+Mục **"5. Giao diện"** (tab Tuỳ biến) cho phép chọn 1 trong 8 màu accent (thay cho màu teal mặc
+định) — áp dụng ngay cho nút, biểu đồ đơn sắc và bảng nhiệt trên toàn app. Lựa chọn được lưu vào
+bảng `settings` mới trong Supabase.
+
+1. Chạy đoạn SQL `create table settings...` trong [`supabase_schema.sql`](supabase_schema.sql)
+   (nếu đã chạy cả file lúc thiết lập Supabase thì bảng này đã có sẵn, không cần chạy lại).
+2. Mở app → tab **Tuỳ biến** → mục **"5. Giao diện"** → bấm 1 màu để áp dụng ngay.
+
+Tính năng này hoàn toàn tuỳ chọn: nếu bảng `settings` chưa tồn tại hoặc Supabase gặp lỗi, app tự
+rơi về màu teal mặc định thay vì báo lỗi.
 
 ---
 
