@@ -2489,6 +2489,10 @@ st.markdown(
         border-bottom-color: #00a3ad !important; box-shadow: none !important;
     }
     .st-key-rl_view_tabs [data-baseweb="tab-list"] { justify-content: center !important; }
+    /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab (data-baseweb=
+       "tab-border") -- không có ở "Chọn kỳ xem" (Báo cáo, dùng segmented_control tự dựng, không
+       có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
+    .st-key-rl_view_tabs [data-baseweb="tab-border"] { display: none !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa */
