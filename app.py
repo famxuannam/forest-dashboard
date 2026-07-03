@@ -2987,10 +2987,13 @@ st.markdown(
     .note-html > :first-child, .st-key-note_saved > :first-child { margin-top: 0 !important; }
     .note-html > :last-child, .st-key-note_saved > :last-child { margin-bottom: 0 !important; }
     .note-html a, .st-key-note_saved a { color: var(--accent); }
-    /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) */
-    .ql-indent-1 { padding-left: 2.0em; } .ql-indent-2 { padding-left: 4.0em; }
-    .ql-indent-3 { padding-left: 6.0em; } .ql-indent-4 { padding-left: 8.0em; }
-    .ql-indent-5 { padding-left: 10em; } .ql-indent-6 { padding-left: 12em; }
+    /* Thụt lề bullet/đánh số lồng nhau (Quill dùng class ql-indent-N trên <li>) -- CẦN
+       !important: Streamlit tự đặt sẵn CSS cho <li> bên trong [data-testid="stMarkdownContainer"]
+       (độ đặc hiệu (0,1,1), cao hơn 1 class selector đơn (0,1,0)) nên rule padding-left thường
+       bị đè mất, khiến mọi bullet/số lồng nhau hiện phẳng thành 1 tầng dù HTML lưu đúng class. */
+    .ql-indent-1 { padding-left: 2.0em !important; } .ql-indent-2 { padding-left: 4.0em !important; }
+    .ql-indent-3 { padding-left: 6.0em !important; } .ql-indent-4 { padding-left: 8.0em !important; }
+    .ql-indent-5 { padding-left: 10em !important; } .ql-indent-6 { padding-left: 12em !important; }
 
     /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước, hướng dẫn) trông
        như glass-card ===== */
