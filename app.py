@@ -2653,6 +2653,13 @@ st.markdown(
     [data-baseweb="calendar"] [role="gridcell"][aria-label^="Selected"]::after {
         background: var(--accent) !important;
     }
+    /* Khung lịch bật lên (data-baseweb="popover") -- dùng outline chứ không phải border: nội
+       dung trắng bên trong popover có cùng kích thước với chính nó và vẽ đè lên trên, che mất
+       border thường; outline không tham gia box model nên không bị che. */
+    [data-baseweb="popover"] {
+        outline: 1.5px solid var(--accent) !important;
+        outline-offset: -1px;
+    }
 
     /* Mọi hộp thả xuống (st.selectbox) trong app: viền đổi sang màu accent khi đang mở/focus,
        cùng hiệu ứng đã làm cho hộp chọn ngày ở trên -- áp dụng chung 1 lần ở đây cho TẤT CẢ
