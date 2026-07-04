@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import io
 import json
+import base64
 import time
 import zipfile
 import plotly.express as px
@@ -2635,6 +2636,64 @@ def frag_period_table(scope_df, key):
     render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 
 
+# --- LOGO: mark "vòng tuổi cây" (growth ring) + wordmark, thiết kế nhập từ Claude Design
+# (xem Forest_Dashboard_Logo_standalone.html) -- 3 cung tròn đồng tâm đứt khúc nhạt dần ra ngoài,
+# gợi ẩn dụ "mỗi vòng là một lần nhìn lại" khớp tinh thần hồi cứu của app; wordmark "Forest" bằng
+# font display Instrument Serif + nhãn "Dashboard" nhỏ/nhạt bên cạnh, lặp lại đúng cấu trúc
+# "hero to + nhãn phụ nhỏ xám" dùng xuyên suốt UI. Cần dùng được ở CẢ 2 nơi: trang đăng nhập
+# (chạy TRƯỚC khối inject :root CSS var) và title chính (chạy SAU) -- nên tự chứa @font-face
+# riêng + chọn màu chữ bằng literal Python theo IS_DARK, không phụ thuộc var(--text)/var(--accent).
+@st.cache_resource
+def _logo_font_b64():
+    with open(os.path.join("assets", "fonts", "InstrumentSerif-Regular-latin.woff2"), "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+_LOGO_FONT_FACE = (
+    "@font-face { font-family:'Instrument Serif'; font-style:normal; font-weight:400; "
+    f"font-display:swap; src:url(data:font/woff2;base64,{_logo_font_b64()}) format('woff2'); "
+    "unicode-range:U+0000-00FF,U+2018-201F; }"
+)
+
+
+def _logo_mark_svg(size):
+    """SVG mark riêng, tô theo ACCENT đang chọn (không hardcode teal -- tự đổi theo 14 màu accent
+    người dùng có thể chọn ở Tuỳ biến). Tỉ lệ bán kính/độ dày/dash giữ đúng bản thiết kế gốc
+    (mốc 28px)."""
+    s = size / 28
+    c = size / 2
+    # (bán kính, độ dày nét, dash-on, dash-off, góc xoay, độ đục) -- đúng 3 giá trị thiết kế gốc
+    specs = [(4.48, 2.86, 17.45, 10.7, -30, 1), (7.84, 2.21, 24.63, 24.63, 140, 0.7),
+             (11.2, 1.56, 49.26, 21.11, 250, 0.45)]
+    circles = "".join(
+        f"<circle cx='{c:.2f}' cy='{c:.2f}' r='{r * s:.2f}' fill='none' stroke='{ACCENT}' "
+        f"stroke-opacity='{op}' stroke-width='{w * s:.2f}' stroke-linecap='round' "
+        f"stroke-dasharray='{d1 * s:.2f} {d2 * s:.2f}' transform='rotate({rot} {c:.2f} {c:.2f})'></circle>"
+        for r, w, d1, d2, rot, op in specs)
+    return f"<svg width='{size}' height='{size}' viewBox='0 0 {size} {size}'>{circles}</svg>"
+
+
+def _wordmark_html(layout="header"):
+    """Mark + wordmark dùng chung cho trang đăng nhập ("login", to, xếp dọc) và title chính
+    ("header", vừa, xếp dọc, gọn hơn login). Không dùng cho bố cục kiểu topbar-1-hàng vì app
+    không có nav bar tích hợp cùng hàng với logo (nav là 1 st.segmented_control riêng bên dưới)."""
+    _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
+    _text2 = "#98989d" if IS_DARK else "#6e6e73"
+    if layout == "login":
+        mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
+    else:
+        mark, forest_sz, dash_sz, gap_outer = 40, 30, 12, 10
+    return (
+        f"<style>{_LOGO_FONT_FACE}</style>"
+        f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
+        f"{_logo_mark_svg(mark)}"
+        "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+        f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
+        f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
+        f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
+        "letter-spacing:0.08em;'>Dashboard</span></div></div>"
+    )
+
+
 # --- GIAO DIỆN CHÍNH ---
 st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
 
@@ -2655,12 +2714,12 @@ if _auth_configured:
         st.stop()
     if not st.user.is_logged_in:
         # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
-        # dùng var(--text-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal theo IS_DARK.
+        # dùng var(--text-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal theo IS_DARK
+        # -- _wordmark_html() đã tự lo việc này (xem định nghĩa), không cần lặp lại ở đây.
         _login_txt2 = "#98989d" if IS_DARK else "#6e6e73"
         st.markdown(
-            "<div style='max-width:420px;margin:15vh auto 24px;text-align:center;'>"
-            "<div style='font-size:2.2rem;font-weight:700;letter-spacing:-0.5px;margin-bottom:6px;'>"
-            "Forest Dashboard</div>"
+            "<div style='max-width:420px;margin:12vh auto 24px;text-align:center;'>"
+            f"<div style='margin-bottom:18px;'>{_wordmark_html('login')}</div>"
             f"<div style='color:{_login_txt2};'>Đăng nhập để tiếp tục.</div></div>",
             unsafe_allow_html=True)
         _login_col = st.columns([1, 1, 1])[1]
@@ -3082,7 +3141,7 @@ st.markdown(
 )
 
 st.markdown(
-    "<h1 style='text-align:center; margin:0 0 0.35em 0; letter-spacing:-0.6px;'>Forest Dashboard</h1>",
+    f"<div style='margin:0 0 0.6em 0;'>{_wordmark_html('header')}</div>",
     unsafe_allow_html=True,
 )
 
