@@ -11,6 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
 import colorsys
+import hashlib
 import re
 from itertools import groupby
 from html import escape as html_escape, unescape as html_unescape
@@ -1089,6 +1090,209 @@ def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None
     return prev_m, avg_m
 
 
+# Kho câu cho _smart_digest() -- mỗi tình huống 2-3 biến thể, chọn ổn định theo md5(kỳ|tình
+# huống) để rerun không đổi câu nhưng 2 kỳ khác nhau cùng tình huống không lặp y hệt một câu.
+# Giọng văn: nhận xét tinh tế + một chút hài hước kiểu "người làm vườn", KHÔNG lặp lại số liệu
+# đã có ở hero deltas ngay phía trên trừ khi con số là nhân vật chính của câu.
+_DIGEST_TEMPLATES = {
+    "first": [
+        "{kwx_cap} đầu tiên có dữ liệu: <b>{hrs}</b>, <b>{trees} cây</b>. Mọi khu rừng đều bắt đầu từ vài hạt mầm.",
+        "Chưa có gì để so sánh — nhưng <b>{hrs}</b> đầu tiên thì đã nằm trong sổ. Khởi đầu được ghi nhận.",
+        "Trang đầu tiên của cuốn sổ: <b>{hrs}</b>, <b>{trees} cây</b>. Các {kwx} sau sẽ có thứ để ganh đua.",
+    ],
+    "record": [
+        "Kỷ lục mới: <b>{hrs}</b> — {kwx} năng suất nhất từ trước tới nay. Đỉnh cũ ({best_hrs}) xin phép lùi về nhì.",
+        "<b>{hrs}</b> — chưa {kwx} nào chạm tới con số này. Trần cũ ({best_hrs}) vừa được nâng thêm một tầng.",
+        "{kw_cap} đi vào lịch sử: <b>{hrs}</b>, vượt mọi {kwx} trước đó. Bảng vàng đã được cập nhật.",
+    ],
+    "record_progress": [
+        "Chưa hết {kwx} mà đã <b>{hrs}</b> — vượt mọi {kwx} trước đó. Phần còn lại chỉ là nới rộng kỷ lục.",
+        "Kỷ lục cũ ({best_hrs}) đã bị vượt từ giữa chừng: <b>{hrs}</b> và {kwx} vẫn còn chưa kết thúc.",
+        "<b>{hrs}</b> khi {kwx} còn dang dở — các {kwx} cũ nhìn nhau, chưa hiểu chuyện gì vừa xảy ra.",
+    ],
+    "near_record": [
+        "<b>{hrs}</b> — thiếu đúng {gap} nữa là chạm kỷ lục ({best_hrs}). Gần tới mức nghe được tiếng gõ cửa.",
+        "Suýt thì lịch sử: <b>{hrs}</b>, kém đỉnh cũ vỏn vẹn {gap}. Lần sau nhớ mang thêm một phiên.",
+        "Á quân mọi thời đại: <b>{hrs}</b>, chỉ sau mức {best_hrs}. Ngôi vương bắt đầu thấy không yên.",
+    ],
+    "comeback": [
+        "Sự trở lại: từ <b>{prev_hrs}</b> {prevw} lên <b>{hrs}</b>. Khu rừng xanh lại rồi.",
+        "{prevw_cap} gần như im ắng, giờ là <b>{hrs}</b> — hoá ra chỉ là nghỉ giữa hiệp.",
+        "Từ <b>{prev_hrs}</b> bật lên <b>{hrs}</b>. Ai bảo nghỉ là mất đà thì xem lại giúp.",
+    ],
+    "big_up": [
+        "Tăng tốc rõ rệt: <b>{hrs}</b>, hơn {prevw} <b>{d}</b>. Đầu tàu {kw}: <b>{proj}</b>.",
+        "Vườn {kw} rậm hơn hẳn: <b>+{d}</b> so với {prevw}, phần lớn đổ vào <b>{proj}</b>.",
+        "<b>{hrs}</b> — bỏ xa {prevw} {d}. Đà này thì kỷ lục cũng nên bắt đầu lo.",
+    ],
+    "big_down": [
+        "{kw_cap} chậm lại: <b>{hrs}</b>, kém {prevw} {d}. Đất cũng cần nghỉ giữa hai vụ.",
+        "Nhịp {kw} nhẹ hơn: <b>{hrs}</b> (−{d} so với {prevw}). Rừng thưa vẫn là rừng.",
+        "<b>{hrs}</b>, hụt {d} so với {prevw}. Coi như chương nghỉ giữa truyện — miễn là có chương sau.",
+    ],
+    "one_day_carry": [
+        "Một mình <b>{day}</b> ({day_hrs}) gánh <b>{pct}%</b> cả {kwx}. Đề nghị tuyên dương trước toàn trường.",
+        "<b>{day}</b> cân cả {kwx}: <b>{day_hrs}</b> trên tổng {hrs}. Các ngày còn lại có mặt chủ yếu để cổ vũ.",
+        "{pct}% thời lượng cả {kwx} dồn vào đúng <b>{day}</b>. Một ngày ra trận, những ngày còn lại dưỡng quân.",
+    ],
+    "proj_dominates": [
+        "<b>{proj}</b> chiếm <b>{pct}%</b> thời gian {kw} — không còn là ưu tiên nữa, mà là mối quan hệ nghiêm túc.",
+        "{kw_cap} gần như chỉ có một cái tên: <b>{proj}</b> ({pct}%). Tập trung kiểu này khó chê.",
+        "Sân khấu {kw} thuộc về <b>{proj}</b> ({pct}%). Các dự án khác vui lòng giữ trật tự ở hàng ghế khán giả.",
+    ],
+    "weekend": [
+        "<b>{pct}%</b> thời gian {kw} rơi vào cuối tuần ({wk_hrs}). Thứ 7 – Chủ Nhật gửi lời chào tới khái niệm 'nghỉ ngơi'.",
+        "Chiến binh cuối tuần: <b>{wk_hrs}</b> trên tổng {hrs} nằm gọn trong Thứ 7 và Chủ Nhật. Ngày thường chỉ là phần khởi động.",
+    ],
+    "deep_sessions": [
+        "Phiên trung bình <b>{sess} phút</b> — dài hơn nếp quen ({avg_sess} phút) thấy rõ. Rễ đang cắm sâu hơn.",
+        "{kw_cap} bạn ngồi lì hơn hẳn: <b>{sess} phút/phiên</b> so với nếp cũ {avg_sess}. Chiếc ghế chắc cũng bất ngờ.",
+        "Ít mà chất: mỗi phiên {kw} kéo dài <b>{sess} phút</b>, vượt xa nhịp quen {avg_sess} phút.",
+    ],
+    "shallow_sessions": [
+        "Phiên {kw} hơi vụn: <b>{sess} phút/phiên</b>, nếp quen là {avg_sess}. Gom củi nhỏ lại thành đống lửa lớn nhé.",
+        "Nhiều phiên ngắn ({sess} phút/phiên so với nếp {avg_sess}). Bonsai cũng là cây — nhưng thử vài phiên dài xem sao.",
+    ],
+    "iron": [
+        "<b>{n_days}/{total_days} ngày</b> đều có mặt — chuyên cần kiểu này thời đi học là có giấy khen.",
+        "Gần như không sót ngày nào ({n_days}/{total_days}). Sự đều đặn nhàm chán một cách đáng ngưỡng mộ.",
+        "Điểm danh {n_days}/{total_days} ngày. Cái cây nào được tưới đều thế này thì muốn còi cũng khó.",
+    ],
+    "diverse": [
+        "<b>{n_proj} dự án</b> chia đều sân khấu, không ai vượt {pct}%. Một khu vườn đa canh đúng nghĩa.",
+        "Thời gian {kw} rải đều cho {n_proj} dự án — đội hình đồng đều, không ngôi sao độc diễn.",
+    ],
+    "milestone": [
+        "Lần đầu tiên một {kwx} vượt mốc <b>{mile}h</b>: {hrs}. Chỗ này mà là cây thật thì đủ gọi là một cánh rừng.",
+        "Cột mốc <b>{mile}h</b>/{kwx} lần đầu bị bỏ lại sau lưng ({hrs}). Số giờ này quy ra cây là cả một quả đồi.",
+    ],
+    "steady": [
+        "<b>{hrs}</b> — sát trung bình như đo bằng thước. Ổn định cũng là một loại năng lực.",
+        "Không đột biến, không tụt dốc: <b>{hrs}</b>, đúng nhịp quen thuộc. Rừng lâu năm mọc kiểu này đấy.",
+        "{kw_cap}: <b>{hrs}</b>, đều tăm tắp so với mọi khi. Biểu đồ nhìn hơi buồn ngủ — chủ vườn thì đáng nể.",
+    ],
+    "generic": [
+        "<b>{hrs}</b> và <b>{trees} cây</b> {kw}. Không có gì giật gân — khu rừng vẫn lặng lẽ mọc thêm.",
+        "Sổ {kw} ghi {hrs}, {trees} cây. Bình thường, mà chắc chắn.",
+        "{hrs}, {trees} cây, không drama. Có những {kwx} chỉ cần thế là đủ.",
+    ],
+}
+
+# Tình huống "đáng ăn mừng" -> footer tint accent; còn lại tint chip trung tính.
+_DIGEST_CELEBRATE = {"first", "record", "record_progress", "near_record", "comeback", "big_up",
+                     "iron", "milestone"}
+
+
+def _smart_digest(df, period_col, selected_key, df_p, prev_m, avg_m, is_current):
+    """1 dòng "điểm nhấn" gắn cuối panel Tổng quan của Tuần/Tháng/Năm: chọn ĐÚNG 1 tín hiệu
+    đáng nói nhất của kỳ theo thứ tự ưu tiên (kỷ lục > mốc tròn năm lần đầu vượt > bật lại >
+    tăng/giảm mạnh > cơ cấu bất thường: 1 ngày gánh/1 dự án chiếm sóng/dồn cuối tuần/phiên
+    sâu-vụn > chuyên cần > đa dạng > ổn định), diễn đạt bằng câu chữ thay vì lặp lại bảng số --
+    hero deltas ngay
+    trên đã lo phần số liệu. prev_m/avg_m truyền vào là bản ĐÃ cắt theo phần kỳ trôi qua khi
+    is_current (từ _period_comparison), nên mọi so sánh ở đây tự công bằng với kỳ dở dang; nhãn
+    cũng tự đổi thành "cùng kỳ ... trước" cho khớp. Trả (html, bg, fg) cho footer của
+    render_stat_panel, hoặc None nếu kỳ trống."""
+    if df_p.empty:
+        return None
+
+    word = {"Tuần": "tuần", "Tháng": "tháng", "Năm": "năm"}[period_col]
+    kind = {"Tuần": "week", "Tháng": "month", "Năm": "year"}[period_col]
+
+    def _fh(v):
+        return f"{v:.0f}h" if abs(v - round(v)) < 0.05 else f"{v:.1f}h"
+
+    hrs = df_p['Thời lượng (Phút)'].sum() / 60
+    trees = len(df_p)
+    n_days = df_p['Ngày'].nunique()
+    sess_min = (hrs * 60) / trees if trees else 0
+
+    F = {"hrs": _fh(hrs), "trees": trees, "kwx": word, "kwx_cap": word.capitalize(),
+         "kw": f"{word} này", "kw_cap": f"{word.capitalize()} này",
+         "prevw": f"cùng kỳ {word} trước" if is_current else f"{word} trước"}
+    F["prevw_cap"] = F["prevw"].capitalize()
+
+    # Bối cảnh dùng chung cho các bộ dò bên dưới
+    totals = df.groupby(period_col)['Thời lượng (Phút)'].sum() / 60
+    others = totals.drop(selected_key, errors='ignore')
+    prev_hrs = prev_m["hrs"] if prev_m else 0.0
+    avg_hrs = avg_m["hrs"] if avg_m else None
+    abs_big = {"week": 2.0, "month": 5.0, "year": 20.0}[kind]
+    _miles = (100, 250, 500, 1000, 2000)
+    _mile_cur = max((m for m in _miles if hrs >= m), default=None)
+    _mile_best_other = max((m for m in _miles if len(others) and others.max() >= m), default=0)
+
+    by_proj = df_p.dropna(subset=['Dự án']).groupby('Dự án')['Thời lượng (Phút)'].sum()
+    top_proj, top_share = (by_proj.idxmax(), by_proj.max() / by_proj.sum()) if not by_proj.empty else (None, 0)
+    by_day = df_p.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
+    wk_hrs = df_p[df_p['Thời gian bắt đầu'].dt.dayofweek >= 5]['Thời lượng (Phút)'].sum() / 60
+    if kind == "week":
+        total_days = _today_vn().isoweekday() if is_current else 7
+    elif kind == "month":
+        total_days = _today_vn().day if is_current else pd.Period(selected_key).days_in_month
+    else:
+        total_days = (_today_vn().timetuple().tm_yday if is_current
+                      else pd.Timestamp(f"{selected_key}-12-31").dayofyear)
+
+    sit = None
+    if prev_m is None and avg_m is None:
+        sit = "first"
+    elif len(others) >= 2 and hrs > others.max():
+        sit = "record_progress" if is_current else "record"
+        F["best_hrs"] = _fh(others.max())
+    elif not is_current and len(others) >= 2 and others.max() > 0 and hrs >= 0.92 * others.max():
+        sit = "near_record"
+        F.update(best_hrs=_fh(others.max()), gap=_fh(others.max() - hrs))
+    elif kind == "year" and _mile_cur is not None and _mile_cur > _mile_best_other:
+        # Chỉ khi LẦN ĐẦU một năm vượt qua mốc tròn cao hơn mọi năm khác -- không lặp lại
+        # "vượt mốc 250h" cho mọi năm về sau một khi ai cũng qua mốc đó.
+        sit = "milestone"
+        F["mile"] = _mile_cur
+    elif avg_hrs and avg_hrs >= 1 and prev_hrs < 0.25 * avg_hrs and hrs >= 0.85 * avg_hrs:
+        sit = "comeback"
+        F["prev_hrs"] = _fh(prev_hrs)
+    elif prev_hrs > 0 and hrs - prev_hrs >= abs_big and (hrs - prev_hrs) / prev_hrs >= 0.30:
+        sit = "big_up"
+        F.update(d=_fh(hrs - prev_hrs), proj=html_escape(str(top_proj)) if top_proj else "nhiều dự án")
+    elif prev_hrs >= abs_big and prev_hrs - hrs >= abs_big and (prev_hrs - hrs) / prev_hrs >= 0.30:
+        sit = "big_down"
+        F["d"] = _fh(prev_hrs - hrs)
+    elif kind in ("week", "month") and n_days >= 3 and hrs >= 2 and by_day.max() / hrs >= 0.45:
+        sit = "one_day_carry"
+        _dmax = by_day.idxmax()
+        F.update(day=VN_DAYS.get(pd.Timestamp(_dmax).day_name(), str(_dmax)),
+                 day_hrs=_fh(by_day.max()), pct=round(by_day.max() / hrs * 100))
+    elif top_proj is not None and len(by_proj) >= 2 and hrs >= 3 and top_share >= 0.60:
+        sit = "proj_dominates"
+        F.update(proj=html_escape(str(top_proj)), pct=round(top_share * 100))
+    elif kind in ("week", "month") and hrs >= 3 and wk_hrs / hrs >= 0.55:
+        sit = "weekend"
+        F.update(wk_hrs=_fh(wk_hrs), pct=round(wk_hrs / hrs * 100))
+    elif avg_m and avg_m.get("min_sess") and sess_min >= avg_m["min_sess"] * 1.3 and sess_min - avg_m["min_sess"] >= 5:
+        sit = "deep_sessions"
+        F.update(sess=round(sess_min), avg_sess=round(avg_m["min_sess"]))
+    elif avg_m and avg_m.get("min_sess") and trees >= 5 and sess_min <= avg_m["min_sess"] * 0.7 and avg_m["min_sess"] - sess_min >= 5:
+        sit = "shallow_sessions"
+        F.update(sess=round(sess_min), avg_sess=round(avg_m["min_sess"]))
+    elif total_days >= 6 and n_days / total_days >= 0.85:
+        sit = "iron"
+        F.update(n_days=n_days, total_days=total_days)
+    elif len(by_proj) >= 4 and hrs >= 3 and top_share <= 0.35:
+        sit = "diverse"
+        F.update(n_proj=len(by_proj), pct=round(top_share * 100))
+    elif avg_hrs and abs(hrs - avg_hrs) <= 0.1 * avg_hrs:
+        sit = "steady"
+    else:
+        sit = "generic"
+
+    variants = _DIGEST_TEMPLATES[sit]
+    idx = int(hashlib.md5(f"{selected_key}|{sit}".encode()).hexdigest()[:8], 16) % len(variants)
+    text = variants[idx].format(**F)
+    if sit in _DIGEST_CELEBRATE:
+        return text, "rgba(var(--accent-rgb),0.10)", "var(--accent-dark)"
+    return text, "var(--chip)", "var(--text)"
+
+
 def _clip_card(note):
     """Thẻ nhỏ giải thích khi so sánh kỳ bị cắt vì kỳ đang xem còn dở dang -- cùng khuôn thẻ
     "Cập nhật gần nhất" (glass-card ngang, icon nhỏ + nhãn xám hoa + nội dung), thay vì 1 dòng
@@ -1162,7 +1366,7 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
             h += _render_sec(sec)
     if footer:
         f_txt, f_bg, f_fg = footer
-        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.07);text-align:center;'>"
+        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid var(--divider);text-align:center;'>"
               f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
     h += "</div>"
     st.markdown(h, unsafe_allow_html=True)
@@ -3996,7 +4200,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
-                    ])
+                    ], footer=_smart_digest(df, 'Tuần', selected_week, df_w, prev_w, avg_w, elapsed_mask_w is not None))
                     render_session_bar(df_w)
 
                     st.write("")
@@ -4068,7 +4272,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, f"cây {lbl_prev_m}"), _delta_t(delta2_tr, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, f"cây {lbl_prev_m}"), _delta_t(delta2_trd, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, f"phút {lbl_prev_m}"), _delta_t(delta2_ms, f"phút {lbl_avg_m}")] if d]},
-                    ])
+                    ], footer=_smart_digest(df, 'Tháng', selected_month, df_m, prev_m, avg_m, elapsed_mask_m is not None))
                     render_session_bar(df_m)
 
                     st.write("")
@@ -4134,7 +4338,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
-                    ])
+                    ], footer=_smart_digest(df, 'Năm', selected_year, df_y, prev_y, avg_y, elapsed_mask_y is not None))
                     render_session_bar(df_y)
 
                     st.write("")
@@ -5199,6 +5403,17 @@ elif nav == "Hướng dẫn":
     with _guide_tabs[5]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(152, "Thêm dòng \"điểm nhấn\" cuối panel Tổng quan Tuần/Tháng/Năm", [
+            "Cuối thẻ Tổng quan của Báo cáo Tuần/Tháng/Năm giờ có 1 câu nhận xét tự chọn ĐÚNG 1 "
+            "tín hiệu đáng nói nhất của kỳ: kỷ lục mới, lần đầu vượt mốc tròn của năm, cú bật lại "
+            "sau kỳ im ắng, tăng/giảm rõ rệt, một ngày/một dự án gánh cả kỳ, dồn việc cuối tuần, "
+            "phiên sâu hơn hay vụn hơn hẳn nếp quen, chuyên cần gần đủ ngày, rải đều nhiều dự án… "
+            "— không lặp lại các con số đã có ở hàng hero phía trên.",
+            "Câu chữ có nhiều biến thể cho mỗi tình huống, chọn cố định theo kỳ (xem lại kỳ cũ "
+            "luôn thấy đúng 1 câu đó, nhưng 2 kỳ khác nhau cùng tình huống sẽ không lặp y hệt). "
+            "Khi kỳ đang xem còn dở dang, mọi so sánh trong câu tự tính theo \"cùng kỳ\" đã trôi "
+            "qua của các kỳ trước cho công bằng.",
+        ])
         guide_update(141, "Thêm phím tắt bàn phím, gọn trang Tìm kiếm", [
             "Phím tắt toàn app: 1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm "
             "nay, / focus vào ô Tìm kiếm — xem mục \"Phím tắt bàn phím\" ngay bên dưới.",
