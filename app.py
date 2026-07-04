@@ -3232,7 +3232,9 @@ def _inject_keyboard_shortcuts():
     - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Năm/Tháng/Tuần/Dự án).
     - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY, tự cuộn trang tới đúng ô soạn (Quill) sau khi
       mở -- ô này thường không nằm ở đầu trang nên cần cuộn hộ, tránh cảm giác "bấm xong không
-      thấy gì" khi vẫn đứng ở đầu trang.
+      thấy gì" khi vẫn đứng ở đầu trang. Cuộn xong tự focus luôn vào ô soạn (Quill nằm trong
+      iframe riêng, phải đọc contentDocument của đúng iframe đó rồi .focus() thẳng vào
+      .ql-editor) để gõ được ngay phím tiếp theo, không cần bấm chuột vào ô trước.
     - /: focus vào ô Tìm kiếm (đứng sẵn ở đó thì focus luôn, đứng trang khác thì nhảy tới trước).
       Esc trong khi đang focus ô này: bỏ con trỏ ra khỏi ô (blur), KHÔNG đổi/xoá từ khoá đang gõ
       -- đây là ngoại lệ duy nhất được xử lý TRƯỚC bộ lọc input/textarea bên dưới, vì mọi phím
@@ -3362,7 +3364,7 @@ def _inject_keyboard_shortcuts():
         "  const HELP_ROWS = [\n"
         "    ['1 – 7', 'Nhảy nhanh tới từng mục nav'],\n"
         "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Năm/Tháng/Tuần/Dự án'],\n"
-        "    ['N', 'Mở nhanh Ghi chú ngày hôm nay'],\n"
+        "    ['N', 'Mở nhanh Ghi chú ngày hôm nay, cuộn tới và focus sẵn để gõ ngay'],\n"
         "    ['/', 'Focus vào ô Tìm kiếm — Esc để bỏ con trỏ ra khỏi ô'],\n"
         "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
         "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
@@ -3439,6 +3441,18 @@ def _inject_keyboard_shortcuts():
         "            card.scrollIntoView({behavior: 'smooth', block: 'center'});\n"
         "            return true;\n"
         "          }\n"
+        "          return false;\n"
+        "        },\n"
+        "        function(){\n"
+        "          // Focus thẳng vào ô soạn Quill (iframe riêng) để gõ được ngay, không cần bấm\n"
+        "          // chuột -- contentDocument đọc được vì cùng-origin (allow-same-origin), chỉ cần\n"
+        "          // đợi Quill mount xong .ql-editor (mới tạo lại sau rerun nên có thể trễ vài nhịp).\n"
+        "          const card = w.document.querySelector('.st-key-note_card');\n"
+        "          const ifr = card ? card.querySelector('iframe') : null;\n"
+        "          if (!ifr) return false;\n"
+        "          let d; try { d = ifr.contentDocument; } catch (err) { return false; }\n"
+        "          const ed = d ? d.querySelector('.ql-editor') : null;\n"
+        "          if (ed) { ed.focus(); return true; }\n"
         "          return false;\n"
         "        },\n"
         "      ], 40);\n"
@@ -4643,7 +4657,8 @@ elif nav == "Hướng dẫn":
             "- **Shift + 1 .. 5**: nhảy thẳng tới Báo cáo và chọn đúng 1 trong 5 lát cắt — "
             "Shift+1 = Tổng quan, Shift+2 = Năm, Shift+3 = Tháng, Shift+4 = Tuần, Shift+5 = Dự án.\n"
             "- **N**: mở ngay ô soạn Ghi chú ngày của **hôm nay** — dù đang ở trang nào, không "
-            "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú.\n"
+            "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú; trang tự cuộn tới đúng ô soạn "
+            "và focus sẵn vào đó, gõ được luôn ở phím tiếp theo mà không cần bấm chuột.\n"
             "- **/** (dấu gạch chéo): focus vào ô Tìm kiếm — nếu đang ở trang khác thì tự nhảy "
             "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập. Đang gõ trong ô "
             "này mà muốn thoát ra thì bấm **Esc** — chỉ bỏ con trỏ ra khỏi ô, không xoá từ khoá "
