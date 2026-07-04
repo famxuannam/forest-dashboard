@@ -497,6 +497,18 @@ def save_settings_bulk(df):
 # buộc cho toàn app ngay từ đầu).
 APP_TZ = ZoneInfo("Asia/Ho_Chi_Minh")  # cố định múi giờ hiển thị, không phụ thuộc múi giờ server
 
+
+def _today_vn():
+    """"Hôm nay" theo giờ Việt Nam (APP_TZ) -- KHÔNG dùng date.today() trần ở bất kỳ đâu trong
+    app: hàm đó trả về ngày theo múi giờ hệ thống máy chủ chạy Streamlit, rất có thể là UTC khi
+    deploy production (lệch 7 tiếng so với Việt Nam). Trong khung giờ 17:00-24:00 UTC mỗi ngày
+    (đúng 00:00-07:00 giờ Việt Nam hôm sau), date.today() trên server UTC vẫn trả về NGÀY HÔM
+    TRƯỚC dù người dùng ở Việt Nam đã sang ngày mới -- y hệt lỗi đã tìm và sửa ở
+    format_relative(), áp dụng cho MỌI chỗ cần biết "hôm nay" (mặc định trang Hôm nay, kỳ hiện
+    tại của Tuần/Tháng/Năm, nhắc sao lưu...)."""
+    return datetime.now(APP_TZ).date()
+
+
 def _has_icloud_secrets():
     try:
         return bool(st.secrets.get("ICLOUD_USERNAME")) and bool(st.secrets.get("ICLOUD_APP_PASSWORD"))
@@ -922,7 +934,7 @@ def day_picker(active_days):
     trên nav bar (xem callback gắn ở st.segmented_control(key="nav")), nút riêng trong trang là
     thừa khi đã có lối tắt đó."""
     pk = "day_pick"
-    lo, hi = active_days[0], max(active_days[-1], date.today())
+    lo, hi = active_days[0], max(active_days[-1], _today_vn())
     if pk not in st.session_state:
         _qd = st.query_params.get("day")
         _parsed = None
@@ -1408,7 +1420,7 @@ def _streak_stats(streak_df):
         return {"total": 0, "longest": 0, "current": 0, "gap": None}
     sid = (u.diff().dt.days > 1).cumsum()
     counts = sid.value_counts()
-    gap = int((pd.Timestamp(date.today()) - u.max()).days)
+    gap = int((pd.Timestamp(_today_vn()) - u.max()).days)
     current = int(counts[sid.iloc[-1]]) if gap <= 1 else 0
     return {"total": int(len(u)), "longest": int(counts.max()), "current": current, "gap": gap}
 
@@ -1535,7 +1547,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     reading = t[t['Trạng thái'] == labels['ongoing']]
 
     # Số liệu đầu mục: panel thẻ giống "Tổng quan", chia 3 nhóm dọc
-    _today = date.today()
+    _today = _today_vn()
     s_read = _streak_stats(df_books)
 
     def _period_chips(scope):
@@ -3272,7 +3284,7 @@ def _reset_today_on_nav_click():
     # đó -- thay cho nút "Ngày gần nhất" đã bỏ trong day_picker(). Chỉ set khi có "day_pick" sẵn
     # (đã từng vào trang Hôm nay) -- nếu chưa, day_picker() sẽ tự khởi tạo đúng hôm nay lúc đó.
     if st.session_state.get("nav") in (None, "Hôm nay") and "day_pick" in st.session_state:
-        st.session_state["day_pick"] = date.today()
+        st.session_state["day_pick"] = _today_vn()
 
 nav = st.segmented_control(
     "Trang", list(NAV.keys()),
@@ -3866,7 +3878,7 @@ elif nav == "Báo cáo":
                 base_avg = total_hrs / num_days
 
                 # Phong độ 7 ngày gần đây so với mức trung bình của chính mình
-                recent7 = df[df['Ngày'] >= (date.today() - timedelta(days=6))]
+                recent7 = df[df['Ngày'] >= (_today_vn() - timedelta(days=6))]
                 r_days = recent7['Ngày'].nunique()
                 recent_chips = []
                 if r_days > 0:
@@ -3914,7 +3926,7 @@ elif nav == "Báo cáo":
 
                 st.write("")
                 c_top1, c_top2 = st.columns(2)
-                _wk_now = date.today().strftime('%G-W%V')
+                _wk_now = _today_vn().strftime('%G-W%V')
                 with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
                 with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
             with st.expander("2. Biểu đồ lịch", expanded=False):
@@ -3935,7 +3947,7 @@ elif nav == "Báo cáo":
     elif bc_sub == "Tuần":
         if not df.empty:
             weeks = sorted(df['Tuần'].unique())
-            selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=date.today().strftime('%G-W%V'))
+            selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=_today_vn().strftime('%G-W%V'))
             df_w = df[df['Tuần'] == selected_week]
 
             week_anchor = df_w['Thời gian bắt đầu'].min()
@@ -3945,8 +3957,8 @@ elif nav == "Báo cáo":
             # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng.
             # Nhãn delta giữ NGẮN (xem chú thích tương ứng ở nhánh Tháng).
             elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = None, "vs Tuần trước", "vs Trung bình", None
-            if selected_week == date.today().strftime('%G-W%V'):
-                _dow = date.today().isoweekday()
+            if selected_week == _today_vn().strftime('%G-W%V'):
+                _dow = _today_vn().isoweekday()
                 elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
                 _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
@@ -4004,7 +4016,7 @@ elif nav == "Báo cáo":
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
-            selected_month = period_stepper(months, key="month", fmt=fmt_month, current=date.today().strftime('%Y-%m'))
+            selected_month = period_stepper(months, key="month", fmt=fmt_month, current=_today_vn().strftime('%Y-%m'))
             df_m = df[df['Tháng'] == selected_month]
 
             y, m = map(int, selected_month.split('-'))
@@ -4017,8 +4029,8 @@ elif nav == "Báo cáo":
             # ngày cắt chỉ nói 1 lần qua st.caption() bên dưới, tránh nhắc lại 5 lần (1 lần/hero
             # item) làm chữ dài, tự xuống dòng lem nhem trong cột hẹp.
             elapsed_mask_m, lbl_prev_m, lbl_avg_m, _clip_note_m = None, "vs Tháng trước", "vs Trung bình", None
-            if selected_month == date.today().strftime('%Y-%m'):
-                _d = date.today().day
+            if selected_month == _today_vn().strftime('%Y-%m'):
+                _d = _today_vn().day
                 elapsed_mask_m = df['Thời gian bắt đầu'].dt.day <= _d
                 _clip_note_m = f"So sánh chỉ tính {_d} ngày đầu của Tháng trước/các tháng khác cho công bằng."
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
@@ -4076,7 +4088,7 @@ elif nav == "Báo cáo":
     elif bc_sub == "Năm":
         if not df.empty:
             years = sorted(df['Năm'].unique())
-            selected_year = period_stepper(years, key="year", fmt=lambda y: f"Năm {y}", current=str(date.today().year))
+            selected_year = period_stepper(years, key="year", fmt=lambda y: f"Năm {y}", current=str(_today_vn().year))
             df_y = df[df['Năm'] == selected_year]
             prev_year_key = str(int(selected_year) - 1)
 
@@ -4084,8 +4096,8 @@ elif nav == "Báo cáo":
             # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần. Nhãn delta giữ
             # NGẮN (xem chú thích tương ứng ở nhánh Tháng).
             elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = None, "vs Năm trước", "vs Trung bình", None
-            if selected_year == str(date.today().year):
-                _doy = date.today().timetuple().tm_yday
+            if selected_year == str(_today_vn().year):
+                _doy = _today_vn().timetuple().tm_yday
                 elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
                 _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
@@ -4197,7 +4209,7 @@ elif nav == "Báo cáo":
                         ]},
                     ]
 
-                    df_g_thisweek = df_g[df_g['Tuần'] == date.today().strftime('%G-W%V')]
+                    df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
                     if not df_g_thisweek.empty:
                         _grp_sections.append({"label": "Tuần này", "chips": [
                             {"k": "Thời gian", "v": f"{df_g_thisweek['Thời lượng (Phút)'].sum()/60:.1f}h", "hl": True},
@@ -4370,8 +4382,8 @@ elif nav == "Tuỳ biến":
             with sc2:
                 st.write("")
                 if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
-                    _start = date.today() - timedelta(days=sync_days)
-                    _end = date.today() + timedelta(days=sync_days)
+                    _start = _today_vn() - timedelta(days=sync_days)
+                    _end = _today_vn() + timedelta(days=sync_days)
                     with st.spinner("Đang kết nối iCloud..."):
                         _n, _err = sync_work_calendar(_start, _end)
                     if _err:
@@ -4386,9 +4398,9 @@ elif nav == "Tuỳ biến":
                            "cần dùng thường xuyên.")
                 dc1, dc2, dc3 = st.columns([2, 2, 1])
                 with dc1:
-                    _adv_start = st.date_input("Từ ngày", value=date.today() - timedelta(days=365 * 2), key="wc_adv_start")
+                    _adv_start = st.date_input("Từ ngày", value=_today_vn() - timedelta(days=365 * 2), key="wc_adv_start")
                 with dc2:
-                    _adv_end = st.date_input("Đến ngày", value=date.today(), key="wc_adv_end")
+                    _adv_end = st.date_input("Đến ngày", value=_today_vn(), key="wc_adv_end")
                 with dc3:
                     st.write("")
                     if st.button("Đồng bộ ngay", key="wc_adv_sync_btn"):
@@ -4547,14 +4559,14 @@ elif nav == "Tuỳ biến":
 
     with st.expander("5. Quản lý hệ thống", expanded=True):
         c1, c2, c3 = st.columns(3)
-        _today = date.today().strftime('%Y-%m-%d')
+        _today = _today_vn().strftime('%Y-%m-%d')
         with c1:
             st.subheader("Sao lưu")
             # Nhắc sao lưu: chỉ hiện ngay tại đây (không phải banner toàn app) -- đúng nơi và
             # lúc người dùng hành động được ngay. Chưa từng sao lưu, hoặc lần gần nhất quá 30
             # ngày, thì nhắc nhẹ.
             _last_bk = _cached_settings().get("last_backup_at")
-            _days_since_bk = (date.today() - date.fromisoformat(_last_bk)).days if _last_bk else None
+            _days_since_bk = (_today_vn() - date.fromisoformat(_last_bk)).days if _last_bk else None
             if _days_since_bk is None:
                 st.caption("Chưa sao lưu lần nào.")
             elif _days_since_bk > 30:
