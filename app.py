@@ -2695,7 +2695,11 @@ def _wordmark_html(layout="header"):
 
 
 # --- GIAO DIỆN CHÍNH ---
-st.set_page_config(page_title="Forest Tracker", page_icon=":material/forest:", layout="wide")
+# page_icon nhận chuỗi SVG thô trực tiếp (Streamlit tự nhận diện qua regex "<svg " ở đầu chuỗi,
+# tự thêm xmlns nếu thiếu, rồi encode base64 thành data URI) -- không cần rasterize ra PNG. Icon
+# Material trước đây (":material/forest:") luôn ra màu đen bất kể theme (giới hạn đã biết của
+# Streamlit với favicon Material icon) -- SVG tự vẽ thì giữ được màu accent thật.
+st.set_page_config(page_title="Forest Dashboard", page_icon=_logo_mark_svg(64), layout="wide")
 
 # Đăng nhập Google (tuỳ chọn) -- chỉ bật khi có mục [auth] trong secrets (xem
 # .streamlit/secrets.toml.example). Không cấu hình thì app chạy như cũ, không cổng đăng nhập nào
