@@ -3286,7 +3286,9 @@ def _inject_keyboard_shortcuts():
 
     Toàn cục (từ bất kỳ trang nào):
     - 1-7: nhảy tới từng mục nav (đúng thứ tự NAV).
-    - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Năm/Tháng/Tuần/Dự án).
+    - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Tuần/Tháng/Năm/Dự án).
+      Riêng Shift+5 (Dự án) focus sẵn vào ô chọn Nhóm/Dự án -- bấm ↑↓ + Enter để chọn ngay, giống
+      hệt cơ chế của ô chọn sách/series ở sub-tab Chi tiết (Sách/Gundam).
     - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY, tự cuộn trang tới đúng ô soạn (Quill) sau khi
       mở -- ô này thường không nằm ở đầu trang nên cần cuộn hộ, tránh cảm giác "bấm xong không
       thấy gì" khi vẫn đứng ở đầu trang. Cuộn xong tự focus luôn vào ô soạn (Quill nằm trong
@@ -3447,7 +3449,7 @@ def _inject_keyboard_shortcuts():
         "  }\n"
         "  const HELP_ROWS = [\n"
         "    ['1 – 7', 'Nhảy nhanh tới từng mục nav'],\n"
-        "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Năm/Tháng/Tuần/Dự án'],\n"
+        "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Tuần/Tháng/Năm/Dự án (5 focus sẵn ô chọn)'],\n"
         "    ['N', 'Mở nhanh Ghi chú ngày hôm nay, cuộn tới và focus sẵn để gõ ngay'],\n"
         "    ['/', 'Focus vào ô Tìm kiếm — Esc để bỏ con trỏ ra khỏi ô'],\n"
         "    ['F', 'Tuỳ biến → Tải lên từ Forest (chọn file xong Enter là xác nhận)'],\n"
@@ -3502,6 +3504,14 @@ def _inject_keyboard_shortcuts():
         "        runChain([\n"
         "          function(){ return clickNavByLabel('Báo cáo'); },\n"
         "          function(){ return clickSegmentedWithinKey('bc_sub_picker', BAOCAO_SUBS[sidx]); },\n"
+        "          function(){\n"
+        "            // Sang \"Dự án\" thì focus sẵn ô chọn Nhóm/Dự án, giống hệt ô chọn sách/series\n"
+        "            // ở sub-tab Chi tiết (Sách/Gundam) -- bấm ↑/↓ + Enter chọn ngay không cần chuột.\n"
+        "            if (BAOCAO_SUBS[sidx] !== 'Dự án') return true;\n"
+        "            const inp = w.document.querySelector('.st-key-grp_select input[role=\"combobox\"]');\n"
+        "            if (inp) { inp.focus(); return true; }\n"
+        "            return false;\n"
+        "          },\n"
         "        ], 30);\n"
         "      }\n"
         "      return;\n"
@@ -3643,9 +3653,9 @@ def _inject_note_editor_shortcuts():
     )
     components.html(js, height=0)
 
-# Sub-page của "Báo cáo" (Tổng quan/Tháng/Tuần/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
+# Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
-BAOCAO_SUBS = ["Tổng quan", "Năm", "Tháng", "Tuần", "Dự án"]
+BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
 BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Năm": ":material/celebration:",
                         "Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
                         "Dự án": ":material/work:"}
@@ -3913,6 +3923,75 @@ elif nav == "Báo cáo":
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
 
+    elif bc_sub == "Tuần":
+        if not df.empty:
+            weeks = sorted(df['Tuần'].unique())
+            selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=date.today().strftime('%G-W%V'))
+            df_w = df[df['Tuần'] == selected_week]
+
+            week_anchor = df_w['Thời gian bắt đầu'].min()
+            prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
+
+            # Kỳ đang xem CHƯA kết thúc (đang là tuần hiện tại) -> cắt cả 2 baseline so sánh
+            # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng.
+            # Nhãn delta giữ NGẮN (xem chú thích tương ứng ở nhánh Tháng).
+            elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = None, "vs Tuần trước", "vs Trung bình", None
+            if selected_week == date.today().strftime('%G-W%V'):
+                _dow = date.today().isoweekday()
+                elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
+                _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
+            prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
+
+            if not df_w.empty:
+                with st.expander("1. Tổng quan", expanded=True):
+                    curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
+                    curr_trees_w = len(df_w)
+                    num_days_w = df_w['Ngày'].nunique() or 1
+
+                    curr_hrs_day_w = curr_hrs_w / num_days_w
+                    curr_trees_day_w = curr_trees_w / num_days_w
+                    curr_min_sess_w = _avg_session_min(df_w)
+
+                    def _hd_w(cur_v, key):
+                        d1 = (cur_v - prev_w[key]) if prev_w and prev_w.get(key) is not None else None
+                        d2 = (cur_v - avg_w[key]) if avg_w and avg_w.get(key) is not None else None
+                        return d1, d2
+
+                    d1_hr_w, d2_hr_w = _hd_w(curr_hrs_w, "hrs")
+                    d1_hrd_w, d2_hrd_w = _hd_w(curr_hrs_day_w, "hrs_day")
+                    d1_tr_w, d2_tr_w = _hd_w(curr_trees_w, "trees")
+                    d1_trd_w, d2_trd_w = _hd_w(curr_trees_day_w, "trees_day")
+                    d1_ms_w, d2_ms_w = _hd_w(curr_min_sess_w, "min_sess")
+
+                    if _clip_note_w:
+                        _clip_card(_clip_note_w)
+                    render_stat_panel(hero_items=[
+                        {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
+                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
+                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
+                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
+                    ])
+                    render_session_bar(df_w)
+
+                    st.write("")
+                    c_top1, c_top2 = st.columns(2)
+                    with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
+                    with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
+                with st.expander("2. Nhật ký", expanded=True):
+                    render_notes_journal(selected_week, 'week')
+                with st.expander("3. Phân bổ thời gian", expanded=False):
+                    frag_pie(df_w, "rad_tab4", "Danh mục")
+                with st.expander("4. Xu hướng theo thời gian", expanded=False):
+                    frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
+                with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
+                    frag_hourly(df_w, "hour_w", "Danh mục", with_range=False)
+                with st.expander("6. Giờ tập trung theo thứ", expanded=False):
+                    render_dayhour_heatmap(df_w)
+                with st.expander("7. Phân bố độ dài phiên", expanded=False):
+                    render_session_histogram(df_w)
+                with st.expander("8. Bảng số liệu", expanded=False):
+                    render_detail_table(df_w)
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
@@ -3985,75 +4064,82 @@ elif nav == "Báo cáo":
                     render_session_histogram(df_m)
                 with st.expander("8. Bảng số liệu", expanded=False):
                     render_detail_table(df_m)
-    elif bc_sub == "Tuần":
+    elif bc_sub == "Năm":
         if not df.empty:
-            weeks = sorted(df['Tuần'].unique())
-            selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=date.today().strftime('%G-W%V'))
-            df_w = df[df['Tuần'] == selected_week]
+            years = sorted(df['Năm'].unique())
+            selected_year = period_stepper(years, key="year", fmt=lambda y: f"Năm {y}", current=str(date.today().year))
+            df_y = df[df['Năm'] == selected_year]
+            prev_year_key = str(int(selected_year) - 1)
 
-            week_anchor = df_w['Thời gian bắt đầu'].min()
-            prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
+            # Kỳ đang xem CHƯA kết thúc (đang là năm hiện tại) -> cắt cả 2 baseline so sánh
+            # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần. Nhãn delta giữ
+            # NGẮN (xem chú thích tương ứng ở nhánh Tháng).
+            elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = None, "vs Năm trước", "vs Trung bình", None
+            if selected_year == str(date.today().year):
+                _doy = date.today().timetuple().tm_yday
+                elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
+                _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
+            prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
-            # Kỳ đang xem CHƯA kết thúc (đang là tuần hiện tại) -> cắt cả 2 baseline so sánh
-            # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng.
-            # Nhãn delta giữ NGẮN (xem chú thích tương ứng ở nhánh Tháng).
-            elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = None, "vs Tuần trước", "vs Trung bình", None
-            if selected_week == date.today().strftime('%G-W%V'):
-                _dow = date.today().isoweekday()
-                elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
-                _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
-            prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
-
-            if not df_w.empty:
+            if not df_y.empty:
                 with st.expander("1. Tổng quan", expanded=True):
-                    curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
-                    curr_trees_w = len(df_w)
-                    num_days_w = df_w['Ngày'].nunique() or 1
+                    curr_hrs_y = df_y['Thời lượng (Phút)'].sum() / 60
+                    curr_trees_y = len(df_y)
+                    num_days_y = df_y['Ngày'].nunique() or 1
+                    curr_hrs_day_y = curr_hrs_y / num_days_y
+                    curr_trees_day_y = curr_trees_y / num_days_y
+                    curr_min_sess_y = _avg_session_min(df_y)
 
-                    curr_hrs_day_w = curr_hrs_w / num_days_w
-                    curr_trees_day_w = curr_trees_w / num_days_w
-                    curr_min_sess_w = _avg_session_min(df_w)
-
-                    def _hd_w(cur_v, key):
-                        d1 = (cur_v - prev_w[key]) if prev_w and prev_w.get(key) is not None else None
-                        d2 = (cur_v - avg_w[key]) if avg_w and avg_w.get(key) is not None else None
+                    def _hd_y(cur_v, key):
+                        d1 = (cur_v - prev_y[key]) if prev_y and prev_y.get(key) is not None else None
+                        d2 = (cur_v - avg_y[key]) if avg_y and avg_y.get(key) is not None else None
                         return d1, d2
 
-                    d1_hr_w, d2_hr_w = _hd_w(curr_hrs_w, "hrs")
-                    d1_hrd_w, d2_hrd_w = _hd_w(curr_hrs_day_w, "hrs_day")
-                    d1_tr_w, d2_tr_w = _hd_w(curr_trees_w, "trees")
-                    d1_trd_w, d2_trd_w = _hd_w(curr_trees_day_w, "trees_day")
-                    d1_ms_w, d2_ms_w = _hd_w(curr_min_sess_w, "min_sess")
+                    d1_hr_y, d2_hr_y = _hd_y(curr_hrs_y, "hrs")
+                    d1_hrd_y, d2_hrd_y = _hd_y(curr_hrs_day_y, "hrs_day")
+                    d1_tr_y, d2_tr_y = _hd_y(curr_trees_y, "trees")
+                    d1_trd_y, d2_trd_y = _hd_y(curr_trees_day_y, "trees_day")
+                    d1_ms_y, d2_ms_y = _hd_y(curr_min_sess_y, "min_sess")
 
-                    if _clip_note_w:
-                        _clip_card(_clip_note_w)
+                    if _clip_note_y:
+                        _clip_card(_clip_note_y)
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
-                        {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
-                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
-                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
+                        {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
+                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
+                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
+                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
                     ])
-                    render_session_bar(df_w)
+                    render_session_bar(df_y)
 
                     st.write("")
-                    c_top1, c_top2 = st.columns(2)
-                    with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
-                    with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
-                with st.expander("2. Nhật ký", expanded=True):
-                    render_notes_journal(selected_week, 'week')
-                with st.expander("3. Phân bổ thời gian", expanded=False):
-                    frag_pie(df_w, "rad_tab4", "Danh mục")
-                with st.expander("4. Xu hướng theo thời gian", expanded=False):
-                    frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-                with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
-                    frag_hourly(df_w, "hour_w", "Danh mục", with_range=False)
-                with st.expander("6. Giờ tập trung theo thứ", expanded=False):
-                    render_dayhour_heatmap(df_w)
-                with st.expander("7. Phân bố độ dài phiên", expanded=False):
-                    render_session_histogram(df_w)
-                with st.expander("8. Bảng số liệu", expanded=False):
-                    render_detail_table(df_w)
+                    c_top1_y, c_top2_y = st.columns(2)
+                    with c_top1_y: render_top_3(df_y, 'Danh mục', 'Top 3 Danh mục Năm')
+                    with c_top2_y: render_top_3(df_y, 'Dự án', 'Top 3 Dự án Năm')
+
+                with st.expander("2. Biểu đồ lịch", expanded=False):
+                    # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
+                    # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
+                    # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
+                    # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
+                    render_calendar_grid(df_y, df_y)
+
+                with st.expander("3. Đọc sách & Gundam trong năm", expanded=False):
+                    # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
+                    # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
+                    # phức tạp để tách ra cho 1 mục tổng kết năm.
+                    rl_y = load_reading_log()
+                    rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
+                    if rl_y.empty:
+                        st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
+                    else:
+                        render_stat_panel(hero_items=[
+                            {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
+                            {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
+                        ])
+
+                with st.expander("4. Bảng số liệu", expanded=False):
+                    render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
@@ -4071,7 +4157,9 @@ elif nav == "Báo cáo":
                     for _p in _projs:
                         _op = ("proj", _p); _opts.append(_op); _labels[_op] = f"   {_p}  ·  Dự án"
 
-            sel = st.selectbox("Chọn Nhóm hoặc Dự án:", _opts, format_func=lambda o: _labels[o], key="grp_sel")
+            with st.container(key="grp_select"):
+                sel = st.selectbox("Chọn Nhóm hoặc Dự án:", _opts, format_func=lambda o: _labels[o],
+                                    key="grp_sel", label_visibility="collapsed")
             if sel == _opts[0]:
                 st.info("Chọn 1 Nhóm hoặc Dự án ở trên để xem chi tiết.")
             else:
@@ -4158,82 +4246,6 @@ elif nav == "Báo cáo":
                     render_session_histogram(df_g)
                 with st.expander("5. Bảng số liệu", expanded=False):
                     frag_period_table(df_g, "view_grp")
-    elif bc_sub == "Năm":
-        if not df.empty:
-            years = sorted(df['Năm'].unique())
-            selected_year = period_stepper(years, key="year", fmt=lambda y: f"Năm {y}", current=str(date.today().year))
-            df_y = df[df['Năm'] == selected_year]
-            prev_year_key = str(int(selected_year) - 1)
-
-            # Kỳ đang xem CHƯA kết thúc (đang là năm hiện tại) -> cắt cả 2 baseline so sánh
-            # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần. Nhãn delta giữ
-            # NGẮN (xem chú thích tương ứng ở nhánh Tháng).
-            elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = None, "vs Năm trước", "vs Trung bình", None
-            if selected_year == str(date.today().year):
-                _doy = date.today().timetuple().tm_yday
-                elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
-                _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
-            prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
-
-            if not df_y.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    curr_hrs_y = df_y['Thời lượng (Phút)'].sum() / 60
-                    curr_trees_y = len(df_y)
-                    num_days_y = df_y['Ngày'].nunique() or 1
-                    curr_hrs_day_y = curr_hrs_y / num_days_y
-                    curr_trees_day_y = curr_trees_y / num_days_y
-                    curr_min_sess_y = _avg_session_min(df_y)
-
-                    def _hd_y(cur_v, key):
-                        d1 = (cur_v - prev_y[key]) if prev_y and prev_y.get(key) is not None else None
-                        d2 = (cur_v - avg_y[key]) if avg_y and avg_y.get(key) is not None else None
-                        return d1, d2
-
-                    d1_hr_y, d2_hr_y = _hd_y(curr_hrs_y, "hrs")
-                    d1_hrd_y, d2_hrd_y = _hd_y(curr_hrs_day_y, "hrs_day")
-                    d1_tr_y, d2_tr_y = _hd_y(curr_trees_y, "trees")
-                    d1_trd_y, d2_trd_y = _hd_y(curr_trees_day_y, "trees_day")
-                    d1_ms_y, d2_ms_y = _hd_y(curr_min_sess_y, "min_sess")
-
-                    if _clip_note_y:
-                        _clip_card(_clip_note_y)
-                    render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
-                        {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
-                        {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
-                        {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
-                    ])
-                    render_session_bar(df_y)
-
-                    st.write("")
-                    c_top1_y, c_top2_y = st.columns(2)
-                    with c_top1_y: render_top_3(df_y, 'Danh mục', 'Top 3 Danh mục Năm')
-                    with c_top2_y: render_top_3(df_y, 'Dự án', 'Top 3 Dự án Năm')
-
-                with st.expander("2. Biểu đồ lịch", expanded=False):
-                    # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
-                    # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
-                    # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
-                    # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
-                    render_calendar_grid(df_y, df_y)
-
-                with st.expander("3. Đọc sách & Gundam trong năm", expanded=False):
-                    # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
-                    # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
-                    # phức tạp để tách ra cho 1 mục tổng kết năm.
-                    rl_y = load_reading_log()
-                    rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
-                    if rl_y.empty:
-                        st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
-                    else:
-                        render_stat_panel(hero_items=[
-                            {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
-                            {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
-                        ])
-
-                with st.expander("4. Bảng số liệu", expanded=False):
-                    render_detail_table(df_y)
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
     # nếu người dùng chỉ có dữ liệu đọc sách từ Reminders, chưa từng tải CSV Forest (an toàn
@@ -4661,7 +4673,7 @@ elif nav == "Hướng dẫn":
                 "Thanh điều hướng trên cùng có 7 mục:\n"
                 "- **Hôm nay** — trang mặc định khi mở app. Đúng như tên gọi: chỉ 1 ngày, thường là ngày bạn "
                 "đang xem đầu tiên mỗi lần mở app.\n"
-                "- **Báo cáo** — nhìn theo Tổng quan (toàn bộ lịch sử), Năm, Tháng, Tuần, hoặc theo Dự án.\n"
+                "- **Báo cáo** — nhìn theo Tổng quan (toàn bộ lịch sử), Tuần, Tháng, Năm, hoặc theo Dự án.\n"
                 "- **Sách** / **Gundam** — nhật ký đọc sách và xem Gundam, ghép từ 2 nguồn dữ liệu khác nhau.\n"
                 "- **Tìm kiếm** — tra lại ghi chú/lịch/sách·Gundam cũ theo từ khoá.\n"
                 "- **Tuỳ biến** — nơi nạp dữ liệu, phân loại Dự án, đổi màu accent, sao lưu/khôi phục.\n"
@@ -4765,7 +4777,9 @@ elif nav == "Hướng dẫn":
             "- **1 – 7**: nhảy nhanh tới từng mục trên thanh điều hướng, đúng thứ tự trái sang "
             "phải (1 = Hôm nay, 2 = Báo cáo, ... 7 = Hướng dẫn).\n"
             "- **Shift + 1 .. 5**: nhảy thẳng tới Báo cáo và chọn đúng 1 trong 5 lát cắt — "
-            "Shift+1 = Tổng quan, Shift+2 = Năm, Shift+3 = Tháng, Shift+4 = Tuần, Shift+5 = Dự án.\n"
+            "Shift+1 = Tổng quan, Shift+2 = Tuần, Shift+3 = Tháng, Shift+4 = Năm, Shift+5 = Dự án. "
+            "Riêng Shift+5 focus sẵn vào ô chọn Nhóm/Dự án — bấm ↑/↓ + Enter để xem chi tiết "
+            "ngay, không cần bấm chuột mở dropdown trước.\n"
             "- **N**: mở ngay ô soạn Ghi chú ngày của **hôm nay** — dù đang ở trang nào, không "
             "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú; trang tự cuộn tới đúng ô soạn "
             "và focus sẵn vào đó, gõ được luôn ở phím tiếp theo mà không cần bấm chuột.\n"
