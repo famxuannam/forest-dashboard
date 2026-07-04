@@ -995,6 +995,43 @@ def format_relative(ts):
         return f"{hours} giờ {mins} phút trước"
     return f"{mins} phút trước"
 
+
+def _inject_relative_time_ticker():
+    """Tự cập nhật text "X trước" của thẻ <b id='last-update-live' data-epoch='...'> mỗi 30s
+    bằng JS phía trình duyệt, không cần Streamlit rerun cả trang chỉ để số đếm nhích lên. So
+    Date.now() (epoch UTC thật của trình duyệt) với data-epoch (epoch UTC thật đã tính đúng theo
+    APP_TZ ở phía Python, xem render_day_report) -- CẢ HAI đều là epoch UTC tuyệt đối nên phép
+    trừ luôn đúng bất kể múi giờ máy chủ hay múi giờ máy người dùng đang ở đâu, tránh đúng loại
+    lỗi lệch múi giờ vừa sửa ở format_relative(). Logic format giữ y hệt format_relative() (bỏ
+    qua nhánh tz-aware vì epoch đã tự quy về UTC từ đầu)."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  function relText(ms){\n"
+        "    if (ms < 60000) return 'vừa xong';\n"
+        "    const secs = Math.floor(ms / 1000);\n"
+        "    const days = Math.floor(secs / 86400);\n"
+        "    const hours = Math.floor((secs % 86400) / 3600);\n"
+        "    const mins = Math.floor((secs % 3600) / 60);\n"
+        "    if (days > 0) return days + ' ngày ' + hours + ' giờ trước';\n"
+        "    if (hours > 0) return hours + ' giờ ' + mins + ' phút trước';\n"
+        "    return mins + ' phút trước';\n"
+        "  }\n"
+        "  function tick(){\n"
+        "    const el = window.parent.document.getElementById('last-update-live');\n"
+        "    if (!el) return;\n"
+        "    const epoch = parseInt(el.getAttribute('data-epoch'), 10);\n"
+        "    if (isNaN(epoch)) return;\n"
+        "    el.textContent = relText(Date.now() - epoch);\n"
+        "  }\n"
+        "  tick();\n"
+        "  setInterval(tick, 30000);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def _fmt_delta(d):
     """Số nguyên thì bỏ phần thập phân (+5), số lẻ thì giữ 1 chữ số (+1.9)."""
@@ -3623,9 +3660,15 @@ def render_day_report(df):
     _last_dt = df['Thời gian kết thúc'].max()
     _upd_tail = ''
     if pd.notna(_last_dt):
-        _abs_str = pd.Timestamp(_last_dt).strftime('%H:%M · %d/%m/%Y')
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        # epoch UTC thật (không phải lệch theo múi giờ máy chủ/máy khách) -- localize đúng ts
+        # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
+        # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
         _upd_tail = (f"<span style='font-size:13px;color:var(--text-2);'>· Cập nhật gần nhất "
-                     f"<b style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
+                     f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
                      f"({_abs_str})</span>")
     st.markdown(
         "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
@@ -3635,6 +3678,8 @@ def render_day_report(df):
         f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
         f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span>{_upd_tail}</div>",
         unsafe_allow_html=True)
+    if _upd_tail:
+        _inject_relative_time_ticker()
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
