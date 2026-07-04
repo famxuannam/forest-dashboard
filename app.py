@@ -1973,6 +1973,7 @@ def render_note_editor(day):
                     content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
                                        placeholder="Viết vài dòng về ngày này…", key=quill_key)
                     style_quill()
+                    _inject_note_editor_shortcuts()
                     c1, c2, _, c4 = st.columns([2, 2, 2, 3])
                     with c1:
                         if st.button("Cập nhật", icon=":material/check:", type="primary",
@@ -3220,30 +3221,52 @@ st.query_params["nav"] = nav
 
 
 def _inject_keyboard_shortcuts():
-    """Phím tắt toàn app: 1-7 nhảy nhanh tới từng mục nav (đúng thứ tự NAV), "n" mở nhanh ô
-    soạn Ghi chú ngày của HÔM NAY (từ bất kỳ trang nào), "/" focus vào ô Tìm kiếm (đứng sẵn ở
-    đó thì focus luôn, đứng trang khác thì nhảy tới trước). Bỏ qua khi đang gõ trong input/
-    textarea (kể cả date picker) hoặc đang giữ Ctrl/Cmd/Alt (không đụng shortcut hệ thống/trình
-    duyệt). Không cần lo phím tắt bị bắt nhầm khi đang gõ trong ô soạn Quill -- Quill nằm trong
-    1 iframe RIÊNG (components.html), keydown ở đó không nổi bọt lên tới document của trang
-    chính nơi listener này được gắn.
+    """Phím tắt toàn app. Bỏ qua khi đang gõ trong input/textarea (kể cả date picker) hoặc đang
+    giữ Ctrl/Cmd/Alt (không đụng shortcut hệ thống/trình duyệt). Không cần lo phím tắt bị bắt
+    nhầm khi đang gõ trong ô soạn Quill -- Quill nằm trong 1 iframe RIÊNG (component
+    streamlit_quill), keydown ở đó không nổi bọt lên tới document của trang chính nơi listener
+    này được gắn (xem _inject_note_editor_shortcuts() cho phím tắt RIÊNG của ô soạn).
+
+    Toàn cục (từ bất kỳ trang nào):
+    - 1-7: nhảy tới từng mục nav (đúng thứ tự NAV).
+    - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Năm/Tháng/Tuần/Dự án).
+    - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY.
+    - /: focus vào ô Tìm kiếm (đứng sẵn ở đó thì focus luôn, đứng trang khác thì nhảy tới trước).
+    - f / r / l: nhảy tới Tuỳ biến → mục 1 → đúng tab (Forest/Reminder/Đồng bộ lịch); f và r bấm
+      luôn nút "Browse files" để mở hộp thoại chọn file, l chỉ dừng ở tab (còn phải tự chọn
+      khoảng ngày trước khi bấm Đồng bộ).
+    - ?: hiện/ẩn bảng tóm tắt các phím tắt này.
+
+    Theo ngữ cảnh (chỉ có tác dụng khi đang ở đúng trang, không nhảy trang):
+    - [ / ]: trang Sách/Gundam -- chuyển giữa sub-tab Tổng quan / Chi tiết.
+    - ← / →: trang Hôm nay -- lùi/tiến ngày (bấm hộ nút ◀ ▶ đã có sẵn).
 
     QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
     chỉ có sandbox "allow-scripts allow-same-origin ..." (đã xác nhận trực tiếp qua source
     IFrameUtil.*.js của gói streamlit đang cài), KHÔNG có "allow-top-navigation" -- gán
     location.search từ trong iframe này bị trình duyệt chặn thẳng (SecurityError), bất kể có
     phải do phím thật người dùng bấm hay không. Thay vào đó tự bấm (.click()) đúng nút nav/nút
-    ghi chú ĐÃ CÓ SẴN trong trang chính -- thao tác trong cùng 1 document (không phải điều
-    hướng liên-frame) nên không bị sandbox chặn, và tận dụng lại đúng cơ chế reset-về-hôm-nay
-    đã có sẵn ở on_change của nav "Hôm nay" (_reset_today_on_nav_click) thay vì tự làm lại.
-    Bấm nav xong cần CHỜ Streamlit rerun (bất đồng bộ) rồi mới bấm được nút kế tiếp -- dùng
-    setInterval polling thay vì delay cố định vì thời gian rerun không cố định.
+    đã có sẵn trong trang chính -- thao tác trong cùng 1 document (không phải điều hướng
+    liên-frame) nên không bị sandbox chặn, và tận dụng lại đúng cơ chế reset-về-hôm-nay đã có
+    sẵn ở on_change của nav "Hôm nay" (_reset_today_on_nav_click) thay vì tự làm lại. Mỗi bước
+    bấm xong cần CHỜ Streamlit rerun (bất đồng bộ) rồi mới bấm được bước kế tiếp -- runChain()
+    nối nhiều bước qua setInterval polling thay vì delay cố định vì thời gian rerun không cố định.
+
+    clickNavByLabel() PHẢI tự kiểm tra "đã đứng sẵn ở đúng trang chưa" trước khi bấm -- bấm lại
+    đúng pill đang active sẽ làm segmented_control BỎ CHỌN nó (rơi về "Hôm nay", xem
+    _reset_today_on_nav_click) thay vì giữ nguyên trang, sai hoàn toàn ý đồ của các phím tắt
+    f/r/l/Shift+số khi người dùng gọi chúng lúc đã đứng sẵn ở trang đích.
 
     components.html() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
     window.parent.document (document của trang chính, không phải của iframe) nên vẫn tồn tại
     xuyên suốt qua các iframe cũ bị Streamlit xoá đi -- phải tự canh cờ
     window.parent.__appShortcutsInstalled để không gắn trùng listener sau mỗi lần rerun."""
     nav_short_json = json.dumps(list(NAV_SHORT.values()))
+    baocao_subs_json = json.dumps(BAOCAO_SUBS)
+    _txt = "#f2f2f7" if IS_DARK else "#1d1d1f"
+    _txt2 = "#98989d" if IS_DARK else "#6e6e73"
+    _bg = "#2c2c2e" if IS_DARK else "#ffffff"
+    _border = "#3a3a3c" if IS_DARK else "#d1d1d6"
     js = (
         "<script>\n"
         "(function(){\n"
@@ -3251,11 +3274,17 @@ def _inject_keyboard_shortcuts():
         "  if (w.__appShortcutsInstalled) return;\n"
         "  w.__appShortcutsInstalled = true;\n"
         "  const NAV_LABELS = " + nav_short_json + ";\n"
+        "  const BAOCAO_SUBS = " + baocao_subs_json + ";\n"
         "  function lastLine(el){\n"
         "    const parts = el.innerText.split('\\n').map(function(s){ return s.trim(); }).filter(Boolean);\n"
         "    return parts[parts.length - 1];\n"
         "  }\n"
+        "  function activeNavLabel(){\n"
+        "    const b = w.document.querySelector('[data-testid=\"stBaseButton-segmented_controlActive\"]');\n"
+        "    return b ? lastLine(b) : null;\n"
+        "  }\n"
         "  function clickNavByLabel(label){\n"
+        "    if (activeNavLabel() === label) return true;\n"
         "    const btns = w.document.querySelectorAll('[data-testid^=\"stBaseButton-segmented_control\"]');\n"
         "    for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
         "    return false;\n"
@@ -3264,6 +3293,100 @@ def _inject_keyboard_shortcuts():
         "    const btns = w.document.querySelectorAll('button');\n"
         "    for (const b of btns) { if (texts.indexOf(lastLine(b)) !== -1) { b.click(); return true; } }\n"
         "    return false;\n"
+        "  }\n"
+        "  function clickWithinKey(key){\n"
+        "    const scope = w.document.querySelector('.st-key-' + key);\n"
+        "    if (!scope) return false;\n"
+        "    const btn = scope.querySelector('button');\n"
+        "    if (!btn) return false;\n"
+        "    btn.click();\n"
+        "    return true;\n"
+        "  }\n"
+        "  function clickTabByLabel(scopeSel, label){\n"
+        "    // st.tabs() với icon inline (vd \":material/x: Chi tiết\") render icon+chữ CÙNG 1\n"
+        "    // dòng (khác st.button icon= tách dòng riêng) -- so khớp bằng endsWith thay vì ===.\n"
+        "    const scope = scopeSel ? w.document.querySelector(scopeSel) : w.document;\n"
+        "    if (!scope) return false;\n"
+        "    const tabs = scope.querySelectorAll('button[data-baseweb=\"tab\"]');\n"
+        "    for (const t of tabs) { if (t.innerText.trim().endsWith(label)) { t.click(); return true; } }\n"
+        "    return false;\n"
+        "  }\n"
+        "  function clickSegmentedWithinKey(key, label){\n"
+        "    const scope = w.document.querySelector('.st-key-' + key);\n"
+        "    if (!scope) return false;\n"
+        "    const activeBtn = scope.querySelector('[data-testid=\"stBaseButton-segmented_controlActive\"]');\n"
+        "    if (activeBtn && lastLine(activeBtn) === label) return true;\n"
+        "    const btns = scope.querySelectorAll('button');\n"
+        "    for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
+        "    return false;\n"
+        "  }\n"
+        "  function openExpanderByHeader(text){\n"
+        "    const summaries = w.document.querySelectorAll('[data-testid=\"stExpander\"] summary');\n"
+        "    for (const s of summaries) {\n"
+        "      if (s.innerText.trim().indexOf(text) !== -1) {\n"
+        "        const details = s.closest('details');\n"
+        "        if (details && !details.hasAttribute('open')) s.click();\n"
+        "        return true;\n"
+        "      }\n"
+        "    }\n"
+        "    return false;\n"
+        "  }\n"
+        "  function runChain(steps, triesPerStep){\n"
+        "    let i = 0;\n"
+        "    function attempt(triesLeft){\n"
+        "      if (i >= steps.length) return;\n"
+        "      if (steps[i]()) {\n"
+        "        i++;\n"
+        "        if (i < steps.length) setTimeout(function(){ attempt(triesPerStep); }, 150);\n"
+        "        return;\n"
+        "      }\n"
+        "      if (triesLeft <= 0) return;\n"
+        "      setTimeout(function(){ attempt(triesLeft - 1); }, 150);\n"
+        "    }\n"
+        "    attempt(triesPerStep);\n"
+        "  }\n"
+        "  function goUploadTab(tabLabel, browseKey){\n"
+        "    const steps = [\n"
+        "      function(){ return clickNavByLabel('Tuỳ biến'); },\n"
+        "      function(){ return openExpanderByHeader('Dữ liệu đầu vào'); },\n"
+        "      function(){ return clickTabByLabel(null, tabLabel); },\n"
+        "    ];\n"
+        "    if (browseKey) steps.push(function(){ return clickWithinKey(browseKey); });\n"
+        "    runChain(steps, 30);\n"
+        "  }\n"
+        "  const HELP_ROWS = [\n"
+        "    ['1 – 7', 'Nhảy nhanh tới từng mục nav'],\n"
+        "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Năm/Tháng/Tuần/Dự án'],\n"
+        "    ['N', 'Mở nhanh Ghi chú ngày hôm nay'],\n"
+        "    ['/', 'Focus vào ô Tìm kiếm'],\n"
+        "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
+        "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
+        "    ['L', 'Tuỳ biến → Đồng bộ lịch'],\n"
+        "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết'],\n"
+        "    ['\\u2190 / \\u2192', 'Trang Hôm nay: ngày trước / sau'],\n"
+        "    ['Ctrl/Cmd + Enter', 'Đang soạn ghi chú: Cập nhật'],\n"
+        "    ['Esc', 'Đang soạn ghi chú: Huỷ'],\n"
+        "    ['?', 'Hiện/ẩn bảng này'],\n"
+        "  ];\n"
+        "  function buildHelpOverlay(){\n"
+        "    const rows = HELP_ROWS.map(function(r){\n"
+        "      return \"<div style='display:flex;gap:14px;padding:6px 0;'>\"\n"
+        "        + \"<div style='min-width:130px;font-weight:600;color:" + _txt + ";font-family:ui-monospace,monospace;font-size:13px;'>\" + r[0] + \"</div>\"\n"
+        "        + \"<div style='color:" + _txt2 + ";font-size:13px;'>\" + r[1] + \"</div></div>\";\n"
+        "    }).join('');\n"
+        "    const wrap = w.document.createElement('div');\n"
+        "    wrap.id = 'app-shortcuts-overlay';\n"
+        "    wrap.style.cssText = 'display:none;position:fixed;top:16px;right:16px;z-index:99999;'\n"
+        "      + 'background:" + _bg + ";border:1px solid " + _border + ";border-radius:12px;'\n"
+        "      + 'box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:16px 20px;max-width:360px;';\n"
+        "    wrap.innerHTML = \"<div style='font-weight:700;color:\" + '" + _txt + "' + \";margin-bottom:6px;font-size:14px;'>Phím tắt bàn phím</div>\" + rows;\n"
+        "    w.document.body.appendChild(wrap);\n"
+        "    return wrap;\n"
+        "  }\n"
+        "  function toggleHelpOverlay(){\n"
+        "    let el = w.document.getElementById('app-shortcuts-overlay');\n"
+        "    if (!el) el = buildHelpOverlay();\n"
+        "    el.style.display = (el.style.display === 'none') ? 'block' : 'none';\n"
         "  }\n"
         "  function pollUntil(fn, maxTries){\n"
         "    let tries = 0;\n"
@@ -3278,6 +3401,17 @@ def _inject_keyboard_shortcuts():
         "    if (tag === 'input' || tag === 'textarea' || t.isContentEditable) return;\n"
         "    if (e.ctrlKey || e.metaKey || e.altKey) return;\n"
         "    const key = e.key;\n"
+        "    if (e.shiftKey && e.code && e.code.indexOf('Digit') === 0) {\n"
+        "      const sidx = parseInt(e.code.slice(5), 10) - 1;\n"
+        "      if (BAOCAO_SUBS[sidx]) {\n"
+        "        e.preventDefault();\n"
+        "        runChain([\n"
+        "          function(){ return clickNavByLabel('Báo cáo'); },\n"
+        "          function(){ return clickSegmentedWithinKey('bc_sub_picker', BAOCAO_SUBS[sidx]); },\n"
+        "        ], 30);\n"
+        "      }\n"
+        "      return;\n"
+        "    }\n"
         "    const idx = parseInt(key, 10) - 1;\n"
         "    if (!isNaN(idx) && NAV_LABELS[idx]) {\n"
         "      e.preventDefault(); clickNavByLabel(NAV_LABELS[idx]); return;\n"
@@ -3298,7 +3432,27 @@ def _inject_keyboard_shortcuts():
         "        if (inp2) { inp2.focus(); return true; }\n"
         "        return false;\n"
         "      }, 30);\n"
+        "      return;\n"
         "    }\n"
+        "    if (key === 'f' || key === 'F') { e.preventDefault(); goUploadTab('Tải lên từ Forest', 'forest'); return; }\n"
+        "    if (key === 'r' || key === 'R') { e.preventDefault(); goUploadTab('Tải lên từ Reminder', 'rl_shortcut_file'); return; }\n"
+        "    if (key === 'l' || key === 'L') { e.preventDefault(); goUploadTab('Đồng bộ lịch', null); return; }\n"
+        "    if (key === '[' || key === ']') {\n"
+        "      const cur = activeNavLabel();\n"
+        "      if (cur === 'Sách' || cur === 'Gundam') {\n"
+        "        e.preventDefault();\n"
+        "        clickTabByLabel('.st-key-rl_view_tabs', key === '[' ? 'Tổng quan' : 'Chi tiết');\n"
+        "      }\n"
+        "      return;\n"
+        "    }\n"
+        "    if (key === 'ArrowLeft' || key === 'ArrowRight') {\n"
+        "      if (activeNavLabel() === 'Hôm nay') {\n"
+        "        e.preventDefault();\n"
+        "        clickWithinKey(key === 'ArrowLeft' ? 'day_prev' : 'day_next');\n"
+        "      }\n"
+        "      return;\n"
+        "    }\n"
+        "    if (key === '?') { e.preventDefault(); toggleHelpOverlay(); }\n"
         "  });\n"
         "})();\n"
         "</script>"
@@ -3306,7 +3460,48 @@ def _inject_keyboard_shortcuts():
     components.html(js, height=0)
 
 
-_inject_keyboard_shortcuts()
+def _inject_note_editor_shortcuts():
+    """Ctrl/Cmd+Enter -> bấm "Cập nhật", Escape -> bấm "Huỷ", khi con trỏ đang ở trong ô soạn
+    Quill. Quill chạy trong iframe RIÊNG (component streamlit_quill) nên keydown gõ trong đó
+    KHÔNG nổi bọt lên window.parent.document -- không bắt được bằng listener chung của
+    _inject_keyboard_shortcuts(), phải tự tìm đúng iframe (qua .ql-editor, cùng cách
+    style_quill() đã làm) rồi gắn thẳng listener vào TRONG nó. Bản thân iframe chứa Quill bị
+    Streamlit tạo lại mỗi khi mở/đóng ô soạn (khác iframe của _inject_keyboard_shortcuts() vốn
+    gắn ổn định vào window.parent.document xuyên suốt qua các lần rerun) -- nên phải lặp lại
+    việc gắn định kỳ, giống hệt cách style_quill() lặp lại applyQuillCss mỗi 400ms; đánh dấu
+    qua thuộc tính tự đặt trên chính document của iframe đó để không gắn trùng nhiều listener
+    lên cùng 1 iframe còn sống."""
+    js = (
+        "<script>\n"
+        "function bindNoteShortcuts(){\n"
+        "  try{\n"
+        "    const frames = window.parent.document.querySelectorAll('iframe');\n"
+        "    frames.forEach(function(f){\n"
+        "      let d; try{ d = f.contentDocument; }catch(e){ return; }\n"
+        "      if(!d || !d.querySelector('.ql-editor')) return;\n"
+        "      if(d.__noteShortcutsBound) return;\n"
+        "      d.__noteShortcutsBound = true;\n"
+        "      function lastLine(el){\n"
+        "        const parts = el.innerText.split('\\n').map(function(s){ return s.trim(); }).filter(Boolean);\n"
+        "        return parts[parts.length - 1];\n"
+        "      }\n"
+        "      function clickByLabel(label){\n"
+        "        const btns = window.parent.document.querySelectorAll('button');\n"
+        "        for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
+        "        return false;\n"
+        "      }\n"
+        "      d.addEventListener('keydown', function(e){\n"
+        "        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); clickByLabel('Cập nhật'); }\n"
+        "        else if (e.key === 'Escape') { e.preventDefault(); clickByLabel('Huỷ'); }\n"
+        "      });\n"
+        "    });\n"
+        "  }catch(e){}\n"
+        "}\n"
+        "bindNoteShortcuts();\n"
+        "setInterval(bindNoteShortcuts, 400);\n"
+        "</script>"
+    )
+    components.html(js, height=0)
 
 # Sub-page của "Báo cáo" (Tổng quan/Tháng/Tuần/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
@@ -3321,6 +3516,10 @@ if nav == "Báo cáo":
     st.query_params["sub"] = st.session_state["bc_sub"]
 elif "sub" in st.query_params:
     del st.query_params["sub"]
+
+# Gọi ở đây (chứ không phải ngay sau def) vì cần BAOCAO_SUBS đã được định nghĩa ở trên --
+# hàm đọc biến này ngay khi chạy để build JSON cho JS.
+_inject_keyboard_shortcuts()
 
 
 def render_day_report(df):
@@ -4414,16 +4613,33 @@ elif nav == "Hướng dẫn":
         guide_item(
             "shortcuts.png", "Phím tắt bàn phím",
             "Dùng được từ bất kỳ trang nào (trừ khi con trỏ đang ở trong 1 ô nhập liệu — gõ số/"
-            "chữ bình thường trong ô tìm kiếm hay ghi chú không bị bắt nhầm thành phím tắt):\n\n"
+            "chữ bình thường trong ô tìm kiếm hay ghi chú không bị bắt nhầm thành phím tắt). Bấm "
+            "**?** bất kỳ lúc nào để hiện/ẩn bảng tóm tắt các phím tắt này ngay trong app.\n\n"
+            "**Điều hướng nhanh:**\n"
             "- **1 – 7**: nhảy nhanh tới từng mục trên thanh điều hướng, đúng thứ tự trái sang "
             "phải (1 = Hôm nay, 2 = Báo cáo, ... 7 = Hướng dẫn).\n"
+            "- **Shift + 1 .. 5**: nhảy thẳng tới Báo cáo và chọn đúng 1 trong 5 lát cắt — "
+            "Shift+1 = Tổng quan, Shift+2 = Năm, Shift+3 = Tháng, Shift+4 = Tuần, Shift+5 = Dự án.\n"
             "- **N**: mở ngay ô soạn Ghi chú ngày của **hôm nay** — dù đang ở trang nào, không "
             "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú.\n"
             "- **/** (dấu gạch chéo): focus vào ô Tìm kiếm — nếu đang ở trang khác thì tự nhảy "
-            "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập.",
+            "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập.\n"
+            "- **F / R / L**: nhảy tới Tuỳ biến → mục \"1. Dữ liệu đầu vào\" → đúng tab — F mở "
+            "tab Tải lên từ Forest (và bấm luôn nút chọn file), R mở tab Tải lên từ Reminder "
+            "(cũng bấm luôn nút chọn file), L mở tab Đồng bộ lịch (chỉ dừng ở đó, còn phải tự "
+            "chọn khoảng ngày rồi mới bấm Đồng bộ).\n\n"
+            "**Theo ngữ cảnh (chỉ có tác dụng ở đúng trang liên quan):**\n"
+            "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết.\n"
+            "- **← / →**: ở trang Hôm nay — lùi/tiến 1 ngày (bấm hộ 2 nút ◀ ▶ đã có sẵn).\n"
+            "- **Ctrl/Cmd + Enter**: khi đang soạn Ghi chú ngày (con trỏ trong ô Quill) — lưu "
+            "ngay, tương đương bấm \"Cập nhật\".\n"
+            "- **Esc**: khi đang soạn Ghi chú ngày — huỷ, tương đương bấm \"Huỷ\" (không lưu "
+            "thay đổi vừa gõ).",
             tip="Không dùng được khi đang giữ Ctrl/Cmd/Alt (để không đụng phím tắt của hệ điều "
-                "hành/trình duyệt), và không hoạt động khi con trỏ đang ở trong ô soạn ghi chú "
-                "(Quill) — gõ chữ trong đó luôn được ưu tiên là nội dung ghi chú.",
+                "hành/trình duyệt). Riêng Ctrl/Cmd+Enter và Esc là ngoại lệ có chủ đích, chỉ hoạt "
+                "động khi con trỏ đang ở TRONG ô soạn Quill; mọi phím tắt còn lại đều tự tắt khi "
+                "đang gõ trong bất kỳ ô nhập liệu nào (tìm kiếm, ghi chú, ngày...) để không bắt "
+                "nhầm chữ/số bạn đang gõ thành lệnh.",
             where="Toàn app")
 
     # ==========================================
