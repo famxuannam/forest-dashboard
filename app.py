@@ -3232,6 +3232,9 @@ def _inject_keyboard_shortcuts():
     - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Năm/Tháng/Tuần/Dự án).
     - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY.
     - /: focus vào ô Tìm kiếm (đứng sẵn ở đó thì focus luôn, đứng trang khác thì nhảy tới trước).
+      Esc trong khi đang focus ô này: bỏ con trỏ ra khỏi ô (blur), KHÔNG đổi/xoá từ khoá đang gõ
+      -- đây là ngoại lệ duy nhất được xử lý TRƯỚC bộ lọc input/textarea bên dưới, vì mọi phím
+      tắt khác cố tình bị bỏ qua khi đang gõ trong ô nhập liệu.
     - f / r / l: nhảy tới Tuỳ biến → mục 1 → đúng tab (Forest/Reminder/Đồng bộ lịch); f và r bấm
       luôn nút "Browse files" để mở hộp thoại chọn file, l chỉ dừng ở tab (còn phải tự chọn
       khoảng ngày trước khi bấm Đồng bộ).
@@ -3358,7 +3361,7 @@ def _inject_keyboard_shortcuts():
         "    ['1 – 7', 'Nhảy nhanh tới từng mục nav'],\n"
         "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Năm/Tháng/Tuần/Dự án'],\n"
         "    ['N', 'Mở nhanh Ghi chú ngày hôm nay'],\n"
-        "    ['/', 'Focus vào ô Tìm kiếm'],\n"
+        "    ['/', 'Focus vào ô Tìm kiếm — Esc để bỏ con trỏ ra khỏi ô'],\n"
         "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
         "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
         "    ['L', 'Tuỳ biến → Đồng bộ lịch'],\n"
@@ -3398,6 +3401,9 @@ def _inject_keyboard_shortcuts():
         "  w.document.addEventListener('keydown', function(e){\n"
         "    const t = e.target;\n"
         "    const tag = (t.tagName || '').toLowerCase();\n"
+        "    if (e.key === 'Escape' && t.matches && t.matches('.st-key-search_q input')) {\n"
+        "      e.preventDefault(); t.blur(); return;\n"
+        "    }\n"
         "    if (tag === 'input' || tag === 'textarea' || t.isContentEditable) return;\n"
         "    if (e.ctrlKey || e.metaKey || e.altKey) return;\n"
         "    const key = e.key;\n"
@@ -4623,7 +4629,9 @@ elif nav == "Hướng dẫn":
             "- **N**: mở ngay ô soạn Ghi chú ngày của **hôm nay** — dù đang ở trang nào, không "
             "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú.\n"
             "- **/** (dấu gạch chéo): focus vào ô Tìm kiếm — nếu đang ở trang khác thì tự nhảy "
-            "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập.\n"
+            "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập. Đang gõ trong ô "
+            "này mà muốn thoát ra thì bấm **Esc** — chỉ bỏ con trỏ ra khỏi ô, không xoá từ khoá "
+            "đang gõ.\n"
             "- **F / R / L**: nhảy tới Tuỳ biến → mục \"1. Dữ liệu đầu vào\" → đúng tab — F mở "
             "tab Tải lên từ Forest (và bấm luôn nút chọn file), R mở tab Tải lên từ Reminder "
             "(cũng bấm luôn nút chọn file), L mở tab Đồng bộ lịch (chỉ dừng ở đó, còn phải tự "
