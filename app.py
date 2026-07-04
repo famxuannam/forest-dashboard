@@ -2666,8 +2666,7 @@ except Exception:
 if not _has_supabase_secrets:
     st.error(
         "**Chưa cấu hình Supabase.** App cần `SUPABASE_URL` và `SUPABASE_KEY` trong "
-        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example` và mục "
-        "\"Thiết lập Supabase (bắt buộc)\" trong README) để đọc/ghi dữ liệu.")
+        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`) để đọc/ghi dữ liệu.")
     st.stop()
 
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
