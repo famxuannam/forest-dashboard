@@ -3755,7 +3755,11 @@ def render_day_report(df):
             avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
             ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{avg_h:.1f}h"})
         if ref_chips:
-            render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}])
+            # margin ngang 16px khớp đúng padding trong của st.expander (16px mỗi bên) để card này
+            # rộng bằng đúng note_card bên dưới (vốn co hẹp lại vì nằm trong expander); margin-bottom
+            # 20px (thay vì mặc định 0) tạo khoảng cách rõ ràng hơn trước khi vào "Ghi chú ngày".
+            render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
+                               card_style="padding:20px; margin:0 16px 20px;")
 
         with st.expander("Ghi chú ngày", expanded=True):
             render_note_editor(sel)
