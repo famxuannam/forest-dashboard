@@ -908,9 +908,15 @@ def period_stepper(periods, key, fmt, current=None):
 def day_picker(active_days):
     """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề + lịch chọn ngày + nút ngày gần nhất.
     Đọc query param ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách "nav" đã làm ở
-    st.query_params["nav"]) -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày."""
+    st.query_params["nav"]) -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày.
+
+    hi lấy max(ngày có phiên gần nhất, HÔM NAY THẬT) -- không chỉ ngày có phiên gần nhất: nếu
+    chưa log phiên nào hôm nay (vd mới mở app đầu ngày để xem lịch/tham khảo trước khi lên kế
+    hoạch), hôm nay vẫn chưa có trong active_days, nhưng trang "Hôm nay" phải mặc định VÀO ĐÚNG
+    hôm nay (đúng tên trang) và lịch chọn ngày phải cho chọn được tới hôm nay, thay vì kẹt ở
+    ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn)."""
     pk = "day_pick"
-    lo, hi = active_days[0], active_days[-1]
+    lo, hi = active_days[0], max(active_days[-1], date.today())
     if pk not in st.session_state:
         _qd = st.query_params.get("day")
         _parsed = None
@@ -3160,7 +3166,28 @@ def render_day_report(df):
         unsafe_allow_html=True)
 
     if day_df.empty:
-        st.info("Ngày này không có phiên tập trung nào. Dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
+        st.info("Ngày này chưa có phiên tập trung nào — xem tham khảo bên dưới để lên kế hoạch, "
+                "hoặc dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
+
+        # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
+        # có phiên nào) -- số liệu của CÁC NGÀY KHÁC (cùng thứ tuần trước / trung bình cùng thứ),
+        # không phụ thuộc dữ liệu của chính ngày đang xem nên hiện được ngay cả khi ngày này
+        # (kể cả hôm nay, chưa trồng cây nào) trống trơn. Không kèm delta so với ngày đang xem
+        # (khác nhánh có phiên bên dưới) vì ngày chưa diễn ra thì "0h so với TB 3h" chỉ gây hiểu
+        # lầm là đang tụt lại, không phải thông tin tham khảo hữu ích.
+        pw = df[df['Ngày'] == (sel - timedelta(days=7))]
+        same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
+                  & (df['Ngày'] != sel)]
+        ref_chips = []
+        if not pw.empty:
+            ref_chips.append({"k": f"{vn_dow} tuần trước",
+                               "v": f"{pw['Thời lượng (Phút)'].sum() / 60:.1f}h · {len(pw)} phiên"})
+        if same['Ngày'].nunique():
+            avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
+            ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{avg_h:.1f}h"})
+        if ref_chips:
+            render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}])
+
         with st.expander("Ghi chú ngày", expanded=True):
             render_note_editor(sel)
         with st.expander("Ngày này năm trước", expanded=False):
