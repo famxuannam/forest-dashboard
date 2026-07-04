@@ -4241,9 +4241,29 @@ elif nav == "Hướng dẫn":
                 "**App này là cái gương, không phải bàn làm việc.** Thời gian nhìn vào gương không tự nó tạo ra "
                 "năng suất — nó chỉ giúp bạn điều chỉnh. Nếu thấy mình mở dashboard nhiều lần trong ngày, đó "
                 "thường là dấu hiệu đang trốn việc theo cách trông có vẻ chính đáng.\n\n"
-                "Thời gian hợp lý cho cả vòng: **~5 phút/ngày, ~15 phút cuối tuần, ~30 phút cuối tháng** — cộng "
-                "lại chưa tới 1% thời gian thức mỗi tuần. Bốn mục dưới đây xếp theo đúng nhịp đó, từ ngắn/thường "
-                "xuyên nhất tới dài/hiếm nhất.")
+                "Thời gian hợp lý cho nhịp lõi: **~5 phút/ngày, ~15 phút cuối tuần, ~30 phút cuối tháng** — cộng "
+                "lại chưa tới 1% thời gian thức mỗi tuần. Bốn mục lõi dưới đây (Hàng ngày → Hàng năm) xếp theo "
+                "đúng nhịp đó, từ ngắn/thường xuyên nhất tới dài/hiếm nhất. Mục đầu tiên (Đầu ngày) là **tuỳ "
+                "chọn**, không tính vào nhịp ~5 phút/ngày — chỉ dành cho ai có thói quen lên kế hoạch trước khi "
+                "bắt tay vào việc, và chỉ mất thêm khoảng 30 giây liếc qua.")
+
+        guide_item(
+            "planning_ref.png", "Đầu ngày (tuỳ chọn) — tham khảo trước khi lên kế hoạch",
+            "Nếu Pomodoro đầu tiên trong ngày là để lên kế hoạch (vd quyết định việc cần làm trong Things 3 hay "
+            "công cụ tương tự) trước khi bấm giờ Forest cho việc gì, mở **Hôm nay** lúc đó vẫn có ích — trang "
+            "không còn trống trơn chỉ vì chưa có phiên nào:\n\n"
+            "- **Lịch hẹn Work hôm đó** (nếu đã đồng bộ CalDAV) vẫn hiện đầy đủ trong Ghi chú ngày, không phụ "
+            "thuộc đã có phiên hay chưa — hữu ích để biết hôm nay còn bao nhiêu khung giờ trống trước khi xếp "
+            "việc vào Things 3.\n"
+            "- Panel **\"Tham khảo cho lên kế hoạch\"** cho 2 số tính từ lịch sử: tổng giờ + số phiên của đúng "
+            "**thứ này tuần trước**, và **trung bình giờ của đúng thứ này** qua mọi tuần đã có dữ liệu — đủ để "
+            "cân nhắc \"thứ này thường mình làm được bao nhiêu\" trước khi chốt kế hoạch cho hôm nay.\n\n"
+            "Cố ý KHÔNG có số so sánh kiểu \"đã làm X so với TB\" ở đây (khác nhánh có phiên của Hàng ngày bên "
+            "dưới) — ngày chưa diễn ra thì một con số delta chỉ gây hiểu lầm là đang tụt lại, không phải thông "
+            "tin tham khảo hữu ích.",
+            tip="2 số tham chiếu tính theo ĐÚNG THỨ (Thứ 7 so Thứ 7, không phải 7 ngày liền trước) — nhịp làm "
+                "việc thường lặp theo thứ trong tuần hơn là theo khoảng cách ngày liên tiếp.",
+            where="Hôm nay (khi ngày đang xem chưa có phiên nào)")
 
         guide_item(
             "note_editor.png", "Hàng ngày — 5 phút, nghi thức đóng ngày",
@@ -4329,6 +4349,16 @@ elif nav == "Hướng dẫn":
             "giờ nó diễn ra, tô màu theo Danh mục. Đọc trực quan hơn bảng liệt kê: nhìn một lần biết ngay buổi "
             "sáng/chiều/tối hôm đó dồn vào việc gì, có bị ngắt quãng nhiều không.",
             where="Hôm nay → Tổng quan ngày")
+
+        guide_item(
+            "planning_ref.png", "Khi ngày đang xem chưa có phiên nào",
+            "Trước khi phiên đầu tiên trong ngày được log — thường gặp nhất là mở app đầu ngày trước khi trồng "
+            "cây nào — mục \"1. Tổng quan ngày\" ở trên (dòng thời gian, chip so sánh) chưa có gì để vẽ nên "
+            "được thay bằng panel **\"Tham khảo cho lên kế hoạch\"**: tổng giờ + số phiên của đúng thứ này tuần "
+            "trước, và trung bình giờ của đúng thứ này qua toàn bộ lịch sử — 2 con số tính từ NGÀY KHÁC nên vẫn "
+            "hiện được dù ngày đang xem trống trơn. Ghi chú ngày (kèm chip lịch hẹn Work/sách·Gundam) và \"Ngày "
+            "này năm trước\" vẫn hiện bình thường bên dưới, không phụ thuộc gì vào việc đã có phiên hay chưa.",
+            where="Hôm nay (ngày đang xem chưa có phiên nào)")
 
         guide_item(
             "note_editor.png", "Ghi chú ngày (nhật ký)",
@@ -4566,6 +4596,16 @@ elif nav == "Hướng dẫn":
     with _guide_tabs[5]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(137, "Hiện tham khảo lên kế hoạch khi Hôm nay chưa có phiên", [
+            "\"Hôm nay\" trước đây bị kẹt ở ngày cuối cùng có dữ liệu (không phải hôm nay thật) khi chưa log "
+            "phiên nào trong ngày — nghĩa là không xem được trang đúng lúc cần nhất: đầu ngày, trước khi lên "
+            "kế hoạch. Sửa để trang luôn mặc định đúng hôm nay thật, kể cả khi hôm nay chưa có phiên nào.",
+            "Thêm panel \"Tham khảo cho lên kế hoạch\" (đúng thứ này tuần trước, trung bình đúng thứ này) hiện "
+            "ngay khi ngày đang xem trống — phục vụ thói quen dùng Pomodoro đầu ngày để lên kế hoạch (vd Things "
+            "3) trước khi bấm giờ Forest cho việc gì.",
+            "Cập nhật sub-tab \"Nhịp làm việc\" (mục mới \"Đầu ngày\") và \"Hôm nay & Báo cáo\" (mục mới \"Khi "
+            "ngày đang xem chưa có phiên nào\") để mô tả cách dùng mới này.",
+        ])
         guide_update(136, "Thêm sub-tab \"Nhịp làm việc\" trong Hướng dẫn", [
             "Mục mới, không nói về tính năng mà nói về **cách đưa app vào nhịp làm việc thực tế**: nên dùng "
             "bao nhiêu mỗi ngày/tuần/tháng, xem gì ở mỗi mốc, và 3 cái bẫy thường gặp (tối ưu con số thay vì "
