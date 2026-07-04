@@ -1437,13 +1437,22 @@ def _streak_nudge(s):
     return (f"Chuỗi gần nhất đã dừng {gap} ngày. Hôm nay là lúc tốt để bắt đầu lại.", "neutral")
 
 
-def _weekday_avg(scope_df):
-    """Trung bình giờ mỗi ngày theo thứ, chỉ tính những ngày có hoạt động (bỏ ngày trống)."""
+def _weekday_avg(scope_df, min_count=3):
+    """Trung bình giờ mỗi ngày theo thứ, chỉ tính những ngày có hoạt động (bỏ ngày trống).
+
+    Bỏ các thứ có QUÁ ÍT lần xuất hiện (< min_count) khỏi kết quả trước khi caller dùng
+    idxmax()/idxmin() xếp hạng "Mạnh nhất"/"Yếu nhất" -- nếu không, 1 lần làm đột xuất ngoài lệ
+    (vd đúng 1 buổi tối Thứ Ba hiếm hoi, 2 giờ) sẽ thắng trung bình so với 1 thứ được làm đều đặn
+    nhiều lần (vd Thứ 6, mỗi lần ngắn hơn nhưng LÀ thói quen thật), cho ra kết quả trái ngược hẳn
+    với cảm nhận thực tế khi nhìn Biểu đồ lịch. Dữ liệu quá thưa ở MỌI thứ (không thứ nào đạt
+    min_count) thì vẫn trả bản KHÔNG lọc -- có số liệu chưa đủ tin cậy còn hơn ẩn hẳn mục này."""
     if scope_df.empty:
         return pd.Series(dtype=float)
     wd_count = scope_df.groupby('Thứ')['Ngày'].nunique()
     by = scope_df.groupby('Thứ')['Thời lượng (Phút)'].sum() / 60
-    return (by / wd_count).reindex(DAYS_ORDER).dropna()
+    avg = (by / wd_count).reindex(DAYS_ORDER).dropna()
+    reliable = wd_count.reindex(avg.index) >= min_count
+    return avg[reliable] if reliable.any() else avg
 
 
 def _assign_gundam_sessions(gundam_sessions, rl_gundam):
