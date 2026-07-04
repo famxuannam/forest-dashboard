@@ -2477,8 +2477,12 @@ def render_period_table(df, time_col):
 
 
 def guide_item(img, title, body_md, tip=None, where=None):
-    """Một mục trong trang Hướng dẫn: ảnh minh hoạ + giải thích chi tiết (+ mẹo)."""
-    with st.container(border=True, key=f"guide_{img}"):
+    """Một mục trong trang Hướng dẫn: ảnh minh hoạ + giải thích chi tiết (+ mẹo). Key khoá theo cả
+    img lẫn title (không chỉ img) -- vài sub-tab cố ý dùng lại cùng 1 ảnh minh hoạ cho 1 góc nhìn
+    khác (vd "Nhịp làm việc" tái dùng ảnh heatmap.png/table.png/nam.png đã dùng ở sub-tab khác),
+    chỉ khoá theo img sẽ đụng key trùng giữa 2 guide_item khác nhau."""
+    _title_slug = re.sub(r'[^a-zA-Z0-9]+', '_', title).strip('_')[:40]
+    with st.container(border=True, key=f"guide_{img}_{_title_slug}"):
         if where:
             st.markdown(f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
                         f"text-transform:uppercase;letter-spacing:.5px;'>{where}</div>",
@@ -2662,8 +2666,7 @@ except Exception:
 if not _has_supabase_secrets:
     st.error(
         "**Chưa cấu hình Supabase.** App cần `SUPABASE_URL` và `SUPABASE_KEY` trong "
-        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example` và mục "
-        "\"Thiết lập Supabase (bắt buộc)\" trong README) để đọc/ghi dữ liệu.")
+        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`) để đọc/ghi dữ liệu.")
     st.stop()
 
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
@@ -4083,6 +4086,7 @@ elif nav == "Tuỳ biến":
 elif nav == "Hướng dẫn":
     _guide_tabs = st.tabs([
         ":material/auto_awesome: Tổng quan",
+        ":material/self_improvement: Nhịp làm việc",
         ":material/summarize: Hôm nay & Báo cáo",
         ":material/menu_book: Sách & Gundam",
         ":material/tune: Tuỳ biến",
@@ -4201,9 +4205,87 @@ elif nav == "Hướng dẫn":
             where="Mọi trang Báo cáo · Sách · Gundam")
 
     # ==========================================
-    # SUB-TAB: HÔM NAY & BÁO CÁO
+    # SUB-TAB: NHỊP LÀM VIỆC
     # ==========================================
     with _guide_tabs[1]:
+        with st.container(border=True, key="guide_workflow_intro"):
+            st.markdown("#### Dùng app này bao nhiêu là đủ")
+            st.markdown(
+                "**App này là cái gương, không phải bàn làm việc.** Thời gian nhìn vào gương không tự nó tạo ra "
+                "năng suất — nó chỉ giúp bạn điều chỉnh. Nếu thấy mình mở dashboard nhiều lần trong ngày, đó "
+                "thường là dấu hiệu đang trốn việc theo cách trông có vẻ chính đáng.\n\n"
+                "Thời gian hợp lý cho cả vòng: **~5 phút/ngày, ~15 phút cuối tuần, ~30 phút cuối tháng** — cộng "
+                "lại chưa tới 1% thời gian thức mỗi tuần. Bốn mục dưới đây xếp theo đúng nhịp đó, từ ngắn/thường "
+                "xuyên nhất tới dài/hiếm nhất.")
+
+        guide_item(
+            "note_editor.png", "Hàng ngày — 5 phút, nghi thức đóng ngày",
+            "Chọn 1 mốc cố định trong ngày (sau bữa tối, hoặc ngay trước khi tắt máy) — thói quen sống nhờ mốc "
+            "neo, không nhờ ý chí:\n\n"
+            "1. **Xuất CSV từ Forest và tải lên** (Tuỳ biến → Dữ liệu đầu vào). Mọi giá trị của app phụ thuộc "
+            "bước 30 giây này — không tải lên thì không có gì để xem lại.\n"
+            "2. **Nhìn Hôm nay 1 phút**: dòng thời gian trong ngày + so sánh \"vs Thứ X tuần trước\". Câu hỏi "
+            "duy nhất cần trả lời: hôm nay có đúng như mình định không — không phải để tự khen hay tự trách, "
+            "chỉ để ghi nhận.\n"
+            "3. **Viết Ghi chú ngày 2-3 phút** — thói quen giá trị nhất trong toàn bộ app, vì nó nuôi cùng lúc 3 "
+            "tính năng khác: Nhật ký tuần/tháng, Tìm kiếm, và \"Ngày này năm trước\". Con số nói bạn làm bao "
+            "nhiêu, ghi chú nói bạn làm gì và tại sao — một năm sau, cái thứ hai mới là thứ đáng đọc lại.",
+            tip="Không nên mở Báo cáo tháng/năm hàng ngày — dữ liệu dài hạn nhìn mỗi ngày chỉ sinh nhiễu, một "
+                "ngày xấu không nói lên gì cả.",
+            where="Hôm nay")
+
+        guide_item(
+            "heatmap.png", "Hàng tuần — 15 phút, review có tác dụng điều chỉnh",
+            "Tuần là đơn vị đủ ngắn để sửa và đủ dài để có tín hiệu thật, làm vào sáng Thứ Hai hoặc tối Chủ "
+            "Nhật:\n\n"
+            "- **Báo cáo → Tuần**: xem tổng giờ vs tuần trước và vs trung bình (app đã tự cắt kỳ dở dang nên số "
+            "so sánh công bằng). Chênh lệch ±20% là dao động bình thường — chỉ hành động khi lệch lớn VÀ biết "
+            "rõ lý do.\n"
+            "- **Đọc lại Nhật ký tuần** (mục 2): lướt lại ghi chú 7 ngày liên tiếp thường lộ ra pattern mà từng "
+            "ngày riêng lẻ không thấy được.\n"
+            "- **Nhìn Giờ tập trung theo thứ + Biểu đồ lịch** mỗi 2-3 tuần một lần: nếu dữ liệu nói bạn mạnh "
+            "nhất 8-11h sáng, xếp việc khó vào đúng khung đó tuần tới — đây là quyết định cụ thể duy nhất mà "
+            "biểu đồ này phục vụ.",
+            where="Báo cáo → Tuần")
+
+        guide_item(
+            "table.png", "Hàng tháng — 30 phút, kiểm tra tỉ trọng ưu tiên",
+            "Câu hỏi ở tầm tháng khác hẳn tầm tuần: không phải \"làm đủ giờ chưa\" mà là **tỉ trọng có đúng ưu "
+            "tiên không**. Xem Phân bổ thời gian và Bảng số liệu (Báo cáo → Tháng), chú ý dấu ▾ đỏ (nhóm đang bị "
+            "bỏ bê) — nếu một việc được gọi là ưu tiên mà chỉ chiếm 5% thời gian, con số đang nói thật hơn bạn.\n\n"
+            "Cuối tháng cũng là lúc: xem nhịp đọc sách/xem Gundam có đều không, cuốn nào treo quá lâu; kiểm tra "
+            "Dự án mới phát sinh trong tháng đã được gán Nhóm ở mục Phân loại chưa; và bấm Sao lưu nếu app đã "
+            "nhắc (tự động nhắc khi quá 30 ngày kể từ lần gần nhất) — đừng bỏ qua lời nhắc đó, chỉ 1 cú bấm.",
+            where="Báo cáo → Tháng · Tuỳ biến → Phân loại · Quản lý hệ thống")
+
+        guide_item(
+            "nam.png", "Hàng năm & không định kỳ",
+            "**Báo cáo → Năm** hợp để đọc vào tuần cuối tháng 12 hoặc dịp sinh nhật — đọc như đọc tổng kết, kèm "
+            "lướt \"Ngày này năm trước\" ở vài ngày đáng nhớ.\n\n"
+            "**Tìm kiếm** dùng theo nhu cầu chứ không theo lịch — bật lên khi cần trả lời \"lần trước gặp vấn đề "
+            "này mình xử lý thế nào?\". Giá trị của nó tỉ lệ thuận với độ chăm viết Ghi chú ngày, vì nó chỉ tìm "
+            "được trong những gì bạn đã viết ra.",
+            where="Báo cáo → Năm · Tìm kiếm")
+
+        with st.container(border=True, key="guide_workflow_traps"):
+            st.markdown("#### Ba cái bẫy cần tránh")
+            st.markdown(
+                "1. **Tối ưu con số thay vì công việc** — trồng cây cho phiên đọc tin vặt để \"đủ chỉ tiêu giờ\" "
+                "là tự lừa mình bằng chính công cụ chống tự lừa. Số giờ là proxy, không phải mục tiêu.\n"
+                "2. **Chuỗi ngày (streak) trở thành gông** — chuỗi đứt sau ngày ốm/ngày nghỉ đúng nghĩa là bình "
+                "thường. App cố tình đặt lời nhắc chuỗi đứt ở tông khích lệ (\"Hôm nay là lúc tốt để bắt đầu "
+                "lại\") — hãy đọc nó đúng tinh thần đó, không phải lời trách.\n"
+                "3. **Review mà không có câu hỏi** — mỗi lần mở app nên có sẵn 1 câu hỏi (hôm nay thế nào? / "
+                "tuần này lệch gì? / tháng này đúng ưu tiên chưa?). Mở app không có câu hỏi = lướt số liệu giải "
+                "trí, không phải nhìn lại có chủ đích.\n\n"
+                "Nếu chỉ giữ được một thói quen duy nhất từ toàn bộ mục này: **viết ghi chú mỗi tối**. Mọi thứ "
+                "khác của app vẫn hoạt động khi bạn lơ là, nhưng ghi chú bỏ trống một tháng là mất vĩnh viễn một "
+                "tháng ký ức — phần duy nhất của app không thể \"tải lên lại\" được.")
+
+    # ==========================================
+    # SUB-TAB: HÔM NAY & BÁO CÁO
+    # ==========================================
+    with _guide_tabs[2]:
         with st.container(border=True, key="guide_hn_intro"):
             st.markdown("#### Hôm nay là gì, Báo cáo là gì")
             st.markdown(
@@ -4309,7 +4391,7 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # SUB-TAB: SÁCH & GUNDAM
     # ==========================================
-    with _guide_tabs[2]:
+    with _guide_tabs[3]:
         with st.container(border=True, key="guide_rl_intro"):
             st.markdown("#### 1 Reminder List = 1 cuốn sách/series")
             st.markdown(
@@ -4364,7 +4446,7 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # SUB-TAB: TUỲ BIẾN
     # ==========================================
-    with _guide_tabs[3]:
+    with _guide_tabs[4]:
         with st.container(border=True, key="guide_tb_intro"):
             st.markdown("#### 5 mục của tab Tuỳ biến")
             st.markdown(
@@ -4454,9 +4536,16 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # SUB-TAB: CẬP NHẬT
     # ==========================================
-    with _guide_tabs[4]:
+    with _guide_tabs[5]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(136, "Thêm sub-tab \"Nhịp làm việc\" trong Hướng dẫn", [
+            "Mục mới, không nói về tính năng mà nói về **cách đưa app vào nhịp làm việc thực tế**: nên dùng "
+            "bao nhiêu mỗi ngày/tuần/tháng, xem gì ở mỗi mốc, và 3 cái bẫy thường gặp (tối ưu con số thay vì "
+            "công việc, biến chuỗi ngày thành gông, review không có câu hỏi).",
+            "Đặt ngay sau sub-tab Tổng quan — đọc trước phần mô tả chi tiết từng trang, vì nó trả lời câu hỏi "
+            "\"nên dùng app này thế nào\" trước khi đi vào \"app này có gì\".",
+        ])
         guide_update(133, "Thêm chế độ tối (dark mode)", [
             "Toàn bộ giao diện — nút, thẻ, thanh điều hướng, bảng số liệu, ô ghi chú, biểu đồ và bảng nhiệt "
             "(Biểu đồ lịch, Giờ tập trung theo thứ, Thanh phân bố độ dài phiên) — giờ có phiên bản màu riêng "
