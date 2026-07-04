@@ -969,12 +969,20 @@ def day_picker(active_days):
     return st.session_state[pk]
 
 def format_relative(ts):
-    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
+    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'.
+
+    ts (Thời gian kết thúc) luôn là naive wall-clock giờ Việt Nam (Forest ghi giờ điện thoại,
+    prep_analysis_data không đổi tz) -- TUYỆT ĐỐI không so với pd.Timestamp.now() trần, vì hàm
+    đó trả giờ hệ thống máy chủ chạy Streamlit (deploy production rất có thể là UTC, lệch 7 tiếng
+    so với giờ Việt Nam) chứ không phải giờ Việt Nam. Đã tự kiểm chứng: trên máy chủ chạy UTC,
+    pd.Timestamp.now() ra 15:53 trong khi giờ Việt Nam thực tế là 22:53 -- lệch đúng 7 tiếng,
+    khớp triệu chứng "thời gian hiển thị không chính xác". Dùng chung APP_TZ (đã định nghĩa cho
+    CalDAV) để tính "bây giờ" luôn theo giờ Việt Nam rồi bỏ tzinfo, khớp đúng kiểu naive của ts."""
     if pd.isna(ts):
         return "—"
     ts = pd.Timestamp(ts)
-    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware) hoặc không
-    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now()
+    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware, hiếm) hoặc không (naive, phổ biến)
+    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now(tz=APP_TZ).tz_localize(None)
     secs = (now - ts).total_seconds()
     if secs < 60:
         return "vừa xong"
@@ -986,6 +994,43 @@ def format_relative(ts):
     if hours > 0:
         return f"{hours} giờ {mins} phút trước"
     return f"{mins} phút trước"
+
+
+def _inject_relative_time_ticker():
+    """Tự cập nhật text "X trước" của thẻ <b id='last-update-live' data-epoch='...'> mỗi 30s
+    bằng JS phía trình duyệt, không cần Streamlit rerun cả trang chỉ để số đếm nhích lên. So
+    Date.now() (epoch UTC thật của trình duyệt) với data-epoch (epoch UTC thật đã tính đúng theo
+    APP_TZ ở phía Python, xem render_day_report) -- CẢ HAI đều là epoch UTC tuyệt đối nên phép
+    trừ luôn đúng bất kể múi giờ máy chủ hay múi giờ máy người dùng đang ở đâu, tránh đúng loại
+    lỗi lệch múi giờ vừa sửa ở format_relative(). Logic format giữ y hệt format_relative() (bỏ
+    qua nhánh tz-aware vì epoch đã tự quy về UTC từ đầu)."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  function relText(ms){\n"
+        "    if (ms < 60000) return 'vừa xong';\n"
+        "    const secs = Math.floor(ms / 1000);\n"
+        "    const days = Math.floor(secs / 86400);\n"
+        "    const hours = Math.floor((secs % 86400) / 3600);\n"
+        "    const mins = Math.floor((secs % 3600) / 60);\n"
+        "    if (days > 0) return days + ' ngày ' + hours + ' giờ trước';\n"
+        "    if (hours > 0) return hours + ' giờ ' + mins + ' phút trước';\n"
+        "    return mins + ' phút trước';\n"
+        "  }\n"
+        "  function tick(){\n"
+        "    const el = window.parent.document.getElementById('last-update-live');\n"
+        "    if (!el) return;\n"
+        "    const epoch = parseInt(el.getAttribute('data-epoch'), 10);\n"
+        "    if (isNaN(epoch)) return;\n"
+        "    el.textContent = relText(Date.now() - epoch);\n"
+        "  }\n"
+        "  tick();\n"
+        "  setInterval(tick, 30000);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def _fmt_delta(d):
@@ -1711,8 +1756,10 @@ def _render_reading_detail(t, reading_log_df, labels):
     3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
     ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels."""
     _detail_opts = ["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
-    _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
-                                _detail_opts, key=f"rl_detail_{labels['item_col']}")
+    with st.container(key="rl_detail_select"):
+        _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
+                                    _detail_opts, key=f"rl_detail_{labels['item_col']}",
+                                    label_visibility="collapsed")
     if _detail_sel == _detail_opts[0]:
         st.info(f"Chọn 1 {labels['item_col'].lower()} ở trên để xem chi tiết.")
         return
@@ -2683,23 +2730,33 @@ def _logo_mark_svg(size):
 
 def _wordmark_html(layout="header"):
     """Mark + wordmark dùng chung cho trang đăng nhập ("login", to, xếp dọc) và title chính
-    ("header", vừa, xếp dọc, gọn hơn login). Không dùng cho bố cục kiểu topbar-1-hàng vì app
-    không có nav bar tích hợp cùng hàng với logo (nav là 1 st.segmented_control riêng bên dưới)."""
+    ("header", nằm ngang -- mark bên trái, cụm chữ Forest/Dashboard xếp dọc bên phải, gọn theo
+    chiều cao vì header lặp lại trên MỌI trang, khác login chỉ hiện 1 lần nên giữ xếp dọc to)."""
     _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
     _text2 = "#98989d" if IS_DARK else "#6e6e73"
     if layout == "login":
         mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
-    else:
-        mark, forest_sz, dash_sz, gap_outer = 40, 30, 12, 10
+        return (
+            f"<style>{_LOGO_FONT_FACE}</style>"
+            f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
+            f"{_logo_mark_svg(mark)}"
+            "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+            f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
+            f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
+            f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
+            "letter-spacing:0.08em;'>Dashboard</span></div></div>"
+        )
+    mark, forest_sz, dash_sz, gap_outer = 48, 36, 14, 14
     return (
         f"<style>{_LOGO_FONT_FACE}</style>"
-        f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
+        f"<div style='display:flex;flex-direction:row;align-items:center;justify-content:center;"
+        f"gap:{gap_outer}px;'>"
         f"{_logo_mark_svg(mark)}"
-        "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+        "<div style='display:flex;flex-direction:column;gap:2px;'>"
         f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
-        "letter-spacing:0.08em;'>Dashboard</span></div></div>"
+        "letter-spacing:0.08em;line-height:1;'>Dashboard</span></div></div>"
     )
 
 
@@ -3245,7 +3302,9 @@ def _inject_keyboard_shortcuts():
     - ?: hiện/ẩn bảng tóm tắt các phím tắt này.
 
     Theo ngữ cảnh (chỉ có tác dụng khi đang ở đúng trang, không nhảy trang):
-    - [ / ]: trang Sách/Gundam -- chuyển giữa sub-tab Tổng quan / Chi tiết.
+    - [ / ]: trang Sách/Gundam -- chuyển giữa sub-tab Tổng quan / Chi tiết. Sang Chi tiết (])
+      thì focus sẵn vào ô chọn sách/series -- bấm ↑↓ để duyệt rồi Enter để xem ngay, không cần
+      bấm chuột mở dropdown trước.
     - ← / →: trang Hôm nay -- lùi/tiến ngày (bấm hộ nút ◀ ▶ đã có sẵn).
 
     QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
@@ -3369,7 +3428,7 @@ def _inject_keyboard_shortcuts():
         "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
         "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
         "    ['L', 'Tuỳ biến → Đồng bộ lịch'],\n"
-        "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết'],\n"
+        "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết (] focus sẵn ô chọn)'],\n"
         "    ['\\u2190 / \\u2192', 'Trang Hôm nay: ngày trước / sau'],\n"
         "    ['Ctrl/Cmd + Enter', 'Đang soạn ghi chú: Cập nhật'],\n"
         "    ['Esc', 'Đang soạn ghi chú: Huỷ'],\n"
@@ -3489,6 +3548,15 @@ def _inject_keyboard_shortcuts():
         "      if (cur === 'Sách' || cur === 'Gundam') {\n"
         "        e.preventDefault();\n"
         "        clickTabByLabel('.st-key-rl_view_tabs', key === '[' ? 'Tổng quan' : 'Chi tiết');\n"
+        "        if (key === ']') {\n"
+        "          // Focus sẵn ô chọn sách/series -- gõ được phím lên/xuống + Enter chọn ngay,\n"
+        "          // không cần bấm chuột mở dropdown trước (BaseWeb Select tự mở khi ArrowDown).\n"
+        "          pollUntil(function(){\n"
+        "            const inp = w.document.querySelector('.st-key-rl_detail_select input[role=\"combobox\"]');\n"
+        "            if (inp) { inp.focus(); return true; }\n"
+        "            return false;\n"
+        "          }, 30);\n"
+        "        }\n"
         "      }\n"
         "      return;\n"
         "    }\n"
@@ -3585,14 +3653,33 @@ def render_day_report(df):
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
             "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
     _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
+    # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
+    # tiên, Tổng quan giờ không còn là sub-tab mặc định. Cùng 1 div flex-wrap nên chỉ cần thêm
+    # span, không cần thẻ riêng.
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_tail = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        # epoch UTC thật (không phải lệch theo múi giờ máy chủ/máy khách) -- localize đúng ts
+        # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
+        # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_tail = (f"<span style='font-size:13px;color:var(--text-2);'>· Cập nhật gần nhất "
+                     f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
+                     f"({_abs_str})</span>")
     st.markdown(
         "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
         "flex-wrap:wrap;gap:6px 12px;'>"
         "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
         f"{_evt}Ngày đang xem</span>"
         f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>",
+        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span>{_upd_tail}</div>",
         unsafe_allow_html=True)
+    if _upd_tail:
+        _inject_relative_time_ticker()
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
@@ -3726,22 +3813,9 @@ elif nav == "Báo cáo":
     if bc_sub == "Tổng quan":
         if not df.empty:
             with st.expander("1. Tổng quan", expanded=True):
-
-                last_dt = df['Thời gian kết thúc'].max()
-                if pd.notna(last_dt):
-                    abs_str = pd.Timestamp(last_dt).strftime('%H:%M · %d/%m/%Y')
-                    st.markdown(
-                        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
-                        f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
-                        f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-                        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
-                        f"Cập nhật gần nhất</span>"
-                        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{format_relative(last_dt)}</span>"
-                        f"<span style='font-size:13px;color:var(--text-2);'>({abs_str})</span>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-
+                # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
+                # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
+                # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
                 total_hrs = df['Thời lượng (Phút)'].sum() / 60
                 total_trees = len(df)
                 num_days = df['Ngày'].nunique() or 1
@@ -4679,7 +4753,9 @@ elif nav == "Hướng dẫn":
             "(cũng bấm luôn nút chọn file), L mở tab Đồng bộ lịch (chỉ dừng ở đó, còn phải tự "
             "chọn khoảng ngày rồi mới bấm Đồng bộ).\n\n"
             "**Theo ngữ cảnh (chỉ có tác dụng ở đúng trang liên quan):**\n"
-            "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết.\n"
+            "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết; "
+            "sang Chi tiết (]) thì ô chọn sách/series được focus sẵn — bấm ↑/↓ để duyệt rồi Enter "
+            "để xem ngay, không cần bấm chuột mở dropdown trước.\n"
             "- **← / →**: ở trang Hôm nay — lùi/tiến 1 ngày (bấm hộ 2 nút ◀ ▶ đã có sẵn).\n"
             "- **Ctrl/Cmd + Enter**: khi đang soạn Ghi chú ngày (con trỏ trong ô Quill) — lưu "
             "ngay, tương đương bấm \"Cập nhật\".\n"
