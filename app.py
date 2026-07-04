@@ -2068,10 +2068,8 @@ def render_search():
     phía Supabase. Kết quả gộp theo NGÀY (đúng 1 dòng cho mỗi ngày có ít nhất 1 nguồn khớp),
     hiện ĐỦ CẢ 3 nguồn của ngày đó (không chỉ riêng phần khớp) để giữ nguyên ngữ cảnh cả ngày --
     đúng khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú đã dùng ở Nhật ký."""
-    st.markdown("## Tìm kiếm")
-    q = st.text_input("Từ khoá", placeholder="Nhập từ khoá cần tìm trong ghi chú, lịch, sách/Gundam…", key="search_q")
+    q = st.text_input("Từ khoá", key="search_q", label_visibility="collapsed")
     if not q or len(q.strip()) < 2:
-        st.caption("Nhập ít nhất 2 ký tự để tìm.")
         return
     qq = q.strip()
     pat = re.escape(qq)
@@ -2096,7 +2094,17 @@ def render_search():
     if not hit_days:
         st.info(f"Không tìm thấy kết quả nào chứa \"{q}\".")
         return
-    st.caption(f"Tìm thấy {len(hit_days)} ngày khớp.")
+
+    _search_icon = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='15' height='15' "
+                    "fill='var(--text-2)' style='vertical-align:-2px;margin-right:6px;'>"
+                    "<path d='M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 "
+                    "9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 "
+                    "14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/></svg>")
+    st.markdown(
+        "<div class='glass-card' style='padding:12px 18px;margin:0 0 16px;display:flex;align-items:center;'>"
+        f"<span style='font-size:14px;color:var(--text-2);'>{_search_icon}Tìm thấy "
+        f"<b style='color:var(--text);'>{len(hit_days)}</b> ngày khớp.</span></div>",
+        unsafe_allow_html=True)
 
     rows_html = ''
     for d in hit_days:
