@@ -3230,7 +3230,9 @@ def _inject_keyboard_shortcuts():
     Toàn cục (từ bất kỳ trang nào):
     - 1-7: nhảy tới từng mục nav (đúng thứ tự NAV).
     - Shift+1..5: nhảy tới Báo cáo, chọn đúng 1 trong 5 lát cắt (Tổng quan/Năm/Tháng/Tuần/Dự án).
-    - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY.
+    - n: mở nhanh ô soạn Ghi chú ngày của HÔM NAY, tự cuộn trang tới đúng ô soạn (Quill) sau khi
+      mở -- ô này thường không nằm ở đầu trang nên cần cuộn hộ, tránh cảm giác "bấm xong không
+      thấy gì" khi vẫn đứng ở đầu trang.
     - /: focus vào ô Tìm kiếm (đứng sẵn ở đó thì focus luôn, đứng trang khác thì nhảy tới trước).
       Esc trong khi đang focus ô này: bỏ con trỏ ra khỏi ô (blur), KHÔNG đổi/xoá từ khoá đang gõ
       -- đây là ngoại lệ duy nhất được xử lý TRƯỚC bộ lọc input/textarea bên dưới, vì mọi phím
@@ -3425,7 +3427,21 @@ def _inject_keyboard_shortcuts():
         "    if (key === 'n') {\n"
         "      e.preventDefault();\n"
         "      clickNavByLabel('Hôm nay');\n"
-        "      pollUntil(function(){ return clickButtonWithText(['Thêm ghi chú', 'Sửa ghi chú']); }, 30);\n"
+        "      runChain([\n"
+        "        function(){\n"
+        "          const card = w.document.querySelector('.st-key-note_card');\n"
+        "          if (card && card.querySelector('iframe')) return true;\n"
+        "          return clickButtonWithText(['Thêm ghi chú', 'Sửa ghi chú']);\n"
+        "        },\n"
+        "        function(){\n"
+        "          const card = w.document.querySelector('.st-key-note_card');\n"
+        "          if (card && card.querySelector('iframe')) {\n"
+        "            card.scrollIntoView({behavior: 'smooth', block: 'center'});\n"
+        "            return true;\n"
+        "          }\n"
+        "          return false;\n"
+        "        },\n"
+        "      ], 40);\n"
         "      return;\n"
         "    }\n"
         "    if (key === '/') {\n"
