@@ -3218,6 +3218,96 @@ if not nav:
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
+
+def _inject_keyboard_shortcuts():
+    """Phím tắt toàn app: 1-7 nhảy nhanh tới từng mục nav (đúng thứ tự NAV), "n" mở nhanh ô
+    soạn Ghi chú ngày của HÔM NAY (từ bất kỳ trang nào), "/" focus vào ô Tìm kiếm (đứng sẵn ở
+    đó thì focus luôn, đứng trang khác thì nhảy tới trước). Bỏ qua khi đang gõ trong input/
+    textarea (kể cả date picker) hoặc đang giữ Ctrl/Cmd/Alt (không đụng shortcut hệ thống/trình
+    duyệt). Không cần lo phím tắt bị bắt nhầm khi đang gõ trong ô soạn Quill -- Quill nằm trong
+    1 iframe RIÊNG (components.html), keydown ở đó không nổi bọt lên tới document của trang
+    chính nơi listener này được gắn.
+
+    QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
+    chỉ có sandbox "allow-scripts allow-same-origin ..." (đã xác nhận trực tiếp qua source
+    IFrameUtil.*.js của gói streamlit đang cài), KHÔNG có "allow-top-navigation" -- gán
+    location.search từ trong iframe này bị trình duyệt chặn thẳng (SecurityError), bất kể có
+    phải do phím thật người dùng bấm hay không. Thay vào đó tự bấm (.click()) đúng nút nav/nút
+    ghi chú ĐÃ CÓ SẴN trong trang chính -- thao tác trong cùng 1 document (không phải điều
+    hướng liên-frame) nên không bị sandbox chặn, và tận dụng lại đúng cơ chế reset-về-hôm-nay
+    đã có sẵn ở on_change của nav "Hôm nay" (_reset_today_on_nav_click) thay vì tự làm lại.
+    Bấm nav xong cần CHỜ Streamlit rerun (bất đồng bộ) rồi mới bấm được nút kế tiếp -- dùng
+    setInterval polling thay vì delay cố định vì thời gian rerun không cố định.
+
+    components.html() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
+    window.parent.document (document của trang chính, không phải của iframe) nên vẫn tồn tại
+    xuyên suốt qua các iframe cũ bị Streamlit xoá đi -- phải tự canh cờ
+    window.parent.__appShortcutsInstalled để không gắn trùng listener sau mỗi lần rerun."""
+    nav_short_json = json.dumps(list(NAV_SHORT.values()))
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  const w = window.parent;\n"
+        "  if (w.__appShortcutsInstalled) return;\n"
+        "  w.__appShortcutsInstalled = true;\n"
+        "  const NAV_LABELS = " + nav_short_json + ";\n"
+        "  function lastLine(el){\n"
+        "    const parts = el.innerText.split('\\n').map(function(s){ return s.trim(); }).filter(Boolean);\n"
+        "    return parts[parts.length - 1];\n"
+        "  }\n"
+        "  function clickNavByLabel(label){\n"
+        "    const btns = w.document.querySelectorAll('[data-testid^=\"stBaseButton-segmented_control\"]');\n"
+        "    for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
+        "    return false;\n"
+        "  }\n"
+        "  function clickButtonWithText(texts){\n"
+        "    const btns = w.document.querySelectorAll('button');\n"
+        "    for (const b of btns) { if (texts.indexOf(lastLine(b)) !== -1) { b.click(); return true; } }\n"
+        "    return false;\n"
+        "  }\n"
+        "  function pollUntil(fn, maxTries){\n"
+        "    let tries = 0;\n"
+        "    const iv = setInterval(function(){\n"
+        "      tries++;\n"
+        "      if (fn() || tries >= maxTries) clearInterval(iv);\n"
+        "    }, 150);\n"
+        "  }\n"
+        "  w.document.addEventListener('keydown', function(e){\n"
+        "    const t = e.target;\n"
+        "    const tag = (t.tagName || '').toLowerCase();\n"
+        "    if (tag === 'input' || tag === 'textarea' || t.isContentEditable) return;\n"
+        "    if (e.ctrlKey || e.metaKey || e.altKey) return;\n"
+        "    const key = e.key;\n"
+        "    const idx = parseInt(key, 10) - 1;\n"
+        "    if (!isNaN(idx) && NAV_LABELS[idx]) {\n"
+        "      e.preventDefault(); clickNavByLabel(NAV_LABELS[idx]); return;\n"
+        "    }\n"
+        "    if (key === 'n') {\n"
+        "      e.preventDefault();\n"
+        "      clickNavByLabel('Hôm nay');\n"
+        "      pollUntil(function(){ return clickButtonWithText(['Thêm ghi chú', 'Sửa ghi chú']); }, 30);\n"
+        "      return;\n"
+        "    }\n"
+        "    if (key === '/') {\n"
+        "      e.preventDefault();\n"
+        "      const inp = w.document.querySelector('.st-key-search_q input');\n"
+        "      if (inp) { inp.focus(); return; }\n"
+        "      clickNavByLabel('Tìm kiếm');\n"
+        "      pollUntil(function(){\n"
+        "        const inp2 = w.document.querySelector('.st-key-search_q input');\n"
+        "        if (inp2) { inp2.focus(); return true; }\n"
+        "        return false;\n"
+        "      }, 30);\n"
+        "    }\n"
+        "  });\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
+_inject_keyboard_shortcuts()
+
 # Sub-page của "Báo cáo" (Tổng quan/Tháng/Tuần/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
 BAOCAO_SUBS = ["Tổng quan", "Năm", "Tháng", "Tuần", "Dự án"]
@@ -4321,6 +4411,21 @@ elif nav == "Hướng dẫn":
                 "hàng, giúp so sánh được độ lớn tuyệt đối giữa các Dự án chứ không chỉ giữa các kỳ trong 1 Dự án.",
             where="Mọi trang Báo cáo · Sách · Gundam")
 
+        guide_item(
+            "shortcuts.png", "Phím tắt bàn phím",
+            "Dùng được từ bất kỳ trang nào (trừ khi con trỏ đang ở trong 1 ô nhập liệu — gõ số/"
+            "chữ bình thường trong ô tìm kiếm hay ghi chú không bị bắt nhầm thành phím tắt):\n\n"
+            "- **1 – 7**: nhảy nhanh tới từng mục trên thanh điều hướng, đúng thứ tự trái sang "
+            "phải (1 = Hôm nay, 2 = Báo cáo, ... 7 = Hướng dẫn).\n"
+            "- **N**: mở ngay ô soạn Ghi chú ngày của **hôm nay** — dù đang ở trang nào, không "
+            "cần tự bấm qua Hôm nay rồi tìm nút Thêm/Sửa ghi chú.\n"
+            "- **/** (dấu gạch chéo): focus vào ô Tìm kiếm — nếu đang ở trang khác thì tự nhảy "
+            "tới Tìm kiếm trước, nếu đã đứng sẵn ở đó thì chỉ focus lại ô nhập.",
+            tip="Không dùng được khi đang giữ Ctrl/Cmd/Alt (để không đụng phím tắt của hệ điều "
+                "hành/trình duyệt), và không hoạt động khi con trỏ đang ở trong ô soạn ghi chú "
+                "(Quill) — gõ chữ trong đó luôn được ưu tiên là nội dung ghi chú.",
+            where="Toàn app")
+
     # ==========================================
     # SUB-TAB: NHỊP LÀM VIỆC
     # ==========================================
@@ -4686,6 +4791,12 @@ elif nav == "Hướng dẫn":
     with _guide_tabs[5]:
         st.caption("Các thay đổi tính năng gần đây nhất, mới nhất lên trước.")
 
+        guide_update(141, "Thêm phím tắt bàn phím, gọn trang Tìm kiếm", [
+            "Phím tắt toàn app: 1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm "
+            "nay, / focus vào ô Tìm kiếm — xem mục \"Phím tắt bàn phím\" ngay bên dưới.",
+            "Trang Tìm kiếm gọn lại: bỏ tiêu đề/nhãn/placeholder khi chưa gõ gì, số kết quả "
+            "\"Tìm thấy N ngày khớp\" chuyển thành 1 card riêng kèm icon, lề trên/dưới đều nhau.",
+        ])
         guide_update(137, "Hiện tham khảo lên kế hoạch khi Hôm nay chưa có phiên", [
             "\"Hôm nay\" trước đây bị kẹt ở ngày cuối cùng có dữ liệu (không phải hôm nay thật) khi chưa log "
             "phiên nào trong ngày — nghĩa là không xem được trang đúng lúc cần nhất: đầu ngày, trước khi lên "
