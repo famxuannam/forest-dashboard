@@ -2685,23 +2685,33 @@ def _logo_mark_svg(size):
 
 def _wordmark_html(layout="header"):
     """Mark + wordmark dùng chung cho trang đăng nhập ("login", to, xếp dọc) và title chính
-    ("header", vừa, xếp dọc, gọn hơn login). Không dùng cho bố cục kiểu topbar-1-hàng vì app
-    không có nav bar tích hợp cùng hàng với logo (nav là 1 st.segmented_control riêng bên dưới)."""
+    ("header", nằm ngang -- mark bên trái, cụm chữ Forest/Dashboard xếp dọc bên phải, gọn theo
+    chiều cao vì header lặp lại trên MỌI trang, khác login chỉ hiện 1 lần nên giữ xếp dọc to)."""
     _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
     _text2 = "#98989d" if IS_DARK else "#6e6e73"
     if layout == "login":
         mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
-    else:
-        mark, forest_sz, dash_sz, gap_outer = 40, 30, 12, 10
+        return (
+            f"<style>{_LOGO_FONT_FACE}</style>"
+            f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
+            f"{_logo_mark_svg(mark)}"
+            "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+            f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
+            f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
+            f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
+            "letter-spacing:0.08em;'>Dashboard</span></div></div>"
+        )
+    mark, forest_sz, dash_sz, gap_outer = 48, 36, 14, 14
     return (
         f"<style>{_LOGO_FONT_FACE}</style>"
-        f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
+        f"<div style='display:flex;flex-direction:row;align-items:center;justify-content:center;"
+        f"gap:{gap_outer}px;'>"
         f"{_logo_mark_svg(mark)}"
-        "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+        "<div style='display:flex;flex-direction:column;gap:2px;'>"
         f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
-        "letter-spacing:0.08em;'>Dashboard</span></div></div>"
+        "letter-spacing:0.08em;line-height:1;'>Dashboard</span></div></div>"
     )
 
 
@@ -3598,13 +3608,24 @@ def render_day_report(df):
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
             "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
     _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
+    # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
+    # tiên, Tổng quan giờ không còn là sub-tab mặc định. Cùng 1 div flex-wrap nên chỉ cần thêm
+    # span, không cần thẻ riêng.
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_tail = ''
+    if pd.notna(_last_dt):
+        _abs_str = pd.Timestamp(_last_dt).strftime('%H:%M · %d/%m/%Y')
+        _upd_tail = (f"<span style='font-size:13px;color:var(--text-2);'>· Cập nhật gần nhất "
+                     f"<b style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
+                     f"({_abs_str})</span>")
     st.markdown(
         "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
         "flex-wrap:wrap;gap:6px 12px;'>"
         "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
         f"{_evt}Ngày đang xem</span>"
         f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>",
+        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span>{_upd_tail}</div>",
         unsafe_allow_html=True)
 
     if day_df.empty:
@@ -3739,22 +3760,9 @@ elif nav == "Báo cáo":
     if bc_sub == "Tổng quan":
         if not df.empty:
             with st.expander("1. Tổng quan", expanded=True):
-
-                last_dt = df['Thời gian kết thúc'].max()
-                if pd.notna(last_dt):
-                    abs_str = pd.Timestamp(last_dt).strftime('%H:%M · %d/%m/%Y')
-                    st.markdown(
-                        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
-                        f"align-items:center; flex-wrap:wrap; gap:6px 12px;'>"
-                        f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-                        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' style='vertical-align:-2px;margin-right:5px;'><path d='M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/></svg>"
-                        f"Cập nhật gần nhất</span>"
-                        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{format_relative(last_dt)}</span>"
-                        f"<span style='font-size:13px;color:var(--text-2);'>({abs_str})</span>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-
+                # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
+                # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
+                # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
                 total_hrs = df['Thời lượng (Phút)'].sum() / 60
                 total_trees = len(df)
                 num_days = df['Ngày'].nunique() or 1
