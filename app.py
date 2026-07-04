@@ -906,15 +906,20 @@ def period_stepper(periods, key, fmt, current=None):
     return st.session_state[pk]
 
 def day_picker(active_days):
-    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề + lịch chọn ngày + nút ngày gần nhất.
-    Đọc query param ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách "nav" đã làm ở
-    st.query_params["nav"]) -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày.
+    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề (▶ còn nhảy tới hi/hôm nay ở bước cuối
+    nếu hôm nay chưa có phiên -- xem _next_candidates) + lịch chọn ngày. Đọc query param
+    ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách "nav" đã làm ở st.query_params["nav"])
+    -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày.
 
     hi lấy max(ngày có phiên gần nhất, HÔM NAY THẬT) -- không chỉ ngày có phiên gần nhất: nếu
     chưa log phiên nào hôm nay (vd mới mở app đầu ngày để xem lịch/tham khảo trước khi lên kế
     hoạch), hôm nay vẫn chưa có trong active_days, nhưng trang "Hôm nay" phải mặc định VÀO ĐÚNG
     hôm nay (đúng tên trang) và lịch chọn ngày phải cho chọn được tới hôm nay, thay vì kẹt ở
-    ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn)."""
+    ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn).
+
+    Không còn nút "Ngày gần nhất" riêng -- việc "về hôm nay" giờ nằm ở chỗ bấm lại mục "Hôm nay"
+    trên nav bar (xem callback gắn ở st.segmented_control(key="nav")), nút riêng trong trang là
+    thừa khi đã có lối tắt đó."""
     pk = "day_pick"
     lo, hi = active_days[0], max(active_days[-1], date.today())
     if pk not in st.session_state:
@@ -929,19 +934,25 @@ def day_picker(active_days):
     st.session_state[pk] = min(max(st.session_state[pk], lo), hi)
     sel = st.session_state[pk]
 
+    def _next_candidates(cur):
+        # Ngày CÓ hoạt động liền kề như cũ, CỘNG THÊM hi (hôm nay) làm nấc cuối nếu hôm nay
+        # chưa có phiên (nên không nằm trong active_days) -- không có bước này thì ▶ sẽ kẹt ở
+        # ngày hoạt động gần nhất, không bao giờ tới được hôm nay thật.
+        cand = [d for d in active_days if d > cur]
+        if hi not in active_days and hi > cur:
+            cand.append(hi)
+        return cand
+
     def _prev():
         cand = [d for d in active_days if d < st.session_state[pk]]
         if cand: st.session_state[pk] = cand[-1]
 
     def _next():
-        cand = [d for d in active_days if d > st.session_state[pk]]
-        if cand: st.session_state[pk] = cand[0]
-
-    def _latest():
-        st.session_state[pk] = hi
+        cand = _next_candidates(st.session_state[pk])
+        if cand: st.session_state[pk] = min(cand)
 
     with st.container(key="day_stepper"):
-        c1, c2, c3, c4 = st.columns([1, 6, 1, 2], vertical_alignment="center")
+        c1, c2, c3 = st.columns([1, 8, 1], vertical_alignment="center")
         with c1:
             st.button("", icon=":material/chevron_left:", key="day_prev", on_click=_prev,
                       disabled=not [d for d in active_days if d < sel], use_container_width=True)
@@ -950,10 +961,7 @@ def day_picker(active_days):
                                    format="DD/MM/YYYY", label_visibility="collapsed")
         with c3:
             st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
-                      disabled=not [d for d in active_days if d > sel], use_container_width=True)
-        with c4:
-            st.button("Ngày gần nhất", icon=":material/keyboard_double_arrow_down:", key="day_latest",
-                      on_click=_latest, disabled=sel == hi, use_container_width=True)
+                      disabled=not _next_candidates(sel), use_container_width=True)
     if picked != st.session_state[pk]:
         st.session_state[pk] = picked
         st.rerun()
@@ -2802,6 +2810,10 @@ st.markdown(
     .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
     .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
+    /* .sp-row có margin-top:12px để tách với .sp-hero phía trên -- khi KHÔNG có hero (vd panel
+       "Tham khảo cho lên kế hoạch" chỉ có sections, không hero_items), .sp-row là con đầu tiên
+       nên margin đó cộng dồn với padding 20px của card, làm lề trên dày hơn lề dưới rõ rệt. */
+    .stat-panel > .sp-row:first-child { margin-top: 0; }
     .stat-panel .chip.tw .ck { color: var(--accent-dark); }
     .stat-panel .chip.tw .cv { color: var(--accent); }
     .section-hd { font-size: 15px; font-weight: 700; color: var(--text); margin: 22px 0 6px; letter-spacing: -0.2px; }
@@ -2983,7 +2995,7 @@ st.markdown(
        cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
        khung (viền chấm) để phân biệt rõ với có nội dung. ===== */
     .note-empty { font-size: 14px; color: var(--text-2); background: var(--chip);
-        border: 1px dashed var(--divider); border-radius: 10px; padding: 13px 15px; }
+        border: 1px dashed var(--divider); border-radius: 10px; padding: 13px 15px; margin-bottom: 12px; }
 
     /* ===== Hiển thị ghi chú dạng HTML (do Quill xuất ra) ===== */
     .note-html, .st-key-note_saved { font-size: 14.5px; line-height: 1.6; color: var(--text); }
@@ -3115,10 +3127,20 @@ if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
     st.session_state["nav"] = _q if _q in NAV else "Hôm nay"
 
+def _reset_today_on_nav_click():
+    # Bấm lại mục "Hôm nay" (từ trang khác, hoặc bấm lại chính nó khi đang ở đó -- segmented_control
+    # bỏ chọn khi bấm lại pill đang active, giá trị về None, rơi vào nhánh "if not nav" bên dưới
+    # nên cũng coi là "Hôm nay") phải luôn đưa về đúng NGÀY HÔM NAY, không giữ ngày đã xem trước
+    # đó -- thay cho nút "Ngày gần nhất" đã bỏ trong day_picker(). Chỉ set khi có "day_pick" sẵn
+    # (đã từng vào trang Hôm nay) -- nếu chưa, day_picker() sẽ tự khởi tạo đúng hôm nay lúc đó.
+    if st.session_state.get("nav") in (None, "Hôm nay") and "day_pick" in st.session_state:
+        st.session_state["day_pick"] = date.today()
+
 nav = st.segmented_control(
     "Trang", list(NAV.keys()),
     format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
     key="nav", label_visibility="collapsed",
+    on_change=_reset_today_on_nav_click,
 )
 if not nav:
     nav = "Hôm nay"
@@ -3166,9 +3188,6 @@ def render_day_report(df):
         unsafe_allow_html=True)
 
     if day_df.empty:
-        st.info("Ngày này chưa có phiên tập trung nào — xem tham khảo bên dưới để lên kế hoạch, "
-                "hoặc dùng ◀ ▶ để nhảy tới ngày có hoạt động liền kề.")
-
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
         # có phiên nào) -- số liệu của CÁC NGÀY KHÁC (cùng thứ tuần trước / trung bình cùng thứ),
         # không phụ thuộc dữ liệu của chính ngày đang xem nên hiện được ngay cả khi ngày này
