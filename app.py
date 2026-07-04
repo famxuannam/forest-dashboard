@@ -969,12 +969,20 @@ def day_picker(active_days):
     return st.session_state[pk]
 
 def format_relative(ts):
-    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'."""
+    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'.
+
+    ts (Thời gian kết thúc) luôn là naive wall-clock giờ Việt Nam (Forest ghi giờ điện thoại,
+    prep_analysis_data không đổi tz) -- TUYỆT ĐỐI không so với pd.Timestamp.now() trần, vì hàm
+    đó trả giờ hệ thống máy chủ chạy Streamlit (deploy production rất có thể là UTC, lệch 7 tiếng
+    so với giờ Việt Nam) chứ không phải giờ Việt Nam. Đã tự kiểm chứng: trên máy chủ chạy UTC,
+    pd.Timestamp.now() ra 15:53 trong khi giờ Việt Nam thực tế là 22:53 -- lệch đúng 7 tiếng,
+    khớp triệu chứng "thời gian hiển thị không chính xác". Dùng chung APP_TZ (đã định nghĩa cho
+    CalDAV) để tính "bây giờ" luôn theo giờ Việt Nam rồi bỏ tzinfo, khớp đúng kiểu naive của ts."""
     if pd.isna(ts):
         return "—"
     ts = pd.Timestamp(ts)
-    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware) hoặc không
-    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now()
+    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware, hiếm) hoặc không (naive, phổ biến)
+    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now(tz=APP_TZ).tz_localize(None)
     secs = (now - ts).total_seconds()
     if secs < 60:
         return "vừa xong"
