@@ -2956,7 +2956,14 @@ def _logo_mark_svg(size):
 def _wordmark_html(layout="header"):
     """Mark + wordmark dùng chung cho trang đăng nhập ("login", to, xếp dọc) và title chính
     ("header", nằm ngang -- mark bên trái, cụm chữ Forest/Dashboard xếp dọc bên phải, gọn theo
-    chiều cao vì header lặp lại trên MỌI trang, khác login chỉ hiện 1 lần nên giữ xếp dọc to)."""
+    chiều cao vì header lặp lại trên MỌI trang, khác login chỉ hiện 1 lần nên giữ xếp dọc to).
+
+    Span "Forest" dùng line-height:1.25 (KHÔNG phải 1) -- Instrument Serif có cap-height/overshoot
+    của chữ hoa cao hơn hẳn chữ thường; line-height:1 để lại quá ít khoảng đệm phía trên nên trên
+    mobile Safari (đã xác nhận qua ảnh chụp thật) chữ "F" bị cắt cụt phần trên, đọc nhầm thành
+    "rorest" -- Chromium desktop không tái hiện được lỗi này (khác biệt engine WebKit/Blink khi xử
+    lý half-leading của font có ascent bất thường), nên phải rộng rãi hơn số 1 an toàn thay vì tin
+    vào việc test trên Chromium là đủ."""
     _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
     _text2 = "#98989d" if IS_DARK else "#6e6e73"
     if layout == "login":
@@ -2967,7 +2974,7 @@ def _wordmark_html(layout="header"):
             f"{_logo_mark_svg(mark)}"
             "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
             f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
-            f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
+            f"color:{_text};letter-spacing:0.01em;line-height:1.25;\">Forest</span>"
             f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
             "letter-spacing:0.08em;'>Dashboard</span></div></div>"
         )
@@ -2979,7 +2986,7 @@ def _wordmark_html(layout="header"):
         f"{_logo_mark_svg(mark)}"
         "<div style='display:flex;flex-direction:column;gap:2px;'>"
         f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
-        f"color:{_text};letter-spacing:0.01em;line-height:1;\">Forest</span>"
+        f"color:{_text};letter-spacing:0.01em;line-height:1.25;\">Forest</span>"
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
         "letter-spacing:0.08em;line-height:1;'>Dashboard</span></div></div>"
     )
