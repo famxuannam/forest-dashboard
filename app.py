@@ -3298,7 +3298,11 @@ def _inject_keyboard_shortcuts():
       tắt khác cố tình bị bỏ qua khi đang gõ trong ô nhập liệu.
     - f / r / l: nhảy tới Tuỳ biến → mục 1 → đúng tab (Forest/Reminder/Đồng bộ lịch); f và r bấm
       luôn nút "Browse files" để mở hộp thoại chọn file, l chỉ dừng ở tab (còn phải tự chọn
-      khoảng ngày trước khi bấm Đồng bộ).
+      khoảng ngày trước khi bấm Đồng bộ). Sau khi chọn xong file (hộp thoại OS, ngoài tầm với
+      của JS) và Streamlit render xong bảng xem trước, f/r tự FOCUS SẴN vào nút "Xác nhận" tương
+      ứng (không tự bấm hộ) -- chỉ cần Enter là xác nhận luôn, không cần rê chuột tìm nút. Dùng
+      MutationObserver (không phải poll hẹn giờ) vì thời gian người dùng chọn file trong hộp
+      thoại OS không xác định trước được, có thể vài giây tới vài phút.
     - ?: hiện/ẩn bảng tóm tắt các phím tắt này.
 
     Theo ngữ cảnh (chỉ có tác dụng khi đang ở đúng trang, không nhảy trang):
@@ -3411,13 +3415,34 @@ def _inject_keyboard_shortcuts():
         "    }\n"
         "    attempt(triesPerStep);\n"
         "  }\n"
-        "  function goUploadTab(tabLabel, browseKey){\n"
+        "  function watchAndFocusButton(labelText, timeoutMs){\n"
+        "    // Đợi 1 nút xuất hiện trong DOM rồi FOCUS (không tự bấm) -- dùng cho nút Xác nhận\n"
+        "    // chỉ hiện SAU khi Streamlit render xong bảng xem trước file vừa chọn. Không thể\n"
+        "    // biết trước người dùng chọn file trong hộp thoại OS mất bao lâu (vài giây tới vài\n"
+        "    // phút) nên dùng MutationObserver (chờ sự kiện DOM thay đổi) thay vì setInterval\n"
+        "    // đếm giờ liên tục -- rẻ hơn nhiều, không tốn CPU khi không có gì thay đổi.\n"
+        "    function findBtn(){\n"
+        "      const btns = w.document.querySelectorAll('button');\n"
+        "      for (const b of btns) { if (lastLine(b) === labelText) return b; }\n"
+        "      return null;\n"
+        "    }\n"
+        "    const already = findBtn();\n"
+        "    if (already) { already.focus(); return; }\n"
+        "    const obs = new w.MutationObserver(function(){\n"
+        "      const btn = findBtn();\n"
+        "      if (btn) { btn.focus(); obs.disconnect(); }\n"
+        "    });\n"
+        "    obs.observe(w.document.body, {childList: true, subtree: true});\n"
+        "    w.setTimeout(function(){ obs.disconnect(); }, timeoutMs || 600000);\n"
+        "  }\n"
+        "  function goUploadTab(tabLabel, browseKey, confirmLabel){\n"
         "    const steps = [\n"
         "      function(){ return clickNavByLabel('Tuỳ biến'); },\n"
         "      function(){ return openExpanderByHeader('Dữ liệu đầu vào'); },\n"
         "      function(){ return clickTabByLabel(null, tabLabel); },\n"
         "    ];\n"
         "    if (browseKey) steps.push(function(){ return clickWithinKey(browseKey); });\n"
+        "    if (confirmLabel) watchAndFocusButton(confirmLabel);\n"
         "    runChain(steps, 30);\n"
         "  }\n"
         "  const HELP_ROWS = [\n"
@@ -3425,8 +3450,8 @@ def _inject_keyboard_shortcuts():
         "    ['Shift + 1..5', 'Báo cáo: Tổng quan/Năm/Tháng/Tuần/Dự án'],\n"
         "    ['N', 'Mở nhanh Ghi chú ngày hôm nay, cuộn tới và focus sẵn để gõ ngay'],\n"
         "    ['/', 'Focus vào ô Tìm kiếm — Esc để bỏ con trỏ ra khỏi ô'],\n"
-        "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
-        "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
+        "    ['F', 'Tuỳ biến → Tải lên từ Forest (chọn file xong Enter là xác nhận)'],\n"
+        "    ['R', 'Tuỳ biến → Tải lên từ Reminder (chọn file xong Enter là xác nhận)'],\n"
         "    ['L', 'Tuỳ biến → Đồng bộ lịch'],\n"
         "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết (] focus sẵn ô chọn)'],\n"
         "    ['\\u2190 / \\u2192', 'Trang Hôm nay: ngày trước / sau'],\n"
@@ -3540,8 +3565,8 @@ def _inject_keyboard_shortcuts():
         "      }, 30);\n"
         "      return;\n"
         "    }\n"
-        "    if (key === 'f' || key === 'F') { e.preventDefault(); goUploadTab('Tải lên từ Forest', 'forest'); return; }\n"
-        "    if (key === 'r' || key === 'R') { e.preventDefault(); goUploadTab('Tải lên từ Reminder', 'rl_shortcut_file'); return; }\n"
+        "    if (key === 'f' || key === 'F') { e.preventDefault(); goUploadTab('Tải lên từ Forest', 'forest', 'Xác nhận cập nhật dữ liệu'); return; }\n"
+        "    if (key === 'r' || key === 'R') { e.preventDefault(); goUploadTab('Tải lên từ Reminder', 'rl_shortcut_file', 'Xác nhận nạp dữ liệu'); return; }\n"
         "    if (key === 'l' || key === 'L') { e.preventDefault(); goUploadTab('Đồng bộ lịch', null); return; }\n"
         "    if (key === '[' || key === ']') {\n"
         "      const cur = activeNavLabel();\n"
@@ -4751,7 +4776,9 @@ elif nav == "Hướng dẫn":
             "- **F / R / L**: nhảy tới Tuỳ biến → mục \"1. Dữ liệu đầu vào\" → đúng tab — F mở "
             "tab Tải lên từ Forest (và bấm luôn nút chọn file), R mở tab Tải lên từ Reminder "
             "(cũng bấm luôn nút chọn file), L mở tab Đồng bộ lịch (chỉ dừng ở đó, còn phải tự "
-            "chọn khoảng ngày rồi mới bấm Đồng bộ).\n\n"
+            "chọn khoảng ngày rồi mới bấm Đồng bộ). Với F/R, sau khi chọn xong file và bảng xem "
+            "trước hiện ra, nút \"Xác nhận\" tự được focus sẵn — chỉ cần bấm **Enter** là xong, "
+            "không cần rê chuột tìm nút.\n\n"
             "**Theo ngữ cảnh (chỉ có tác dụng ở đúng trang liên quan):**\n"
             "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết; "
             "sang Chi tiết (]) thì ô chọn sách/series được focus sẵn — bấm ↑/↓ để duyệt rồi Enter "
