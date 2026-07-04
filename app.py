@@ -1711,8 +1711,10 @@ def _render_reading_detail(t, reading_log_df, labels):
     3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
     ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels."""
     _detail_opts = ["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
-    _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
-                                _detail_opts, key=f"rl_detail_{labels['item_col']}")
+    with st.container(key="rl_detail_select"):
+        _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
+                                    _detail_opts, key=f"rl_detail_{labels['item_col']}",
+                                    label_visibility="collapsed")
     if _detail_sel == _detail_opts[0]:
         st.info(f"Chọn 1 {labels['item_col'].lower()} ở trên để xem chi tiết.")
         return
@@ -3245,7 +3247,9 @@ def _inject_keyboard_shortcuts():
     - ?: hiện/ẩn bảng tóm tắt các phím tắt này.
 
     Theo ngữ cảnh (chỉ có tác dụng khi đang ở đúng trang, không nhảy trang):
-    - [ / ]: trang Sách/Gundam -- chuyển giữa sub-tab Tổng quan / Chi tiết.
+    - [ / ]: trang Sách/Gundam -- chuyển giữa sub-tab Tổng quan / Chi tiết. Sang Chi tiết (])
+      thì focus sẵn vào ô chọn sách/series -- bấm ↑↓ để duyệt rồi Enter để xem ngay, không cần
+      bấm chuột mở dropdown trước.
     - ← / →: trang Hôm nay -- lùi/tiến ngày (bấm hộ nút ◀ ▶ đã có sẵn).
 
     QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
@@ -3369,7 +3373,7 @@ def _inject_keyboard_shortcuts():
         "    ['F', 'Tuỳ biến → Tải lên từ Forest'],\n"
         "    ['R', 'Tuỳ biến → Tải lên từ Reminder'],\n"
         "    ['L', 'Tuỳ biến → Đồng bộ lịch'],\n"
-        "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết'],\n"
+        "    ['[ / ]', 'Trang Sách/Gundam: Tổng quan / Chi tiết (] focus sẵn ô chọn)'],\n"
         "    ['\\u2190 / \\u2192', 'Trang Hôm nay: ngày trước / sau'],\n"
         "    ['Ctrl/Cmd + Enter', 'Đang soạn ghi chú: Cập nhật'],\n"
         "    ['Esc', 'Đang soạn ghi chú: Huỷ'],\n"
@@ -3489,6 +3493,15 @@ def _inject_keyboard_shortcuts():
         "      if (cur === 'Sách' || cur === 'Gundam') {\n"
         "        e.preventDefault();\n"
         "        clickTabByLabel('.st-key-rl_view_tabs', key === '[' ? 'Tổng quan' : 'Chi tiết');\n"
+        "        if (key === ']') {\n"
+        "          // Focus sẵn ô chọn sách/series -- gõ được phím lên/xuống + Enter chọn ngay,\n"
+        "          // không cần bấm chuột mở dropdown trước (BaseWeb Select tự mở khi ArrowDown).\n"
+        "          pollUntil(function(){\n"
+        "            const inp = w.document.querySelector('.st-key-rl_detail_select input[role=\"combobox\"]');\n"
+        "            if (inp) { inp.focus(); return true; }\n"
+        "            return false;\n"
+        "          }, 30);\n"
+        "        }\n"
         "      }\n"
         "      return;\n"
         "    }\n"
@@ -4679,7 +4692,9 @@ elif nav == "Hướng dẫn":
             "(cũng bấm luôn nút chọn file), L mở tab Đồng bộ lịch (chỉ dừng ở đó, còn phải tự "
             "chọn khoảng ngày rồi mới bấm Đồng bộ).\n\n"
             "**Theo ngữ cảnh (chỉ có tác dụng ở đúng trang liên quan):**\n"
-            "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết.\n"
+            "- **[ / ]**: ở trang Sách/Gundam — chuyển qua lại giữa 2 sub-tab Tổng quan/Chi tiết; "
+            "sang Chi tiết (]) thì ô chọn sách/series được focus sẵn — bấm ↑/↓ để duyệt rồi Enter "
+            "để xem ngay, không cần bấm chuột mở dropdown trước.\n"
             "- **← / →**: ở trang Hôm nay — lùi/tiến 1 ngày (bấm hộ 2 nút ◀ ▶ đã có sẵn).\n"
             "- **Ctrl/Cmd + Enter**: khi đang soạn Ghi chú ngày (con trỏ trong ô Quill) — lưu "
             "ngay, tương đương bấm \"Cập nhật\".\n"
