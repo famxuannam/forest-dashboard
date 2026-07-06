@@ -2563,29 +2563,37 @@ def render_note_editor(day, day_badges=None):
                                             delete_quick_note(_qid)
                                             st.rerun()
 
-                with st.container(key="note_main", gap="xsmall"):
-                    st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
+                with st.container(key="note_main", gap="small"):
+                    with st.container(key="note_label_content", gap="xsmall"):
+                        st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
+                        if not st.session_state.get(edit_key, False):
+                            if cur:
+                                with st.container(key="note_saved"):
+                                    st.markdown(cur, unsafe_allow_html=True)
+                            else:
+                                st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
+                                            unsafe_allow_html=True)
+                        else:
+                            # Chế độ soạn: trình soạn Quill inline
+                            content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
+                                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
+                            style_quill()
+                            _inject_note_editor_shortcuts()
+
+                    # Hàng nút nằm NGOÀI note_label_content -- 2 container/2 gap tách biệt để
+                    # khoảng nhãn↔nội dung (xsmall, sát) và khoảng nội dung↔nút (small, rộng hơn
+                    # 1 chút) không bị ép về cùng 1 giá trị (xem chú thích CSS ở trên).
                     if not st.session_state.get(edit_key, False):
-                        # Chế độ xem: chỉ ghi chú + 1 nút
                         if cur:
-                            with st.container(key="note_saved"):
-                                st.markdown(cur, unsafe_allow_html=True)
                             if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
                                 _enter_edit()
                                 st.rerun()
                         else:
-                            st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
-                                        unsafe_allow_html=True)
                             if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
                                          key=f"note_addbtn_{day}"):
                                 _enter_edit()
                                 st.rerun()
                     else:
-                        # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
-                        content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
-                                           placeholder="Viết vài dòng về ngày này…", key=quill_key)
-                        style_quill()
-                        _inject_note_editor_shortcuts()
                         with st.container(key="note_actions", horizontal=True, gap="small"):
                             if st.button("Cập nhật", icon=":material/check:", type="primary",
                                          key=f"note_save_{day}"):
@@ -3882,15 +3890,21 @@ st.markdown(
        mặc định (div[data-testid="stButton"] button { width:100% } ở trên) -- to hết cỡ nhìn lệch
        hẳn so với phần còn lại của thẻ (chip nhỏ, chữ ghi chú thường). note_actions (Cập nhật/Huỷ/
        Xoá) dùng st.container(horizontal=True) nên 3 nút tự nằm sát nhau thành 1 cụm, không cần
-       st.columns() + use_container_width như trước. */
+       st.columns() + use_container_width như trước. QUAN TRỌNG: Streamlit tự đặt sẵn
+       min-height:40px cho MỌI nút (kiểm chứng qua getComputedStyle thật trên trình duyệt, không
+       thấy được nếu chỉ đọc CSS nguồn) -- chỉ giảm padding/font-size KHÔNG đủ, nút vẫn cao 40px
+       vì min-height thắng; phải tự đè min-height ở đây thì nút mới thực sự thấp lại. */
     [class*="st-key-note_editbtn_"] div[data-testid="stButton"] button,
     [class*="st-key-note_addbtn_"] div[data-testid="stButton"] button,
     .st-key-note_actions div[data-testid="stButton"] button {
         width: auto !important; padding: 5px 14px !important; font-size: 13px !important;
+        min-height: 0 !important; height: auto !important;
     }
-    /* note_main (nhãn "Ghi chú chính" + nội dung/Quill + hàng nút): gap="xsmall" ở
-       st.container() đã tự co khoảng cách dọc giữa các phần tử con so với mặc định "small" quá
-       rộng -- không cần CSS margin thủ công. */
+    /* note_label_content (nhãn "Ghi chú chính" + nội dung/Quill, gap="xsmall") tách riêng khỏi
+       note_main (gap="small" mặc định) để 2 khoảng cách dọc không bị ép về cùng 1 giá trị: nhãn↔
+       nội dung cần sát (xsmall), nhưng nội dung↔hàng nút bên dưới cần rộng hơn 1 chút để không
+       dính liền -- gộp chung 1 container/1 gap từng làm cả 2 khoảng cách xích lại y hệt, "sửa
+       xong" hoá ra ép nhầm khoảng còn lại quá chật (bug vòng trước). */
     </style>
     """,
     unsafe_allow_html=True
