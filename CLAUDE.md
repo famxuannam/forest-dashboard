@@ -1,144 +1,93 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Tài liệu định hướng cho AI agent làm việc trên mã nguồn Forest Dashboard. File này là **mục lục
+tầng cao** — chi tiết kỹ thuật chuyên sâu nằm trong `.claude/docs/` (xem mục 6), không lặp lại ở
+đây. Nếu bạn chưa từng thấy codebase này, đọc hết file này trước, rồi mở đúng file doc liên quan
+tới việc đang làm trước khi sửa code.
 
-## What this is
+## 1. Tổng quan dự án
 
-A personal, single-user Streamlit dashboard (Vietnamese UI) that visualizes focus-session data
-exported from the **Forest** app, plus two optional secondary sources: work calendar events (via
-CalDAV/iCloud) and reading/watch progress (via Apple Reminders export). It's retrospective only —
-no goal-setting, no reminders, just looking back at what Forest already recorded. See the app's
-own **Hướng dẫn** (Help) tab for user-facing feature documentation — don't duplicate that content
-here.
+Forest Dashboard là dashboard Streamlit cá nhân (single-user, giao diện tiếng Việt), trực quan hoá
+dữ liệu phiên tập trung xuất từ app **Forest**, cộng 2 nguồn phụ tuỳ chọn: lịch hẹn công việc (qua
+CalDAV/iCloud) và tiến độ đọc sách/xem phim (qua file Apple Reminders xuất bằng Shortcuts). Ứng
+dụng thuần hồi cứu (retrospective) — không có tính năng đặt mục tiêu hay nhắc nhở, chỉ hiển thị lại
+dữ liệu Forest đã ghi nhận.
 
-The entire application lives in one file, `app.py` (~5500 lines). There is no separate
-frontend/backend split; Streamlit's script-rerun model *is* the architecture.
+## 2. Tech Stack
 
-## Commands
+- Python 3.11+ (repo không pin version cụ thể).
+- Streamlit `>=1.58,<2` — toàn bộ UI + server nằm gọn trong `app.py`, không có frontend riêng.
+- Supabase (Postgres) qua `supabase-py>=2,<3` — nơi lưu trữ dữ liệu **duy nhất**, không có chế độ
+  CSV cục bộ.
+- `pandas>=2.2,<4` xử lý dữ liệu; `plotly>=6,<7` + `altair>=5,<7` vẽ biểu đồ.
+- `streamlit-quill` cho ô ghi chú rich-text; `Authlib>=1.3.2,<2` cho đăng nhập Google (tuỳ chọn);
+  `caldav>=3,<4` cho đồng bộ lịch Work qua CalDAV (tuỳ chọn).
+- Không có bundler/transpiler/build step nào — `streamlit run app.py` là toàn bộ quy trình chạy.
 
-There is no build step, linter, or test suite in this repo.
+## 3. Lệnh phát triển
 
 ```bash
-# Syntax-check after every edit (cheap, catches typos before running anything)
+# Cài dependency
+pip install -r requirements.txt
+
+# Kiểm tra cú pháp sau MỌI lần sửa app.py — rẻ, bắt lỗi gõ nhầm trước khi chạy thật
 python3 -c "import ast; ast.parse(open('app.py').read())"
 
-# Run the app locally (needs .streamlit/secrets.toml populated, see secrets.toml.example)
+# Chạy app dev (cần .streamlit/secrets.toml điền SUPABASE_URL/SUPABASE_KEY, xem secrets.toml.example)
 streamlit run app.py
 ```
 
-### Verifying a change without hitting Supabase/iCloud
+Không có bước build production riêng biệt, không có linter/test suite trong repo. Sandbox thường
+không có mạng ra Supabase/iCloud thật — quy trình kiểm thử bằng harness giả lập được mô tả chi tiết
+ở [`.claude/docs/testing.md`](.claude/docs/testing.md).
 
-There's no committed test suite, and the sandbox generally can't reach `*.supabase.co` or
-`caldav.icloud.com`. The working pattern for verifying changes in this repo is to run the *real*
-`app.py` against fakes, then drive it with Playwright:
+## 4. Tóm tắt Logic cốt lõi
 
-1. Copy `app.py` to a scratch file and monkeypatch `_get_supabase()` (and `_get_caldav_client()`
-   if relevant) to return an in-memory fake client with `.table(name).select/insert/upsert/
-   delete().execute()` semantics, seeded with representative sample data.
-2. `streamlit run <scratch_app>.py --server.port <N> --server.headless true` in the background.
-3. Drive it with `playwright` (`p.chromium.launch(executable_path='/opt/pw-browsers/chromium')`),
-   checking `"Traceback" not in page.inner_text('body')` across every top-level nav page as a
-   regression sweep, plus targeted checks (bounding boxes, computed styles, screenshots) for the
-   specific change.
-4. For anything with more than 2-3 branches of logic (date-comparison math, template selection,
-   CSV parsing), also write a quick offline Python script that imports/execs just the function
-   under test with synthetic `pandas` DataFrames — faster than round-tripping through Streamlit
-   for pure-logic bugs.
+Codebase này **không có** nghiệp vụ tính trọng số (weight calculation) nào tồn tại — mọi kết quả
+tìm được cho từ khoá "weight" trong `app.py` chỉ là CSS `font-weight`. Phép tính nghiệp vụ trung
+tâm thực tế là **gộp thời lượng phiên theo kỳ**: `prep_analysis_data()` là điểm nối dữ liệu duy
+nhất, join `sessions` với `mapping` (Dự án → Danh mục), sinh thêm cột kỳ (`Tuần`/`Tháng`/`Năm`/
+`Thứ`) từ cột giờ bắt đầu. Mọi trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án) đọc từ DataFrame này
+rồi `groupby` + `sum()` cột `Thời lượng (Phút)` theo Dự án/Danh mục/kỳ. Chi tiết đầy đủ (bao gồm
+timezone và luồng đồng bộ dữ liệu) ở [`.claude/docs/data-layer.md`](.claude/docs/data-layer.md).
 
-Regenerate the scratch harness fresh each session rather than assuming one persists — it isn't
-committed to the repo.
+## 5. Ràng buộc trọng yếu
 
-## Architecture
+Các quy tắc dưới đây là bất biến của dự án — **không tự ý thay đổi hay giả định khác đi** khi chưa
+xác nhận với người dùng:
 
-### Everything is one dispatch function keyed on `st.query_params`
+- **Kiến trúc 1 file**: toàn bộ app nằm trong `app.py` (~5500 dòng). Không tách frontend/backend,
+  không tạo module component riêng — đây là quyết định kiến trúc đã chốt, không phải nợ kỹ thuật
+  cần dọn.
+- **Giờ luôn qua `_today_vn()`**, không bao giờ `date.today()` trần — server có thể chạy UTC, lệch
+  7 tiếng so với giờ Việt Nam đã từng gây bug thật đã ghi nhận.
+- **Supabase là nơi lưu trữ dữ liệu duy nhất**: không thêm chế độ CSV cục bộ. Mọi bảng/bucket mới
+  bắt buộc có cặp `load_*()`/`save_*()` tương ứng **và** cập nhật `supabase_schema.sql` (nguồn
+  chân lý schema duy nhất).
+- **`st.metric` bị ẩn toàn cục bằng CSS** (`[data-testid="stMetric"] { display: none; }`) — dùng
+  widget này sẽ render ra khoảng trắng vô hình, không có lỗi hay warning nào cảnh báo. Không dùng
+  `st.metric()`; xem cách thay thế ở
+  [`.claude/docs/ui-components.md`](.claude/docs/ui-components.md).
+- **Khối CSS chính là string thường, không phải f-string** — không tự ý đổi kiểu (hàng trăm dấu
+  `{`/`}` literal trong CSS sẽ vỡ cú pháp Python).
+- **Không tự ý mở hoặc merge Pull Request** khi chưa được yêu cầu rõ ràng — commit + push lên
+  nhánh làm việc được giao rồi dừng lại chờ xác nhận.
+- **Tab "Hướng dẫn" là nội dung cho người dùng cuối, không phải code phụ trợ** — không viết lại nội
+  dung tab này như tác dụng phụ của 1 thay đổi không liên quan tới trải nghiệm người dùng.
 
-Top-level navigation is a flat dict `NAV` (page name → Material icon) rendered as a
-`st.segmented_control`, backed by `st.session_state["nav"]` seeded once per session from
-`st.query_params["nav"]` and written back after every change (this is what makes deep-links like
-`?nav=Hôm nay&day=2026-07-04` work — session state, not the widget, is the source of truth). The
-page body is a long `if nav == "X": ... elif nav == "Y": ...` chain near the bottom of the file.
-"Báo cáo" has a second-level `BAOCAO_SUBS` list (Tổng quan/Tuần/Tháng/Năm/Dự án) using the exact
-same seed-from-query-param pattern under `?sub=`. `day_picker()` does the same for `?day=`.
+## 6. Tài liệu bổ sung
 
-When reordering nav items or sub-tabs, the list order in `NAV`/`BAOCAO_SUBS` **is** the display
-order — the physical order of the `if/elif` branches doesn't need to match and isn't worth
-reshuffling for its own sake.
-
-### Data layer: Supabase-only, one `load_*`/`save_*` pair per table
-
-No local CSV storage — `load_db()`, `load_mapping()`, `load_deleted()`, `load_notes()`,
-`load_work_calendar()`, `load_reading_log()`, `load_settings()` each wrap a Supabase table read,
-cached with `@st.cache_data`; the matching `save_*`/`sync_*` writes and then calls
-`st.cache_data.clear()`. `work_calendar` (CalDAV) and `reading_log` (Reminders CSV import) are
-optional secondary sources — code touching them must degrade gracefully (empty DataFrame with the
-right columns, not a crash) when the tables are empty or unconfigured, since a real user may not
-have set either up. `supabase_schema.sql` is the source of truth for table shape; keep it in sync
-with any new `load_*`/`save_*` pair.
-
-`prep_analysis_data()` is the one place that joins/derives the analysis-ready DataFrame (adds
-`Tuần`/`Tháng`/`Năm`/`Thứ` columns etc.) that every report page reads from — it must return a
-DataFrame with the right columns even when empty, since several pages branch on `df.empty` rather
-than crashing.
-
-### Timezone: always `_today_vn()`, never bare `date.today()`
-
-`APP_TZ = ZoneInfo("Asia/Ho_Chi_Minh")` is fixed regardless of server locale (Streamlit Cloud runs
-UTC). `date.today()` on a UTC server is a whole day behind Vietnam for 7 hours every day — this
-was a real, previously-shipped bug. Any code that needs "today" (default day, "is this the current
-week/month/year" checks, backup-reminder day counting) must go through `_today_vn()`.
-
-### Theming: CSS custom properties driven by `IS_DARK`, not two stylesheets
-
-`IS_DARK` is derived once from `st.context.theme.type` at module load. A block of `--token`
-CSS custom properties (`--bg`, `--card`, `--text`, `--text-2/3/4`, `--border`, `--divider`,
-`--accent`, `--accent-rgb`, `--accent-dark`) is injected as `:root{...}`, with light/dark values
-chosen per `IS_DARK`. The large main CSS block is a *plain string*, not an f-string — don't convert
-it to one (hundreds of literal `{`/`}` in CSS rules would all need escaping). Custom accent color
-(`ACCENT`, from `ACCENT_PRESETS`, persisted in the `settings` table) flows through the same
-`var(--accent...)` tokens plus a few Python-side derived constants (`ACCENT_RGB`, `ACCENT_DARK`)
-for places CSS vars can't reach (Altair/Plotly chart colors, the Quill iframe's injected CSS,
-which is a separate document and can't see the main page's `:root`).
-
-Any hardcoded hex color added to a new UI element is very likely a dark-mode bug waiting to
-happen — prefer the existing `var(--token)` set.
-
-### Numbered `st.expander` sections are a UI convention, not incidental
-
-Report pages (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết ở Sách/Gundam) are built from a sequence of
-`st.expander("N. Tên mục", ...)`. When inserting/removing a section, renumber the following ones
-in the same page. `render_stat_panel(hero_items, sections, footer, groups, card_style)` is the
-shared "hero numbers + labeled chip rows" component reused across nearly every one of these pages
-— extend it rather than hand-rolling a new card layout, and use `card_style` for one-off
-margin/width overrides instead of touching its shared defaults (they affect every call site).
-
-### Keyboard shortcuts live in one injected JS blob
-
-`_inject_keyboard_shortcuts()` (a big `components.html(js, height=0)` call) handles global
-shortcuts (1-7 nav, Shift+1..5 Báo cáo sub-tabs indexed off `BAOCAO_SUBS`, `n`/`f`/`r`/`l`/`/`/`?`/
-arrow keys/`[`/`]`). `_inject_note_editor_shortcuts()` is injected separately *inside* the Quill
-iframe's own document, because keydowns there don't bubble to the parent frame. Sub-tab shortcuts
-are index-driven off the same list used for rendering, so reordering `BAOCAO_SUBS` doesn't require
-touching the shortcut handler — only doc/help-text updates.
-
-### The "Hướng dẫn" (Help) tab is user-facing documentation, treat it as content, not code
-
-Don't rewrite its explanatory text as a side effect of an unrelated change; update it deliberately
-when a change actually affects what a user sees or how a feature works, and add a `guide_update()`
-entry when it's a notable behavior change.
-
-## Git workflow for this repo
-
-Development happens on branch `claude/app-features-overview-pr-h75608` against `famxuannam/
-forest-dashboard`. PRs are squash-merged one at a time. **Do not open or merge a PR until the user
-explicitly says so** — commit and push to the branch after verifying, then wait.
-
-Because PRs are squashed, the branch's history diverges from `origin/main` after every merge. Before
-starting new work (or before committing, if `origin/main` has moved), restart clean:
-```bash
-git fetch origin main
-git checkout -B claude/app-features-overview-pr-h75608 origin/main
-# re-apply/cherry-pick any not-yet-merged local work here
-git push --force-with-lease -u origin claude/app-features-overview-pr-h75608
-```
-Clean up any generated sample data files (`database.csv`, `mapping.csv`, `notes.csv`,
-`__pycache__`) before committing — they're a byproduct of local testing, not app output.
+- [`.claude/docs/architecture-navigation.md`](.claude/docs/architecture-navigation.md) — dispatch
+  trang theo `st.query_params`, cấu trúc `NAV`/`BAOCAO_SUBS`, `day_picker()`.
+- [`.claude/docs/data-layer.md`](.claude/docs/data-layer.md) — cặp `load_*`/`save_*` từng bảng,
+  timezone, `prep_analysis_data()`, luồng "Đồng bộ nhanh" qua Supabase Storage.
+- [`.claude/docs/theming.md`](.claude/docs/theming.md) — CSS custom properties, `IS_DARK`, cách
+  màu accent lan sang biểu đồ và iframe ghi chú.
+- [`.claude/docs/ui-components.md`](.claude/docs/ui-components.md) — quy ước `st.expander` đánh
+  số, `render_stat_panel()`, bẫy `st.metric`, `guide_item()`/`guide_update()`.
+- [`.claude/docs/keyboard-shortcuts.md`](.claude/docs/keyboard-shortcuts.md) — blob JS phím tắt
+  toàn cục và phím tắt riêng trong iframe ghi chú.
+- [`.claude/docs/testing.md`](.claude/docs/testing.md) — harness giả lập Supabase + Playwright để
+  kiểm thử không cần mạng thật.
+- [`.claude/docs/git-workflow.md`](.claude/docs/git-workflow.md) — nhánh làm việc theo phiên, quy
+  trình PR squash-merge, cách làm sạch nhánh sau mỗi lần merge.
