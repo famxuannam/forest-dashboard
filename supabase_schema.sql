@@ -32,43 +32,17 @@ create table if not exists notes (
   note text not null
 );
 
--- Ghi chú nhanh từ Shortcut iOS (mục "Ghi chú nhanh" trong tab Hướng dẫn) -- gọi qua REST API
--- dạng RPC (POST .../rest/v1/rpc/append_note_bullet), KHÔNG đi qua app: Shortcut tự đọc note
--- hiện có của đúng ngày, chèn 1 bullet mới vào CUỐI danh sách <ul> gần nhất (hoặc tạo <ul> mới
--- nếu ghi chú đang trống/chưa có danh sách), rồi ghi đè lại -- tất cả trong 1 lệnh, tránh race
--- condition nếu gọi 2 lần liên tiếp nhanh (đọc-sửa-ghi làm trong đúng 1 transaction của hàm,
--- không tách thành 2 request riêng như get-rồi-patch). Escape "&/</>" tối thiểu (ĐÚNG thứ tự,
--- & trước) vì note là HTML (Quill) -- chèn thẳng text thô sẽ vỡ cấu trúc HTML nếu người dùng
--- gõ ký tự đặc biệt.
-create or replace function append_note_bullet(p_date date, p_text text)
-returns void
-language plpgsql
-as $$
-declare
-  v_escaped text;
-  v_current text;
-  v_trimmed text;
-  v_new text;
-begin
-  v_escaped := replace(replace(replace(p_text, '&', '&amp;'), '<', '&lt;'), '>', '&gt;');
-  select note into v_current from notes where note_date = p_date;
-  -- rtrim() thô CHỈ cắt dấu cách (space), không cắt newline/tab -- Quill có thể để lại 1 dòng
-  -- trắng cuối note, khiến so khớp "</ul>" ở cuối chuỗi trật (đã tự kiểm chứng bằng test cục
-  -- bộ). regexp_replace cắt MỌI loại khoảng trắng cuối chuỗi mới đúng.
-  v_trimmed := regexp_replace(coalesce(v_current, ''), '\s+$', '');
-
-  if v_trimmed = '' then
-    v_new := '<ul><li>' || v_escaped || '</li></ul>';
-  elsif v_trimmed like '%</ul>' then
-    v_new := left(v_trimmed, length(v_trimmed) - 5) || '<li>' || v_escaped || '</li></ul>';
-  else
-    v_new := v_trimmed || '<ul><li>' || v_escaped || '</li></ul>';
-  end if;
-
-  insert into notes (note_date, note) values (p_date, v_new)
-  on conflict (note_date) do update set note = excluded.note;
-end;
-$$;
+-- Ghi chú nhanh từ Shortcut iOS (mục "Ghi chú nhanh" trong tab Hướng dẫn) -- Shortcut chỉ INSERT
+-- thẳng 1 row thô qua REST API (KHÔNG đụng tới bảng notes/HTML Quill), app tự đọc bảng này và
+-- gộp thủ công vào notes khi người dùng bấm nút "Gộp vào Ghi chú chính" trong trình soạn ngày.
+-- "ts" do chính Shortcut tự format và gửi lên (KHÔNG dùng "default now()") -- server Supabase
+-- chạy UTC, lệch múi giờ Việt Nam, nên phải để Shortcut tự lấy giờ máy rồi gửi nguyên chuỗi
+-- thô, giống quy ước "timestamp" thô ở đầu file này.
+create table if not exists quick_notes (
+  id bigint generated always as identity primary key,
+  ts timestamp not null,
+  note_text text not null
+);
 
 -- Appointment đồng bộ từ lịch "Work" (Apple Calendar) qua CalDAV -- xem mục "Đồng bộ lịch
 -- Work" trong tab Chuẩn bị dữ liệu. Khoá theo (uid, start_time) chứ không chỉ uid, vì 1 sự
@@ -108,6 +82,7 @@ alter table sessions enable row level security;
 alter table mapping enable row level security;
 alter table deleted_sessions enable row level security;
 alter table notes enable row level security;
+alter table quick_notes enable row level security;
 alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
 alter table settings enable row level security;
@@ -116,14 +91,10 @@ create policy "anon full access" on sessions for all using (true) with check (tr
 create policy "anon full access" on mapping for all using (true) with check (true);
 create policy "anon full access" on deleted_sessions for all using (true) with check (true);
 create policy "anon full access" on notes for all using (true) with check (true);
+create policy "anon full access" on quick_notes for all using (true) with check (true);
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
-
--- Cho phép gọi append_note_bullet() qua REST API bằng anon key (giống mọi bảng ở trên) --
--- hàm chạy dưới quyền người GỌI (mặc định, không security definer), nên vẫn cần policy "anon
--- full access" trên notes ở trên để tự đọc/ghi được bên trong hàm.
-grant execute on function append_note_bullet(date, text) to anon;
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
