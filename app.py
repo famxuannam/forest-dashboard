@@ -3907,7 +3907,7 @@ st.markdown(
        st.columns() thật nên không cần .qn-line (đã có [class*="st-key-qnote_row_"] lo margin). */
     .qn-time { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-2);
         background: var(--chip); border-radius: 8px; padding: 4px 9px; font-variant-numeric: tabular-nums;
-        margin-right: 10px; vertical-align: middle; }
+        margin-right: 10px; vertical-align: middle; white-space: nowrap; }
     .qn-text { font-size: 14.5px; color: var(--text); line-height: 1.5; }
     .qn-line { padding: 4px 0; }
     .qn-line + .qn-line { border-top: 1px solid var(--divider); }
@@ -3920,6 +3920,29 @@ st.markdown(
        thắng được rule đó. */
     [class*="st-key-qnote_row_"] { margin-bottom: 2px; }
     [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
+    /* 3 cột (giờ / nội dung / nút) LUÔN giữ 1 hàng ngang, kể cả màn hẹp -- Streamlit tự đặt
+       min-width: calc(100% - 24px) cho MỌI cột dưới 1 ngưỡng rộng màn hình (ép mỗi cột chiếm
+       trọn hàng riêng, dùng cho layout cố ý xếp dọc trên mobile), nhưng hàng ghi chú nhanh này
+       cố ý muốn giữ ngang ở mọi kích thước màn hình -- không có 3 rule dưới đây, xem trên điện
+       thoại dọc sẽ vỡ thành 3 dòng (giờ/chữ/nút mỗi thứ 1 dòng); xem ngang thì cột giờ quá hẹp
+       (theo % cố định) khiến "02:53" bị bẻ dòng giữa số dù đã có white-space:nowrap ở .qn-time
+       (bẻ dòng vì chính CỘT chứa nó quá hẹp, không phải vì chữ tự xuống dòng).
+       Cột 1 (giờ) và cột 3 (nút) đặt CHIỀU RỘNG CỐ ĐỊNH (đủ cho "23:59" và 2 icon) thay vì
+       "flex-basis: auto" co theo nội dung -- đã thử co theo nội dung nhưng Streamlit tự đo và
+       gán width bằng px (inline style, qua ResizeObserver) cho các div bọc bên TRONG mỗi cột
+       (stVerticalBlock/stElementContainer...) lúc mount theo tỉ lệ % CŨ rồi giữ nguyên, khiến
+       phép tính "auto" của trình duyệt vẫn chốt theo con số cũ rất hẹp (~14px) dù đã xoá mọi
+       ràng buộc auto khác -- ép width cứng (không phải auto) ở mọi tầng mới thắng được số đo cũ
+       đó. Không có các rule này, cột co nhỏ hơn hẳn nội dung (badge giờ/cụm nút) trong khi chữ
+       vẫn hiện to hơn khung chứa (overflow:visible) -> nhìn như đè chồng lên cột giữa. */
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"] { min-width: 0 !important; }
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child { flex: 0 0 52px !important; }
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 64px !important; }
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child *,
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child * {
+        width: 100% !important; min-width: 0 !important;
+    }
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:nth-child(2) { flex: 1 1 0 !important; }
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"] {
         background: transparent !important; border: none !important; box-shadow: none !important;
         color: var(--text-3) !important; width: auto !important; min-height: 0 !important;
