@@ -447,9 +447,13 @@ def save_deleted(df):
             sb.table("deleted_sessions").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
 
-@st.cache_data
+@st.cache_data(ttl=30)
 def load_notes():
-    """Ghi chú/nhật ký theo ngày: cột Ngày (YYYY-MM-DD) + Ghi chú (text)."""
+    """Ghi chú/nhật ký theo ngày: cột Ngày (YYYY-MM-DD) + Ghi chú (text). ttl=30s (khác các
+    load_* khác không có ttl) -- notes còn được ghi từ BÊN NGOÀI app (Shortcut "Ghi chú nhanh"
+    gọi thẳng RPC append_note_bullet() trên Supabase), nên st.cache_data.clear() ở save_note()
+    không đủ để thấy cập nhật đó; ttl ngắn đảm bảo mở lại trang là thấy bullet vừa gửi mà không
+    cần đợi 1 hành động ghi nào khác trong app để tự xoá cache."""
     sb = _get_supabase()
     res = sb.table("notes").select("note_date,note").execute()
     cols = ["Ngày", "Ghi chú"]
@@ -5541,6 +5545,26 @@ elif nav == "Hướng dẫn":
             tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
                 "hơn, không tạo cảm giác đang điền vào 1 form.",
             where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
+
+        guide_item(
+            "quick_note.png", "Ghi chú nhanh từ iOS (Shortcuts)",
+            "Dựng 1 Shortcut để gõ nhanh 1 dòng ý tưởng bất kỳ lúc nào trong ngày, gửi đi là tự động thêm thành "
+            "**1 bullet mới ở cuối** Ghi chú của đúng hôm đó — không cần mở app. Giống hệt cơ chế \"Đồng bộ "
+            "nhanh\" (Shortcut gọi thẳng Supabase, app chỉ đọc lại), nên gửi được cả khi app đang đóng.\n\n"
+            "**Cần chạy 1 lần trước khi dùng**: hàm `append_note_bullet` trong `supabase_schema.sql` (Supabase → "
+            "SQL Editor) — bản schema cũ chưa có hàm này thì Shortcut sẽ báo lỗi.\n\n"
+            "**Cách dựng Shortcut** (app Shortcuts trên iPhone):\n"
+            "1. Thêm hành động **Ask for Input** (kiểu Text) — ô gõ ý tưởng mỗi lần chạy.\n"
+            "2. Thêm hành động **Get Contents of URL**: URL = `<SUPABASE_URL>/rest/v1/rpc/append_note_bullet` "
+            "(lấy `SUPABASE_URL` ở Supabase → Settings → API, mục \"Project URL\", giống hệt giá trị đang điền "
+            "trong `secrets.toml`); Method = POST; Headers gồm `apikey` và `Authorization: Bearer <SUPABASE_KEY>` "
+            "(cùng khoá \"anon public\" đang dùng cho app); Request Body (JSON) gồm `p_date` = Current Date định "
+            "dạng `yyyy-MM-dd`, `p_text` = kết quả bước 1.\n"
+            "3. (tuỳ chọn) thêm **Show Notification** để xác nhận đã gửi.\n\n"
+            "Thêm Shortcut ra Màn hình chính (hoặc gán Nút hành động/phím tắt Siri) để mở lên là gõ được ngay.",
+            tip="Tránh gửi ghi chú nhanh khi đang mở sẵn ô soạn Ghi chú ngày trong app — nếu sau đó bấm Cập nhật, "
+                "nội dung đang gõ dở sẽ ghi đè mất bullet vừa gửi (2 nơi không biết về nhau).",
+            where="Hôm nay → Ghi chú ngày (thiết lập 1 lần ngoài app, không phải nút trong Forest Dashboard)")
 
         guide_item(
             "otd.png", "Ngày này năm trước",
