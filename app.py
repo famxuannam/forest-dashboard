@@ -4198,17 +4198,23 @@ def render_day_report(df):
         # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
         # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
         _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_tail = (f"<span style='font-size:13px;color:var(--text-2);'>· Cập nhật gần nhất "
+        _upd_tail = (f"<div style='font-size:13px;color:var(--text-2);margin-top:4px;'>Cập nhật gần nhất "
                      f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
                      f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
-                     f"({_abs_str})</span>")
+                     f"({_abs_str})</div>")
+    # 3 hàng riêng (nhãn -> tiêu đề ngày + trạng thái -> cập nhật gần nhất) thay vì 1 hàng
+    # flex-wrap nhét chung 4 cỡ chữ khác nhau -- trên desktop đủ rộng để KHÔNG bao giờ wrap,
+    # nên trước đây luôn dồn hết vào đúng 1 dòng (nhãn nhỏ + tiêu đề to + 2 đoạn phụ nhỏ chen
+    # nhau, không phân cấp rõ). Xuống dòng cố định thay vì trông chờ wrap -> nhất quán trên
+    # mọi bề rộng màn hình, không cần media query riêng cho mobile như trước.
     st.markdown(
-        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
-        "flex-wrap:wrap;gap:6px 12px;'>"
-        "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-        f"{_evt}Ngày đang xem</span>"
-        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span>{_upd_tail}</div>",
+        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
+        "<div style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
+        f"{_evt}Ngày đang xem</div>"
+        "<div style='margin-top:6px;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;'>"
+        f"<span style='font-size:19px;color:var(--text);font-weight:700;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
+        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>"
+        f"{_upd_tail}</div>",
         unsafe_allow_html=True)
     if _upd_tail:
         _inject_relative_time_ticker()
@@ -4721,9 +4727,12 @@ elif nav == "Báo cáo":
                     records_g = _compute_alltime_records(df)
                     _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
                     if _rec_g:
-                        _grp_sections.append({"label": "Kỷ lục", "chips": [
-                            {"k": "Ngày", "v": ", ".join(f"{d:%d/%m/%Y}" for d in _rec_g['dates'])},
-                            {"k": "Giờ", "v": f"{_rec_g['hours']:.1f}h", "hl": True},
+                        # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
+                        # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
+                        # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
+                        # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
+                        _grp_sections.append({"label": "Ngày nổi bật", "chips": [
+                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_rec_g['hours']:.1f}h"} for d in _rec_g['dates']
                         ]})
 
                     _nud_g = _streak_nudge(s_g)
@@ -5518,7 +5527,9 @@ elif nav == "Hướng dẫn":
             "trang đó. Đồng hạng nếu 2 ngày bằng tuyệt đối số giờ.\n"
             "- **Kỷ lục** — ngày nhiều giờ nhất **toàn thời gian**, tính chung (top 3, hiện ở Bảng số liệu "
             "Tổng quan) và tính riêng cho từng Nhóm/Dự án đã có từ **5 ngày dữ liệu trở lên** (chỉ giữ đúng 1 "
-            "ngày kỷ lục mỗi Nhóm/Dự án, hiện ở Bảng số liệu Báo cáo → Dự án). Mọi ngày giữ 1 trong các kỷ lục "
+            "ngày kỷ lục mỗi Nhóm/Dự án — ở Bảng số liệu Báo cáo → Dự án, chip này gộp chung ngày + số giờ và "
+            "mang tên \"Ngày nổi bật\" cho đồng bộ hình thức với Tuần/Tháng/Năm, dù vẫn cùng 1 khái niệm kỷ lục). "
+            "Mọi ngày giữ 1 trong các kỷ lục "
             "này được gắn thêm 1 chip kèm icon huy chương trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này "
             "năm trước) — 1 chip riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip "
             "Lịch. Icon này (và icon sách/TV trên chip đọc sách/Gundam cạnh đó) dùng chung font Material Symbols "
@@ -5591,8 +5602,9 @@ elif nav == "Hướng dẫn":
             "đúng Dự án mình muốn. Sau khi chọn, cấu trúc rút gọn còn 5 mục (bỏ Nhật ký và Phân bổ thời gian vì "
             "không có khái niệm \"kỳ\" ở đây — đây là toàn bộ lịch sử của riêng Dự án đó) — dùng khi muốn theo "
             "dõi tiến triển của 1 việc cụ thể xuyên suốt, ví dụ so Biểu đồ lịch của \"Deep Work\" tháng này với "
-            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Kỷ lục\" trong Bảng "
-            "số liệu — xem mục \"Bảng vàng\" ở trên.",
+            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Ngày nổi bật\" (ngày "
+            "nhiều giờ nhất toàn thời gian của riêng Nhóm/Dự án đó) trong Bảng số liệu — xem mục \"Bảng vàng\" "
+            "ở trên.",
             where="Báo cáo → Dự án")
 
     # ==========================================
