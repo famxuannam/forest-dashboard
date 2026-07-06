@@ -3299,13 +3299,16 @@ def frag_period_table(scope_df, key):
     render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 
 
-# --- LOGO: mark "vòng tuổi cây" (growth ring) + wordmark, thiết kế nhập từ Claude Design
-# (xem Forest_Dashboard_Logo_standalone.html) -- 3 cung tròn đồng tâm đứt khúc nhạt dần ra ngoài,
-# gợi ẩn dụ "mỗi vòng là một lần nhìn lại" khớp tinh thần hồi cứu của app; wordmark "Forest" bằng
-# font display Instrument Serif + nhãn "Dashboard" nhỏ/nhạt bên cạnh, lặp lại đúng cấu trúc
-# "hero to + nhãn phụ nhỏ xám" dùng xuyên suốt UI. Cần dùng được ở CẢ 2 nơi: trang đăng nhập
-# (chạy TRƯỚC khối inject :root CSS var) và title chính (chạy SAU) -- nên tự chứa @font-face
-# riêng + chọn màu chữ bằng literal Python theo IS_DARK, không phụ thuộc var(--text)/var(--accent).
+# --- LOGO: mark "vòng tuổi cây" (growth ring) skeuomorphic + wordmark, thiết kế nhập từ Claude
+# Design onboard (xem Forest_Dashboard_Logo_v2_Skeuomorphic_standalone.html) -- bản v2, thay bản
+# v1 phẳng (chỉ 3 vòng dash, không nền/không bóng): khối bo tròn kiểu iOS 6 phủ gradient dọc
+# sáng->tối + viền đậm + viền sáng mảnh bên trong + dải bóng (gloss) chéo phía trên, 3 vòng tuổi
+# cây (giữ nguyên tỉ lệ bán kính/dash bản v1, gợi ẩn dụ "mỗi vòng là một lần nhìn lại") vẽ 2 lớp:
+# lớp bóng đổ tối màu lệch xuống 1.5px (hiệu ứng khắc chìm) rồi lớp trắng nổi đè lên trên. Wordmark
+# "Forest" bằng font display Instrument Serif + nhãn "Dashboard" nhỏ/nhạt bên cạnh, giữ nguyên
+# không đổi (chỉ đổi mark). Cần dùng được ở CẢ 2 nơi: trang đăng nhập (chạy TRƯỚC khối inject :root
+# CSS var) và title chính (chạy SAU) -- nên tự chứa @font-face riêng + chọn màu chữ bằng literal
+# Python theo IS_DARK, không phụ thuộc var(--text)/var(--accent).
 @st.cache_resource
 def _logo_font_b64():
     with open(os.path.join("assets", "fonts", "InstrumentSerif-Regular-latin.woff2"), "rb") as f:
@@ -3319,20 +3322,54 @@ _LOGO_FONT_FACE = (
 
 
 def _logo_mark_svg(size):
-    """SVG mark riêng, tô theo ACCENT đang chọn (không hardcode teal -- tự đổi theo 14 màu accent
-    người dùng có thể chọn ở Tuỳ biến). Tỉ lệ bán kính/độ dày/dash giữ đúng bản thiết kế gốc
-    (mốc 28px)."""
-    s = size / 28
-    c = size / 2
-    # (bán kính, độ dày nét, dash-on, dash-off, góc xoay, độ đục) -- đúng 3 giá trị thiết kế gốc
-    specs = [(4.48, 2.86, 17.45, 10.7, -30, 1), (7.84, 2.21, 24.63, 24.63, 140, 0.7),
-             (11.2, 1.56, 49.26, 21.11, 250, 0.45)]
-    circles = "".join(
-        f"<circle cx='{c:.2f}' cy='{c:.2f}' r='{r * s:.2f}' fill='none' stroke='{ACCENT}' "
-        f"stroke-opacity='{op}' stroke-width='{w * s:.2f}' stroke-linecap='round' "
-        f"stroke-dasharray='{d1 * s:.2f} {d2 * s:.2f}' transform='rotate({rot} {c:.2f} {c:.2f})'></circle>"
-        for r, w, d1, d2, rot, op in specs)
-    return f"<svg width='{size}' height='{size}' viewBox='0 0 {size} {size}'>{circles}</svg>"
+    """SVG mark skeuomorphic, TỰ ĐỔI theo ACCENT đang chọn (không hardcode teal của file thiết kế
+    gốc -- tái dùng _brighten()/_darken() đã có sẵn cho mọi màu accent khác trong app). Tỉ lệ
+    sáng/tối giữ tương đương bản thiết kế gốc (tính từ Xanh ngọc #00a3ad mặc định): fill trên
+    sáng hơn ACCENT (_brighten target_l=0.60), fill dưới tối hơn (_darken factor=0.65), viền +
+    vòng bóng đổ tối hơn nữa (_darken factor=0.42, dùng chung 1 màu cho cả viền lẫn vòng bóng --
+    2 màu này gần nhau tới mức khó phân biệt ở size nhỏ trong bản thiết kế gốc). viewBox cố định
+    0 0 100 100 -- size chỉ đổi width/height, không đổi hình học/tỉ lệ nét."""
+    top = _brighten(ACCENT, 0.60)
+    bottom = _darken(ACCENT, 0.65)
+    dark = _darken(ACCENT, 0.42)
+    shadow_dy = max(1, round(size / 34))
+    shadow_blur = max(1, round(size / 22))
+    return (
+        f"<svg width='{size}' height='{size}' viewBox='0 0 100 100' "
+        f"style='filter:drop-shadow(0 {shadow_dy}px {shadow_blur}px rgba(0,0,0,0.35));'>"
+        "<defs>"
+        f"<linearGradient id='fdFill{size}' x1='0' y1='0' x2='0' y2='1'>"
+        f"<stop offset='0' stop-color='{top}'></stop><stop offset='1' stop-color='{bottom}'></stop>"
+        "</linearGradient>"
+        f"<linearGradient id='fdGloss{size}' x1='0' y1='0' x2='0' y2='1'>"
+        "<stop offset='0' stop-color='#ffffff' stop-opacity='0.5'></stop>"
+        "<stop offset='1' stop-color='#ffffff' stop-opacity='0.06'></stop>"
+        "</linearGradient>"
+        "</defs>"
+        f"<rect x='4' y='4' width='92' height='92' rx='22' fill='url(#fdFill{size})' "
+        f"stroke='{dark}' stroke-width='1.5'></rect>"
+        "<rect x='5.5' y='5.5' width='89' height='89' rx='20.5' fill='none' "
+        "stroke='#ffffff' stroke-opacity='0.35' stroke-width='1.5'></rect>"
+        f"<g transform='translate(0,1.5)' stroke='{dark}' stroke-opacity='0.5' fill='none' stroke-linecap='round'>"
+        "<circle cx='50' cy='50' r='13' stroke-width='7' stroke-dasharray='50.6 31.1' "
+        "transform='rotate(-30 50 50)'></circle>"
+        "<circle cx='50' cy='50' r='24' stroke-width='5.5' stroke-dasharray='75.4 75.4' "
+        "transform='rotate(140 50 50)'></circle>"
+        "<circle cx='50' cy='50' r='34' stroke-width='4.5' stroke-dasharray='149.5 64.1' "
+        "transform='rotate(250 50 50)'></circle>"
+        "</g>"
+        "<g stroke='#ffffff' fill='none' stroke-linecap='round'>"
+        "<circle cx='50' cy='50' r='13' stroke-width='7' stroke-dasharray='50.6 31.1' "
+        "transform='rotate(-30 50 50)'></circle>"
+        "<circle cx='50' cy='50' r='24' stroke-width='5.5' stroke-opacity='0.8' stroke-dasharray='75.4 75.4' "
+        "transform='rotate(140 50 50)'></circle>"
+        "<circle cx='50' cy='50' r='34' stroke-width='4.5' stroke-opacity='0.6' stroke-dasharray='149.5 64.1' "
+        "transform='rotate(250 50 50)'></circle>"
+        "</g>"
+        "<path d='M 8 42 C 8 20, 20 8, 42 8 L 58 8 C 80 8, 92 20, 92 42 L 92 46 C 74 56, 30 56, 8 46 Z' "
+        f"fill='url(#fdGloss{size})'></path>"
+        "</svg>"
+    )
 
 
 def _wordmark_html(layout="header"):
