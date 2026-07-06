@@ -130,7 +130,7 @@ DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
-QUICK_NOTES_FILE = "quick_notes.csv"  # ghi chú nhanh từ Shortcut iOS, chờ gộp vào notes
+QUICK_NOTES_FILE = "quick_notes.csv"  # ghi chú nhanh từ Shortcut iOS, đứng độc lập với notes
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
@@ -488,8 +488,9 @@ def save_notes_bulk(df):
 
 @st.cache_data(ttl=30)
 def load_quick_notes():
-    """Ghi chú nhanh đang chờ gộp, ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG qua app, xem
-    guide_item "Ghi chú nhanh"). ttl=30 (khác load_notes() cache vô hạn) vì bảng này có thể bị
+    """Ghi chú nhanh (đứng độc lập với Ghi chú chính, không tự gộp), ghi thẳng bởi Shortcut iOS
+    qua REST API (KHÔNG qua app, xem guide_item "Ghi chú nhanh"). ttl=30 (khác load_notes() cache
+    vô hạn) vì bảng này có thể bị
     thay đổi từ NGOÀI vòng save_*/xoá của app -- vòng đó tự gọi st.cache_data.clear(), nhưng 1
     INSERT từ Shortcut thì không, nên phải tự hết hạn theo thời gian để quick note mới hiện ra
     mà không cần chờ 1 thao tác lưu khác trong app."""
@@ -509,29 +510,15 @@ def delete_quick_note(note_id):
     st.cache_data.clear()
 
 
-def merge_quick_notes_into_note(day, qn_day):
-    """Gộp toàn bộ quick note của 1 ngày vào Ghi chú chính (Quill), mỗi note thành 1 bullet
-    "<b>HH:mm</b> text" nối vào CUỐI <ul> gần nhất (hoặc tạo <ul> mới nếu ghi chú đang trống/chưa
-    có danh sách) -- cùng logic nối chuỗi từng dùng ở hàm SQL append_note_bullet() (nay đã bỏ,
-    Shortcut chỉ INSERT thô), chuyển hẳn sang app xử lý để không phải mutate HTML từ bên ngoài
-    app nữa (rủi ro corrupt note nếu Shortcut bắn tới đúng lúc đang mở Quill sửa tay). regexp
-    '\\s+$' cắt MỌI loại khoảng trắng cuối chuỗi (kể cả newline/tab Quill để lại), không dùng
-    .rstrip() thô (chỉ cắt space, từng gây bug so khớp "</ul>" sai ở bản SQL cũ). Xoá các row
-    quick_notes vừa gộp sau khi lưu note thành công."""
-    cur = get_note(day)
-    trimmed = re.sub(r'\s+$', '', cur or '')
-    bullets = ''.join(
-        f"<li><b>{r['Thời gian']:%H:%M}</b> {html_escape(str(r['Nội dung']))}</li>"
-        for _, r in qn_day.iterrows()
-    )
-    if trimmed == '':
-        new_note = f"<ul>{bullets}</ul>"
-    elif trimmed.endswith('</ul>'):
-        new_note = trimmed[:-len('</ul>')] + bullets + '</ul>'
-    else:
-        new_note = trimmed + f"<ul>{bullets}</ul>"
-    save_note(day, new_note)
-    _get_supabase().table("quick_notes").delete().in_("id", [int(i) for i in qn_day['id'].tolist()]).execute()
+def update_quick_note(note_id, text):
+    """Sửa nội dung 1 quick note lẻ tại chỗ (không đụng tới giờ "ts" -- giờ là lúc note được tạo,
+    không phải lúc sửa). Rỗng (sau khi strip) = xoá luôn dòng đó, nhất quán với hành vi save_note()
+    của Ghi chú chính (rỗng = xoá)."""
+    text = str(text).strip()
+    if not text:
+        delete_quick_note(note_id)
+        return
+    _get_supabase().table("quick_notes").update({"note_text": text}).eq("id", int(note_id)).execute()
     st.cache_data.clear()
 
 
@@ -1918,8 +1905,7 @@ def _compute_alltime_records(df):
 
 def _chip_row_html(heading, chips_html):
     """1 hàng "heading nhỏ (class .rl-book) + các jchip" -- khuôn dùng chung cho
-    _record_chips_html() (chip Kỷ lục), _book_chips_html() (chip tên sách) và
-    _quick_note_chips_html() (chip ghi chú nhanh)."""
+    _record_chips_html() (chip Kỷ lục) và _book_chips_html() (chip tên sách)."""
     return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
 
 
@@ -1932,19 +1918,20 @@ def _quick_notes_on(qn_df, day):
 
 
 def _quick_note_chips_html(qn_day):
-    """Chip "Ghi chú nhanh" cho 1 ngày (qn_day = _quick_notes_on() của đúng ngày, đã cũ→mới) --
-    dùng chung _chip_row_html(), mỗi chip 1 quick note theo đúng khuôn chip Lịch (ck = giờ đậm,
-    cv = nội dung) để nhất quán hình ảnh trong cùng 1 hàng Timeline. Chỉ đọc -- nút xoá/gộp
-    (tương tác thật, cần widget Streamlit) nằm riêng trong render_note_editor(), không lẫn vào
-    chuỗi HTML tĩnh này."""
+    """"Ghi chú nhanh" cho 1 ngày (qn_day = _quick_notes_on() của đúng ngày, đã cũ→mới), CHỈ ĐỌC
+    -- mỗi note 1 dòng riêng (không phải chip inline như chip Lịch/Sách): badge giờ nhỏ (class
+    .qn-time, chỉ bọc đúng giờ) + chữ ghi chú thường ngoài badge (class .qn-text, cùng cỡ chữ/màu
+    với .note-html) để đọc như 1 câu ghi chú thật, không phải nhãn nhỏ. Nút sửa/xoá (tương tác
+    thật, cần widget Streamlit) nằm riêng trong render_note_editor(), không lẫn vào chuỗi HTML
+    tĩnh này."""
     if qn_day is None or qn_day.empty:
         return ''
-    chips = ''.join(
-        f"<span class='jchip'><span class='ck'>{r['Thời gian']:%H:%M}</span>"
-        f"<span class='cv'>{html_escape(str(r['Nội dung']))}</span></span>"
+    rows = ''.join(
+        f"<div class='qn-line'><span class='qn-time'>{r['Thời gian']:%H:%M}</span>"
+        f"<span class='qn-text'>{html_escape(str(r['Nội dung']))}</span></div>"
         for _, r in qn_day.iterrows()
     )
-    return _chip_row_html("Ghi chú nhanh", chips)
+    return f"<div style='margin-bottom:6px;'><span class='rl-book'>Ghi chú nhanh</span>{rows}</div>"
 
 
 def _record_chips_html(badges):
@@ -2474,10 +2461,11 @@ def render_note_editor(day, day_badges=None):
     dù ở đây chỉ có đúng 1 "dòng"), cột phải theo thứ tự cố định: chip Kỷ lục (nếu ngày này giữ
     kỷ lục -- day_badges do caller truyền vào, xem _compute_alltime_records()) → chip lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách/Gundam (tự nhóm+gắn nhãn theo cuốn/series qua
-    _book_chips_html()) → ghi chú nhanh đang chờ gộp (mỗi note 1 hàng chip + nút xoá, cộng nút
-    "Gộp vào Ghi chú chính" -- xem merge_quick_notes_into_note()) → ghi chú chính. Mặc định chỉ
-    hiện ghi chú đã lưu (hoặc trạng thái trống) kèm một nút; bấm nút mới mở trình soạn (Quill)
-    inline với Cập nhật/Huỷ/Xoá.
+    _book_chips_html()) → ghi chú nhanh đang chờ (mỗi note 1 hàng badge giờ + chữ + nút Sửa/Xoá
+    riêng, KHÔNG có nút gộp -- đứng độc lập vĩnh viễn với ghi chú chính, xem update_quick_note()/
+    delete_quick_note()) → nhãn "Ghi chú chính" → ghi chú chính. Mặc định chỉ hiện ghi chú đã lưu
+    (hoặc trạng thái trống) kèm một nút; bấm nút mới mở trình soạn (Quill) inline với Cập nhật/
+    Huỷ/Xoá.
 
     Bọc trong @st.fragment: ô soạn Quill gửi nội dung về server mỗi lần gõ phím, nếu
     không cô lập thì cả trang Báo cáo ngày chạy lại mỗi ký tự -> giao diện giật. Là
@@ -2538,23 +2526,48 @@ def render_note_editor(day, day_badges=None):
                     st.markdown("<span class='rl-book'>Ghi chú nhanh</span>", unsafe_allow_html=True)
                     for _, r in qn_day.iterrows():
                         _qid = int(r['id'])
+                        qedit_key = f"qnote_edit_{_qid}"
                         with st.container(key=f"qnote_row_{_qid}"):
-                            qc1, qc2 = st.columns([14, 1])
+                            qc1, qc2, qc3 = st.columns([2, 15, 3])
                             with qc1:
-                                st.markdown(
-                                    f"<span class='jchip'><span class='ck'>{r['Thời gian']:%H:%M}</span>"
-                                    f"<span class='cv'>{html_escape(str(r['Nội dung']))}</span></span>",
-                                    unsafe_allow_html=True)
-                            with qc2:
-                                if st.button("", icon=":material/close:", key=f"qnote_del_{_qid}",
-                                             help="Xoá ghi chú nhanh này"):
-                                    delete_quick_note(_qid)
-                                    st.rerun()
-                    if st.button("Gộp vào Ghi chú chính", icon=":material/call_merge:",
-                                 key=f"qnote_merge_{day}"):
-                        merge_quick_notes_into_note(day, qn_day)
-                        st.rerun()
+                                st.markdown(f"<span class='qn-time'>{r['Thời gian']:%H:%M}</span>",
+                                            unsafe_allow_html=True)
+                            if st.session_state.get(qedit_key, False):
+                                qinput_key = f"qnote_input_{_qid}"
+                                with qc2:
+                                    st.text_area("Sửa ghi chú nhanh", value=str(r['Nội dung']),
+                                                 key=qinput_key, label_visibility="collapsed", height=68)
+                                with qc3:
+                                    bc1, bc2 = st.columns(2)
+                                    with bc1:
+                                        if st.button("", icon=":material/check:", key=f"qnote_save_{_qid}",
+                                                     help="Cập nhật"):
+                                            update_quick_note(_qid, st.session_state.get(qinput_key, ""))
+                                            st.session_state[qedit_key] = False
+                                            st.rerun()
+                                    with bc2:
+                                        if st.button("", icon=":material/close:",
+                                                     key=f"qnote_canceledit_{_qid}", help="Huỷ"):
+                                            st.session_state[qedit_key] = False
+                                            st.rerun()
+                            else:
+                                with qc2:
+                                    st.markdown(f"<span class='qn-text'>{html_escape(str(r['Nội dung']))}</span>",
+                                                unsafe_allow_html=True)
+                                with qc3:
+                                    bc1, bc2 = st.columns(2)
+                                    with bc1:
+                                        if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
+                                                     help="Sửa"):
+                                            st.session_state[qedit_key] = True
+                                            st.rerun()
+                                    with bc2:
+                                        if st.button("", icon=":material/delete:", key=f"qnote_del_{_qid}",
+                                                     help="Xoá"):
+                                            delete_quick_note(_qid)
+                                            st.rerun()
 
+                st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
                 if not st.session_state.get(edit_key, False):
                     # Chế độ xem: chỉ ghi chú + 1 nút
                     if cur:
@@ -2604,9 +2617,10 @@ def render_notes_journal(period_key, kind, df_all):
     để chip 🏆 có chỗ hiện ra, đúng lời hứa "chip Kỷ lục luôn thấy được ở Nhật ký Tuần/Tháng"
     trong tab Hướng dẫn. Mỗi dòng theo thứ tự cố định: chip Kỷ lục (nếu có) → chip Lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách (tự nhóm+gắn nhãn theo từng cuốn/series qua
-    _book_chips_html()) → chip ghi chú nhanh đang chờ gộp (chỉ đọc, xem _quick_note_chips_html())
-    → ghi chú. Không lọc Gundam khỏi nguồn đọc sách ở đây -- đây là nhật ký chung của cả app,
-    không riêng tab Sách. Ô Thứ/ngày mỗi dòng là link nhảy sang đúng Báo cáo ngày hôm đó.
+    _book_chips_html()) → ghi chú nhanh đang chờ (chỉ đọc, xem _quick_note_chips_html()) → nhãn
+    "Ghi chú chính" + ghi chú (nhãn chỉ hiện nếu ngày đó có ghi chú). Không lọc Gundam khỏi nguồn
+    đọc sách ở đây -- đây là nhật ký chung của cả app, không riêng tab Sách. Ô Thứ/ngày mỗi dòng
+    là link nhảy sang đúng Báo cáo ngày hôm đó.
     Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
     cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
     hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
@@ -2666,7 +2680,8 @@ def render_notes_journal(period_key, kind, df_all):
         qnote_html = _quick_note_chips_html(qn[qn['_d'] == d]) if d in quick_note_days else ''
         note_html = ''
         if d in note_days:
-            note_html = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
+            note_html = (f"<span class='rl-book'>Ghi chú chính</span>"
+                         f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>")
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
@@ -2800,8 +2815,8 @@ def render_on_this_day(sel, df_all):
     """“Ngày này năm trước”: khớp cùng ngày/tháng ở các năm trước (từ phiên + ghi chú),
     mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc. Mỗi dòng năm cũng
     theo đúng thứ tự cố định chip Kỷ lục (nếu năm đó rơi đúng ngày giữ kỷ lục, xem
-    _compute_alltime_records()) → chip Lịch → chip đọc sách → số liệu phiên → chip ghi chú nhanh
-    đang chờ gộp → ghi chú, nhất quán với render_note_editor()/render_notes_journal()."""
+    _compute_alltime_records()) → chip Lịch → chip đọc sách → số liệu phiên → ghi chú nhanh đang
+    chờ → nhãn "Ghi chú chính" + ghi chú, nhất quán với render_note_editor()/render_notes_journal()."""
     day_badges = _compute_alltime_records(df_all)["day_badges"]
     m, d = sel.month, sel.day
     # Số liệu phiên theo từng năm trước (cùng ngày/tháng)
@@ -2834,7 +2849,7 @@ def render_on_this_day(sel, df_all):
                   & (rl['Ngày hoàn thành'].dt.year < sel.year)]
         for y, g in rl_m.groupby(rl_m['Ngày hoàn thành'].dt.year):
             reading[int(y)] = g
-    # Ghi chú nhanh đang chờ gộp, cùng ngày/tháng ở các năm trước
+    # Ghi chú nhanh, cùng ngày/tháng ở các năm trước
     quick_notes = {}  # year -> DataFrame
     qn = load_quick_notes()
     if not qn.empty:
@@ -2882,7 +2897,8 @@ def render_on_this_day(sel, df_all):
             _chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
             chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
         qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
-        note_block = f"<div class='note-html'>{notes[y]}</div>" if notes.get(y) else ''
+        note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
+                      if notes.get(y) else '')
         rows_html += (
             "<div class='jrow'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
@@ -3835,10 +3851,22 @@ st.markdown(
     }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
-    /* Ghi chú nhanh (Báo cáo ngày): mỗi quick note 1 hàng chip + nút xoá nhỏ ngay cạnh --
-       [class*=...] khớp mọi container qnote_row_<id> cùng lúc (id đổi theo từng note). Ghi đè
-       lại rule chung button[kind="secondary"] (nền/viền) giống cách làm ở nút chọn màu accent
-       (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới thắng được rule đó. */
+    /* Ghi chú nhanh: badge giờ nhỏ (.qn-time) + chữ ghi chú thường NGOÀI badge (.qn-text, cùng
+       cỡ/màu .note-html) -- khác .jchip (cả giờ lẫn chữ đều tô nền), vì quick note nay là 1 câu
+       đọc như ghi chú thật, không phải 1 nhãn nhỏ. .qn-line dùng ở bản CHỈ ĐỌC (Nhật ký
+       Tuần/Tháng, Ngày này năm trước) -- bản có nút sửa/xoá ở Ghi chú ngày dựng bằng
+       st.columns() thật nên không cần .qn-line (đã có [class*="st-key-qnote_row_"] lo margin). */
+    .qn-time { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-2);
+        background: var(--chip); border-radius: 8px; padding: 4px 9px; font-variant-numeric: tabular-nums;
+        margin-right: 10px; vertical-align: middle; }
+    .qn-text { font-size: 14.5px; color: var(--text); line-height: 1.5; }
+    .qn-line { padding: 4px 0; }
+    .qn-line + .qn-line { border-top: 1px solid var(--divider); }
+    /* Ghi chú nhanh (Ghi chú ngày, có sửa/xoá): mỗi quick note 1 hàng st.columns() thật (badge
+       giờ + text/ô sửa + 2 nút) -- [class*=...] khớp mọi container qnote_row_<id> cùng lúc (id
+       đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền) giống cách
+       làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới thắng được
+       rule đó. */
     [class*="st-key-qnote_row_"] { margin-bottom: 2px; }
     [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"] {
@@ -3848,6 +3876,13 @@ st.markdown(
     }
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"]:hover {
         color: var(--text) !important;
+    }
+    /* "Sửa ghi chú"/"Thêm ghi chú" (Ghi chú ngày): nút nhỏ gọn tự co theo chữ, KHÔNG kéo giãn
+       hết chiều rộng cột như mặc định (div[data-testid="stButton"] button { width:100% } ở trên)
+       -- to hết cỡ nhìn lệch hẳn so với phần còn lại của thẻ (chip nhỏ, chữ ghi chú thường). */
+    [class*="st-key-note_editbtn_"] div[data-testid="stButton"] button,
+    [class*="st-key-note_addbtn_"] div[data-testid="stButton"] button {
+        width: auto !important; padding: 5px 14px !important; font-size: 13px !important;
     }
     </style>
     """,
@@ -5679,12 +5714,12 @@ elif nav == "Hướng dẫn":
             "note_editor.png", "Ghi chú ngày (nhật ký)",
             "Thẻ 2 cột: cột trái là Thứ/ngày, cột phải gộp **3 nguồn** cho đúng ngày đó — chip lịch hẹn Work (nếu "
             "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó (kèm icon sách/TV tương ứng ngay đầu "
-            "chip để phân biệt nhanh 2 loại không cần đọc chữ), và ô ghi chú tự do (trình soạn thảo Quill, hỗ "
-            "trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem mục \"Bảng vàng\" bên dưới), "
-            "1 chip kèm icon huy chương hiện thêm ở đầu, trước cả chip lịch. Nếu có **ghi chú nhanh** đang chờ "
-            "gộp (xem mục ngay bên dưới), danh sách đó hiện ngay phía trên ô ghi chú. Cùng 1 bố cục 2 cột này "
-            "lặp lại ở thẻ **Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất "
-            "quán để không phải học lại cách đọc.",
+            "chip để phân biệt nhanh 2 loại không cần đọc chữ), và ô ghi chú tự do dưới nhãn **Ghi chú chính** "
+            "(trình soạn thảo Quill, hỗ trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem "
+            "mục \"Bảng vàng\" bên dưới), 1 chip kèm icon huy chương hiện thêm ở đầu, trước cả chip lịch. Nếu có "
+            "**ghi chú nhanh** đang chờ (xem mục ngay bên dưới), danh sách đó hiện ngay phía trên nhãn \"Ghi chú "
+            "chính\". Cùng 1 bố cục 2 cột này lặp lại ở thẻ **Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh "
+            "sách nhiều ngày xếp dọc) — nhất quán để không phải học lại cách đọc.",
             tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
                 "hơn, không tạo cảm giác đang điền vào 1 form.",
             where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
@@ -5694,14 +5729,15 @@ elif nav == "Hướng dẫn":
             "Một Shortcut trên iPhone (Trợ lý Siri, Action Button, hoặc icon Màn hình chính) hỏi bạn gõ 1 dòng "
             "ý tưởng, rồi gửi thẳng lên Supabase — **không đi qua app**, không cần mở trình duyệt. Mỗi lần gửi "
             "tạo 1 quick note mới, gắn kèm giờ máy lúc gửi. Ngày nào có quick note đang chờ, danh sách đó hiện "
-            "thành chip **giờ + nội dung** (giống hệt khuôn chip Lịch) ngay trong Ghi chú ngày, phía trên ô "
-            "ghi chú chính. Bấm nút **Gộp vào Ghi chú chính** sẽ chuyển toàn bộ quick note hôm đó thành các "
-            "dòng bullet (giờ in đậm) nối vào cuối Ghi chú, rồi xoá khỏi danh sách chờ — quick note gõ nhầm có "
-            "thể xoá riêng lẻ bằng nút **×** cạnh mỗi chip, không cần gộp mới xoá được. Nhật ký Tuần/Tháng và "
-            "Ngày này năm trước cũng hiện chip quick note đang chờ của mỗi ngày (chỉ đọc, không có nút gộp/xoá "
-            "ở 2 nơi đó — thao tác quản lý chỉ có tại đúng Ghi chú ngày của ngày đó).",
-            tip="Quick note KHÔNG tự động gộp — mục đích là gom ý tưởng rời rạc trong ngày rồi tối tự tay bấm "
-                "Gộp, đọc lại và chỉnh sửa câu chữ trong ô Quill nếu cần trước khi lưu thành ghi chú chính thức.",
+            "ngay trong Ghi chú ngày, phía trên nhãn \"Ghi chú chính\" — mỗi dòng là 1 badge **giờ** nhỏ cộng "
+            "chữ ghi chú định dạng như ghi chú thường (không phải chip nhỏ), tách biệt hẳn với Ghi chú chính "
+            "(không có nút gộp — quick note đứng độc lập, không tự chuyển vào ghi chú chính). Mỗi dòng có 2 "
+            "nút riêng: **Sửa** (mở ô nhập ngay tại dòng đó, sửa xong bấm Cập nhật/Huỷ) và **Xoá**. Sửa một "
+            "dòng thành trống rồi bấm Cập nhật cũng xoá luôn dòng đó, giống hệt hành vi Ghi chú chính. Nhật ký "
+            "Tuần/Tháng và Ngày này năm trước cũng hiện danh sách quick note của mỗi ngày (chỉ đọc, không có "
+            "nút Sửa/Xoá ở 2 nơi đó — thao tác quản lý chỉ có tại đúng Ghi chú ngày của ngày đó).",
+            tip="Giờ hiện trên badge là lúc quick note được TẠO (Shortcut tự gửi lên) — sửa nội dung không đổi "
+                "lại giờ này.",
             where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký · Ngày này năm trước")
 
         guide_item(
@@ -5946,7 +5982,7 @@ elif nav == "Hướng dẫn":
         guide_item(
             "prep_backup.png", "5. Quản lý hệ thống",
             "3 thao tác trên toàn bộ dữ liệu:\n\n"
-            "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, ghi chú nhanh đang chờ gộp, lịch, "
+            "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, ghi chú nhanh, lịch, "
             "sách/Gundam, cài đặt màu) thành "
             "1 file .zip, tên tự kèm ngày giờ. App tự nhớ **ngày sao lưu gần nhất** (bảng `settings`) — nếu chưa "
             "từng sao lưu, hoặc lần gần nhất đã quá 30 ngày, 1 dòng nhắc nhỏ hiện ngay phía trên nút này.\n"
