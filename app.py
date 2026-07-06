@@ -3505,9 +3505,14 @@ st.markdown(
        flex-start -> đẩy hàng nút vào giữa */
     .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
 
-    /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
-    [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
-    [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
+       hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
+       stepper") để khớp được cả 2 kiểu key, vì "day_stepper" không có "stepper" ngay sau
+       "st-key-" như "stepper_x". Thiếu rule này, cột chứa st.date_input (min-width mặc định
+       của Streamlit ăn theo nội dung) sẽ bị đẩy xuống dòng riêng trên mobile thay vì co lại
+       vừa tỉ lệ cột như st.selectbox của period_stepper. */
+    [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
+    [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch nâng cao)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -3590,6 +3595,13 @@ st.markdown(
         /* Thẻ dạng flex (vd Cập nhật gần nhất): xếp dọc cho dễ đọc */
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
+
+        /* Card "Ngày đang xem" (render_day_report): cố định 1 dòng trên mọi bề rộng, nhưng phần
+           chữ nhãn + cụm "Cập nhật gần nhất" (kém thiết yếu hơn ngày/trạng thái đang xem) ẩn hẳn
+           trên điện thoại thay vì cố nhét -- tổng độ rộng các phần "không co" (nhãn đủ chữ +
+           ngày + trạng thái) đã vượt màn hình hẹp, nếu không ẩn sẽ bị cắt cụt giữa chữ (icon
+           nhãn vẫn giữ lại, không mất hẳn ý nghĩa "đây là nhãn"). */
+        .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
@@ -3669,9 +3681,11 @@ st.markdown(
     .jchip.rec::before, .jchip.book::before, .jchip.gundam::before {
         font-family: 'Material Symbols Rounded'; font-size: 13px; vertical-align: -2px; margin-right: 3px;
     }
-    /* Chip "Kỷ lục" (Bảng vàng) -- cùng tông "nổi bật" với .stat-panel .chip.tw (nền/màu chữ
-       theo accent) để phân biệt nhanh với jchip thường (Lịch/Sách) không cần đọc chữ. */
-    .jchip.rec { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); font-weight: 600; }
+    /* Chữ (màu/độ đậm/cỡ) của Kỷ lục/Sách/Gundam CỐ Ý giống hệt .cv (chip Lịch) và giống nhau
+       giữa 3 loại -- chỉ phân biệt qua icon + nền (riêng Kỷ lục), không qua định dạng chữ, để
+       không loại nào trông "nổi" hơn loại khác. */
+    .jchip.rec, .jchip.book, .jchip.gundam { font-weight: 600; color: var(--text); }
+    .jchip.rec { background: rgba(var(--accent-rgb),0.10); }
     .jchip.rec::before { content: "emoji_events"; }
     .jchip.book::before { content: "menu_book"; }
     .jchip.gundam::before { content: "tv"; }
@@ -4177,11 +4191,11 @@ def render_day_report(df):
     _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
             "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
-    _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _dot = "<span style='color:var(--border);flex:0 0 auto;'>·</span>"
     # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
     # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
-    # tiên, Tổng quan giờ không còn là sub-tab mặc định. Cùng 1 div flex-wrap nên chỉ cần thêm
-    # span, không cần thẻ riêng.
+    # tiên, Tổng quan giờ không còn là sub-tab mặc định.
     _last_dt = df['Thời gian kết thúc'].max()
     _upd_tail = ''
     if pd.notna(_last_dt):
@@ -4191,17 +4205,44 @@ def render_day_report(df):
         # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
         # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
         _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_tail = (f"<span style='font-size:13px;color:var(--text-2);'>· Cập nhật gần nhất "
-                     f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
-                     f"({_abs_str})</span>")
+        # Giờ phút giây tuyệt đối (_abs_str) dời vào title= (tooltip hover) thay vì hiện luôn
+        # trong chữ -- giữ đúng 1 dòng gọn, phần lớn chỉ cần biết "khoảng bao lâu trước", số giờ
+        # chính xác là chi tiết tra cứu thêm chứ không phải thông tin ai cũng cần thấy ngay.
+        # Cả cụm (dấu chấm + chữ) bọc chung 1 span "dcx-upd" flex riêng -- vừa là 1 flex item
+        # DUY NHẤT của hàng ngoài (co dãn/ẩn được nguyên cụm qua class, không lệ thuộc thứ tự
+        # nhiều item rời rạc), vừa tự có overflow:hidden riêng để chữ bên trong elipsis đúng chỗ.
+        _upd_tail = (
+            "<span class='dcx-upd' style='display:flex;align-items:center;gap:9px;min-width:0;"
+            "overflow:hidden;flex:1 1 auto;'>"
+            f"{_dot}"
+            f"<span style='font-size:14.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;"
+            f"white-space:nowrap;min-width:0;' title='Cập nhật lúc {_abs_str}'>Cập nhật gần nhất "
+            f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
+            f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b></span></span>"
+        )
+    # 1 hàng gọn: nhãn thu lại thành thẻ nhỏ bo góc (khác kiểu chữ hoa rời trước đây) + 1 vạch
+    # dọc mảnh phân tách, rồi tới nội dung cùng 1 cỡ chữ (14.5px, chỉ khác màu/độ đậm để vẫn
+    # phân cấp) -- không còn đủ 3 cỡ chữ chen nhau trên 1 dòng như bản trước. Cụm "Cập nhật gần
+    # nhất" (ít quan trọng nhất, dài nhất) được phép co lại + hiện "…" khi màn hẹp vừa phải
+    # (flex:1 1 auto), và ẩn hẳn cùng chữ nhãn "Ngày đang xem" (chỉ còn icon) ở mobile thật hẹp
+    # (xem rule .dcx-upd/.dcx-lbltxt trong khối @media (max-width: 640px)) -- nếu không, tổng độ
+    # rộng các phần "không co" (nhãn đủ chữ + ngày + trạng thái) đã vượt quá màn hình điện thoại,
+    # bị cắt cụt giữa chữ thay vì gọn gàng.
     st.markdown(
-        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;"
-        "flex-wrap:wrap;gap:6px 12px;'>"
-        "<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-        f"{_evt}Ngày đang xem</span>"
-        f"<span style='font-size:17px;color:var(--text);font-weight:600;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span>{_upd_tail}</div>",
+        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
+        "<div style='display:flex;align-items:center;gap:10px;'>"
+        "<span style='display:flex;align-items:center;flex:0 0 auto;font-size:11.5px;font-weight:600;"
+        "color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:7px;"
+        "padding:4px 9px;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;'>"
+        f"{_evt}<span class='dcx-lbltxt'>Ngày đang xem</span></span>"
+        "<span style='width:1px;align-self:stretch;background:var(--divider);flex:0 0 auto;'></span>"
+        "<div style='display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;'>"
+        f"<span style='font-size:14.5px;color:var(--text);font-weight:600;white-space:nowrap;flex:0 0 auto;'>"
+        f"{vn_dow}, {sel:%d/%m/%Y}</span>"
+        f"{_dot}"
+        f"<span style='font-size:14.5px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;'>{_sub}</span>"
+        f"{_upd_tail}"
+        "</div></div></div>",
         unsafe_allow_html=True)
     if _upd_tail:
         _inject_relative_time_ticker()
@@ -4714,9 +4755,12 @@ elif nav == "Báo cáo":
                     records_g = _compute_alltime_records(df)
                     _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
                     if _rec_g:
-                        _grp_sections.append({"label": "Kỷ lục", "chips": [
-                            {"k": "Ngày", "v": ", ".join(f"{d:%d/%m/%Y}" for d in _rec_g['dates'])},
-                            {"k": "Giờ", "v": f"{_rec_g['hours']:.1f}h", "hl": True},
+                        # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
+                        # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
+                        # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
+                        # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
+                        _grp_sections.append({"label": "Ngày nổi bật", "chips": [
+                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_rec_g['hours']:.1f}h"} for d in _rec_g['dates']
                         ]})
 
                     _nud_g = _streak_nudge(s_g)
@@ -5511,7 +5555,9 @@ elif nav == "Hướng dẫn":
             "trang đó. Đồng hạng nếu 2 ngày bằng tuyệt đối số giờ.\n"
             "- **Kỷ lục** — ngày nhiều giờ nhất **toàn thời gian**, tính chung (top 3, hiện ở Bảng số liệu "
             "Tổng quan) và tính riêng cho từng Nhóm/Dự án đã có từ **5 ngày dữ liệu trở lên** (chỉ giữ đúng 1 "
-            "ngày kỷ lục mỗi Nhóm/Dự án, hiện ở Bảng số liệu Báo cáo → Dự án). Mọi ngày giữ 1 trong các kỷ lục "
+            "ngày kỷ lục mỗi Nhóm/Dự án — ở Bảng số liệu Báo cáo → Dự án, chip này gộp chung ngày + số giờ và "
+            "mang tên \"Ngày nổi bật\" cho đồng bộ hình thức với Tuần/Tháng/Năm, dù vẫn cùng 1 khái niệm kỷ lục). "
+            "Mọi ngày giữ 1 trong các kỷ lục "
             "này được gắn thêm 1 chip kèm icon huy chương trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này "
             "năm trước) — 1 chip riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip "
             "Lịch. Icon này (và icon sách/TV trên chip đọc sách/Gundam cạnh đó) dùng chung font Material Symbols "
@@ -5584,8 +5630,9 @@ elif nav == "Hướng dẫn":
             "đúng Dự án mình muốn. Sau khi chọn, cấu trúc rút gọn còn 5 mục (bỏ Nhật ký và Phân bổ thời gian vì "
             "không có khái niệm \"kỳ\" ở đây — đây là toàn bộ lịch sử của riêng Dự án đó) — dùng khi muốn theo "
             "dõi tiến triển của 1 việc cụ thể xuyên suốt, ví dụ so Biểu đồ lịch của \"Deep Work\" tháng này với "
-            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Kỷ lục\" trong Bảng "
-            "số liệu — xem mục \"Bảng vàng\" ở trên.",
+            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Ngày nổi bật\" (ngày "
+            "nhiều giờ nhất toàn thời gian của riêng Nhóm/Dự án đó) trong Bảng số liệu — xem mục \"Bảng vàng\" "
+            "ở trên.",
             where="Báo cáo → Dự án")
 
     # ==========================================
