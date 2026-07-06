@@ -81,3 +81,19 @@ create policy "anon full access" on notes for all using (true) with check (true)
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
+
+-- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
+-- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
+-- này để nạp dữ liệu thay vì đọc trực tiếp iCloud Drive (server chạy từ xa, không có filesystem
+-- chung với điện thoại). "public = false" vì file chỉ cần đọc/ghi qua API bằng anon key (đã có
+-- trong secrets), không cần truy cập qua URL công khai không xác thực. Đổi tên 'sync-uploads' ở
+-- CẢ 2 chỗ dưới đây nếu bạn đặt SUPABASE_SYNC_BUCKET khác trong secrets.toml.
+insert into storage.buckets (id, name, public)
+values ('sync-uploads', 'sync-uploads', false)
+on conflict (id) do nothing;
+
+-- storage.objects đã bật RLS sẵn từ phía Supabase -- chỉ cần thêm policy, không cần "alter
+-- table ... enable row level security" (khác các bảng tự tạo ở trên). Cùng lý do "mở toàn
+-- quyền qua anon key" như các bảng khác: app không có lớp đăng nhập theo lựa chọn đã chốt.
+create policy "anon full access sync-uploads" on storage.objects for all
+  using (bucket_id = 'sync-uploads') with check (bucket_id = 'sync-uploads');
