@@ -726,6 +726,113 @@ def parse_forest_csv(uploaded):
     return df, stats, []
 
 
+# --- ĐỒNG BỘ NHANH (Shortcut iOS -> Supabase Storage -> 1 nút trong app) ---
+# Thay cho việc tải tay 2 file (Forest CSV + Reminder backup) rồi bấm "Đồng bộ lịch" riêng: Shortcut
+# ở iOS (chạy từ share sheet khi Export Forest) gộp cả 2 file rồi upload thẳng lên 1 bucket Storage
+# qua HTTP request (không cần app can thiệp) -- app chỉ cần quét bucket này, không đọc trực tiếp
+# iCloud Drive được vì server chạy từ xa, không có filesystem chung với máy/điện thoại người dùng.
+
+def _sync_bucket_name():
+    return st.secrets.get("SUPABASE_SYNC_BUCKET", "sync-uploads")
+
+def _list_sync_files():
+    """Liệt kê file trong bucket Storage dùng cho Đồng bộ nhanh, mới nhất trước (theo created_at).
+    Trả về [] nếu bucket chưa tạo/chưa cấu hình -- tính năng tuỳ chọn, không chặn phần còn lại của
+    tab Dữ liệu đầu vào khi chưa dùng tới."""
+    try:
+        files = _get_supabase().storage.from_(_sync_bucket_name()).list()
+    except Exception:
+        return []
+    return sorted((f for f in files if f.get("name")), key=lambda f: f.get("created_at") or "", reverse=True)
+
+def _latest_sync_file(files, prefix):
+    """files đã sort mới nhất trước (xem _list_sync_files) -> file khớp ĐẦU TIÊN chính là mới nhất."""
+    prefix = prefix.lower()
+    for f in files:
+        if f["name"].lower().startswith(prefix):
+            return f
+    return None
+
+def sync_from_storage(cal_start, cal_end):
+    """Đồng bộ nhanh 1 nút cho luồng Shortcut iOS: lấy file Forest CSV + Reminder backup mới nhất
+    (tên bắt đầu bằng "forest"/"reminder") từ bucket Supabase Storage, nạp vào DB y hệt luồng tải
+    tay (Forest: cộng thêm + bỏ trùng/đã xoá; Reminder: thay thế toàn bộ), rồi đồng bộ luôn lịch
+    Work qua CalDAV. Xoá các file CŨ HƠN cùng loại trong bucket SAU KHI nạp thành công (giữ đúng 1
+    file mới nhất mỗi loại) để bucket không phình to qua thời gian -- không xoá nếu file lỗi/thiếu
+    cột, để còn nguyên đó cho lần thử lại sau khi đã sửa Shortcut. Trả về dict kết quả để hiển thị,
+    không raise ra ngoài UI."""
+    result = {"forest": None, "forest_error": None, "reading": None, "reading_error": None,
+              "calendar": None, "calendar_error": None, "error": None}
+    try:
+        bucket = _get_supabase().storage.from_(_sync_bucket_name())
+        files = _list_sync_files()
+    except Exception as e:
+        result["error"] = f"Không kết nối được Supabase Storage: {e}"
+        return result
+
+    forest_meta = _latest_sync_file(files, "forest")
+    reading_meta = _latest_sync_file(files, "reminder")
+    to_delete = []
+
+    if forest_meta:
+        try:
+            raw = bucket.download(forest_meta["name"])
+            df_new, stats, missing = parse_forest_csv(io.BytesIO(raw))
+            if missing:
+                result["forest_error"] = "Thiếu cột: " + ", ".join(missing)
+            elif df_new is None or df_new.empty:
+                result["forest"] = 0
+            else:
+                deleted = load_deleted()
+                if not deleted.empty:
+                    del_keys = set(zip(deleted['Thời gian bắt đầu'].map(_fmt_ts),
+                                       deleted['Thời gian kết thúc'].map(_fmt_ts)))
+                    keep = [(s, e) not in del_keys for s, e in
+                            zip(df_new['Thời gian bắt đầu'].map(_fmt_ts), df_new['Thời gian kết thúc'].map(_fmt_ts))]
+                    df_new = df_new[keep]
+                db = load_db()
+                before = len(db)
+                combined = pd.concat([db, df_new])
+                combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
+                combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
+                combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
+                save_db(combined)
+                result["forest"] = len(combined) - before
+            if not result["forest_error"]:
+                to_delete += [f["name"] for f in files
+                              if f["name"].lower().startswith("forest") and f["name"] != forest_meta["name"]]
+        except Exception as e:
+            result["forest_error"] = str(e)
+
+    if reading_meta:
+        try:
+            raw = bucket.download(reading_meta["name"])
+            rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(io.BytesIO(raw))
+            if rl_missing:
+                result["reading_error"] = "Thiếu cột: " + ", ".join(rl_missing)
+            elif rl_df.empty:
+                result["reading"] = 0
+            else:
+                save_reading_log_bulk(rl_df)
+                result["reading"] = len(rl_df)
+            if not result["reading_error"]:
+                to_delete += [f["name"] for f in files
+                              if f["name"].lower().startswith("reminder") and f["name"] != reading_meta["name"]]
+        except Exception as e:
+            result["reading_error"] = str(e)
+
+    if to_delete:
+        try:
+            bucket.remove(to_delete)
+        except Exception:
+            pass
+
+    n_cal, err_cal = sync_work_calendar(cal_start, cal_end)
+    result["calendar"] = n_cal
+    result["calendar_error"] = err_cal
+    return result
+
+
 @st.cache_data
 def prep_analysis_data():
     db = load_db().copy()
@@ -4531,7 +4638,46 @@ elif nav == "Tìm kiếm":
 # ==========================================
 elif nav == "Tuỳ biến":
     with st.expander("1. Dữ liệu đầu vào", expanded=True):
-        _tab_forest, _tab_cal, _tab_rem = st.tabs(["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
+        _tab_quick, _tab_forest, _tab_cal, _tab_rem = st.tabs(
+            ["Đồng bộ nhanh", "Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
+        with _tab_quick:
+            st.caption("Dùng với Shortcut iOS (share sheet khi Export Forest) tự tải file Forest + "
+                       f"Reminder lên bucket Storage `{_sync_bucket_name()}` — 1 nút gộp cả 3 bước: "
+                       "nạp Forest, nạp Reminder, đồng bộ lịch Work. Xem cách tạo Shortcut ở tab Hướng dẫn.")
+            _qmsg = st.session_state.pop('quick_sync_msg', None)
+            if _qmsg:
+                (st.success if not st.session_state.pop('quick_sync_has_error', False) else st.warning)(_qmsg)
+            _qfiles = _list_sync_files()
+            _qf = _latest_sync_file(_qfiles, "forest")
+            _qr = _latest_sync_file(_qfiles, "reminder")
+            qc1, qc2 = st.columns(2)
+            with qc1:
+                st.markdown(f"**File Forest mới nhất**  \n{_qf['name'] if _qf else '_— chưa có —_'}")
+            with qc2:
+                st.markdown(f"**File Reminder mới nhất**  \n{_qr['name'] if _qr else '_— chưa có —_'}")
+            if st.button("Đồng bộ ngay", type="primary", key="quick_sync_btn", disabled=not (_qf or _qr)):
+                with st.spinner("Đang đồng bộ..."):
+                    _qres = sync_from_storage(_today_vn() - timedelta(days=90), _today_vn() + timedelta(days=90))
+                if _qres["error"]:
+                    st.session_state['quick_sync_msg'] = _qres["error"]
+                    st.session_state['quick_sync_has_error'] = True
+                else:
+                    _parts, _has_err = [], False
+                    if _qres["forest_error"]:
+                        _parts.append(f"Forest lỗi ({_qres['forest_error']})"); _has_err = True
+                    elif _qres["forest"] is not None:
+                        _parts.append(f"{_qres['forest']} phiên Forest mới")
+                    if _qres["reading_error"]:
+                        _parts.append(f"Reminder lỗi ({_qres['reading_error']})"); _has_err = True
+                    elif _qres["reading"] is not None:
+                        _parts.append(f"{_qres['reading']} phần đọc/xem")
+                    if _qres["calendar_error"]:
+                        _parts.append(f"lịch lỗi ({_qres['calendar_error']})"); _has_err = True
+                    elif _qres["calendar"] is not None:
+                        _parts.append(f"{_qres['calendar']} appointment lịch")
+                    st.session_state['quick_sync_msg'] = "Đã đồng bộ: " + ", ".join(_parts) + "." if _parts else "Không có file mới để đồng bộ."
+                    st.session_state['quick_sync_has_error'] = _has_err
+                st.rerun()
         with _tab_forest:
             _msg = st.session_state.pop('import_msg', None)
             if _msg:
@@ -5330,7 +5476,14 @@ elif nav == "Hướng dẫn":
 
         guide_item(
             "prep_data_input.png", "1. Dữ liệu đầu vào",
-            "3 tab con, chỉ hiện 1 tab tại 1 thời điểm cho gọn:\n\n"
+            "4 tab con, chỉ hiện 1 tab tại 1 thời điểm cho gọn:\n\n"
+            "- **Đồng bộ nhanh** — dành cho Shortcut iOS chạy từ share sheet: khi Export CSV từ Forest, Shortcut "
+            "lấy luôn file backup Reminder rồi tải cả 2 lên bucket Supabase Storage (tên file bắt đầu bằng "
+            "`forest`/`reminder`, vd `forest_2026-07-06.csv`). Bấm **Đồng bộ ngay** để app tự tìm file mới nhất "
+            "mỗi loại, nạp vào DB theo đúng luật của 2 tab thủ công bên dưới (Forest cộng thêm, Reminder thay thế "
+            "toàn bộ), đồng bộ luôn lịch Work qua CalDAV, rồi xoá các file cũ hơn trong bucket — gộp 3 thao tác "
+            "thủ công thành 1 nút. Chưa tạo Shortcut/bucket thì tab này chỉ hiện \"chưa có\", không ảnh hưởng gì "
+            "tới 3 tab tải tay bên dưới.\n"
             "- **Tải lên từ Forest** — nạp file CSV xuất từ app Forest. Mỗi lần tải lên chỉ **thêm dữ liệu mới**, "
             "tự động bỏ qua phiên trùng lặp (so theo giờ bắt đầu/kết thúc) và phiên đã từng bị xoá trước đó — "
             "nạp lại cùng 1 file nhiều lần không sợ bị nhân đôi dữ liệu.\n"
