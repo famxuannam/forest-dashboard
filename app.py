@@ -148,6 +148,10 @@ BOOKS_EXCLUDE = {"The Economist", "Gundam"}
 # tag chung này; xem _assign_gundam_sessions() để biết cách suy ra series đang xem theo ngày.
 GUNDAM_TAG = "Gundam"
 
+# "Bảng vàng": số ngày có dữ liệu tối thiểu để 1 Dự án/Nhóm đủ điều kiện có kỷ lục riêng (mục
+# _compute_alltime_records()) -- ngưỡng để tránh dự án/nhóm mới thử vài ngày đã có "kỷ lục".
+RECORD_MIN_DAYS = 5
+
 # render_reading_log() dùng chung cho tab "Nhật ký đọc sách" (mặc định) và tab "Gundam" (truyền
 # labels=GUNDAM_LABELS) -- chỉ khác nhau ở CHỮ hiển thị, không khác logic tính toán. Tên cột nội
 # bộ trong DataFrame (vd 'Cuốn sách', 'Trạng thái') giữ nguyên bất kể labels nào đang dùng.
@@ -1778,6 +1782,107 @@ def _weekday_avg(scope_df, min_count=3):
     return avg[reliable] if reliable.any() else avg
 
 
+def _top_days(df_scope, n=3):
+    """Top n ngày nhiều giờ nhất trong df_scope (dùng cho mục "Ngày nổi bật" ở Bảng số liệu
+    Tổng quan/Tuần/Tháng/Năm) -- rank(method='min') nên 2 ngày bằng tuyệt đối giờ ở cùng 1 hạng
+    thì ĐỒNG HẠNG cả hai (danh sách trả về có thể dài hơn n khi có hoà). Trả về
+    list[{"rank", "date", "hours"}] sắp theo giờ giảm dần."""
+    if df_scope.empty:
+        return []
+    daily = df_scope.groupby('Ngày')['Thời lượng (Phút)'].sum().sort_values(ascending=False)
+    ranks = daily.rank(method='min', ascending=False)
+    top = daily[ranks <= n]
+    return [{"rank": int(ranks[d]), "date": d, "hours": h / 60} for d, h in top.items()]
+
+
+def _top_days_chips(items):
+    """Chuyển kết quả _top_days()/overall_top3 thành chips cho render_stat_panel() -- dùng
+    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm."""
+    return [{"k": f"#{it['rank']}", "v": f"{it['date']:%d/%m/%Y} · {it['hours']:.1f}h"} for it in items]
+
+
+def _top_days_section(df_scope, label, n=3):
+    """1 section "Ngày nổi bật" cho render_stat_panel() (sections=...), hoặc None nếu kỳ chưa
+    có ngày nào -- dùng chung ở Bảng số liệu Tuần/Tháng/Năm (Tổng quan tự truyền thẳng
+    overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây)."""
+    items = _top_days(df_scope, n)
+    return [{"label": label, "chips": _top_days_chips(items)}] if items else None
+
+
+@st.cache_data
+def _compute_alltime_records(df):
+    """"Bảng vàng": kỷ lục TOÀN THỜI GIAN -- top 3 ngày nhiều giờ nhất chung (overall_top3, tái
+    dùng bởi Bảng số liệu Tổng quan) + kỷ lục #1 riêng theo từng Dự án/Nhóm đủ ngưỡng
+    RECORD_MIN_DAYS ngày có dữ liệu (project_records/category_records, dùng bởi Bảng số liệu
+    trang Dự án). day_badges là bảng tra ngược ngày -> danh sách badge, dựng sẵn 1 lần để các
+    điểm gắn chip trên Timeline (render_note_editor/render_notes_journal/render_on_this_day)
+    không phải lặp lại groupby. Cache theo st.cache_data (như prep_analysis_data()) -> tự làm
+    mới ngay khi dữ liệu đổi (mọi save_*/xoá dữ liệu đã gọi st.cache_data.clear() sẵn), không
+    bao giờ outdate."""
+    day_badges = {}
+
+    def _add_badge(d, badge):
+        day_badges.setdefault(d, []).append(badge)
+
+    overall_top3 = _top_days(df, 3)
+    for item in overall_top3:
+        _add_badge(item["date"], {"kind": "overall", "rank": item["rank"]})
+
+    def _group_records(scope_df, col_name):
+        recs = {}
+        if scope_df.empty:
+            return recs
+        eligible = scope_df.groupby(col_name)['Ngày'].nunique()
+        eligible = eligible[eligible >= RECORD_MIN_DAYS].index
+        for name in eligible:
+            g = scope_df[scope_df[col_name] == name]
+            daily = g.groupby('Ngày')['Thời lượng (Phút)'].sum()
+            best_hours = daily.max()
+            best_days = daily[daily == best_hours].index  # đồng hạng nếu nhiều ngày hoà kỷ lục
+            recs[name] = {"dates": list(best_days), "hours": best_hours / 60}
+            for d in best_days:
+                _add_badge(d, {"kind": col_name, "name": name})
+        return recs
+
+    project_records = _group_records(df, 'Dự án')
+    category_records = _group_records(df[df['Có danh mục']], 'Danh mục')
+
+    return {
+        "overall_top3": overall_top3,
+        "project_records": project_records,
+        "category_records": category_records,
+        "day_badges": day_badges,
+    }
+
+
+def _chip_row_html(heading, chips_html):
+    """1 hàng "heading nhỏ (class .rl-book) + các jchip" -- khuôn dùng chung cho
+    _record_chips_html() (chip Kỷ lục) và _book_chips_html() (chip tên sách)."""
+    return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
+
+
+def _record_chips_html(badges):
+    """Chip "Kỷ lục" cho 1 ngày (badges = day_badges.get(ngày), có thể None/rỗng) -- dùng chung
+    _chip_row_html() với _book_chips_html(), 1 chip riêng mỗi badge (không gộp) vì 1 ngày có
+    thể vừa giữ hạng chung vừa giữ kỷ lục riêng vài Dự án/Nhóm. Nhãn "Danh mục" ghi
+    rõ chữ "Nhóm" (khác "Dự án" giữ nguyên tên) -- nếu không, 1 Nhóm tự đặt trùng tên đúng 1 Dự
+    án duy nhất của nó (vd Nhóm "Deep Work" chỉ gồm Dự án "Deep Work") sẽ ra 2 chip đọc y hệt
+    nhau "Kỷ lục Deep Work", trông như bị lặp badge dù thực ra là 2 kỷ lục khác khái niệm."""
+    if not badges:
+        return ''
+    _ORD = {1: "Hạng nhất", 2: "Hạng nhì", 3: "Hạng ba"}
+    parts = []
+    for b in badges:
+        if b["kind"] == "overall":
+            label = _ORD.get(b["rank"], f"Hạng {b['rank']}") + " mọi thời đại"
+        elif b["kind"] == "Danh mục":
+            label = f"Kỷ lục Nhóm {b['name']}"
+        else:
+            label = f"Kỷ lục {b['name']}"
+        parts.append(f"<span class='jchip rec'>{html_escape(label)}</span>")
+    return _chip_row_html("Kỷ lục", ''.join(parts))
+
+
 def _assign_gundam_sessions(gundam_sessions, rl_gundam):
     """Gán mỗi phiên Forest tag GUNDAM_TAG vào đúng series đang xem hôm đó -- Forest không có
     Dự án riêng theo từng series Gundam, chỉ 1 tag chung, nên phải suy ra. Quy tắc: mỗi ngày có
@@ -2278,17 +2383,22 @@ def render_day_timeline(day_df, sel, df_all):
 
 
 @st.fragment
-def render_note_editor(day):
+def render_note_editor(day, day_badges=None):
     """Thẻ 2 cột cho một ngày: Thứ/ngày bên trái (giống bố cục .jrows của Nhật ký tuần/tháng,
-    dù ở đây chỉ có đúng 1 "dòng"), cột phải theo thứ tự cố định: chip lịch (kèm heading nhỏ
-    "Lịch") → chip đọc sách/Gundam (tự nhóm+gắn nhãn theo cuốn/series qua _book_chips_html())
-    → ghi chú. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái trống) kèm một nút; bấm nút
-    mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
+    dù ở đây chỉ có đúng 1 "dòng"), cột phải theo thứ tự cố định: chip Kỷ lục (nếu ngày này giữ
+    kỷ lục -- day_badges do caller truyền vào, xem _compute_alltime_records()) → chip lịch (kèm
+    heading nhỏ "Lịch") → chip đọc sách/Gundam (tự nhóm+gắn nhãn theo cuốn/series qua
+    _book_chips_html()) → ghi chú. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái trống) kèm
+    một nút; bấm nút mới mở trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
 
     Bọc trong @st.fragment: ô soạn Quill gửi nội dung về server mỗi lần gõ phím, nếu
     không cô lập thì cả trang Báo cáo ngày chạy lại mỗi ký tự -> giao diện giật. Là
     fragment nên mỗi lần gõ chỉ phần ghi chú này vẽ lại; các st.rerun() bên dưới cũng
     chỉ rerun trong fragment (đủ vì không phần nào khác trên trang phụ thuộc ghi chú).
+    Đúng vì lý do này, day_badges PHẢI được tính sẵn ở caller (ngoài fragment) rồi truyền
+    vào dạng list/None đã tra cứu sẵn -- gọi _compute_alltime_records(prep_analysis_data())
+    trực tiếp trong này sẽ khiến Streamlit băm lại cả DataFrame phiên mỗi lần gõ phím, đúng
+    thứ mà @st.fragment được thêm vào để tránh.
 
     Cột trái/phải dựng bằng st.columns() thật (không phải HTML tĩnh như .jrows) vì cột phải
     chứa widget Streamlit thật (Quill, nút) không thể nhét vào 1 chuỗi HTML. Bọc trong
@@ -2314,6 +2424,9 @@ def render_note_editor(day):
                 st.markdown(f"<div class='jdate'><div class='jdowbig'>{vn_dow}</div>"
                             f"<div class='jdm'>{day:%d/%m}</div></div>", unsafe_allow_html=True)
             with c_body:
+                if day_badges:
+                    st.markdown(_record_chips_html(day_badges), unsafe_allow_html=True)
+
                 wc = load_work_calendar()
                 if not wc.empty:
                     day_events = wc[wc['Thời gian bắt đầu'].dt.date == day].sort_values('Thời gian bắt đầu')
@@ -2373,10 +2486,13 @@ def render_note_editor(day):
                             st.rerun()
 
 
-def render_notes_journal(period_key, kind):
+def render_notes_journal(period_key, kind, df_all):
     """Liệt kê (chỉ đọc) ghi chú + appointment lịch + phần đọc sách/Gundam của các ngày thuộc
-    một kỳ (tuần/tháng) -- một dòng cho mỗi ngày có ÍT NHẤT 1 trong 3 nguồn (hợp/union), không
-    chỉ giới hạn ở ngày đã có ghi chú viết tay. Mỗi dòng theo thứ tự cố định: chip Lịch (kèm
+    một kỳ (tuần/tháng) -- một dòng cho mỗi ngày có ÍT NHẤT 1 trong 4 nguồn (hợp/union): ghi
+    chú, lịch, đọc sách, HOẶC giữ 1 kỷ lục Bảng vàng (xem _compute_alltime_records()) -- nguồn
+    thứ 4 này đảm bảo 1 ngày kỷ lục nhưng không có ghi chú/lịch/đọc sách nào vẫn hiện dòng riêng
+    để chip 🏆 có chỗ hiện ra, đúng lời hứa "chip Kỷ lục luôn thấy được ở Nhật ký Tuần/Tháng"
+    trong tab Hướng dẫn. Mỗi dòng theo thứ tự cố định: chip Kỷ lục (nếu có) → chip Lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách (tự nhóm+gắn nhãn theo từng cuốn/series qua
     _book_chips_html()) → ghi chú. Không lọc Gundam khỏi nguồn đọc sách ở đây -- đây là nhật ký
     chung của cả app, không riêng tab Sách. Ô Thứ/ngày mỗi dòng là link nhảy sang đúng Báo cáo
@@ -2384,9 +2500,15 @@ def render_notes_journal(period_key, kind):
     Dựng HTML tự thân (1 khối st.markdown duy nhất) thay vì st.columns() lặp lại -> khoảng
     cách quanh mỗi đường kẻ do CSS box model tự nhiên quyết định, không lệ thuộc chiều cao
     hàng do Streamlit tự tính (xem chú thích ở khối CSS .jrows)."""
+    day_badges = _compute_alltime_records(df_all)["day_badges"]
+
     def _in_period(dt_series):
         return (dt_series.dt.strftime('%Y-%m') == period_key) if kind == 'month' \
             else (dt_series.dt.strftime('%G-W%V') == period_key)
+
+    def _date_in_period(d):
+        return (d.strftime('%Y-%m') == period_key) if kind == 'month' \
+            else (d.strftime('%G-W%V') == period_key)
 
     nd = load_notes()
     if not nd.empty:
@@ -2406,13 +2528,15 @@ def render_notes_journal(period_key, kind):
     note_days = set(nd['_d']) if not nd.empty else set()
     event_days = set(wc['_d']) if not wc.empty else set()
     reading_days = set(rl['_d']) if not rl.empty else set()
-    days = sorted(note_days | event_days | reading_days)
+    record_days = {pd.Timestamp(d) for d in day_badges if _date_in_period(d)}
+    days = sorted(note_days | event_days | reading_days | record_days)
     if not days:
         st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong kỳ này.")
         return
 
     rows_html = ''
     for d in days:
+        rec_html = _record_chips_html(day_badges.get(d.date()))
         cal_html = ''
         if d in event_days:
             day_events = wc[wc['_d'] == d].sort_values('Thời gian bắt đầu')
@@ -2434,7 +2558,7 @@ def render_notes_journal(period_key, kind):
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m}</div></div></a>"
-            f"<div>{cal_html}{read_html}{note_html}</div>"
+            f"<div>{rec_html}{cal_html}{read_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key=f"jcard_journal_{kind}"):
@@ -2517,14 +2641,17 @@ def _book_chips_html(day_g):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
     người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
+    Mỗi chip gắn thêm class 'book'/'gundam' (icon Material tương ứng, xem CSS .jchip.book/
+    .jchip.gundam) để phân biệt nhanh 2 loại không cần đọc chữ.
     Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html."""
     out = ''
     groups = list(day_g.groupby('Cuốn sách', sort=False))
     groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
     for book, g in groups:
-        parts = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+        _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
+        parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                         for _, r in g.sort_values('Ngày hoàn thành').iterrows())
-        out += f"<div style='margin-bottom:6px;'><span class='rl-book'>{html_escape(book)}</span>{parts}</div>"
+        out += _chip_row_html(html_escape(book), parts)
     return out
 
 
@@ -2538,7 +2665,8 @@ def _reading_rows_html(rl_df, label_book=True):
         if label_book:
             chips_html = _book_chips_html(day_g)
         else:
-            chips_html = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+            _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
+            chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành').iterrows())
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
@@ -2553,7 +2681,11 @@ def _reading_rows_html(rl_df, label_book=True):
 
 def render_on_this_day(sel, df_all):
     """“Ngày này năm trước”: khớp cùng ngày/tháng ở các năm trước (từ phiên + ghi chú),
-    mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc."""
+    mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc. Mỗi dòng năm cũng
+    theo đúng thứ tự cố định chip Kỷ lục (nếu năm đó rơi đúng ngày giữ kỷ lục, xem
+    _compute_alltime_records()) → chip Lịch → chip đọc sách → số liệu phiên → ghi chú, nhất
+    quán với render_note_editor()/render_notes_journal()."""
+    day_badges = _compute_alltime_records(df_all)["day_badges"]
     m, d = sel.month, sel.day
     # Số liệu phiên theo từng năm trước (cùng ngày/tháng)
     sess = df_all[df_all['Ngày'].apply(lambda x: x.month == m and x.day == d and x.year < sel.year)]
@@ -2609,6 +2741,7 @@ def render_on_this_day(sel, df_all):
     rows_html = ''
     for y in years:
         wd = VN_DAYS.get(pd.Timestamp(date(y, m, d)).day_name(), "")
+        rec_html = _record_chips_html(day_badges.get(date(y, m, d)))
         cal_html = ''
         if y in events:
             _cchips = ''.join(
@@ -2628,7 +2761,7 @@ def render_on_this_day(sel, df_all):
             "<div class='jrow'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
-            f"<div>{cal_html}{read_html}{chips_html}{note_block}</div>"
+            f"<div>{rec_html}{cal_html}{read_html}{chips_html}{note_block}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_otd"):
@@ -3530,6 +3663,18 @@ st.markdown(
     .jchip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: var(--text-2); } .jchip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    /* Icon Material Symbols (font Streamlit đã tự load sẵn cho :material/x: của riêng nó, nên
+       dùng lại được ở đây không cần nhúng thêm font nào) đặt đầu 1 số jchip -- nhận diện nhanh
+       loại chip không cần đọc chữ: 🏆 Kỷ lục (Bảng vàng), sách/gundam phân biệt phần đọc/xem. */
+    .jchip.rec::before, .jchip.book::before, .jchip.gundam::before {
+        font-family: 'Material Symbols Rounded'; font-size: 13px; vertical-align: -2px; margin-right: 3px;
+    }
+    /* Chip "Kỷ lục" (Bảng vàng) -- cùng tông "nổi bật" với .stat-panel .chip.tw (nền/màu chữ
+       theo accent) để phân biệt nhanh với jchip thường (Lịch/Sách) không cần đọc chữ. */
+    .jchip.rec { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); font-weight: 600; }
+    .jchip.rec::before { content: "emoji_events"; }
+    .jchip.book::before { content: "menu_book"; }
+    .jchip.gundam::before { content: "tv"; }
     /* Nhãn tên sách phía trên chip các phần đã đọc (box Đọc sách, Nhật ký đọc sách) -- nhại
        đúng pattern nhãn nhỏ đã dùng cho where= của guide_item và box "Lịch Work" cũ. */
     .rl-book { display: block; font-size: 11px; font-weight: 700; color: var(--text-2);
@@ -4023,6 +4168,11 @@ def render_day_report(df):
     sel = day_picker(active_days)
     day_df = df[df['Ngày'] == sel]
     vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
+    # Tính 1 lần ở đây (ngoài render_note_editor) rồi truyền list badge của đúng "sel" xuống --
+    # render_note_editor chạy trong @st.fragment (rerun mỗi lần gõ ghi chú), gọi lại
+    # _compute_alltime_records() trong đó sẽ băm lại cả df mỗi phím gõ, mất hết tác dụng cô lập
+    # của fragment.
+    sel_day_badges = _compute_alltime_records(df)["day_badges"].get(sel)
 
     _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
@@ -4081,7 +4231,7 @@ def render_day_report(df):
                                card_style="padding:20px; margin:0 16px 20px;")
 
         with st.expander("Ghi chú ngày", expanded=True):
-            render_note_editor(sel)
+            render_note_editor(sel, sel_day_badges)
         with st.expander("Ngày này năm trước", expanded=False):
             render_on_this_day(sel, df)
     else:
@@ -4140,7 +4290,7 @@ def render_day_report(df):
             render_day_timeline(day_df, sel, df)
 
         with st.expander("2. Ghi chú ngày", expanded=True):
-            render_note_editor(sel)
+            render_note_editor(sel, sel_day_badges)
 
         with st.expander("3. Phân bổ thời gian", expanded=False):
             frag_pie(day_df, "rad_day", "Dự án")
@@ -4216,6 +4366,7 @@ elif nav == "Báo cáo":
 
                 s_stat = _streak_stats(df)
                 by_wd = _weekday_avg(df)
+                overall_top3 = _top_days(df, 3)
                 _sections = [
                     {"label": "Trung bình (toàn thời gian)", "chips": [
                         {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
@@ -4234,6 +4385,8 @@ elif nav == "Báo cáo":
                         {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({by_wd.max():.1f}h)"},
                         {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
                     ]})
+                if overall_top3:
+                    _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
                 _nud = _streak_nudge(s_stat)
                 _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
@@ -4309,13 +4462,14 @@ elif nav == "Báo cáo":
 
                     if _clip_note_w:
                         _clip_card(_clip_note_w)
+                    _sections_w = _top_days_section(df_w, "Ngày nổi bật trong tuần")
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
-                    ], footer=_smart_digest(df, 'Tuần', selected_week, df_w, prev_w, avg_w, elapsed_mask_w is not None))
+                    ], sections=_sections_w, footer=_smart_digest(df, 'Tuần', selected_week, df_w, prev_w, avg_w, elapsed_mask_w is not None))
                     render_session_bar(df_w)
 
                     st.write("")
@@ -4323,7 +4477,7 @@ elif nav == "Báo cáo":
                     with c_top1: render_top_3(df_w, 'Danh mục', 'Top 3 Danh mục Tuần')
                     with c_top2: render_top_3(df_w, 'Dự án', 'Top 3 Dự án Tuần')
                 with st.expander("2. Nhật ký", expanded=True):
-                    render_notes_journal(selected_week, 'week')
+                    render_notes_journal(selected_week, 'week', df)
                 with st.expander("3. Phân bổ thời gian", expanded=False):
                     frag_pie(df_w, "rad_tab4", "Danh mục")
                 with st.expander("4. Xu hướng theo thời gian", expanded=False):
@@ -4381,13 +4535,14 @@ elif nav == "Báo cáo":
 
                     if _clip_note_m:
                         _clip_card(_clip_note_m)
+                    _sections_m = _top_days_section(df_m, "Ngày nổi bật trong tháng")
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, f"h {lbl_prev_m}"), _delta_t(delta2_hr, f"h {lbl_avg_m}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, f"h {lbl_prev_m}"), _delta_t(delta2_hrd, f"h {lbl_avg_m}")] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, f"cây {lbl_prev_m}"), _delta_t(delta2_tr, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, f"cây {lbl_prev_m}"), _delta_t(delta2_trd, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, f"phút {lbl_prev_m}"), _delta_t(delta2_ms, f"phút {lbl_avg_m}")] if d]},
-                    ], footer=_smart_digest(df, 'Tháng', selected_month, df_m, prev_m, avg_m, elapsed_mask_m is not None))
+                    ], sections=_sections_m, footer=_smart_digest(df, 'Tháng', selected_month, df_m, prev_m, avg_m, elapsed_mask_m is not None))
                     render_session_bar(df_m)
 
                     st.write("")
@@ -4395,7 +4550,7 @@ elif nav == "Báo cáo":
                     with c_top1: render_top_3(df_m, 'Danh mục', 'Top 3 Danh mục Tháng')
                     with c_top2: render_top_3(df_m, 'Dự án', 'Top 3 Dự án Tháng')
                 with st.expander("2. Nhật ký", expanded=True):
-                    render_notes_journal(selected_month, 'month')
+                    render_notes_journal(selected_month, 'month', df)
                 with st.expander("3. Phân bổ thời gian", expanded=False):
                     frag_pie(df_m, "rad_tab3", "Danh mục")
                 with st.expander("4. Xu hướng theo thời gian", expanded=False):
@@ -4447,13 +4602,14 @@ elif nav == "Báo cáo":
 
                     if _clip_note_y:
                         _clip_card(_clip_note_y)
+                    _sections_y = _top_days_section(df_y, "Ngày nổi bật trong năm")
                     render_stat_panel(hero_items=[
                         {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
                         {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
-                    ], footer=_smart_digest(df, 'Năm', selected_year, df_y, prev_y, avg_y, elapsed_mask_y is not None))
+                    ], sections=_sections_y, footer=_smart_digest(df, 'Năm', selected_year, df_y, prev_y, avg_y, elapsed_mask_y is not None))
                     render_session_bar(df_y)
 
                     st.write("")
@@ -4554,6 +4710,14 @@ elif nav == "Báo cáo":
                         {"k": "Ngày đầu tiên", "v": first_day},
                         {"k": "Ngày gần nhất", "v": last_day},
                     ]})
+
+                    records_g = _compute_alltime_records(df)
+                    _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
+                    if _rec_g:
+                        _grp_sections.append({"label": "Kỷ lục", "chips": [
+                            {"k": "Ngày", "v": ", ".join(f"{d:%d/%m/%Y}" for d in _rec_g['dates'])},
+                            {"k": "Giờ", "v": f"{_rec_g['hours']:.1f}h", "hl": True},
+                        ]})
 
                     _nud_g = _streak_nudge(s_g)
                     _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
@@ -5318,10 +5482,12 @@ elif nav == "Hướng dẫn":
         guide_item(
             "note_editor.png", "Ghi chú ngày (nhật ký)",
             "Thẻ 2 cột: cột trái là Thứ/ngày, cột phải gộp **3 nguồn** cho đúng ngày đó — chip lịch hẹn Work (nếu "
-            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó, và ô ghi chú tự do (trình soạn thảo "
-            "Quill, hỗ trợ chữ đậm/nghiêng/danh sách). Cùng 1 bố cục 2 cột này lặp lại ở thẻ **Nhật ký** của "
-            "Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất quán để không phải học lại "
-            "cách đọc.",
+            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó (kèm icon sách/TV tương ứng ngay đầu "
+            "chip để phân biệt nhanh 2 loại không cần đọc chữ), và ô ghi chú tự do (trình soạn thảo Quill, hỗ "
+            "trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem mục \"Bảng vàng\" bên dưới), "
+            "1 chip kèm icon huy chương hiện thêm ở đầu, trước cả chip lịch. Cùng 1 bố cục 2 cột này lặp lại ở "
+            "thẻ **Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất quán để "
+            "không phải học lại cách đọc.",
             tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
                 "hơn, không tạo cảm giác đang điền vào 1 form.",
             where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
@@ -5332,8 +5498,28 @@ elif nav == "Hướng dẫn":
             "phiên Forest, ghi chú, lịch hẹn Work, và sách/Gundam đã đọc/xem — năm nào có ít nhất 1 trong 4 "
             "nguồn thì hiện dòng cho năm đó, sắp xếp năm gần nhất lên trên. Không cần năm đó phải có ghi chú mới "
             "hiện — chỉ cần có lịch hẹn hoặc đã đọc xong 1 chương cũng đủ để dòng năm đó xuất hiện. Mục này càng "
-            "dùng lâu càng dày dữ liệu, vì mỗi năm trôi qua lại có thêm 1 \"ngày này năm trước\" mới để so sánh.",
+            "dùng lâu càng dày dữ liệu, vì mỗi năm trôi qua lại có thêm 1 \"ngày này năm trước\" mới để so sánh. "
+            "Năm nào rơi đúng vào ngày giữ kỷ lục cũng hiện chip kèm icon huy chương y hệt Ghi chú ngày.",
             where="Hôm nay → Ngày này năm trước")
+
+        guide_item(
+            "bang_vang.png", "Bảng vàng: Ngày nổi bật & Kỷ lục",
+            "2 khái niệm tách biệt, cả hai tính thẳng từ dữ liệu phiên mỗi lần tải trang (không lưu riêng nên "
+            "không bao giờ lỗi thời):\n\n"
+            "- **Ngày nổi bật** — top 1/2/3 ngày nhiều giờ nhất trong đúng phạm vi đang xem (Tổng quan = toàn "
+            "bộ lịch sử, Tuần/Tháng/Năm = đúng kỳ đang chọn), hiện như 1 nhóm chip trong **Bảng số liệu** của "
+            "trang đó. Đồng hạng nếu 2 ngày bằng tuyệt đối số giờ.\n"
+            "- **Kỷ lục** — ngày nhiều giờ nhất **toàn thời gian**, tính chung (top 3, hiện ở Bảng số liệu "
+            "Tổng quan) và tính riêng cho từng Nhóm/Dự án đã có từ **5 ngày dữ liệu trở lên** (chỉ giữ đúng 1 "
+            "ngày kỷ lục mỗi Nhóm/Dự án, hiện ở Bảng số liệu Báo cáo → Dự án). Mọi ngày giữ 1 trong các kỷ lục "
+            "này được gắn thêm 1 chip kèm icon huy chương trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này "
+            "năm trước) — 1 chip riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip "
+            "Lịch. Icon này (và icon sách/TV trên chip đọc sách/Gundam cạnh đó) dùng chung font Material Symbols "
+            "mà Streamlit đã tự tải sẵn cho mọi icon khác trong app — không phải emoji, nên hiện đồng nhất trên "
+            "mọi thiết bị/trình duyệt thay vì tuỳ theo bộ font emoji của từng máy.",
+            tip="Chỉ \"Kỷ lục\" (toàn thời gian) mới lên chip Timeline — \"Ngày nổi bật\" theo Tuần/Tháng/Năm cố "
+                "tình KHÔNG gắn chip vì gần như tuần/tháng nào cũng có top 3 riêng, gắn hết sẽ mất cảm giác hiếm.",
+            where="Báo cáo → Tổng quan/Tuần/Tháng/Năm/Dự án · Hôm nay · Ngày này năm trước")
 
         guide_item(
             "search.png", "Tìm kiếm",
@@ -5375,7 +5561,8 @@ elif nav == "Hướng dẫn":
             "Bản tổng kết 1 năm cụ thể, cố ý gọn hơn hẳn Tháng/Tuần (chỉ 4 mục thay vì 8) vì đây là trang xem "
             "\"để có cảm giác tổng thể\" chứ không cần đào sâu từng biểu đồ:\n\n"
             "1. **Tổng quan** — 5 số hero (Tổng thời gian, Thời gian/ngày, Số cây, Số cây/ngày, Thời gian/phiên) "
-            "kèm so sánh với năm trước/trung bình các năm khác, cộng Top 3 Danh mục và Top 3 Dự án trong năm.\n"
+            "kèm so sánh với năm trước/trung bình các năm khác, cộng Top 3 Danh mục, Top 3 Dự án, và \"Ngày nổi "
+            "bật\" (xem mục \"Bảng vàng\" ở trên) trong năm.\n"
             "2. **Biểu đồ lịch** — lưới nhiệt trọn năm đang chọn, không kéo dài sang năm khác (khác các trang "
             "Báo cáo khác luôn hiện lưới tới tận hôm nay).\n"
             "3. **Đọc sách & Gundam trong năm** — đếm nhanh số phần đã đọc/xem và số cuốn·series có hoạt động "
@@ -5397,7 +5584,8 @@ elif nav == "Hướng dẫn":
             "đúng Dự án mình muốn. Sau khi chọn, cấu trúc rút gọn còn 5 mục (bỏ Nhật ký và Phân bổ thời gian vì "
             "không có khái niệm \"kỳ\" ở đây — đây là toàn bộ lịch sử của riêng Dự án đó) — dùng khi muốn theo "
             "dõi tiến triển của 1 việc cụ thể xuyên suốt, ví dụ so Biểu đồ lịch của \"Deep Work\" tháng này với "
-            "tháng trước.",
+            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Kỷ lục\" trong Bảng "
+            "số liệu — xem mục \"Bảng vàng\" ở trên.",
             where="Báo cáo → Dự án")
 
     # ==========================================
