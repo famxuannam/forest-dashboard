@@ -3893,10 +3893,20 @@ st.markdown(
        st.columns() + use_container_width như trước. QUAN TRỌNG: Streamlit tự đặt sẵn
        min-height:40px cho MỌI nút (kiểm chứng qua getComputedStyle thật trên trình duyệt, không
        thấy được nếu chỉ đọc CSS nguồn) -- chỉ giảm padding/font-size KHÔNG đủ, nút vẫn cao 40px
-       vì min-height thắng; phải tự đè min-height ở đây thì nút mới thực sự thấp lại. */
+       vì min-height thắng; phải tự đè min-height ở đây thì nút mới thực sự thấp lại. Cùng 1 rule
+       áp luôn cho "st-key-tbtn_*" -- tiền tố dùng chung cho MỌI nút thao tác đơn lẻ trong tab Tuỳ
+       biến (Đồng bộ ngay, Xác nhận cập nhật/nạp dữ liệu, Lưu phân loại, Xoá phiên đã chọn, Tải
+       bản sao lưu, Xác nhận Khôi phục, Xoá toàn bộ dữ liệu, Đăng xuất) để đồng bộ 1 kiểu nút nhỏ
+       gọn xuyên suốt app -- KHÔNG áp cho nút chọn màu accent (tự có style ô màu vuông riêng, xem
+       _swatch_css) hay nút bước ngày/kỳ (mũi tên trái/phải, vốn đã là 1 thanh điều khiển đều
+       nhau, không phải nút hành động đơn lẻ). "Tải bản sao lưu" là st.download_button() -- DOM
+       khác st.button() (div data-testid="stDownloadButton", không phải "stButton"), phải khớp
+       thêm selector riêng, không thì lọt lưới rule chỉ nhắm "stButton". */
     [class*="st-key-note_editbtn_"] div[data-testid="stButton"] button,
     [class*="st-key-note_addbtn_"] div[data-testid="stButton"] button,
-    .st-key-note_actions div[data-testid="stButton"] button {
+    .st-key-note_actions div[data-testid="stButton"] button,
+    [class*="st-key-tbtn_"] div[data-testid="stButton"] button,
+    [class*="st-key-tbtn_"] div[data-testid="stDownloadButton"] button {
         width: auto !important; padding: 5px 14px !important; font-size: 13px !important;
         min-height: 0 !important; height: auto !important;
     }
@@ -5060,7 +5070,7 @@ elif nav == "Tuỳ biến":
             st.markdown(f"**File Forest mới nhất**  \n{_qf['name'] if _qf else '_— chưa có —_'}")
         with qc2:
             st.markdown(f"**File Reminder mới nhất**  \n{_qr['name'] if _qr else '_— chưa có —_'}")
-        if st.button("Đồng bộ ngay", type="primary", key="quick_sync_btn", disabled=not (_qf or _qr)):
+        if st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync", disabled=not (_qf or _qr)):
             with st.spinner("Đang đồng bộ..."):
                 _qres = sync_from_storage(_today_vn() - timedelta(days=90), _today_vn() + timedelta(days=90))
             if _qres["error"]:
@@ -5122,7 +5132,7 @@ elif nav == "Tuỳ biến":
                             preview['Thời gian bắt đầu'] = preview['Thời gian bắt đầu'].dt.strftime('%Y-%m-%d %H:%M')
                             preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
                             st.dataframe(preview, width='stretch', hide_index=True)
-                            if st.button("Xác nhận cập nhật dữ liệu", type="primary"):
+                            if st.button("Xác nhận cập nhật dữ liệu", type="primary", key="tbtn_import_confirm"):
                                 db = load_db()
                                 before = len(db)
                                 rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
@@ -5151,7 +5161,7 @@ elif nav == "Tuỳ biến":
                 sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
                 with sc2:
                     st.write("")
-                    if st.button("Đồng bộ ngay", type="primary", key="wc_sync_btn"):
+                    if st.button("Đồng bộ ngay", type="primary", key="tbtn_wc_sync"):
                         _start = _today_vn() - timedelta(days=sync_days)
                         _end = _today_vn() + timedelta(days=sync_days)
                         with st.spinner("Đang kết nối iCloud..."):
@@ -5171,7 +5181,7 @@ elif nav == "Tuỳ biến":
                         _adv_end = st.date_input("Đến ngày", value=_today_vn(), key="wc_adv_end")
                     with dc3:
                         st.write("")
-                        if st.button("Đồng bộ ngay", key="wc_adv_sync_btn"):
+                        if st.button("Đồng bộ ngay", key="tbtn_wc_adv_sync"):
                             if _adv_start >= _adv_end:
                                 st.error("Từ ngày phải trước Đến ngày.")
                             else:
@@ -5199,7 +5209,7 @@ elif nav == "Tuỳ biến":
                         _rl_prev['Ngày hoàn thành'] = _rl_prev['Ngày hoàn thành'].dt.strftime('%Y-%m-%d %H:%M')
                         st.dataframe(_rl_prev, width='stretch', hide_index=True)
                         st.caption("Xác nhận sẽ **thay thế toàn bộ** dữ liệu Đọc sách hiện có bằng nội dung file này.")
-                        if st.button("Xác nhận nạp dữ liệu", type="primary", key="rl_shortcut_confirm"):
+                        if st.button("Xác nhận nạp dữ liệu", type="primary", key="tbtn_rl_confirm"):
                             save_reading_log_bulk(rl_df)
                             st.success(f"Đã nạp {rl_df['Sách (gốc)'].nunique()} cuốn sách, {len(rl_df)} phần đã đọc.")
                             time.sleep(1)
@@ -5236,7 +5246,7 @@ elif nav == "Tuỳ biến":
                         help="Để trống (hiện 'None') = dự án tự đứng riêng, không thuộc nhóm nào."),
                 },
             )
-            if st.button("Lưu phân loại", type="primary"):
+            if st.button("Lưu phân loại", type="primary", key="tbtn_save_mapping"):
                 nm = edited.rename(columns={"Nhóm (Danh mục)": "Danh mục"})
                 nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
                 save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
@@ -5275,7 +5285,7 @@ elif nav == "Tuỳ biến":
             ev = st.dataframe(page_df, width='stretch', hide_index=True,
                               on_select="rerun", selection_mode="multi-row", key="db_view")
             sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
-            if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary"):
+            if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary", key="tbtn_delete_selected"):
                 add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                 save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
                 st.rerun()
@@ -5351,7 +5361,7 @@ elif nav == "Tuỳ biến":
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
-                                   f"forest_backup_{_today}.zip", "application/zip",
+                                   f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
                                    on_click=lambda: save_setting("last_backup_at", _today))
             else:
                 st.caption("Chưa có dữ liệu để sao lưu.")
@@ -5393,7 +5403,7 @@ elif nav == "Tuỳ biến":
                     st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
             if ok_zip:
                 st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
-            if st.button("Xác nhận Khôi phục", type="primary", disabled=not ok_zip):
+            if st.button("Xác nhận Khôi phục", type="primary", disabled=not ok_zip, key="tbtn_restore_confirm"):
                 res.seek(0)
                 with zipfile.ZipFile(res) as _z:
                     names = set(_z.namelist())
@@ -5418,7 +5428,7 @@ elif nav == "Tuỳ biến":
         with c3:
             st.subheader("Làm mới")
             confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu")
-            if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete):
+            if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete, key="tbtn_wipe_all"):
                 _sb_delete_all("sessions", "id")
                 _sb_delete_all("mapping", "project")
                 _sb_delete_all("deleted_sessions", "start_time")
@@ -5435,7 +5445,7 @@ elif nav == "Tuỳ biến":
         if _auth_configured:
             st.divider()
             st.caption(f"Đăng nhập với **{st.user.email}**")
-            st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="auth_logout_btn")
+            st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
 
 # ==========================================
 # TAB HƯỚNG DẪN
