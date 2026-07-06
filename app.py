@@ -2641,12 +2641,15 @@ def _book_chips_html(day_g):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
     người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
+    Mỗi chip gắn thêm class 'book'/'gundam' (icon Material tương ứng, xem CSS .jchip.book/
+    .jchip.gundam) để phân biệt nhanh 2 loại không cần đọc chữ.
     Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html."""
     out = ''
     groups = list(day_g.groupby('Cuốn sách', sort=False))
     groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
     for book, g in groups:
-        parts = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+        _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
+        parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                         for _, r in g.sort_values('Ngày hoàn thành').iterrows())
         out += _chip_row_html(html_escape(book), parts)
     return out
@@ -2662,7 +2665,8 @@ def _reading_rows_html(rl_df, label_book=True):
         if label_book:
             chips_html = _book_chips_html(day_g)
         else:
-            chips_html = ''.join(f"<span class='jchip'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+            _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
+            chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành').iterrows())
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
@@ -3659,10 +3663,18 @@ st.markdown(
     .jchip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: var(--text-2); } .jchip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    /* Icon Material Symbols (font Streamlit đã tự load sẵn cho :material/x: của riêng nó, nên
+       dùng lại được ở đây không cần nhúng thêm font nào) đặt đầu 1 số jchip -- nhận diện nhanh
+       loại chip không cần đọc chữ: 🏆 Kỷ lục (Bảng vàng), sách/gundam phân biệt phần đọc/xem. */
+    .jchip.rec::before, .jchip.book::before, .jchip.gundam::before {
+        font-family: 'Material Symbols Rounded'; font-size: 13px; vertical-align: -2px; margin-right: 3px;
+    }
     /* Chip "Kỷ lục" (Bảng vàng) -- cùng tông "nổi bật" với .stat-panel .chip.tw (nền/màu chữ
-       theo accent), thêm 🏆 để phân biệt nhanh với jchip thường (Lịch/Sách) không cần đọc chữ. */
+       theo accent) để phân biệt nhanh với jchip thường (Lịch/Sách) không cần đọc chữ. */
     .jchip.rec { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); font-weight: 600; }
-    .jchip.rec::before { content: "🏆 "; }
+    .jchip.rec::before { content: "emoji_events"; }
+    .jchip.book::before { content: "menu_book"; }
+    .jchip.gundam::before { content: "tv"; }
     /* Nhãn tên sách phía trên chip các phần đã đọc (box Đọc sách, Nhật ký đọc sách) -- nhại
        đúng pattern nhãn nhỏ đã dùng cho where= của guide_item và box "Lịch Work" cũ. */
     .rl-book { display: block; font-size: 11px; font-weight: 700; color: var(--text-2);
