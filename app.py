@@ -2538,14 +2538,12 @@ def render_note_editor(day, day_badges=None):
                                     st.text_area("Sửa ghi chú nhanh", value=str(r['Nội dung']),
                                                  key=qinput_key, label_visibility="collapsed", height=68)
                                 with qc3:
-                                    bc1, bc2 = st.columns(2)
-                                    with bc1:
+                                    with st.container(horizontal=True, gap="small"):
                                         if st.button("", icon=":material/check:", key=f"qnote_save_{_qid}",
                                                      help="Cập nhật"):
                                             update_quick_note(_qid, st.session_state.get(qinput_key, ""))
                                             st.session_state[qedit_key] = False
                                             st.rerun()
-                                    with bc2:
                                         if st.button("", icon=":material/close:",
                                                      key=f"qnote_canceledit_{_qid}", help="Huỷ"):
                                             st.session_state[qedit_key] = False
@@ -2555,58 +2553,52 @@ def render_note_editor(day, day_badges=None):
                                     st.markdown(f"<span class='qn-text'>{html_escape(str(r['Nội dung']))}</span>",
                                                 unsafe_allow_html=True)
                                 with qc3:
-                                    bc1, bc2 = st.columns(2)
-                                    with bc1:
+                                    with st.container(horizontal=True, gap="small"):
                                         if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
                                                      help="Sửa"):
                                             st.session_state[qedit_key] = True
                                             st.rerun()
-                                    with bc2:
                                         if st.button("", icon=":material/delete:", key=f"qnote_del_{_qid}",
                                                      help="Xoá"):
                                             delete_quick_note(_qid)
                                             st.rerun()
 
-                st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
-                if not st.session_state.get(edit_key, False):
-                    # Chế độ xem: chỉ ghi chú + 1 nút
-                    if cur:
-                        with st.container(key="note_saved"):
-                            st.markdown(cur, unsafe_allow_html=True)
-                        if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
-                            _enter_edit()
-                            st.rerun()
+                with st.container(key="note_main", gap="xsmall"):
+                    st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
+                    if not st.session_state.get(edit_key, False):
+                        # Chế độ xem: chỉ ghi chú + 1 nút
+                        if cur:
+                            with st.container(key="note_saved"):
+                                st.markdown(cur, unsafe_allow_html=True)
+                            if st.button("Sửa ghi chú", icon=":material/edit:", key=f"note_editbtn_{day}"):
+                                _enter_edit()
+                                st.rerun()
+                        else:
+                            st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
+                                        unsafe_allow_html=True)
+                            if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
+                                         key=f"note_addbtn_{day}"):
+                                _enter_edit()
+                                st.rerun()
                     else:
-                        st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
-                                    unsafe_allow_html=True)
-                        if st.button("Thêm ghi chú", icon=":material/add:", type="primary",
-                                     key=f"note_addbtn_{day}"):
-                            _enter_edit()
-                            st.rerun()
-                else:
-                    # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
-                    content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
-                                       placeholder="Viết vài dòng về ngày này…", key=quill_key)
-                    style_quill()
-                    _inject_note_editor_shortcuts()
-                    c1, c2, _, c4 = st.columns([2, 2, 2, 3])
-                    with c1:
-                        if st.button("Cập nhật", icon=":material/check:", type="primary",
-                                     key=f"note_save_{day}", use_container_width=True):
-                            save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
-                            st.session_state[edit_key] = False
-                            st.rerun()
-                    with c2:
-                        if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}",
-                                     use_container_width=True):
-                            st.session_state[edit_key] = False
-                            st.rerun()
-                    with c4:
-                        if cur and st.button("Xoá ghi chú", icon=":material/delete:",
-                                             key=f"note_del_{day}", use_container_width=True):
-                            save_note(day, "")
-                            st.session_state[edit_key] = False
-                            st.rerun()
+                        # Chế độ soạn: trình soạn Quill inline + Cập nhật / Huỷ / Xoá
+                        content = st_quill(value=cur, html=True, toolbar=NOTE_TOOLBAR,
+                                           placeholder="Viết vài dòng về ngày này…", key=quill_key)
+                        style_quill()
+                        _inject_note_editor_shortcuts()
+                        with st.container(key="note_actions", horizontal=True, gap="small"):
+                            if st.button("Cập nhật", icon=":material/check:", type="primary",
+                                         key=f"note_save_{day}"):
+                                save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                            if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}"):
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                            if cur and st.button("Xoá ghi chú", icon=":material/delete:", key=f"note_del_{day}"):
+                                save_note(day, "")
+                                st.session_state[edit_key] = False
+                                st.rerun()
 
 
 def render_notes_journal(period_key, kind, df_all):
@@ -3843,11 +3835,17 @@ st.markdown(
         text-transform: uppercase; letter-spacing: .5px; margin: 0 0 4px 2px; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
-       không thể gói trong unsafe_allow_html. [data-testid="stColumn"] là cột do Streamlit tự
-       dựng bên trong container key="note_row". */
-    .st-key-note_row [data-testid="stColumn"]:first-child { border-right: 1px solid var(--divider); }
+       không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
+       phải descendant thường ("khoảng trắng") -- cột phải (c_body) còn chứa nhiều st.columns()
+       khác lồng sâu hơn (mỗi dòng Ghi chú nhanh, hàng nút Cập nhật/Huỷ/Xoá); nếu dùng descendant
+       selector, rule này khớp NHẦM luôn "cột đầu tiên" của các st.columns() lồng bên trong đó,
+       kẻ vạch thừa không mong muốn (bug đã gặp thật). ">" giới hạn CHỈ đúng 1 cặp cột ngoài cùng
+       (Thứ/ngày | nội dung) của container key="note_row". */
+    .st-key-note_row > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] >
+        [data-testid="stColumn"]:first-child { border-right: 1px solid var(--divider); }
     @media (max-width: 640px) {
-        .st-key-note_row [data-testid="stColumn"]:first-child { border-right: none; }
+        .st-key-note_row > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] >
+            [data-testid="stColumn"]:first-child { border-right: none; }
     }
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 14px; }
@@ -3863,10 +3861,12 @@ st.markdown(
     .qn-line { padding: 4px 0; }
     .qn-line + .qn-line { border-top: 1px solid var(--divider); }
     /* Ghi chú nhanh (Ghi chú ngày, có sửa/xoá): mỗi quick note 1 hàng st.columns() thật (badge
-       giờ + text/ô sửa + 2 nút) -- [class*=...] khớp mọi container qnote_row_<id> cùng lúc (id
-       đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền) giống cách
-       làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới thắng được
-       rule đó. */
+       giờ + text/ô sửa + cụm 2 nút) -- cụm nút dùng st.container(horizontal=True) (không phải
+       st.columns() lồng bên trong nữa, tránh lặp lại đúng bug đã gặp: st.columns() lồng sâu bị
+       CSS "cột ngoài cùng" ở trên khớp nhầm). [class*=...] khớp mọi container qnote_row_<id>
+       cùng lúc (id đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền)
+       giống cách làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới
+       thắng được rule đó. */
     [class*="st-key-qnote_row_"] { margin-bottom: 2px; }
     [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"] {
@@ -3877,13 +3877,20 @@ st.markdown(
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"]:hover {
         color: var(--text) !important;
     }
-    /* "Sửa ghi chú"/"Thêm ghi chú" (Ghi chú ngày): nút nhỏ gọn tự co theo chữ, KHÔNG kéo giãn
-       hết chiều rộng cột như mặc định (div[data-testid="stButton"] button { width:100% } ở trên)
-       -- to hết cỡ nhìn lệch hẳn so với phần còn lại của thẻ (chip nhỏ, chữ ghi chú thường). */
+    /* "Sửa ghi chú"/"Thêm ghi chú"/"Cập nhật"/"Huỷ"/"Xoá ghi chú" (Ghi chú ngày): mọi nút thao
+       tác của Ghi chú chính đều nhỏ gọn tự co theo chữ, KHÔNG kéo giãn hết chiều rộng cột như
+       mặc định (div[data-testid="stButton"] button { width:100% } ở trên) -- to hết cỡ nhìn lệch
+       hẳn so với phần còn lại của thẻ (chip nhỏ, chữ ghi chú thường). note_actions (Cập nhật/Huỷ/
+       Xoá) dùng st.container(horizontal=True) nên 3 nút tự nằm sát nhau thành 1 cụm, không cần
+       st.columns() + use_container_width như trước. */
     [class*="st-key-note_editbtn_"] div[data-testid="stButton"] button,
-    [class*="st-key-note_addbtn_"] div[data-testid="stButton"] button {
+    [class*="st-key-note_addbtn_"] div[data-testid="stButton"] button,
+    .st-key-note_actions div[data-testid="stButton"] button {
         width: auto !important; padding: 5px 14px !important; font-size: 13px !important;
     }
+    /* note_main (nhãn "Ghi chú chính" + nội dung/Quill + hàng nút): gap="xsmall" ở
+       st.container() đã tự co khoảng cách dọc giữa các phần tử con so với mặc định "small" quá
+       rộng -- không cần CSS margin thủ công. */
     </style>
     """,
     unsafe_allow_html=True
