@@ -3403,7 +3403,13 @@ st.markdown(
     .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
     .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
     @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
-    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: nowrap; background: var(--chip); }
+    /* white-space KHÔNG nowrap (khác vẻ ngoài "viên thuốc" gọn thường thấy) -- vài chip mang giá
+       trị tự do dài (vd "Phần gần nhất" là tên chương/tập, không có độ dài cố định) sẽ tràn ra
+       ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
+       vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
+       không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
+    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: normal;
+        max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
     .stat-panel .chip .ck { color: var(--text-2); }
     .stat-panel .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
