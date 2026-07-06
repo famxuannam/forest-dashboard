@@ -3780,7 +3780,7 @@ def _inject_keyboard_shortcuts():
         "    const steps = [\n"
         "      function(){ return clickNavByLabel('Tuỳ biến'); },\n"
         "      function(){ return openExpanderByHeader('Dữ liệu đầu vào'); },\n"
-        "      function(){ return openExpanderByHeader('Phương án dự phòng'); },\n"
+        "      function(){ return openExpanderByHeader('Dự phòng'); },\n"
         "      function(){ return clickTabByLabel(null, tabLabel); },\n"
         "    ];\n"
         "    if (browseKey) steps.push(function(){ return clickWithinKey(browseKey); });\n"
@@ -4674,7 +4674,7 @@ elif nav == "Tuỳ biến":
                 st.session_state['quick_sync_has_error'] = _has_err
             st.rerun()
 
-        with st.expander("Phương án dự phòng (Forest / Đồng bộ lịch / Reminder thủ công)", expanded=False):
+        with st.expander("Dự phòng", expanded=False):
             _tab_forest, _tab_cal, _tab_rem = st.tabs(
                 ["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
             with _tab_forest:
@@ -5478,8 +5478,8 @@ elif nav == "Hướng dẫn":
             "dưới (Forest cộng thêm, Reminder thay thế toàn bộ), đồng bộ luôn lịch Work qua CalDAV, rồi xoá các "
             "file cũ hơn trong bucket — gộp 3 thao tác thủ công thành 1 nút. Chưa tạo Shortcut/bucket thì mục "
             "này chỉ hiện \"chưa có\", không ảnh hưởng gì tới các cách tải tay bên dưới.\n\n"
-            "3 cách còn lại chỉ là **phương án dự phòng**, gộp chung trong 1 khối thu gọn (\"Phương án dự "
-            "phòng\") — chỉ cần mở khi Đồng bộ nhanh chưa dùng được hoặc cần thao tác riêng lẻ:\n"
+            "3 cách còn lại chỉ là phương án dự phòng, gộp chung trong 1 khối thu gọn (\"Dự phòng\") — chỉ "
+            "cần mở khi Đồng bộ nhanh chưa dùng được hoặc cần thao tác riêng lẻ:\n"
             "- **Tải lên từ Forest** — nạp file CSV xuất từ app Forest. Mỗi lần tải lên chỉ **thêm dữ liệu mới**, "
             "tự động bỏ qua phiên trùng lặp (so theo giờ bắt đầu/kết thúc) và phiên đã từng bị xoá trước đó — "
             "nạp lại cùng 1 file nhiều lần không sợ bị nhân đôi dữ liệu.\n"
