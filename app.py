@@ -3505,9 +3505,14 @@ st.markdown(
        flex-start -> đẩy hàng nút vào giữa */
     .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
 
-    /* Bộ chọn kỳ (stepper): luôn 1 hàng, co vừa cả mobile */
-    [class*="st-key-stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
-    [class*="st-key-stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
+       hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
+       stepper") để khớp được cả 2 kiểu key, vì "day_stepper" không có "stepper" ngay sau
+       "st-key-" như "stepper_x". Thiếu rule này, cột chứa st.date_input (min-width mặc định
+       của Streamlit ăn theo nội dung) sẽ bị đẩy xuống dòng riêng trên mobile thay vì co lại
+       vừa tỉ lệ cột như st.selectbox của period_stepper. */
+    [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
+    [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch nâng cao)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -3669,9 +3674,11 @@ st.markdown(
     .jchip.rec::before, .jchip.book::before, .jchip.gundam::before {
         font-family: 'Material Symbols Rounded'; font-size: 13px; vertical-align: -2px; margin-right: 3px;
     }
-    /* Chip "Kỷ lục" (Bảng vàng) -- cùng tông "nổi bật" với .stat-panel .chip.tw (nền/màu chữ
-       theo accent) để phân biệt nhanh với jchip thường (Lịch/Sách) không cần đọc chữ. */
-    .jchip.rec { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); font-weight: 600; }
+    /* Chữ (màu/độ đậm/cỡ) của Kỷ lục/Sách/Gundam CỐ Ý giống hệt .cv (chip Lịch) và giống nhau
+       giữa 3 loại -- chỉ phân biệt qua icon + nền (riêng Kỷ lục), không qua định dạng chữ, để
+       không loại nào trông "nổi" hơn loại khác. */
+    .jchip.rec, .jchip.book, .jchip.gundam { font-weight: 600; color: var(--text); }
+    .jchip.rec { background: rgba(var(--accent-rgb),0.10); }
     .jchip.rec::before { content: "emoji_events"; }
     .jchip.book::before { content: "menu_book"; }
     .jchip.gundam::before { content: "tv"; }
