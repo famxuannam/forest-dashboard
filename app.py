@@ -3595,6 +3595,13 @@ st.markdown(
         /* Thẻ dạng flex (vd Cập nhật gần nhất): xếp dọc cho dễ đọc */
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
+
+        /* Card "Ngày đang xem" (render_day_report): cố định 1 dòng trên mọi bề rộng, nhưng phần
+           chữ nhãn + cụm "Cập nhật gần nhất" (kém thiết yếu hơn ngày/trạng thái đang xem) ẩn hẳn
+           trên điện thoại thay vì cố nhét -- tổng độ rộng các phần "không co" (nhãn đủ chữ +
+           ngày + trạng thái) đã vượt màn hình hẹp, nếu không ẩn sẽ bị cắt cụt giữa chữ (icon
+           nhãn vẫn giữ lại, không mất hẳn ý nghĩa "đây là nhãn"). */
+        .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
@@ -4184,11 +4191,11 @@ def render_day_report(df):
     _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
             "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
             "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
-    _sub = "· không có hoạt động" if day_df.empty else f"· ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _dot = "<span style='color:var(--border);flex:0 0 auto;'>·</span>"
     # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
     # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
-    # tiên, Tổng quan giờ không còn là sub-tab mặc định. Cùng 1 div flex-wrap nên chỉ cần thêm
-    # span, không cần thẻ riêng.
+    # tiên, Tổng quan giờ không còn là sub-tab mặc định.
     _last_dt = df['Thời gian kết thúc'].max()
     _upd_tail = ''
     if pd.notna(_last_dt):
@@ -4198,23 +4205,44 @@ def render_day_report(df):
         # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
         # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
         _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_tail = (f"<div style='font-size:13px;color:var(--text-2);margin-top:4px;'>Cập nhật gần nhất "
-                     f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b> "
-                     f"({_abs_str})</div>")
-    # 3 hàng riêng (nhãn -> tiêu đề ngày + trạng thái -> cập nhật gần nhất) thay vì 1 hàng
-    # flex-wrap nhét chung 4 cỡ chữ khác nhau -- trên desktop đủ rộng để KHÔNG bao giờ wrap,
-    # nên trước đây luôn dồn hết vào đúng 1 dòng (nhãn nhỏ + tiêu đề to + 2 đoạn phụ nhỏ chen
-    # nhau, không phân cấp rõ). Xuống dòng cố định thay vì trông chờ wrap -> nhất quán trên
-    # mọi bề rộng màn hình, không cần media query riêng cho mobile như trước.
+        # Giờ phút giây tuyệt đối (_abs_str) dời vào title= (tooltip hover) thay vì hiện luôn
+        # trong chữ -- giữ đúng 1 dòng gọn, phần lớn chỉ cần biết "khoảng bao lâu trước", số giờ
+        # chính xác là chi tiết tra cứu thêm chứ không phải thông tin ai cũng cần thấy ngay.
+        # Cả cụm (dấu chấm + chữ) bọc chung 1 span "dcx-upd" flex riêng -- vừa là 1 flex item
+        # DUY NHẤT của hàng ngoài (co dãn/ẩn được nguyên cụm qua class, không lệ thuộc thứ tự
+        # nhiều item rời rạc), vừa tự có overflow:hidden riêng để chữ bên trong elipsis đúng chỗ.
+        _upd_tail = (
+            "<span class='dcx-upd' style='display:flex;align-items:center;gap:9px;min-width:0;"
+            "overflow:hidden;flex:1 1 auto;'>"
+            f"{_dot}"
+            f"<span style='font-size:14.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;"
+            f"white-space:nowrap;min-width:0;' title='Cập nhật lúc {_abs_str}'>Cập nhật gần nhất "
+            f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
+            f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b></span></span>"
+        )
+    # 1 hàng gọn: nhãn thu lại thành thẻ nhỏ bo góc (khác kiểu chữ hoa rời trước đây) + 1 vạch
+    # dọc mảnh phân tách, rồi tới nội dung cùng 1 cỡ chữ (14.5px, chỉ khác màu/độ đậm để vẫn
+    # phân cấp) -- không còn đủ 3 cỡ chữ chen nhau trên 1 dòng như bản trước. Cụm "Cập nhật gần
+    # nhất" (ít quan trọng nhất, dài nhất) được phép co lại + hiện "…" khi màn hẹp vừa phải
+    # (flex:1 1 auto), và ẩn hẳn cùng chữ nhãn "Ngày đang xem" (chỉ còn icon) ở mobile thật hẹp
+    # (xem rule .dcx-upd/.dcx-lbltxt trong khối @media (max-width: 640px)) -- nếu không, tổng độ
+    # rộng các phần "không co" (nhãn đủ chữ + ngày + trạng thái) đã vượt quá màn hình điện thoại,
+    # bị cắt cụt giữa chữ thay vì gọn gàng.
     st.markdown(
         "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
-        "<div style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;'>"
-        f"{_evt}Ngày đang xem</div>"
-        "<div style='margin-top:6px;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;'>"
-        f"<span style='font-size:19px;color:var(--text);font-weight:700;'>{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"<span style='font-size:13px;color:var(--text-2);'>{_sub}</span></div>"
-        f"{_upd_tail}</div>",
+        "<div style='display:flex;align-items:center;gap:10px;'>"
+        "<span style='display:flex;align-items:center;flex:0 0 auto;font-size:11.5px;font-weight:600;"
+        "color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:7px;"
+        "padding:4px 9px;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;'>"
+        f"{_evt}<span class='dcx-lbltxt'>Ngày đang xem</span></span>"
+        "<span style='width:1px;align-self:stretch;background:var(--divider);flex:0 0 auto;'></span>"
+        "<div style='display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;'>"
+        f"<span style='font-size:14.5px;color:var(--text);font-weight:600;white-space:nowrap;flex:0 0 auto;'>"
+        f"{vn_dow}, {sel:%d/%m/%Y}</span>"
+        f"{_dot}"
+        f"<span style='font-size:14.5px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;'>{_sub}</span>"
+        f"{_upd_tail}"
+        "</div></div></div>",
         unsafe_allow_html=True)
     if _upd_tail:
         _inject_relative_time_ticker()
