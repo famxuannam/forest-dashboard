@@ -32,6 +32,18 @@ create table if not exists notes (
   note text not null
 );
 
+-- Ghi chú nhanh từ Shortcut iOS (mục "Ghi chú nhanh" trong tab Hướng dẫn) -- Shortcut chỉ INSERT
+-- thẳng 1 row thô qua REST API (KHÔNG đụng tới bảng notes/HTML Quill), app tự đọc bảng này và
+-- gộp thủ công vào notes khi người dùng bấm nút "Gộp vào Ghi chú chính" trong trình soạn ngày.
+-- "ts" do chính Shortcut tự format và gửi lên (KHÔNG dùng "default now()") -- server Supabase
+-- chạy UTC, lệch múi giờ Việt Nam, nên phải để Shortcut tự lấy giờ máy rồi gửi nguyên chuỗi
+-- thô, giống quy ước "timestamp" thô ở đầu file này.
+create table if not exists quick_notes (
+  id bigint generated always as identity primary key,
+  ts timestamp not null,
+  note_text text not null
+);
+
 -- Appointment đồng bộ từ lịch "Work" (Apple Calendar) qua CalDAV -- xem mục "Đồng bộ lịch
 -- Work" trong tab Chuẩn bị dữ liệu. Khoá theo (uid, start_time) chứ không chỉ uid, vì 1 sự
 -- kiện lặp lại (recurring) sau khi khai triển có nhiều lần xuất hiện cùng uid khác start_time.
@@ -70,6 +82,7 @@ alter table sessions enable row level security;
 alter table mapping enable row level security;
 alter table deleted_sessions enable row level security;
 alter table notes enable row level security;
+alter table quick_notes enable row level security;
 alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
 alter table settings enable row level security;
@@ -78,6 +91,7 @@ create policy "anon full access" on sessions for all using (true) with check (tr
 create policy "anon full access" on mapping for all using (true) with check (true);
 create policy "anon full access" on deleted_sessions for all using (true) with check (true);
 create policy "anon full access" on notes for all using (true) with check (true);
+create policy "anon full access" on quick_notes for all using (true) with check (true);
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
