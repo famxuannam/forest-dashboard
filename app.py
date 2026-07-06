@@ -5482,11 +5482,12 @@ elif nav == "Hướng dẫn":
         guide_item(
             "note_editor.png", "Ghi chú ngày (nhật ký)",
             "Thẻ 2 cột: cột trái là Thứ/ngày, cột phải gộp **3 nguồn** cho đúng ngày đó — chip lịch hẹn Work (nếu "
-            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó, và ô ghi chú tự do (trình soạn thảo "
-            "Quill, hỗ trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem mục \"Bảng vàng\" "
-            "bên dưới), 1 chip 🏆 hiện thêm ở đầu, trước cả chip lịch. Cùng 1 bố cục 2 cột này lặp lại ở thẻ "
-            "**Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất quán để không "
-            "phải học lại cách đọc.",
+            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó (kèm icon sách/TV tương ứng ngay đầu "
+            "chip để phân biệt nhanh 2 loại không cần đọc chữ), và ô ghi chú tự do (trình soạn thảo Quill, hỗ "
+            "trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem mục \"Bảng vàng\" bên dưới), "
+            "1 chip kèm icon huy chương hiện thêm ở đầu, trước cả chip lịch. Cùng 1 bố cục 2 cột này lặp lại ở "
+            "thẻ **Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh sách nhiều ngày xếp dọc) — nhất quán để "
+            "không phải học lại cách đọc.",
             tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
                 "hơn, không tạo cảm giác đang điền vào 1 form.",
             where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
@@ -5498,7 +5499,7 @@ elif nav == "Hướng dẫn":
             "nguồn thì hiện dòng cho năm đó, sắp xếp năm gần nhất lên trên. Không cần năm đó phải có ghi chú mới "
             "hiện — chỉ cần có lịch hẹn hoặc đã đọc xong 1 chương cũng đủ để dòng năm đó xuất hiện. Mục này càng "
             "dùng lâu càng dày dữ liệu, vì mỗi năm trôi qua lại có thêm 1 \"ngày này năm trước\" mới để so sánh. "
-            "Năm nào rơi đúng vào ngày giữ kỷ lục cũng hiện chip 🏆 y hệt Ghi chú ngày.",
+            "Năm nào rơi đúng vào ngày giữ kỷ lục cũng hiện chip kèm icon huy chương y hệt Ghi chú ngày.",
             where="Hôm nay → Ngày này năm trước")
 
         guide_item(
@@ -5511,8 +5512,11 @@ elif nav == "Hướng dẫn":
             "- **Kỷ lục** — ngày nhiều giờ nhất **toàn thời gian**, tính chung (top 3, hiện ở Bảng số liệu "
             "Tổng quan) và tính riêng cho từng Nhóm/Dự án đã có từ **5 ngày dữ liệu trở lên** (chỉ giữ đúng 1 "
             "ngày kỷ lục mỗi Nhóm/Dự án, hiện ở Bảng số liệu Báo cáo → Dự án). Mọi ngày giữ 1 trong các kỷ lục "
-            "này được gắn thêm chip 🏆 trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này năm trước) — 1 chip "
-            "riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip Lịch.",
+            "này được gắn thêm 1 chip kèm icon huy chương trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này "
+            "năm trước) — 1 chip riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip "
+            "Lịch. Icon này (và icon sách/TV trên chip đọc sách/Gundam cạnh đó) dùng chung font Material Symbols "
+            "mà Streamlit đã tự tải sẵn cho mọi icon khác trong app — không phải emoji, nên hiện đồng nhất trên "
+            "mọi thiết bị/trình duyệt thay vì tuỳ theo bộ font emoji của từng máy.",
             tip="Chỉ \"Kỷ lục\" (toàn thời gian) mới lên chip Timeline — \"Ngày nổi bật\" theo Tuần/Tháng/Năm cố "
                 "tình KHÔNG gắn chip vì gần như tuần/tháng nào cũng có top 3 riêng, gắn hết sẽ mất cảm giác hiếm.",
             where="Báo cáo → Tổng quan/Tuần/Tháng/Năm/Dự án · Hôm nay · Ngày này năm trước")
