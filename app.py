@@ -998,7 +998,8 @@ def format_plotly_fig(fig, is_pie=False):
         # customdata: chuỗi "X giờ Y phút" đã format sẵn -- hovertemplate của Plotly chỉ hỗ trợ
         # d3-format cho %{value}, không tự tách giờ/phút được, nên phải tính trước ở Python.
         for tr in fig.data:
-            tr.customdata = [[_fmt_hours_long(v)] for v in (tr.values or [])]
+            if tr.values is not None:
+                tr.customdata = [[_fmt_hours_long(v)] for v in tr.values]
         fig.update_traces(marker=dict(line=dict(color=_pie_line, width=2)),
                           hovertemplate='<b>%{label}</b><br>%{customdata[0]}<extra></extra>')
     else:
