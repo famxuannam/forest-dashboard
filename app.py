@@ -920,7 +920,7 @@ def add_total_labels(fig, df, x_col, y_col):
     totals = df.groupby(x_col)[y_col].sum().reset_index()
     _txt = "#f2f2f7" if IS_DARK else "#1d1d1f"
     fig.add_trace(go.Scatter(
-        x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].round(1).astype(str),
+        x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].map(_fmt_hours_short),
         textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=_txt, size=13)
     ))
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
@@ -995,10 +995,17 @@ def format_plotly_fig(fig, is_pie=False):
         # Đường viền phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer) -- khớp
         # màu nền thẻ (--card) đổi theo IS_DARK để viền "hoà" vào nền thay vì luôn trắng cứng.
         _pie_line = "#2c2c2e" if IS_DARK else "#ffffff"
+        # customdata: chuỗi "X giờ Y phút" đã format sẵn -- hovertemplate của Plotly chỉ hỗ trợ
+        # d3-format cho %{value}, không tự tách giờ/phút được, nên phải tính trước ở Python.
+        for tr in fig.data:
+            tr.customdata = [[_fmt_hours_long(v)] for v in (tr.values or [])]
         fig.update_traces(marker=dict(line=dict(color=_pie_line, width=2)),
-                          hovertemplate='<b>%{label}</b><br>%{value:.1f} giờ<extra></extra>')
+                          hovertemplate='<b>%{label}</b><br>%{customdata[0]}<extra></extra>')
     else:
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.1f} giờ<extra></extra>')
+        for tr in fig.data:
+            if tr.y is not None:
+                tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
+        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
         # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
         # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
         fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
@@ -1218,6 +1225,41 @@ def _delta_t(delta, label):
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
+def _fmt_hours_short(v):
+    """Số giờ thập phân (vd 1.5) -> dạng gọn 'XhYYp' cho chỗ hẹp (chip/badge/ô bảng/nhãn biểu
+    đồ): 1.5 -> '1h30p', 0.5 -> '30p', 2.0 -> '2h', 0 -> '0p'. Làm tròn tới phút gần nhất, bỏ
+    hẳn phần giờ/phút nếu bằng 0 thay vì hiện '0h'/'00p' thừa."""
+    total_min = max(round(v * 60), 0)
+    h, m = divmod(total_min, 60)
+    if h and m:
+        return f"{h}h{m:02d}p"
+    if h:
+        return f"{h}h"
+    return f"{m}p"
+
+
+def _fmt_hours_long(v):
+    """Bản đầy đủ của _fmt_hours_short cho chỗ rộng rãi (câu văn, tooltip): 1.5 -> '1 giờ 30
+    phút', 0.5 -> '30 phút', 2.0 -> '2 giờ'."""
+    total_min = max(round(v * 60), 0)
+    h, m = divmod(total_min, 60)
+    if h and m:
+        return f"{h} giờ {m} phút"
+    if h:
+        return f"{h} giờ"
+    return f"{m} phút"
+
+
+def _delta_t_hours(delta, label):
+    """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30p'/'-45p' thay vì số
+    thập phân '+1.5'/'−0.8'."""
+    if delta is None:
+        return None
+    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
+    sign = "+" if delta >= 0 else "-"
+    return (f"{sign}{_fmt_hours_short(abs(delta))} {label}", c)
+
+
 def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None):
     """Baseline so sánh cho hero deltas (Tháng/Tuần/Năm dùng chung) -- (prev_metrics, avg_metrics),
     mỗi cái None hoặc {hrs,trees,hrs_day,trees_day,min_sess}. avg_metrics = trung bình các kỳ
@@ -1359,7 +1401,7 @@ def _smart_digest(df, period_col, selected_key, df_p, prev_m, avg_m, is_current)
     kind = {"Tuần": "week", "Tháng": "month", "Năm": "year"}[period_col]
 
     def _fh(v):
-        return f"{v:.0f}h" if abs(v - round(v)) < 0.05 else f"{v:.1f}h"
+        return _fmt_hours_short(v)
 
     hrs = df_p['Thời lượng (Phút)'].sum() / 60
     trees = len(df_p)
@@ -1543,8 +1585,8 @@ def render_top_3(df, col_name, title, week_key=None, n=3):
         html_list = "<ul style='margin:0; padding-left: 20px; color: var(--text); font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
-            wsuf = f" <span style='color:{ACCENT}; font-size:13px;'>({wh:.1f}h tuần này)</span>" if wh > 0.05 else ""
-            html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {v/60:.1f}h{wsuf}</li>"
+            wsuf = f" <span style='color:{ACCENT}; font-size:13px;'>({_fmt_hours_short(wh)} tuần này)</span>" if wh > 0.05 else ""
+            html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {_fmt_hours_short(v/60)}{wsuf}</li>"
         html_list += "</ul>"
 
     html = f"""
@@ -1714,7 +1756,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
                       yaxis=dict(range=[0, y_max * 1.28]),
                       xaxis=dict(range=[-PAD, 23 + PAD], dtick=2))
     fig = format_plotly_fig(fig)
-    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{y:.2f} h/ngày<extra></extra>')
+    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}/ngày<extra></extra>')
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
     # Tự nêu "giờ vàng" + buổi mạnh nhất, đặt trong glass card cho đồng bộ
@@ -1728,7 +1770,7 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
             "gap:6px 16px;max-width:900px;margin:8px auto 0 auto;padding:12px 18px;'>"
             f"<span style='{_lbl}'>Giờ tập trung nhất</span>"
             f"<span style='{_val}'>{peak_h}h</span>"
-            f"<span style='font-size:13px;color:var(--text-2);'>(TB {tot.max():.1f}h/ngày)</span>"
+            f"<span style='font-size:13px;color:var(--text-2);'>(TB {_fmt_hours_short(tot.max())}/ngày)</span>"
             "<span style='color:var(--text-4);'>·</span>"
             f"<span style='{_lbl}'>Buổi mạnh nhất</span>"
             f"<span style='{_val}'>{strong_buoi}</span>"
@@ -1752,6 +1794,7 @@ def render_dayhour_heatmap(scope_df):
     full = pd.MultiIndex.from_product([DAYS_ORDER, range(24)], names=['Thứ', 'Khung giờ'])
     cell = grp.reindex(full, fill_value=0.0).reset_index(name='giờ')
     cell['TB'] = cell.apply(lambda r: r['giờ'] / max(int(wd_count.get(r['Thứ'], 1)), 1), axis=1)
+    cell['TB_txt'] = cell['TB'].map(_fmt_hours_long)
 
     # Thứ ra trục ngang (nhãn ở trên), giờ xuống trục dọc (nhãn mỗi 2h) -> lưới cao, hẹp
     # Step rộng hơn (54 thay vì 46) để có chỗ cho chữ trục to hơn mà không bị chật/đè nhau.
@@ -1765,7 +1808,7 @@ def render_dayhour_heatmap(scope_df):
         # trung tính -> cả dải đều là sắc teal, không bị xỉn/xám ở vùng giá trị thấp.
         color=alt.Color('TB:Q', scale=alt.Scale(range=[_teal_shades(7)[0], _teal_shades(7)[-1]]), legend=None),
         tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
-                 alt.Tooltip('TB:Q', title='TB giờ/ngày', format='.2f')],
+                 alt.Tooltip('TB_txt:N', title='TB giờ/ngày')],
     ).properties(width=alt.Step(54), height=alt.Step(26), background='transparent').configure_view(strokeWidth=0)
     # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
     # background='transparent' ở properties(): Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu
@@ -1846,7 +1889,7 @@ def _top_days(df_scope, n=3):
 def _top_days_chips(items):
     """Chuyển kết quả _top_days()/overall_top3 thành chips cho render_stat_panel() -- dùng
     chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm."""
-    return [{"k": f"#{it['rank']}", "v": f"{it['date']:%d/%m/%Y} · {it['hours']:.1f}h"} for it in items]
+    return [{"k": f"#{it['rank']}", "v": f"{it['date']:%d/%m/%Y} · {_fmt_hours_short(it['hours'])}"} for it in items]
 
 
 def _top_days_section(df_scope, label, n=3):
@@ -2044,8 +2087,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         _nd = scope['Ngày'].nunique()
         return [
             {"k": labels['count_label'], "v": f"{scope['Dự án'].nunique()}"},
-            {"k": "Số giờ", "v": f"{_h:.1f}h"},
-            {"k": "TB giờ/ngày", "v": f"{_h / _nd:.1f}h" if _nd else "—"},
+            {"k": "Số giờ", "v": f"{_fmt_hours_short(_h)}"},
+            {"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_h / _nd)}" if _nd else "—"},
         ]
 
     def _pace(d):
@@ -2075,14 +2118,14 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         _has_days = done['Số ngày'].notna().any()
         _chips_done = [{"k": labels['count_label'], "v": f"{len(done)}"}]
         if _has_hrs:
-            _chips_done.append({"k": labels['avg_hr_label'], "v": f"{done['Tổng giờ'].mean():.1f}h"})
+            _chips_done.append({"k": labels['avg_hr_label'], "v": f"{_fmt_hours_short(done['Tổng giờ'].mean())}"})
         if _has_days:
             _chips_done.append({"k": labels['avg_days_label'], "v": f"{done['Số ngày'].mean():.0f}"})
         _grp_summary.append({"label": "Đã xong", "chips": _chips_done})
         _highlight = []
         if _has_hrs:
             top = done.loc[done['Tổng giờ'].idxmax()]
-            _highlight.append({"k": "Nhiều giờ nhất", "v": f"{top['Cuốn sách']} ({top['Tổng giờ']:.1f}h)"})
+            _highlight.append({"k": "Nhiều giờ nhất", "v": f"{top['Cuốn sách']} ({_fmt_hours_short(top['Tổng giờ'])})"})
         if _has_days:
             fast = done.loc[done['Số ngày'].idxmin()]
             _highlight.append({"k": labels['fastest_label'], "v": f"{fast['Cuốn sách']} ({int(fast['Số ngày'])} ngày)"})
@@ -2091,7 +2134,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     if len(reading):
         _grp_summary.append({"label": labels['ongoing'], "chips": [
             {"k": r['Cuốn sách'],
-             "v": f"{r['Tổng giờ']:.1f}h" if pd.notna(r['Tổng giờ']) else f"{int(r['Số phần đã đọc'])} {labels['part_word']}",
+             "v": f"{_fmt_hours_short(r['Tổng giờ'])}" if pd.notna(r['Tổng giờ']) else f"{int(r['Số phần đã đọc'])} {labels['part_word']}",
              "hl": True}
             for _, r in reading.iterrows()
         ]})
@@ -2115,7 +2158,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     render_stat_panel(
         hero_items=[
             {"label": labels['count_label'], "value": f"{len(t)}"},
-            {"label": "Tổng giờ", "value": f"{t['Tổng giờ'].sum():.1f}h"},
+            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
             {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
         ],
         groups=[{"label": "Tổng kết", "sections": _grp_summary}],
@@ -2135,8 +2178,8 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                 {"k": labels['pace_pct_label'], "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
             ]},
             {"label": "Nhịp gần đây", "chips": [
-                {"k": "7 ngày", "v": f"{_pace(7):.1f}h/ngày"},
-                {"k": "30 ngày", "v": f"{_pace(30):.1f}h/ngày"},
+                {"k": "7 ngày", "v": f"{_fmt_hours_short(_pace(7))}/ngày"},
+                {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
             ]},
         ]}],
         card_style="padding:20px;margin-top:14px;",
@@ -2285,9 +2328,9 @@ def _render_reading_detail(t, reading_log_df, labels):
         ]}]
         _nhip = []
         if pd.notna(_row['Giờ/tuần']):
-            _nhip.append({"k": "Giờ/tuần", "v": f"{_row['Giờ/tuần']:.1f}h"})
+            _nhip.append({"k": "Giờ/tuần", "v": f"{_fmt_hours_short(_row['Giờ/tuần'])}"})
         if pd.notna(_row['Tổng giờ']) and pd.notna(_row['Số ngày']) and _row['Số ngày']:
-            _nhip.append({"k": "TB giờ/ngày", "v": f"{_row['Tổng giờ'] / _row['Số ngày']:.1f}h"})
+            _nhip.append({"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_row['Tổng giờ'] / _row['Số ngày'])}"})
         if _nhip:
             _secs.append({"label": "Nhịp độ", "chips": _nhip})
         _tt = [{"k": "Hiện tại", "v": _row['Trạng thái'], "hl": _row['Trạng thái'] == labels['ongoing']}]
@@ -2297,7 +2340,7 @@ def _render_reading_detail(t, reading_log_df, labels):
 
         render_stat_panel(
             hero_items=[
-                {"label": "Tổng giờ", "value": f"{_row['Tổng giờ']:.1f}h" if pd.notna(_row['Tổng giờ']) else "—"},
+                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
                 {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
             ],
             sections=_secs,
@@ -2327,7 +2370,7 @@ def _render_reading_detail(t, reading_log_df, labels):
                 _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
                 _rows += '<tr class="prow">'
                 _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
-                _rows += _heat_cell(float(r['n']), _vmax)
+                _rows += _heat_cell(float(r['n']), _vmax, as_hours=False)
                 _rows += '</tr>'
             st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap">
@@ -2894,7 +2937,7 @@ def render_on_this_day(sel, df_all):
         if y in stats:
             hrs, ss = stats[y]
             avg = (hrs * 60 / ss) if ss else 0
-            _chips = _chip("Giờ", f"{hrs:.1f}h") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
+            _chips = _chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
             chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
         qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
         note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
@@ -2928,6 +2971,7 @@ def render_calendar_grid(scope_df, full_df):
     grp = scope_df.groupby('Ngày')['Thời lượng (Phút)'].sum().reset_index()
     cal_data = cal_data.merge(grp, left_on='Ngày_str', right_on='Ngày', how='left').fillna({'Thời lượng (Phút)': 0})
     cal_data['Số giờ'] = (cal_data['Thời lượng (Phút)'] / 60).round(1)
+    cal_data['Giờ_txt'] = cal_data['Số giờ'].map(_fmt_hours_long)
     cal_data['day'] = cal_data['Ngày_x'].dt.day if 'Ngày_x' in cal_data else pd.to_datetime(cal_data['Ngày_str']).dt.day
 
     # Thang màu theo BẬC (0 / <0.5h / 0.5–1h / 1–2h / 2–3h / 3–4h / 4–6h / ≥6h) -> ngày
@@ -2950,7 +2994,7 @@ def render_calendar_grid(scope_df, full_df):
                                 labelExpr="month(datum.value) != month(datum.value - 7*24*60*60*1000) ? 'Th' + (month(datum.value)+1) : ''"))
     enc_y = alt.Y('Thứ:O', sort=DAYS_ORDER, title='', scale=alt.Scale(domain=DAYS_ORDER), axis=alt.Axis(tickSize=0, domain=False))
     cal_tooltip = [alt.Tooltip('Ngày_str:T', format='%d-%m-%Y', title='Ngày'),
-                   alt.Tooltip('Số giờ:Q', format='.1f', title='Giờ')]
+                   alt.Tooltip('Giờ_txt:N', title='Giờ')]
     base = alt.Chart(cal_data).encode(x=enc_x, y=enc_y)
     rect = base.mark_rect(cornerRadius=3).encode(
         color=alt.Color('lvl:O', scale=alt.Scale(domain=list(range(8)), range=LVL_COLORS), legend=None),
@@ -3004,9 +3048,11 @@ DTBL_CSS = """
 """
 
 
-def _heat_cell(v, ref, extra_cls="", drop=False):
+def _heat_cell(v, ref, extra_cls="", drop=False, as_hours=True):
     """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền teal theo tỉ lệ v/ref.
-    drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước)."""
+    drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước). as_hours=True (mặc định, dùng
+    cho mọi cột "Số giờ") -> hiện dạng gọn 'XhYYp' thay vì số thập phân; as_hours=False (vd cột
+    đếm số phần đọc/xem) giữ nguyên số thập phân 1 chữ số như trước."""
     cls = extra_cls.strip()
     mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
     title = " title='Giảm mạnh so với kỳ trước'" if drop else ""
@@ -3017,7 +3063,8 @@ def _heat_cell(v, ref, extra_cls="", drop=False):
     a = min(v / ref, 1.0) * 0.7 if ref > 0 else 0
     bg = f'background:rgba({ACCENT_RGB},{a:.2f});' if a > 0.02 else ''
     cls_attr = f' class="{cls}"' if cls else ''
-    return f'<td{cls_attr}{title} style="{bg}">{mark}{v:.1f}</td>'
+    val_txt = _fmt_hours_short(v) if as_hours else f"{v:.1f}"
+    return f'<td{cls_attr}{title} style="{bg}">{mark}{val_txt}</td>'
 
 
 def render_data_table(df, time_col):
@@ -4541,10 +4588,10 @@ def render_day_report(df):
         ref_chips = []
         if not pw.empty:
             ref_chips.append({"k": f"{vn_dow} tuần trước",
-                               "v": f"{pw['Thời lượng (Phút)'].sum() / 60:.1f}h · {len(pw)} phiên"})
+                               "v": f"{_fmt_hours_short(pw['Thời lượng (Phút)'].sum() / 60)} · {len(pw)} phiên"})
         if same['Ngày'].nunique():
             avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-            ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{avg_h:.1f}h"})
+            ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}"})
         if ref_chips:
             # margin ngang 16px khớp đúng padding trong của st.expander (16px mỗi bên) để card này
             # rộng bằng đúng note_card bên dưới (vốn co hẹp lại vì nằm trong expander); margin-bottom
@@ -4567,7 +4614,7 @@ def render_day_report(df):
             if not pw.empty:
                 pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
                 _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
-                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{pw_h:.1f}h",
+                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
                                   "delta": (f"{_fmt_delta(d_hrs - pw_h)}h · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
             else:
                 cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
@@ -4576,7 +4623,7 @@ def render_day_report(df):
             if same['Ngày'].nunique():
                 avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
                 _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
-                cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{avg_h:.1f}h",
+                cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
                                   "delta": (f"{_fmt_delta(d_hrs - avg_h)}h", _c)})
 
             t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
@@ -4586,7 +4633,7 @@ def render_day_report(df):
 
             bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
                         .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
-            buoi_chips = [{"k": b, "v": f"{bg[b]:.1f}h"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
+            buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
 
             _secs = [{"label": "So sánh", "chips": cmp_chips},
                      {"label": "Mốc trong ngày", "chips": [
@@ -4596,7 +4643,7 @@ def render_day_report(df):
             if buoi_chips:
                 _secs.append({"label": "Theo buổi", "chips": buoi_chips})
             render_stat_panel(hero_items=[
-                {"label": "Tổng thời gian", "value": f"{d_hrs:.1f}h"},
+                {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
                 {"label": "Số phiên", "value": f"{d_sess}"},
                 {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
             ], sections=_secs)
@@ -4683,7 +4730,7 @@ elif nav == "Báo cáo":
                         _pct = (r_avg - base_avg) / base_avg * 100
                         _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
                         _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
-                    recent_chips.append({"k": "Thời gian / ngày", "v": f"{r_avg:.1f}h", "delta": _delta})
+                    recent_chips.append({"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(r_avg)}", "delta": _delta})
                 recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
 
                 s_stat = _streak_stats(df)
@@ -4691,7 +4738,7 @@ elif nav == "Báo cáo":
                 overall_top3 = _top_days(df, 3)
                 _sections = [
                     {"label": "Trung bình (toàn thời gian)", "chips": [
-                        {"k": "Thời gian / ngày", "v": f"{base_avg:.1f}h"},
+                        {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(base_avg)}"},
                         {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
                         {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
                     ]},
@@ -4704,8 +4751,8 @@ elif nav == "Báo cáo":
                 ]
                 if len(by_wd) and by_wd.max() > 0:
                     _sections.append({"label": "Theo thứ", "chips": [
-                        {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({by_wd.max():.1f}h)"},
-                        {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({by_wd.min():.1f}h)"},
+                        {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
+                        {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
                     ]})
                 if overall_top3:
                     _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
@@ -4714,7 +4761,7 @@ elif nav == "Báo cáo":
 
                 render_stat_panel(
                     hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{total_hrs:.1f}h"},
+                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
                         {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                     ],
                     sections=_sections,
@@ -4786,8 +4833,8 @@ elif nav == "Báo cáo":
                         _clip_card(_clip_note_w)
                     _sections_w = _top_days_section(df_w, "Ngày nổi bật trong tuần")
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_w, f"h {lbl_prev_w}"), _delta_t(d2_hr_w, f"h {lbl_avg_w}")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_w:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_w, f"h {lbl_prev_w}"), _delta_t(d2_hrd_w, f"h {lbl_avg_w}")] if d]},
+                        {"label": "Tổng thời gian", "value": _fmt_hours_short(curr_hrs_w), "deltas": [d for d in [_delta_t_hours(d1_hr_w, lbl_prev_w), _delta_t_hours(d2_hr_w, lbl_avg_w)] if d]},
+                        {"label": "Thời gian / ngày", "value": _fmt_hours_short(curr_hrs_day_w), "deltas": [d for d in [_delta_t_hours(d1_hrd_w, lbl_prev_w), _delta_t_hours(d2_hrd_w, lbl_avg_w)] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_w}", "deltas": [d for d in [_delta_t(d1_tr_w, f"cây {lbl_prev_w}"), _delta_t(d2_tr_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_w:.1f}", "deltas": [d for d in [_delta_t(d1_trd_w, f"cây {lbl_prev_w}"), _delta_t(d2_trd_w, f"cây {lbl_avg_w}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_w:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_w, f"phút {lbl_prev_w}"), _delta_t(d2_ms_w, f"phút {lbl_avg_w}")] if d]},
@@ -4859,8 +4906,8 @@ elif nav == "Báo cáo":
                         _clip_card(_clip_note_m)
                     _sections_m = _top_days_section(df_m, "Ngày nổi bật trong tháng")
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs:.1f}h", "deltas": [d for d in [_delta_t(delta1_hr, f"h {lbl_prev_m}"), _delta_t(delta2_hr, f"h {lbl_avg_m}")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day:.1f}h", "deltas": [d for d in [_delta_t(delta1_hrd, f"h {lbl_prev_m}"), _delta_t(delta2_hrd, f"h {lbl_avg_m}")] if d]},
+                        {"label": "Tổng thời gian", "value": _fmt_hours_short(curr_hrs), "deltas": [d for d in [_delta_t_hours(delta1_hr, lbl_prev_m), _delta_t_hours(delta2_hr, lbl_avg_m)] if d]},
+                        {"label": "Thời gian / ngày", "value": _fmt_hours_short(curr_hrs_day), "deltas": [d for d in [_delta_t_hours(delta1_hrd, lbl_prev_m), _delta_t_hours(delta2_hrd, lbl_avg_m)] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees}", "deltas": [d for d in [_delta_t(delta1_tr, f"cây {lbl_prev_m}"), _delta_t(delta2_tr, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day:.1f}", "deltas": [d for d in [_delta_t(delta1_trd, f"cây {lbl_prev_m}"), _delta_t(delta2_trd, f"cây {lbl_avg_m}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút", "deltas": [d for d in [_delta_t(delta1_ms, f"phút {lbl_prev_m}"), _delta_t(delta2_ms, f"phút {lbl_avg_m}")] if d]},
@@ -4926,8 +4973,8 @@ elif nav == "Báo cáo":
                         _clip_card(_clip_note_y)
                     _sections_y = _top_days_section(df_y, "Ngày nổi bật trong năm")
                     render_stat_panel(hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{curr_hrs_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hr_y, f"h {lbl_prev_y}"), _delta_t(d2_hr_y, f"h {lbl_avg_y}")] if d]},
-                        {"label": "Thời gian / ngày", "value": f"{curr_hrs_day_y:.1f}h", "deltas": [d for d in [_delta_t(d1_hrd_y, f"h {lbl_prev_y}"), _delta_t(d2_hrd_y, f"h {lbl_avg_y}")] if d]},
+                        {"label": "Tổng thời gian", "value": _fmt_hours_short(curr_hrs_y), "deltas": [d for d in [_delta_t_hours(d1_hr_y, lbl_prev_y), _delta_t_hours(d2_hr_y, lbl_avg_y)] if d]},
+                        {"label": "Thời gian / ngày", "value": _fmt_hours_short(curr_hrs_day_y), "deltas": [d for d in [_delta_t_hours(d1_hrd_y, lbl_prev_y), _delta_t_hours(d2_hrd_y, lbl_avg_y)] if d]},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_y}", "deltas": [d for d in [_delta_t(d1_tr_y, f"cây {lbl_prev_y}"), _delta_t(d2_tr_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Số cây / ngày", "value": f"{curr_trees_day_y:.1f}", "deltas": [d for d in [_delta_t(d1_trd_y, f"cây {lbl_prev_y}"), _delta_t(d2_trd_y, f"cây {lbl_avg_y}")] if d]},
                         {"label": "Thời gian / phiên", "value": f"{curr_min_sess_y:.0f} phút", "deltas": [d for d in [_delta_t(d1_ms_y, f"phút {lbl_prev_y}"), _delta_t(d2_ms_y, f"phút {lbl_avg_y}")] if d]},
@@ -5002,8 +5049,8 @@ elif nav == "Báo cáo":
 
                     _grp_sections = [
                         {"label": "Trung bình", "chips": [
-                            {"k": "Thời gian / ngày", "v": f"{curr_hrs_g/num_days_g:.1f}h"},
-                            {"k": "Thời gian / tuần", "v": f"{curr_hrs_g/num_weeks_g:.1f}h"},
+                            {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(curr_hrs_g/num_days_g)}"},
+                            {"k": "Thời gian / tuần", "v": f"{_fmt_hours_short(curr_hrs_g/num_weeks_g)}"},
                             {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
                             {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
                             {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
@@ -5013,7 +5060,7 @@ elif nav == "Báo cáo":
                     df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
                     if not df_g_thisweek.empty:
                         _grp_sections.append({"label": "Tuần này", "chips": [
-                            {"k": "Thời gian", "v": f"{df_g_thisweek['Thời lượng (Phút)'].sum()/60:.1f}h", "hl": True},
+                            {"k": "Thời gian", "v": f"{_fmt_hours_short(df_g_thisweek['Thời lượng (Phút)'].sum()/60)}", "hl": True},
                             {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
                         ]})
 
@@ -5025,8 +5072,8 @@ elif nav == "Báo cáo":
                     ]})
                     if len(wd_g) and wd_g.max() > 0:
                         _grp_sections.append({"label": "Theo thứ", "chips": [
-                            {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({wd_g.max():.1f}h)"},
-                            {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({wd_g.min():.1f}h)"},
+                            {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({_fmt_hours_short(wd_g.max())})"},
+                            {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({_fmt_hours_short(wd_g.min())})"},
                         ]})
                     _grp_sections.append({"label": "Mốc thời gian", "chips": [
                         {"k": "Ngày đầu tiên", "v": first_day},
@@ -5041,7 +5088,7 @@ elif nav == "Báo cáo":
                         # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
                         # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
                         _grp_sections.append({"label": "Ngày nổi bật", "chips": [
-                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_rec_g['hours']:.1f}h"} for d in _rec_g['dates']
+                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
                         ]})
 
                     _nud_g = _streak_nudge(s_g)
@@ -5049,7 +5096,7 @@ elif nav == "Báo cáo":
 
                     render_stat_panel(
                         hero_items=[
-                            {"label": "Tổng thời gian", "value": f"{curr_hrs_g:.1f}h"},
+                            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
                             {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                         ],
                         sections=_grp_sections,
