@@ -3942,6 +3942,9 @@ st.markdown(
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child * {
         width: 100% !important; min-width: 0 !important;
     }
+    /* Badge giờ (.qn-time) là inline-block nên mặc định bám lề TRÁI trong khối 52px cha (đã ép
+       width:100% ở trên) -- text-align:center để chữ số nằm giữa khung, không lệch trái. */
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child p { text-align: center; }
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:nth-child(2) { flex: 1 1 0 !important; }
     [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"] {
         background: transparent !important; border: none !important; box-shadow: none !important;
