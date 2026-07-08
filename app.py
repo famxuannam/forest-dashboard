@@ -1251,14 +1251,20 @@ def _fmt_hours_long(v):
     return f"{m} phút"
 
 
+def _fmt_hours_delta(v):
+    """Bản có dấu +/- của _fmt_hours_short cho chênh lệch SỐ GIỜ (vd '+1h30p', '-45p') thay vì
+    số thập phân '+1.5'/'−0.8'."""
+    sign = "+" if v >= 0 else "-"
+    return f"{sign}{_fmt_hours_short(abs(v))}"
+
+
 def _delta_t_hours(delta, label):
     """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30p'/'-45p' thay vì số
     thập phân '+1.5'/'−0.8'."""
     if delta is None:
         return None
     c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
-    sign = "+" if delta >= 0 else "-"
-    return (f"{sign}{_fmt_hours_short(abs(delta))} {label}", c)
+    return (f"{_fmt_hours_delta(delta)} {label}", c)
 
 
 def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None):
@@ -4616,7 +4622,7 @@ def render_day_report(df):
                 pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
                 _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
                 cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
-                                  "delta": (f"{_fmt_delta(d_hrs - pw_h)}h · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
+                                  "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
             else:
                 cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
             same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
@@ -4625,7 +4631,7 @@ def render_day_report(df):
                 avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
                 _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
                 cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
-                                  "delta": (f"{_fmt_delta(d_hrs - avg_h)}h", _c)})
+                                  "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
 
             t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
             t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
