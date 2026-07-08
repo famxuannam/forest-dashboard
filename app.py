@@ -2871,57 +2871,141 @@ HEALTH_METRICS_JSON_EXAMPLE = [
 ]
 
 
-def render_health_page():
-    """Trang "Sức khoẻ": theo dõi chỉ số xét nghiệm máu định kỳ. Khác với phần còn lại của app
-    (thuần retrospective, đọc lại dữ liệu Forest) -- trang này CÓ nhập liệu tay, vì không có
-    nguồn tự động nào xuất dữ liệu xét nghiệm ra file: người dùng chụp ảnh phiếu xét nghiệm, nhờ
-    Claude đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE) vào mục Import, hoặc gõ
-    tay từng lần khám ở mục Nhập nhanh. Xem hướng dẫn đầy đủ ở tab Hướng dẫn."""
-    df_health = load_health_metrics()
+def _render_health_report(df_health):
+    """Sub-tab "Báo cáo": chọn Nhóm/Chỉ số rồi xem 1. Số liệu + 2. Biểu đồ theo dõi cho đúng
+    chỉ số đó. Cả 2 mục dùng chung is_abn/unit tính 1 lần (tránh lặp logic)."""
+    if df_health.empty:
+        st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
+        return
+    cc1, cc2 = st.columns(2)
+    cats = sorted(df_health['Nhóm'].dropna().unique())
+    cat_pick = cc1.selectbox("Nhóm", cats, key="hm_chart_cat")
+    inds = sorted(df_health.loc[df_health['Nhóm'] == cat_pick, 'Chỉ số'].dropna().unique())
+    ind_pick = cc2.selectbox("Chỉ số", inds, key="hm_chart_ind")
+    s = (df_health[(df_health['Nhóm'] == cat_pick) & (df_health['Chỉ số'] == ind_pick)]
+         .sort_values('Ngày lấy mẫu'))
+    s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
 
-    # ==========================================
-    # 1. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
-    # ==========================================
-    with st.expander("1. Nhập kết quả xét nghiệm", expanded=df_health.empty):
-        existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
-        cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
-        ic1, ic2 = st.columns(2)
-        entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
-        cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
-        entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
-                           if cat_choice == "+ Nhóm khác..." else cat_choice)
-        _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
-                                     "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
-        entry_df = st.data_editor(
-            _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
-            column_config={
-                "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
-                "Giá trị": st.column_config.TextColumn("Giá trị"),
-                "Đơn vị": st.column_config.TextColumn("Đơn vị"),
-                "Khoảng tham chiếu": st.column_config.TextColumn(
-                    "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
-            })
-        if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
-            rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
-            if not entry_category or not str(entry_category).strip():
-                st.error("Chưa chọn/nhập Nhóm.")
-            elif not rows:
-                st.error("Chưa nhập chỉ số nào.")
-            else:
-                panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
-                         "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
-                                         "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                        for r in rows]}
-                save_health_metrics_bulk([panel])
-                st.session_state.pop("hm_entry_editor", None)
-                st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
+    if s_num.empty:
+        with st.expander("1. Số liệu", expanded=True):
+            st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
+        with st.expander("2. Biểu đồ theo dõi", expanded=True):
+            st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
+        return
+
+    _unit_vals = s_num['Đơn vị'].dropna()
+    unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
+    is_abn = ((s_num['Ref thấp'].notna() & (s_num['Giá trị'] < s_num['Ref thấp'])) |
+              (s_num['Ref cao'].notna() & (s_num['Giá trị'] > s_num['Ref cao'])))
+
+    with st.expander("1. Số liệu", expanded=True):
+        last = s_num.iloc[-1]
+        deltas = []
+        if len(s_num) > 1:
+            d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
+            dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
+            deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
+        hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
+                       "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
+        hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
+        n_abn = int(is_abn.sum())
+        sections = [
+            {"label": "Thống kê", "chips": [
+                {"k": "Số quan sát", "v": str(len(s_num))},
+                {"k": "Khoảng thời gian",
+                 "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
+                {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
+                {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+                {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+            ]},
+            {"label": "Bất thường", "chips": [
+                {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
+            ]},
+        ]
+        render_stat_panel(hero_items, sections=sections)
+
+    with st.expander("2. Biểu đồ theo dõi", expanded=True):
+        _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
+        _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
+        fig = go.Figure()
+        if s_num['Ref cao'].notna().any():
+            fig.add_trace(go.Scatter(
+                x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
+                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+                name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
+        if s_num['Ref thấp'].notna().any():
+            fig.add_trace(go.Scatter(
+                x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
+                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+                fill='tonexty', fillcolor=_band_fill,
+                name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+        fig.add_trace(go.Scatter(
+            x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
+            line=dict(color=ACCENT, width=2.5),
+            marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
+            name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
+            hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
+        ))
+        fig.update_layout(
+            height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
+            xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
+            yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+        if is_abn.any():
+            st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
+        _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
+        _tbl['Trạng thái'] = ['⚠️ Bất thường' if a else '' for a in is_abn]
+        _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
+        _tbl['Ngày lấy mẫu'] = _tbl['Ngày lấy mẫu'].dt.strftime('%d/%m/%Y')
+        st.dataframe(_tbl, hide_index=True, width='stretch')
+
+
+def _render_health_history(df_health):
+    """Sub-tab "Lịch sử": danh sách từng lần xét nghiệm đã nhập theo năm, sửa/xoá từng lần.
+    Không đánh số expander (khác các sub-tab khác) vì đây là NỘI DUNG DUY NHẤT của tab -- quy
+    ước đánh số N. chỉ áp dụng khi có nhiều mục cùng cấp cần phân biệt thứ tự."""
+    if df_health.empty:
+        st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
+        return
+    _years = sorted(df_health['Ngày lấy mẫu'].dt.year.unique(), reverse=True)
+    year_sel = st.selectbox("Năm", _years, key="hm_hist_year")
+    panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
+    _groups = sorted(panels.groupby(['Ngày lấy mẫu', 'Nhóm']), key=lambda kv: kv[0][0], reverse=True)
+    for (pdate, pcat), grp in _groups:
+        _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
+        with st.expander(f"{pdate:%d/%m/%Y} · {pcat} ({len(grp)} chỉ số)", expanded=False):
+            edited = st.data_editor(
+                grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]],
+                hide_index=True, width='stretch', num_rows="dynamic", key=_ek)
+            ec1, ec2 = st.columns(2)
+            if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
+                delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
+                if _rows:
+                    save_health_metrics_bulk([{
+                        "test_date": pdate.date().isoformat(), "category": pcat,
+                        "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
+                                        "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                       for r in _rows]}])
+                st.success("Đã lưu thay đổi.")
+                time.sleep(1)
+                st.rerun()
+            if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
+                delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                st.success("Đã xoá.")
                 time.sleep(1)
                 st.rerun()
 
+
+def _render_health_input(df_health):
+    """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ Claude
+    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi)."""
     # ==========================================
-    # 2. IMPORT HÀNG LOẠT (dán JSON do Claude xuất ra từ nhiều ảnh phiếu xét nghiệm cũ)
+    # 1. IMPORT HÀNG LOẠT
     # ==========================================
-    with st.expander("2. Import hàng loạt", expanded=False):
+    with st.expander("1. Import hàng loạt", expanded=df_health.empty):
         st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
                     "nhiều lần khám cũ cùng lúc.")
         with st.expander("Xem định dạng JSON mẫu", expanded=False):
@@ -2966,99 +3050,69 @@ def render_health_page():
                 st.rerun()
 
     # ==========================================
-    # 3. LỊCH SỬ & QUẢN LÝ (sửa/xoá từng lần xét nghiệm đã nhập)
+    # 2. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
     # ==========================================
-    with st.expander("3. Lịch sử & quản lý", expanded=False):
-        if df_health.empty:
-            st.caption("Chưa có dữ liệu xét nghiệm nào.")
-        else:
-            _years = sorted(df_health['Ngày lấy mẫu'].dt.year.unique(), reverse=True)
-            year_sel = st.selectbox("Năm", _years, key="hm_hist_year")
-            panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
-            _groups = sorted(panels.groupby(['Ngày lấy mẫu', 'Nhóm']),
-                              key=lambda kv: kv[0][0], reverse=True)
-            for (pdate, pcat), grp in _groups:
-                _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
-                with st.expander(f"{pdate:%d/%m/%Y} · {pcat} ({len(grp)} chỉ số)", expanded=False):
-                    edited = st.data_editor(
-                        grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]],
-                        hide_index=True, width='stretch', num_rows="dynamic", key=_ek)
-                    ec1, ec2 = st.columns(2)
-                    if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
-                        delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                        _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
-                        if _rows:
-                            save_health_metrics_bulk([{
-                                "test_date": pdate.date().isoformat(), "category": pcat,
-                                "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
-                                                "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                               for r in _rows]}])
-                        st.success("Đã lưu thay đổi.")
-                        time.sleep(1)
-                        st.rerun()
-                    if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
-                        delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                        st.success("Đã xoá.")
-                        time.sleep(1)
-                        st.rerun()
-
-    # ==========================================
-    # 4. BIỂU ĐỒ THEO DÕI
-    # ==========================================
-    with st.expander("4. Biểu đồ theo dõi", expanded=True):
-        if df_health.empty:
-            st.caption("Chưa có dữ liệu xét nghiệm nào để vẽ biểu đồ.")
-        else:
-            cc1, cc2 = st.columns(2)
-            cats = sorted(df_health['Nhóm'].dropna().unique())
-            cat_pick = cc1.selectbox("Nhóm", cats, key="hm_chart_cat")
-            inds = sorted(df_health.loc[df_health['Nhóm'] == cat_pick, 'Chỉ số'].dropna().unique())
-            ind_pick = cc2.selectbox("Chỉ số", inds, key="hm_chart_ind")
-            s = (df_health[(df_health['Nhóm'] == cat_pick) & (df_health['Chỉ số'] == ind_pick)]
-                 .sort_values('Ngày lấy mẫu'))
-            s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
-            if s_num.empty:
-                st.info("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ (có thể là kết quả định tính).")
+    with st.expander("2. Nhập kết quả xét nghiệm", expanded=False):
+        existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
+        cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
+        ic1, ic2 = st.columns(2)
+        entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
+        cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
+        entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
+                           if cat_choice == "+ Nhóm khác..." else cat_choice)
+        _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
+                                     "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
+        entry_df = st.data_editor(
+            _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
+            column_config={
+                "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
+                "Giá trị": st.column_config.TextColumn("Giá trị"),
+                "Đơn vị": st.column_config.TextColumn("Đơn vị"),
+                "Khoảng tham chiếu": st.column_config.TextColumn(
+                    "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
+            })
+        if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
+            rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
+            if not entry_category or not str(entry_category).strip():
+                st.error("Chưa chọn/nhập Nhóm.")
+            elif not rows:
+                st.error("Chưa nhập chỉ số nào.")
             else:
-                _unit_vals = s_num['Đơn vị'].dropna()
-                unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
-                is_abn = ((s_num['Ref thấp'].notna() & (s_num['Giá trị'] < s_num['Ref thấp'])) |
-                          (s_num['Ref cao'].notna() & (s_num['Giá trị'] > s_num['Ref cao'])))
-                _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
-                _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
-                fig = go.Figure()
-                if s_num['Ref cao'].notna().any():
-                    fig.add_trace(go.Scatter(
-                        x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
-                        line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                        name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
-                if s_num['Ref thấp'].notna().any():
-                    fig.add_trace(go.Scatter(
-                        x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
-                        line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                        fill='tonexty', fillcolor=_band_fill,
-                        name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
-                fig.add_trace(go.Scatter(
-                    x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
-                    line=dict(color=ACCENT, width=2.5),
-                    marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
-                    name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
-                    hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
-                ))
-                fig.update_layout(
-                    height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
-                    xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
-                    yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                )
-                st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-                if is_abn.any():
-                    st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
-                _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
-                _tbl['Trạng thái'] = ['⚠️ Bất thường' if a else '' for a in is_abn]
-                _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
-                _tbl['Ngày lấy mẫu'] = _tbl['Ngày lấy mẫu'].dt.strftime('%d/%m/%Y')
-                st.dataframe(_tbl, hide_index=True, width='stretch')
+                panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
+                         "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
+                                         "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                        for r in rows]}
+                save_health_metrics_bulk([panel])
+                st.session_state.pop("hm_entry_editor", None)
+                st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
+                time.sleep(1)
+                st.rerun()
+
+
+def render_health_page():
+    """Trang "Sức khoẻ": theo dõi chỉ số xét nghiệm máu định kỳ. Khác với phần còn lại của app
+    (thuần retrospective, đọc lại dữ liệu Forest) -- trang này CÓ nhập liệu tay, vì không có
+    nguồn tự động nào xuất dữ liệu xét nghiệm ra file: người dùng chụp ảnh phiếu xét nghiệm, nhờ
+    Claude đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE), hoặc gõ tay từng lần
+    khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
+    SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
+    df_health = load_health_metrics()
+
+    _sub_pick = st.segmented_control(
+        "Xem theo", SUCKHOE_SUBS,
+        format_func=lambda x: f"{SUCKHOE_SUB_ICONS_MD[x]} {x}",
+        default=st.session_state["hm_sub"], key="hm_sub_picker", label_visibility="collapsed")
+    if _sub_pick and _sub_pick != st.session_state["hm_sub"]:
+        st.session_state["hm_sub"] = _sub_pick
+    hm_sub = st.session_state["hm_sub"]
+    st.query_params["hsub"] = hm_sub
+
+    if hm_sub == "Báo cáo":
+        _render_health_report(df_health)
+    elif hm_sub == "Lịch sử":
+        _render_health_history(df_health)
+    elif hm_sub == "Dữ liệu đầu vào":
+        _render_health_input(df_health)
 
 
 def render_search():
@@ -4030,18 +4084,18 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
-    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) --
-       label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav ở trên. Đổi
-       thêm dáng nút từ pill sang tab gạch chân (giống Tổng quan/Chi tiết ở Sách/Gundam) cho gọn
-       và nhất quán, thay vì nền đặc teal như nav chính. */
-    .st-key-bc_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
-    .st-key-bc_sub_picker button {
+    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
+       "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
+       .st-key-nav ở trên. Đổi thêm dáng nút từ pill sang tab gạch chân (giống Tổng quan/Chi tiết
+       ở Sách/Gundam) cho gọn và nhất quán, thay vì nền đặc teal như nav chính. */
+    .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+    .st-key-bc_sub_picker button, .st-key-hm_sub_picker button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
         color: var(--text-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
-    .st-key-bc_sub_picker button[kind="segmented_controlActive"] {
+    .st-key-bc_sub_picker button[kind="segmented_controlActive"], .st-key-hm_sub_picker button[kind="segmented_controlActive"] {
         background: transparent !important; color: var(--accent) !important; font-weight: 600 !important;
         border-bottom-color: var(--accent) !important; box-shadow: none !important;
     }
@@ -4816,6 +4870,22 @@ if nav == "Báo cáo":
     st.query_params["sub"] = st.session_state["bc_sub"]
 elif "sub" in st.query_params:
     del st.query_params["sub"]
+
+# Sub-page của "Sức khoẻ" (Báo cáo/Lịch sử/Dữ liệu đầu vào) -- CÙNG 1 pattern hệt BAOCAO_SUBS ở
+# trên (segmented_control + query param riêng), không dùng st.tabs() -- khác tab Hướng dẫn (nội
+# dung tĩnh, không cần deep-link) ở chỗ đây là trang thao tác, cần chia sẻ được link/nhảy sang
+# đúng sub-tab bằng code (vd sau khi Lưu ở "Dữ liệu đầu vào" có thể tự chuyển sang "Báo cáo").
+# Query param riêng "hsub" (không dùng chung "sub" với Báo cáo) để 2 trang không giẫm state.
+SUCKHOE_SUBS = ["Báo cáo", "Lịch sử", "Dữ liệu đầu vào"]
+SUCKHOE_SUB_ICONS_MD = {"Báo cáo": ":material/monitoring:", "Lịch sử": ":material/history:",
+                        "Dữ liệu đầu vào": ":material/edit_note:"}
+if "hm_sub" not in st.session_state:
+    _qs_hm = st.query_params.get("hsub")
+    st.session_state["hm_sub"] = _qs_hm if _qs_hm in SUCKHOE_SUBS else "Báo cáo"
+if nav == "Sức khoẻ":
+    st.query_params["hsub"] = st.session_state["hm_sub"]
+elif "hsub" in st.query_params:
+    del st.query_params["hsub"]
 
 # Gọi ở đây (chứ không phải ngay sau def) vì cần BAOCAO_SUBS đã được định nghĩa ở trên --
 # hàm đọc biến này ngay khi chạy để build JSON cho JS.
@@ -6347,21 +6417,33 @@ elif nav == "Hướng dẫn":
                 "Toàn bộ phần còn lại của app thuần hồi cứu — chỉ hiển thị lại dữ liệu Forest đã ghi nhận. Trang "
                 "**Sức khoẻ** là ngoại lệ duy nhất: không có nguồn tự động nào xuất được kết quả xét nghiệm máu ra "
                 "file, nên bạn tự nhập. Quy trình gợi ý: chụp ảnh 2 phiếu xét nghiệm (Huyết học + Sinh hóa) mỗi "
-                "lần đi khám, đưa ảnh vào Claude và nhờ đọc + xuất đúng định dạng JSON ở mục 2, dán vào app.")
+                "lần đi khám, đưa ảnh vào Claude và nhờ đọc + xuất đúng định dạng JSON, dán vào tab Dữ liệu đầu "
+                "vào.\n\n"
+                "3 sub-tab (cùng kiểu \"Chọn kỳ xem\" ở trang Báo cáo, không phải `st.tabs()`) chia theo đúng 3 "
+                "việc khác nhau: **Báo cáo** (chỉ xem, không nhập), **Lịch sử** (sửa/xoá), **Dữ liệu đầu vào** "
+                "(nhập mới).")
 
         guide_item(
-            "suckhoe.png", "4 mục của trang Sức khoẻ",
-            "**1. Nhập kết quả xét nghiệm** — nhập tay 1 lần khám: chọn Ngày lấy mẫu + Nhóm (Huyết học/Sinh hóa/"
-            "tự đặt nhóm khác), rồi gõ từng chỉ số vào bảng (Chỉ số/Giá trị/Đơn vị/Khoảng tham chiếu), bấm Lưu.\n\n"
-            "**2. Import hàng loạt** — dán 1 khối JSON gồm nhiều lần khám cùng lúc (xem mục \"Xem định dạng JSON "
-            "mẫu\" ngay trong trang) — cách nhanh nhất để nạp dữ liệu xét nghiệm nhiều năm cũ, hoặc nạp kết quả "
-            "Claude vừa đọc từ ảnh. Có bước Xem trước trước khi Xác nhận lưu.\n\n"
-            "**3. Lịch sử & quản lý** — danh sách từng lần xét nghiệm đã nhập theo năm, sửa lại bảng chỉ số hoặc "
-            "xoá cả lần xét nghiệm nếu nhập nhầm.\n\n"
-            "**4. Biểu đồ theo dõi** — chọn Nhóm rồi Chỉ số để xem xu hướng theo thời gian: dải xám là khoảng "
-            "tham chiếu (khoảng bình thường) tại đúng thời điểm đo — vì khoảng này có thể đổi theo lab/máy xét "
-            "nghiệm qua các năm; điểm đỏ là giá trị nằm ngoài khoảng đó.",
-            where="Sức khoẻ")
+            "suckhoe.png", "Sub-tab Báo cáo — số liệu + biểu đồ",
+            "Chọn **Nhóm** rồi **Chỉ số** ở đầu trang, 2 mục bên dưới tự cập nhật theo lựa chọn đó:\n\n"
+            "**1. Số liệu** — hero là giá trị **gần nhất** (kèm ngày đo + so với lần đo liền trước), cộng chip "
+            "Số quan sát/Khoảng thời gian/Trung bình/Cao nhất/Thấp nhất, và chip riêng đếm số lần **ngoài khoảng "
+            "tham chiếu** trên tổng số lần đo (tô nổi bật nếu có).\n\n"
+            "**2. Biểu đồ theo dõi** — xu hướng theo thời gian: dải xám là khoảng tham chiếu (khoảng bình "
+            "thường) tại đúng thời điểm đo — vì khoảng này có thể đổi theo lab/máy xét nghiệm qua các năm; điểm "
+            "đỏ là giá trị nằm ngoài khoảng đó.",
+            where="Sức khoẻ → Báo cáo")
+
+        guide_item(
+            "suckhoe.png", "Sub-tab Lịch sử & Dữ liệu đầu vào",
+            "**Lịch sử** — chọn Năm rồi mở đúng lần khám cần xem/sửa: sửa lại bảng chỉ số (Chỉ số/Giá trị/Đơn "
+            "vị/Khoảng tham chiếu) rồi Lưu thay đổi, hoặc Xoá cả lần xét nghiệm nếu nhập nhầm.\n\n"
+            "**Dữ liệu đầu vào** — 2 cách nhập, **Import hàng loạt** đặt lên trước vì là luồng chính: dán 1 khối "
+            "JSON gồm nhiều lần khám cùng lúc (xem mục \"Xem định dạng JSON mẫu\" ngay trong trang), có bước Xem "
+            "trước rồi mới Xác nhận lưu — cách nhanh nhất để nạp dữ liệu nhiều năm cũ hoặc kết quả Claude vừa đọc "
+            "từ ảnh. **Nhập kết quả xét nghiệm** (gõ tay từng lần khám) xếp sau, dùng khi chỉ có 1 lần khám lẻ "
+            "hoặc muốn sửa nhanh không qua JSON.",
+            where="Sức khoẻ → Lịch sử · Sức khoẻ → Dữ liệu đầu vào")
 
         with st.container(border=True, key="guide_health_json"):
             st.markdown("#### Định dạng JSON để nhờ Claude xuất từ ảnh")
@@ -6369,7 +6451,7 @@ elif nav == "Hướng dẫn":
                 "Khi đưa ảnh phiếu xét nghiệm vào Claude, yêu cầu xuất đúng khuôn dưới đây (mỗi phần tử trong "
                 "list là 1 phiếu/1 nhóm chỉ số của 1 lần khám — 1 lần khám có 2 phiếu Huyết học + Sinh hóa thì ra "
                 "2 phần tử cùng `test_date` khác `category`), rồi dán nguyên văn vào ô \"Dán nội dung JSON\" ở "
-                "mục 2:")
+                "mục 1 (Import hàng loạt) trong tab Dữ liệu đầu vào:")
             st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
             st.markdown(
                 "`ref_raw` chấp nhận các dạng thường gặp trên phiếu: khoảng đủ (`\"4.2 - 5.4\"`), chỉ có trần "
