@@ -75,6 +75,25 @@ create table if not exists settings (
   value text not null
 );
 
+-- Chỉ số xét nghiệm máu định kỳ (tab "Sức khoẻ") -- dạng "long format": mỗi dòng là 1 chỉ số
+-- của 1 lần xét nghiệm (không phải 1 cột/chỉ số), vì panel xét nghiệm có thể đổi qua các năm
+-- (đổi lab, đổi máy, thêm/bớt chỉ số). Khoảng tham chiếu (ref_raw/ref_low/ref_high) lưu KÈM
+-- theo từng dòng, không tách bảng riêng -- vì khoảng "bình thường" có thể đổi theo thời gian
+-- (đổi máy xét nghiệm/đổi lab), lưu tách riêng sẽ sai lệch dữ liệu lịch sử.
+create table if not exists health_metrics (
+  id bigint generated always as identity primary key,
+  test_date date not null,
+  category text not null,   -- "Huyết học" / "Sinh hóa" / ... (mở rộng tự do, không enum cứng)
+  indicator text not null,  -- tên chỉ số, vd "Hemoglobin", "Glucose"
+  value numeric,            -- giá trị số, dùng để vẽ biểu đồ (NULL nếu kết quả định tính)
+  value_raw text not null,  -- chuỗi gốc y hệt trên phiếu, vd "148", "Âm tính"
+  unit text,
+  ref_raw text,             -- khoảng tham chiếu gốc y hệt trên phiếu, vd "130 - 170", "< 5"
+  ref_low numeric,          -- parse từ ref_raw (xem _parse_ref_range trong app.py), NULL nếu không parse được
+  ref_high numeric,
+  unique (test_date, category, indicator)
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -86,6 +105,7 @@ alter table quick_notes enable row level security;
 alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
 alter table settings enable row level security;
+alter table health_metrics enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -95,6 +115,7 @@ create policy "anon full access" on quick_notes for all using (true) with check 
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
+create policy "anon full access" on health_metrics for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket

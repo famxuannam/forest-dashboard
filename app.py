@@ -134,6 +134,7 @@ QUICK_NOTES_FILE = "quick_notes.csv"  # ghi chú nhanh từ Shortcut iOS, đứn
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
+HEALTH_METRICS_FILE = "health_metrics.csv"  # chỉ số xét nghiệm máu định kỳ (trang Sức khoẻ)
 
 @st.cache_resource
 def _get_supabase():
@@ -707,6 +708,110 @@ def save_reading_log_bulk(df):
                 for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()]
         for i in range(0, len(recs), 500):
             sb.table("reading_log").insert(recs[i:i + 500]).execute()
+    st.cache_data.clear()
+
+
+HEALTH_METRICS_COLS = ["id", "Ngày lấy mẫu", "Nhóm", "Chỉ số", "Giá trị", "Giá trị (gốc)",
+                        "Đơn vị", "Khoảng tham chiếu", "Ref thấp", "Ref cao"]
+
+
+@st.cache_data
+def load_health_metrics():
+    """Đọc bảng health_metrics (chỉ số xét nghiệm máu định kỳ, xem tab "Sức khoẻ") -- dạng long
+    format: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm, không phải 1 cột/chỉ số."""
+    sb = _get_supabase()
+    res = sb.table("health_metrics").select(
+        "id,test_date,category,indicator,value,value_raw,unit,ref_raw,ref_low,ref_high").execute()
+    if not res.data:
+        return pd.DataFrame(columns=HEALTH_METRICS_COLS)
+    df = pd.DataFrame(res.data).rename(columns={
+        "test_date": "Ngày lấy mẫu", "category": "Nhóm", "indicator": "Chỉ số",
+        "value": "Giá trị", "value_raw": "Giá trị (gốc)", "unit": "Đơn vị",
+        "ref_raw": "Khoảng tham chiếu", "ref_low": "Ref thấp", "ref_high": "Ref cao"})
+    df["Ngày lấy mẫu"] = pd.to_datetime(df["Ngày lấy mẫu"], format='ISO8601')
+    return df[HEALTH_METRICS_COLS]
+
+
+def _parse_ref_range(raw):
+    """Parse chuỗi khoảng tham chiếu in trên phiếu xét nghiệm về (thấp, cao) dạng số -- dùng để
+    tô vùng bình thường trên biểu đồ + phát hiện giá trị bất thường. Hỗ trợ các dạng thường gặp
+    trên phiếu xét nghiệm: "a - b" (khoảng đủ), "< x"/"≤ x" (chỉ có trần trên), ">x"/"≥ x" (chỉ
+    có sàn dưới). Trả (None, None) nếu không nhận dạng được (vd kết quả định tính "Âm tính") --
+    không raise lỗi, vì không phải chỉ số nào cũng có khoảng tham chiếu dạng số."""
+    if not raw:
+        return None, None
+    s = str(raw).strip().replace(",", ".")
+    m = re.match(r'^[<≤]\s*([\d.]+)$', s)
+    if m:
+        return None, float(m.group(1))
+    m = re.match(r'^[>≥]\s*([\d.]+)$', s)
+    if m:
+        return float(m.group(1)), None
+    m = re.match(r'^([\d.]+)\s*-\s*([\d.]+)$', s)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+    return None, None
+
+
+def save_health_metrics_bulk(panels):
+    """Ghi 1 hoặc nhiều "panel" xét nghiệm vào Supabase -- dùng chung cho cả form nhập nhanh lẫn
+    import JSON hàng loạt. panels: list dict {"test_date", "category", "indicators": [{"indicator",
+    "value_raw"/"value", "unit"?, "ref_raw"/"ref_range"?}, ...]}. Upsert theo khoá (test_date,
+    category, indicator) nên sửa 1 chỉ số đã nhập chỉ cần gọi lại cùng khoá, không cần xoá tay
+    trước (khác _sb_delete_all + insert lại như reading_log, vì ở đây ta muốn CỘNG DỒN qua nhiều
+    lần nhập chứ không ghi đè toàn bảng mỗi lần lưu)."""
+    sb = _get_supabase()
+    recs = []
+    for p in panels:
+        category = str(p["category"]).strip()
+        test_date = str(p["test_date"])
+        for ind in p.get("indicators", []):
+            name = str(ind.get("indicator", "")).strip()
+            if not name:
+                continue
+            value_raw = str(ind.get("value_raw", ind.get("value", ""))).strip()
+            value = pd.to_numeric(value_raw.replace(",", "."), errors="coerce")
+            ref_raw = ind.get("ref_raw") or ind.get("ref_range") or None
+            ref_low, ref_high = _parse_ref_range(ref_raw)
+            recs.append({
+                "test_date": test_date, "category": category, "indicator": name,
+                "value": None if pd.isna(value) else float(value), "value_raw": value_raw,
+                "unit": (str(ind["unit"]).strip() if ind.get("unit") else None),
+                "ref_raw": ref_raw, "ref_low": ref_low, "ref_high": ref_high,
+            })
+    if recs:
+        for i in range(0, len(recs), 500):
+            sb.table("health_metrics").upsert(
+                recs[i:i + 500], on_conflict="test_date,category,indicator").execute()
+    st.cache_data.clear()
+
+
+def delete_health_metric_panel(test_date, category):
+    """Xoá toàn bộ 1 lần xét nghiệm (mọi chỉ số cùng ngày lấy mẫu + nhóm)."""
+    sb = _get_supabase()
+    sb.table("health_metrics").delete().eq("test_date", str(test_date)).eq("category", category).execute()
+    st.cache_data.clear()
+
+
+def save_health_metrics_raw_bulk(df):
+    """Ghi đè TOÀN BỘ bảng health_metrics từ 1 DataFrame đúng khuôn HEALTH_METRICS_COLS -- dùng
+    RIÊNG cho luồng Khôi phục từ bản sao lưu (khác save_health_metrics_bulk là upsert cộng dồn
+    dùng cho nhập liệu thường ngày). Y hệt kiểu save_db()/save_reading_log_bulk(): xoá sạch rồi
+    chèn lại nguyên trạng, đúng ngữ nghĩa "khôi phục về đúng mốc đã sao lưu"."""
+    sb = _get_supabase()
+    _sb_delete_all("health_metrics", "id")
+    if not df.empty:
+        recs = [{
+            "test_date": str(pd.Timestamp(r["Ngày lấy mẫu"]).date()), "category": str(r["Nhóm"]),
+            "indicator": str(r["Chỉ số"]), "value": None if pd.isna(r["Giá trị"]) else float(r["Giá trị"]),
+            "value_raw": str(r["Giá trị (gốc)"]) if pd.notna(r["Giá trị (gốc)"]) else "",
+            "unit": (str(r["Đơn vị"]) if pd.notna(r["Đơn vị"]) else None),
+            "ref_raw": (str(r["Khoảng tham chiếu"]) if pd.notna(r["Khoảng tham chiếu"]) else None),
+            "ref_low": None if pd.isna(r["Ref thấp"]) else float(r["Ref thấp"]),
+            "ref_high": None if pd.isna(r["Ref cao"]) else float(r["Ref cao"]),
+        } for r in df.to_dict("records")]
+        for i in range(0, len(recs), 500):
+            sb.table("health_metrics").insert(recs[i:i + 500]).execute()
     st.cache_data.clear()
 
 
@@ -2747,6 +2852,215 @@ def render_notes_journal(period_key, kind, df_all):
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
+HEALTH_METRICS_JSON_EXAMPLE = [
+    {
+        "test_date": "2026-07-08",
+        "category": "Huyết học",
+        "indicators": [
+            {"indicator": "Số lượng hồng cầu", "value_raw": "5.03", "unit": "T/L", "ref_raw": "4.2 - 5.4"},
+            {"indicator": "Hemoglobin (Hb)", "value_raw": "148", "unit": "g/L", "ref_raw": "130 - 170"},
+        ],
+    },
+    {
+        "test_date": "2026-07-08",
+        "category": "Sinh hóa",
+        "indicators": [
+            {"indicator": "Glucose", "value_raw": "5.4", "unit": "mmol/L", "ref_raw": "3.9 - 6.4"},
+        ],
+    },
+]
+
+
+def render_health_page():
+    """Trang "Sức khoẻ": theo dõi chỉ số xét nghiệm máu định kỳ. Khác với phần còn lại của app
+    (thuần retrospective, đọc lại dữ liệu Forest) -- trang này CÓ nhập liệu tay, vì không có
+    nguồn tự động nào xuất dữ liệu xét nghiệm ra file: người dùng chụp ảnh phiếu xét nghiệm, nhờ
+    Claude đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE) vào mục Import, hoặc gõ
+    tay từng lần khám ở mục Nhập nhanh. Xem hướng dẫn đầy đủ ở tab Hướng dẫn."""
+    df_health = load_health_metrics()
+
+    # ==========================================
+    # 1. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
+    # ==========================================
+    with st.expander("1. Nhập kết quả xét nghiệm", expanded=df_health.empty):
+        existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
+        cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
+        ic1, ic2 = st.columns(2)
+        entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
+        cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
+        entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
+                           if cat_choice == "+ Nhóm khác..." else cat_choice)
+        _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
+                                     "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
+        entry_df = st.data_editor(
+            _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
+            column_config={
+                "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
+                "Giá trị": st.column_config.TextColumn("Giá trị"),
+                "Đơn vị": st.column_config.TextColumn("Đơn vị"),
+                "Khoảng tham chiếu": st.column_config.TextColumn(
+                    "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
+            })
+        if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
+            rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
+            if not entry_category or not str(entry_category).strip():
+                st.error("Chưa chọn/nhập Nhóm.")
+            elif not rows:
+                st.error("Chưa nhập chỉ số nào.")
+            else:
+                panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
+                         "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
+                                         "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                        for r in rows]}
+                save_health_metrics_bulk([panel])
+                st.session_state.pop("hm_entry_editor", None)
+                st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
+                time.sleep(1)
+                st.rerun()
+
+    # ==========================================
+    # 2. IMPORT HÀNG LOẠT (dán JSON do Claude xuất ra từ nhiều ảnh phiếu xét nghiệm cũ)
+    # ==========================================
+    with st.expander("2. Import hàng loạt", expanded=False):
+        st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
+                    "nhiều lần khám cũ cùng lúc.")
+        with st.expander("Xem định dạng JSON mẫu", expanded=False):
+            st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
+        st.text_area("Dán nội dung JSON vào đây", height=200, key="hm_import_json")
+        if st.button("Xem trước", key="hm_import_preview_btn"):
+            try:
+                parsed = json.loads(st.session_state.get("hm_import_json", "") or "[]")
+                if not isinstance(parsed, list) or not parsed:
+                    raise ValueError("JSON phải là 1 danh sách (list) các lần xét nghiệm.")
+                flat_rows = []
+                for p in parsed:
+                    for ind in p.get("indicators", []):
+                        flat_rows.append({
+                            "Ngày lấy mẫu": p.get("test_date"), "Nhóm": p.get("category"),
+                            "Chỉ số": ind.get("indicator"),
+                            "Giá trị": ind.get("value_raw", ind.get("value")),
+                            "Đơn vị": ind.get("unit"),
+                            "Khoảng tham chiếu": ind.get("ref_raw", ind.get("ref_range")),
+                        })
+                if not flat_rows:
+                    raise ValueError("Không tìm thấy chỉ số nào trong dữ liệu đã dán.")
+                st.session_state["hm_import_preview"] = parsed
+                st.session_state["hm_import_preview_df"] = pd.DataFrame(flat_rows)
+            except Exception as e:
+                st.session_state.pop("hm_import_preview", None)
+                st.session_state.pop("hm_import_preview_df", None)
+                st.error(f"JSON không hợp lệ: {e}")
+        if st.session_state.get("hm_import_preview") is not None:
+            _prev_df = st.session_state["hm_import_preview_df"]
+            _n_panels = len(st.session_state["hm_import_preview"])
+            st.caption(f"Xem trước {len(_prev_df)} chỉ số từ {_n_panels} lần xét nghiệm:")
+            st.dataframe(_prev_df, hide_index=True, width='stretch')
+            if st.button("Xác nhận lưu", type="primary", key="hm_import_confirm_btn"):
+                save_health_metrics_bulk(st.session_state["hm_import_preview"])
+                _saved_n = len(_prev_df)
+                st.session_state.pop("hm_import_preview", None)
+                st.session_state.pop("hm_import_preview_df", None)
+                st.session_state.pop("hm_import_json", None)
+                st.success(f"Đã lưu {_saved_n} chỉ số từ {_n_panels} lần xét nghiệm.")
+                time.sleep(1)
+                st.rerun()
+
+    # ==========================================
+    # 3. LỊCH SỬ & QUẢN LÝ (sửa/xoá từng lần xét nghiệm đã nhập)
+    # ==========================================
+    with st.expander("3. Lịch sử & quản lý", expanded=False):
+        if df_health.empty:
+            st.caption("Chưa có dữ liệu xét nghiệm nào.")
+        else:
+            _years = sorted(df_health['Ngày lấy mẫu'].dt.year.unique(), reverse=True)
+            year_sel = st.selectbox("Năm", _years, key="hm_hist_year")
+            panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
+            _groups = sorted(panels.groupby(['Ngày lấy mẫu', 'Nhóm']),
+                              key=lambda kv: kv[0][0], reverse=True)
+            for (pdate, pcat), grp in _groups:
+                _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
+                with st.expander(f"{pdate:%d/%m/%Y} · {pcat} ({len(grp)} chỉ số)", expanded=False):
+                    edited = st.data_editor(
+                        grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]],
+                        hide_index=True, width='stretch', num_rows="dynamic", key=_ek)
+                    ec1, ec2 = st.columns(2)
+                    if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
+                        delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                        _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
+                        if _rows:
+                            save_health_metrics_bulk([{
+                                "test_date": pdate.date().isoformat(), "category": pcat,
+                                "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
+                                                "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                               for r in _rows]}])
+                        st.success("Đã lưu thay đổi.")
+                        time.sleep(1)
+                        st.rerun()
+                    if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
+                        delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                        st.success("Đã xoá.")
+                        time.sleep(1)
+                        st.rerun()
+
+    # ==========================================
+    # 4. BIỂU ĐỒ THEO DÕI
+    # ==========================================
+    with st.expander("4. Biểu đồ theo dõi", expanded=True):
+        if df_health.empty:
+            st.caption("Chưa có dữ liệu xét nghiệm nào để vẽ biểu đồ.")
+        else:
+            cc1, cc2 = st.columns(2)
+            cats = sorted(df_health['Nhóm'].dropna().unique())
+            cat_pick = cc1.selectbox("Nhóm", cats, key="hm_chart_cat")
+            inds = sorted(df_health.loc[df_health['Nhóm'] == cat_pick, 'Chỉ số'].dropna().unique())
+            ind_pick = cc2.selectbox("Chỉ số", inds, key="hm_chart_ind")
+            s = (df_health[(df_health['Nhóm'] == cat_pick) & (df_health['Chỉ số'] == ind_pick)]
+                 .sort_values('Ngày lấy mẫu'))
+            s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
+            if s_num.empty:
+                st.info("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ (có thể là kết quả định tính).")
+            else:
+                _unit_vals = s_num['Đơn vị'].dropna()
+                unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
+                is_abn = ((s_num['Ref thấp'].notna() & (s_num['Giá trị'] < s_num['Ref thấp'])) |
+                          (s_num['Ref cao'].notna() & (s_num['Giá trị'] > s_num['Ref cao'])))
+                _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
+                _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
+                fig = go.Figure()
+                if s_num['Ref cao'].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
+                        line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+                        name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
+                if s_num['Ref thấp'].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
+                        line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+                        fill='tonexty', fillcolor=_band_fill,
+                        name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+                fig.add_trace(go.Scatter(
+                    x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
+                    line=dict(color=ACCENT, width=2.5),
+                    marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
+                    name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
+                    hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
+                ))
+                fig.update_layout(
+                    height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
+                    xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
+                    yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+                if is_abn.any():
+                    st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
+                _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
+                _tbl['Trạng thái'] = ['⚠️ Bất thường' if a else '' for a in is_abn]
+                _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
+                _tbl['Ngày lấy mẫu'] = _tbl['Ngày lấy mẫu'].dt.strftime('%d/%m/%Y')
+                st.dataframe(_tbl, hide_index=True, width='stretch')
+
+
 def render_search():
     """Tìm kiếm theo từ khoá trên CẢ 3 nguồn: ghi chú, lịch (tiêu đề appointment), sách/Gundam
     (tên cuốn/series + tiêu đề phần) -- lọc trực tiếp trong Python trên text thuần, khối lượng
@@ -4055,6 +4369,7 @@ NAV = {
     "Báo cáo": ":material/summarize:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/shield:",
+    "Sức khoẻ": ":material/monitor_heart:",
     "Tìm kiếm": ":material/search:",
     "Tuỳ biến": ":material/settings:",
     "Hướng dẫn": ":material/help:",
@@ -4065,6 +4380,7 @@ NAV_SHORT = {
     "Báo cáo": "Báo cáo",
     "Nhật ký đọc sách": "Sách",
     "Gundam": "Gundam",
+    "Sức khoẻ": "Sức khoẻ",
     "Tìm kiếm": "Tìm kiếm",
     "Tuỳ biến": "Tuỳ biến",
     "Hướng dẫn": "Trợ giúp",
@@ -5175,6 +5491,11 @@ elif nav == "Gundam":
                     if v is not None and pd.notna(v)]
         latest_overall_g = max(_cands_g) if _cands_g else None
         render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS)
+# ==========================================
+# TRANG: SỨC KHOẺ
+# ==========================================
+elif nav == "Sức khoẻ":
+    render_health_page()
 elif nav == "Tìm kiếm":
     render_search()
 # ==========================================
@@ -5480,7 +5801,8 @@ elif nav == "Tuỳ biến":
                                       (QUICK_NOTES_FILE, load_quick_notes()),
                                       (WORK_CALENDAR_FILE, load_work_calendar()),
                                       (READING_LOG_FILE, load_reading_log()),
-                                      (SETTINGS_FILE, _settings_df)]:
+                                      (SETTINGS_FILE, _settings_df),
+                                      (HEALTH_METRICS_FILE, load_health_metrics())]:
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
@@ -5517,6 +5839,8 @@ elif nav == "Tuỳ biến":
                             parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
                         if SETTINGS_FILE in names:
                             parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
+                        if HEALTH_METRICS_FILE in names:
+                            parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -5544,6 +5868,10 @@ elif nav == "Tuỳ biến":
                         save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
                     if SETTINGS_FILE in names:
                         save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
+                    if HEALTH_METRICS_FILE in names:
+                        # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
+                        # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
+                        save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -5560,6 +5888,7 @@ elif nav == "Tuỳ biến":
                 _sb_delete_all("work_calendar", "uid")
                 _sb_delete_all("reading_log", "uid")
                 _sb_delete_all("settings", "key")
+                _sb_delete_all("health_metrics", "id")
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
@@ -5580,6 +5909,7 @@ elif nav == "Hướng dẫn":
         ":material/today: Hôm nay",
         ":material/summarize: Báo cáo",
         ":material/menu_book: Sách & Gundam",
+        ":material/monitor_heart: Sức khoẻ",
         ":material/tune: Tuỳ biến",
         ":material/new_releases: Cập nhật",
     ], key="help_subtabs")
@@ -5596,10 +5926,11 @@ elif nav == "Hướng dẫn":
                 "độ đọc sách/xem Gundam), rồi **nhìn lại** — tập trung nhiều nhất vào khung giờ nào, thói quen "
                 "đang mạnh lên hay chùng xuống, một cuốn sách mất bao lâu để đọc xong. Toàn bộ app mang tính "
                 "nhìn lại quá khứ, không phải một bộ đếm ngược hay thanh tiến độ.\n\n"
-                "Thanh điều hướng trên cùng có 7 mục: **Hôm nay** (trang mặc định, 1 ngày cụ thể) · **Báo cáo** "
-                "(Tổng quan/Tuần/Tháng/Năm/Dự án) · **Sách** / **Gundam** (nhật ký đọc/xem) · **Tìm kiếm** (tra "
-                "ghi chú/lịch/sách·Gundam cũ) · **Tuỳ biến** (nạp dữ liệu, phân loại, đổi màu, sao lưu) · "
-                "**Trợ giúp** — trang bạn đang xem.\n\n"
+                "Thanh điều hướng trên cùng có 8 mục: **Hôm nay** (trang mặc định, 1 ngày cụ thể) · **Báo cáo** "
+                "(Tổng quan/Tuần/Tháng/Năm/Dự án) · **Sách** / **Gundam** (nhật ký đọc/xem) · **Sức khoẻ** (chỉ "
+                "số xét nghiệm máu định kỳ — mục nhập liệu duy nhất của app, khác phần còn lại thuần hồi cứu) · "
+                "**Tìm kiếm** (tra ghi chú/lịch/sách·Gundam cũ) · **Tuỳ biến** (nạp dữ liệu, phân loại, đổi màu, "
+                "sao lưu) · **Trợ giúp** — trang bạn đang xem.\n\n"
                 "Nhiều biểu đồ/bảng dưới đây xuất hiện giống hệt nhau ở nhiều trang khác nhau — có chủ đích: đọc "
                 "quen 1 biểu đồ ở Hôm nay là đọc được y hệt biểu đồ đó ở Báo cáo, Sách hay Gundam. Mục này liệt "
                 "kê từng thành phần dùng chung đó một lần duy nhất; các tab sau chỉ nói phần khác biệt riêng của "
@@ -6007,9 +6338,48 @@ elif nav == "Hướng dẫn":
             where="Gundam")
 
     # ==========================================
-    # SUB-TAB: TUỲ BIẾN
+    # SUB-TAB: SỨC KHOẺ
     # ==========================================
     with _guide_tabs[5]:
+        with st.container(border=True, key="guide_health_intro"):
+            st.markdown("#### Trang duy nhất CÓ nhập liệu tay")
+            st.markdown(
+                "Toàn bộ phần còn lại của app thuần hồi cứu — chỉ hiển thị lại dữ liệu Forest đã ghi nhận. Trang "
+                "**Sức khoẻ** là ngoại lệ duy nhất: không có nguồn tự động nào xuất được kết quả xét nghiệm máu ra "
+                "file, nên bạn tự nhập. Quy trình gợi ý: chụp ảnh 2 phiếu xét nghiệm (Huyết học + Sinh hóa) mỗi "
+                "lần đi khám, đưa ảnh vào Claude và nhờ đọc + xuất đúng định dạng JSON ở mục 2, dán vào app.")
+
+        guide_item(
+            "suckhoe.png", "4 mục của trang Sức khoẻ",
+            "**1. Nhập kết quả xét nghiệm** — nhập tay 1 lần khám: chọn Ngày lấy mẫu + Nhóm (Huyết học/Sinh hóa/"
+            "tự đặt nhóm khác), rồi gõ từng chỉ số vào bảng (Chỉ số/Giá trị/Đơn vị/Khoảng tham chiếu), bấm Lưu.\n\n"
+            "**2. Import hàng loạt** — dán 1 khối JSON gồm nhiều lần khám cùng lúc (xem mục \"Xem định dạng JSON "
+            "mẫu\" ngay trong trang) — cách nhanh nhất để nạp dữ liệu xét nghiệm nhiều năm cũ, hoặc nạp kết quả "
+            "Claude vừa đọc từ ảnh. Có bước Xem trước trước khi Xác nhận lưu.\n\n"
+            "**3. Lịch sử & quản lý** — danh sách từng lần xét nghiệm đã nhập theo năm, sửa lại bảng chỉ số hoặc "
+            "xoá cả lần xét nghiệm nếu nhập nhầm.\n\n"
+            "**4. Biểu đồ theo dõi** — chọn Nhóm rồi Chỉ số để xem xu hướng theo thời gian: dải xám là khoảng "
+            "tham chiếu (khoảng bình thường) tại đúng thời điểm đo — vì khoảng này có thể đổi theo lab/máy xét "
+            "nghiệm qua các năm; điểm đỏ là giá trị nằm ngoài khoảng đó.",
+            where="Sức khoẻ")
+
+        with st.container(border=True, key="guide_health_json"):
+            st.markdown("#### Định dạng JSON để nhờ Claude xuất từ ảnh")
+            st.markdown(
+                "Khi đưa ảnh phiếu xét nghiệm vào Claude, yêu cầu xuất đúng khuôn dưới đây (mỗi phần tử trong "
+                "list là 1 phiếu/1 nhóm chỉ số của 1 lần khám — 1 lần khám có 2 phiếu Huyết học + Sinh hóa thì ra "
+                "2 phần tử cùng `test_date` khác `category`), rồi dán nguyên văn vào ô \"Dán nội dung JSON\" ở "
+                "mục 2:")
+            st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
+            st.markdown(
+                "`ref_raw` chấp nhận các dạng thường gặp trên phiếu: khoảng đủ (`\"4.2 - 5.4\"`), chỉ có trần "
+                "trên (`\"< 5\"`), chỉ có sàn dưới (`\"> 10\"`) — dạng khác (vd kết quả định tính \"Âm tính\") vẫn "
+                "lưu được, chỉ không vẽ được lên biểu đồ/không phát hiện bất thường.")
+
+    # ==========================================
+    # SUB-TAB: TUỲ BIẾN
+    # ==========================================
+    with _guide_tabs[6]:
         with st.container(border=True, key="guide_tb_intro"):
             st.markdown("#### 5 mục của tab Tuỳ biến")
             st.markdown(
@@ -6095,7 +6465,7 @@ elif nav == "Hướng dẫn":
             "prep_backup.png", "5. Quản lý hệ thống",
             "3 thao tác trên toàn bộ dữ liệu:\n\n"
             "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, ghi chú nhanh, lịch, "
-            "sách/Gundam, cài đặt màu) thành "
+            "sách/Gundam, cài đặt màu, chỉ số Sức khoẻ) thành "
             "1 file .zip, tên tự kèm ngày giờ. App tự nhớ **ngày sao lưu gần nhất** (bảng `settings`) — nếu chưa "
             "từng sao lưu, hoặc lần gần nhất đã quá 30 ngày, 1 dòng nhắc nhỏ hiện ngay phía trên nút này.\n"
             "- **Khôi phục** — tải 1 file .zip đã sao lưu để phục hồi đúng nguyên trạng tại thời điểm đó, dùng "
