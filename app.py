@@ -13,6 +13,8 @@ import altair as alt
 import colorsys
 import hashlib
 import re
+import difflib
+import random
 from itertools import groupby
 from html import escape as html_escape, unescape as html_unescape
 from datetime import date, datetime, timedelta
@@ -135,6 +137,8 @@ WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
 HEALTH_METRICS_FILE = "health_metrics.csv"  # chỉ số xét nghiệm máu định kỳ (trang Sức khoẻ)
+KINDLE_HIGHLIGHTS_FILE = "kindle_highlights.csv"  # trích dẫn/ghi chú Kindle, nạp từ My Clippings.txt
+KINDLE_BOOK_MAP_FILE = "kindle_book_map.csv"  # ánh xạ tên sách Kindle -> Dự án/nhãn hiển thị
 
 @st.cache_resource
 def _get_supabase():
@@ -711,6 +715,100 @@ def save_reading_log_bulk(df):
     st.cache_data.clear()
 
 
+# --- KINDLE: TRÍCH DẪN & GHI CHÚ (từ My Clippings.txt, xem parse_kindle_clippings) ---
+# 2 bảng: kindle_highlights (từng đoạn highlight/note gốc) và kindle_book_map (ánh xạ tên sách
+# GHI NGUYÊN VĂN trong Clippings.txt -> 1 Dự án đã có, hoặc để trống + tự đặt nhãn nếu là nguồn
+# không thuộc Dự án nào, vd tạp chí The Economist -- xem UI xác nhận ở tab "Tải trích dẫn Kindle").
+# kindle_book_map lưu 1 lần lúc xác nhận import, các lần sau tự nhớ, không hỏi lại cùng 1 tên sách.
+
+def _kindle_dedupe_hash(kindle_title, location, content):
+    """Băm (sách, vị trí, nội dung) làm khoá chống trùng -- Kindle luôn xuất TOÀN BỘ lịch sử cộng
+    dồn mỗi lần export (không chỉ phần mới), nên import lặp lại nhiều lần (hoặc từ nhiều thiết bị
+    Kindle khác nhau) phải tự nhận ra dòng đã có mà không cần so sánh gì khác ngoài chính nội dung
+    -- tính lại được y hệt từ dữ liệu thô, không cần lưu/truyền riêng."""
+    # pd.notna, KHÔNG "location or ''" -- float NaN (location thiếu, đọc từ DataFrame) là truthy
+    # trong Python, "nan or ''" giữ nguyên NaN chứ không rơi về '' như None/0/'' vẫn làm.
+    loc = str(location) if pd.notna(location) else ''
+    raw = f"{kindle_title}|{loc}|{content}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+
+@st.cache_data
+def load_kindle_book_map():
+    sb = _get_supabase()
+    res = sb.table("kindle_book_map").select("kindle_title,project,label").execute()
+    cols = ["Tên Kindle", "Dự án", "Nhãn"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(res.data).rename(columns={
+        "kindle_title": "Tên Kindle", "project": "Dự án", "label": "Nhãn"})[cols]
+
+
+def save_kindle_book_map_upsert(df):
+    """Upsert theo kindle_title -- KHÔNG xoá sạch trước như save_reading_log_bulk(), vì đây là
+    bảng CỘNG DỒN theo thời gian (mỗi lần import chỉ thêm ánh xạ cho sách MỚI gặp lần đầu, sách cũ
+    đã gán không được đụng tới)."""
+    sb = _get_supabase()
+    if not df.empty:
+        recs = [{"kindle_title": str(r["Tên Kindle"]),
+                 "project": (str(r["Dự án"]) if pd.notna(r.get("Dự án")) and str(r["Dự án"]).strip() else None),
+                 "label": str(r["Nhãn"])} for r in df.to_dict("records")]
+        sb.table("kindle_book_map").upsert(recs, on_conflict="kindle_title").execute()
+    st.cache_data.clear()
+
+
+@st.cache_data
+def load_kindle_highlights():
+    """Đọc kindle_highlights rồi JOIN với kindle_book_map để ra cột "Cuốn sách" hiển thị cuối
+    cùng: sách đã gán Dự án -> dùng đúng tên Dự án đó (để nối được vào trang "Nhật ký đọc sách" ->
+    Chi tiết); sách gán "nguồn độc lập" (Dự án để trống) -> dùng nhãn tự đặt lúc import; sách CHƯA
+    qua bước xác nhận map (không có trong kindle_book_map, không nên xảy ra ở luồng bình thường vì
+    UI luôn bắt xác nhận trước khi lưu) -> rơi về chính tên gốc trong Clippings.txt, phòng dữ liệu
+    bất thường thay vì hiện trống/lỗi."""
+    sb = _get_supabase()
+    res = sb.table("kindle_highlights").select(
+        "kindle_title,author,kind,content,location,added_at").execute()
+    cols = ["Tên Kindle", "Tác giả", "Loại", "Nội dung", "Vị trí", "Ngày thêm", "Cuốn sách", "Dự án"]
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(res.data).rename(columns={
+        "kindle_title": "Tên Kindle", "author": "Tác giả", "kind": "Loại",
+        "content": "Nội dung", "location": "Vị trí", "added_at": "Ngày thêm"})
+    df["Ngày thêm"] = pd.to_datetime(df["Ngày thêm"], format='ISO8601', errors='coerce')
+    bm = load_kindle_book_map()
+    bm_idx = bm.set_index("Tên Kindle")[["Dự án", "Nhãn"]] if not bm.empty else pd.DataFrame(columns=["Dự án", "Nhãn"])
+
+    def _resolve(t):
+        if t in bm_idx.index:
+            proj, label = bm_idx.loc[t, "Dự án"], bm_idx.loc[t, "Nhãn"]
+            proj = proj if pd.notna(proj) and str(proj).strip() else None
+            return pd.Series({"Cuốn sách": proj or label, "Dự án": proj})
+        return pd.Series({"Cuốn sách": t, "Dự án": None})
+
+    df = df.join(df["Tên Kindle"].apply(_resolve))
+    return df[cols]
+
+
+def save_kindle_highlights_bulk(df):
+    """Upsert theo dedupe_hash (tự tính lại từ Tên Kindle/Vị trí/Nội dung, xem _kindle_dedupe_hash)
+    -- KHÔNG xoá sạch trước như save_reading_log_bulk(), vì Kindle xuất TOÀN BỘ lịch sử cộng dồn
+    mỗi lần export: nạp lại cùng file hoặc file từ nhiều thiết bị Kindle khác nhau chỉ thêm dòng
+    thật sự mới, dòng trùng tự bị bỏ qua qua on_conflict."""
+    sb = _get_supabase()
+    if not df.empty:
+        recs = [{
+            "dedupe_hash": _kindle_dedupe_hash(r["Tên Kindle"], r.get("Vị trí"), r["Nội dung"]),
+            "kindle_title": str(r["Tên Kindle"]),
+            "author": (str(r["Tác giả"]) if pd.notna(r.get("Tác giả")) and str(r["Tác giả"]).strip() else None),
+            "kind": str(r["Loại"]), "content": str(r["Nội dung"]),
+            "location": (str(r["Vị trí"]) if pd.notna(r.get("Vị trí")) and str(r["Vị trí"]).strip() else None),
+            "added_at": (_fmt_ts(r["Ngày thêm"]) if pd.notna(r.get("Ngày thêm")) else None),
+        } for r in df.to_dict("records")]
+        for i in range(0, len(recs), 500):
+            sb.table("kindle_highlights").upsert(recs[i:i + 500], on_conflict="dedupe_hash").execute()
+    st.cache_data.clear()
+
+
 HEALTH_METRICS_COLS = ["id", "Ngày lấy mẫu", "Nhóm", "Chỉ số", "Giá trị", "Giá trị (gốc)",
                         "Đơn vị", "Khoảng tham chiếu", "Ref thấp", "Ref cao"]
 
@@ -881,6 +979,65 @@ def parse_forest_csv(uploaded):
     df = df[['Thời gian bắt đầu', 'Thời gian kết thúc', 'Dự án', 'Thời lượng (Phút)']]
     stats['valid'] = len(df)
     return df, stats, []
+
+
+def parse_kindle_clippings(raw):
+    """Đọc "My Clippings.txt" (định dạng xuất mặc định của mọi Kindle, xem "Cách xuất Clippings"
+    trong tab Hướng dẫn) -- mỗi entry cách nhau bởi 1 dòng đúng 10 dấu "=", gồm: dòng 1 "Tên sách
+    (Tác giả)", dòng 2 metadata "- Your Highlight/Note/Bookmark on page X | location Y | Added on
+    <ngày giờ>", 1 dòng trống, rồi nội dung (rỗng với Bookmark). Bookmark KHÔNG có nội dung nên bị
+    bỏ qua hoàn toàn -- không có gì để hiện làm quote/note. Trả về (df, stats):
+    df cột (Tên Kindle, Tác giả, Loại, Nội dung, Vị trí, Ngày thêm); stats = {'raw', 'valid',
+    'bookmarks', 'invalid'}."""
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8-sig', errors='replace')
+    else:
+        raw = raw.lstrip('﻿')
+    blocks = [b.strip('\r\n') for b in re.split(r'\r?\n={10}\r?\n?', raw) if b.strip()]
+    rows = []
+    n_bookmark = n_invalid = 0
+    for block in blocks:
+        lines = block.splitlines()
+        if len(lines) < 2:
+            n_invalid += 1
+            continue
+        title_line, meta_line = lines[0].strip(), lines[1].strip()
+        content = "\n".join(lines[2:]).strip()
+        m = re.match(r'^(.*)\s+\(([^()]+)\)\s*$', title_line)
+        title, author = (m.group(1).strip(), m.group(2).strip()) if m else (title_line, None)
+        meta_low = meta_line.lower()
+        kind = ('highlight' if 'highlight' in meta_low else 'note' if 'note' in meta_low
+                else 'bookmark' if 'bookmark' in meta_low else None)
+        if kind is None:
+            n_invalid += 1
+            continue
+        if kind == 'bookmark':
+            n_bookmark += 1
+            continue
+        if not content:
+            n_invalid += 1
+            continue
+        loc_m = re.search(r'location\s+([\d\-]+)', meta_line, re.IGNORECASE)
+        page_m = re.search(r'page\s+([\d\-]+)', meta_line, re.IGNORECASE)
+        location = loc_m.group(1) if loc_m else (f"trang {page_m.group(1)}" if page_m else None)
+        added_m = re.search(r'Added on (.+?)$', meta_line, re.IGNORECASE)
+        added_at = pd.to_datetime(added_m.group(1), errors='coerce') if added_m else pd.NaT
+        rows.append({'Tên Kindle': title, 'Tác giả': author, 'Loại': kind, 'Nội dung': content,
+                     'Vị trí': location, 'Ngày thêm': added_at})
+    stats = {'raw': len(blocks), 'valid': len(rows), 'bookmarks': n_bookmark, 'invalid': n_invalid}
+    cols = ['Tên Kindle', 'Tác giả', 'Loại', 'Nội dung', 'Vị trí', 'Ngày thêm']
+    return pd.DataFrame(rows, columns=cols), stats
+
+
+def _fuzzy_match_project(title, projects):
+    """Gợi ý Dự án khớp gần đúng nhất với tên sách Kindle (Kindle thường ghi kèm phụ đề/dấu câu
+    khác với tên Dự án Forest tự đặt tay) -- dùng difflib (đủ tốt cho vài chục Dự án, không cần
+    thêm thư viện fuzzy ngoài chỉ cho 1 tính năng phụ này). Trả None nếu độ khớp dưới ngưỡng, coi
+    như không có gợi ý đáng tin -- người dùng vẫn tự chọn tay được trong UI xác nhận."""
+    if not projects:
+        return None
+    match = difflib.get_close_matches(title, projects, n=1, cutoff=0.55)
+    return match[0] if match else None
 
 
 # --- ĐỒNG BỘ NHANH (Shortcut iOS -> Supabase Storage -> 1 nút trong app) ---
@@ -2466,6 +2623,17 @@ def _render_reading_detail(t, reading_log_df, labels):
         else:
             st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
+    # Trích dẫn/ghi chú Kindle (My Clippings.txt) -- KHÔNG đánh số (giữ nguyên số các mục 1-4 cố
+    # định) vì đây là mục điều kiện, đúng tiền lệ "Nhật ký đọc" không số ở Báo cáo -> Dự án: chỉ
+    # hiện khi cuốn/series đang xem có ít nhất 1 trích dẫn đã gán qua kindle_book_map (khớp tên
+    # Kindle -> đúng tên Dự án/series này, xem load_kindle_highlights()).
+    _kh_all = load_kindle_highlights()
+    _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
+    if not _kh_book.empty:
+        with st.expander("Trích dẫn & Ghi chú Kindle", expanded=True):
+            with st.container(border=True, key="jcard_kindle_detail"):
+                st.markdown(f"<div class='jrows'>{_kindle_rows_html(_kh_book)}</div>", unsafe_allow_html=True)
+
     with st.expander("3. Biểu đồ lịch", expanded=False):
         if not _rl_detail.empty:
             render_reading_calendar_grid(_rl_detail, labels)
@@ -3226,6 +3394,35 @@ def _reading_rows_html(rl_df, label_book=True):
             f"<div class='jdm'>{d:%d/%m}</div></div></a>"
             f"<div>{chips_html}</div></div>"
         )
+    return rows_html
+
+
+def _kindle_rows_html(kh_df):
+    """HTML .jrows cho trích dẫn/ghi chú Kindle (kh_df đã lọc sẵn đúng 1 cuốn/nguồn) -- 1 dòng cho
+    mỗi ngày có "Ngày thêm", MỚI NHẤT LÊN TRƯỚC (khác _reading_rows_html tăng dần, vì đọc sách là
+    hành trình xuôi theo thời gian còn đọc lại trích dẫn cũ giống lật nhật ký, xem cái gần đây nhất
+    trước hợp lý hơn). Dòng nào không parse được "Added on" (added_at NaT, hiếm) vẫn hiện, gom
+    chung 1 nhóm "—" ở cuối thay vì bị groupby() âm thầm bỏ sót."""
+    kh = kh_df.assign(_d=kh_df['Ngày thêm'].dt.normalize())
+    rows_html = ''
+    _all_groups = list(kh.groupby('_d', dropna=False))
+    groups = (sorted((g for g in _all_groups if pd.notna(g[0])), key=lambda kv: kv[0], reverse=True)
+              + [g for g in _all_groups if pd.isna(g[0])])
+    for d, day_g in groups:
+        cards = ''
+        for _, r in day_g.sort_values('Ngày thêm').iterrows():
+            _cls = 'kq-note' if r['Loại'] == 'note' else 'kq-highlight'
+            _loc = (f"<span class='kq-loc'>{html_escape(str(r['Vị trí']))}</span>"
+                    if pd.notna(r['Vị trí']) and str(r['Vị trí']).strip() else '')
+            cards += (f"<div class='{_cls}'><div class='kq-text'>{html_escape(str(r['Nội dung']))}</div>{_loc}</div>")
+        if pd.isna(d):
+            _date_block = "<div class='jdate'><div class='jdowbig'>—</div></div>"
+        else:
+            _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
+            _date_block = (f"<a class='jdate-link' href='{_href}' target='_self'>"
+                           f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
+                           f"<div class='jdm'>{d:%d/%m/%Y}</div></div></a>")
+        rows_html += f"<div class='jrow'>{_date_block}<div>{cards}</div></div>"
     return rows_html
 
 
@@ -4306,6 +4503,24 @@ st.markdown(
        đúng pattern nhãn nhỏ đã dùng cho where= của guide_item và box "Lịch Work" cũ. */
     .rl-book { display: block; font-size: 11px; font-weight: 700; color: var(--text-2);
         text-transform: uppercase; letter-spacing: .5px; margin: 0 0 4px 2px; }
+    /* Trích dẫn/ghi chú Kindle (mục "Trích dẫn & Ghi chú Kindle" ở Sách -> Chi tiết): thẻ viền
+       trái thay vì .jchip nền phẳng -- nội dung ở đây là ĐOẠN VĂN dài (1 highlight có thể vài
+       dòng), khác các chip 1 dòng ngắn (tiêu đề phần đọc, appointment lịch...) dùng .jchip. */
+    .kq-highlight, .kq-note { position: relative; padding: 9px 12px; margin: 0 0 8px;
+        border-left: 3px solid var(--accent); border-radius: 6px; background: var(--chip); }
+    .kq-highlight:last-child, .kq-note:last-child { margin-bottom: 0; }
+    .kq-note { border-left-color: var(--text-3); }
+    .kq-text { font-size: 13.5px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
+    .kq-note .kq-text { font-style: italic; color: var(--text-2); }
+    .kq-loc { display: block; margin-top: 5px; font-size: 11px; color: var(--text-3); }
+    /* Quote ngẫu nhiên (cố định theo ngày) ở đầu trang Hôm nay -- xem _kindle_quote_of_day() */
+    .kq-daily { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 18px 24px 20px; margin-bottom: 16px; }
+    .kq-daily-mark { font-size: 34px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
+        opacity: .55; margin-bottom: -6px; }
+    .kq-daily-text { font-size: 14.5px; line-height: 1.6; color: var(--text); font-style: italic;
+        white-space: pre-wrap; }
+    .kq-daily-src { margin-top: 10px; font-size: 12px; color: var(--text-2); font-weight: 600; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
@@ -4892,6 +5107,19 @@ elif "hsub" in st.query_params:
 _inject_keyboard_shortcuts()
 
 
+def _kindle_quote_of_day():
+    """Chọn 1 trích dẫn/ghi chú Kindle ngẫu nhiên nhưng CỐ ĐỊNH trong ngày -- seed theo ngày THẬT
+    hôm nay (_today_vn(), không phải "sel", ngày đang xem trên trang Hôm nay) nên tải lại trang hay
+    lùi/tiến xem ngày khác vẫn ra đúng 1 câu suốt cả ngày hôm nay, đúng cảm giác "quote of the
+    day" thật -- chỉ đổi khi sang ngày mới. Trả None nếu chưa import trích dẫn nào (tính năng tuỳ
+    chọn, không chặn phần còn lại của trang)."""
+    kh = load_kindle_highlights()
+    if kh.empty:
+        return None
+    idx = random.Random(_today_vn().isoformat()).randrange(len(kh))
+    return kh.iloc[idx]
+
+
 def render_day_report(df):
     """Nội dung trang "Hôm nay" -- mục đầu tiên trên nav bar, trang mặc định khi mở app. Tách
     thành hàm riêng (thay vì viết trực tiếp trong khối if nav=="Hôm nay":) vì day-jump link
@@ -4967,6 +5195,15 @@ def render_day_report(df):
         unsafe_allow_html=True)
     if _upd_tail:
         _inject_relative_time_ticker()
+
+    _kq = _kindle_quote_of_day()
+    if _kq is not None:
+        st.markdown(
+            "<div class='kq-daily'>"
+            f"<div class='kq-daily-mark'>{'“'}</div>"
+            f"<div class='kq-daily-text'>{html_escape(str(_kq['Nội dung']))}</div>"
+            f"<div class='kq-daily-src'>— {html_escape(str(_kq['Cuốn sách']))}</div>"
+            "</div>", unsafe_allow_html=True)
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
@@ -5609,8 +5846,8 @@ elif nav == "Tuỳ biến":
             st.rerun()
 
         with st.expander("Dự phòng", expanded=False):
-            _tab_forest, _tab_cal, _tab_rem = st.tabs(
-                ["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder"])
+            _tab_forest, _tab_cal, _tab_rem, _tab_kindle = st.tabs(
+                ["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder", "Tải trích dẫn Kindle"])
             with _tab_forest:
                 _msg = st.session_state.pop('import_msg', None)
                 if _msg:
@@ -5727,6 +5964,89 @@ elif nav == "Tuỳ biến":
                             save_reading_log_bulk(rl_df)
                             st.success(f"Đã nạp {rl_df['Sách (gốc)'].nunique()} cuốn sách, {len(rl_df)} phần đã đọc.")
                             time.sleep(1)
+                            st.rerun()
+
+            with _tab_kindle:
+                _kmsg = st.session_state.pop('kindle_import_msg', None)
+                if _kmsg:
+                    st.success(_kmsg)
+                kindle_file = st.file_uploader("Tải lên My Clippings.txt", type=["txt"], key="kindle_file")
+                if kindle_file:
+                    k_df, k_stats = parse_kindle_clippings(kindle_file.read())
+                    if k_df.empty:
+                        st.warning("Không đọc được trích dẫn/ghi chú hợp lệ nào trong file.")
+                    else:
+                        _extra_parts = []
+                        if k_stats['bookmarks']:
+                            _extra_parts.append(f"{k_stats['bookmarks']} bookmark không có nội dung")
+                        if k_stats['invalid']:
+                            _extra_parts.append(f"{k_stats['invalid']} dòng không nhận dạng được")
+                        _extra = f" (bỏ {', '.join(_extra_parts)})" if _extra_parts else ""
+                        st.caption(f"Đọc được **{k_stats['valid']}** trích dẫn/ghi chú hợp lệ từ "
+                                   f"**{k_df['Tên Kindle'].nunique()}** cuốn/nguồn{_extra}. Xem trước:")
+                        _kprev = k_df.head(8).copy()
+                        _kprev['Nội dung'] = _kprev['Nội dung'].apply(lambda s: s if len(s) <= 120 else s[:120] + '…')
+                        _kprev['Ngày thêm'] = _kprev['Ngày thêm'].apply(
+                            lambda d: d.strftime('%Y-%m-%d %H:%M') if pd.notna(d) else '—')
+                        st.dataframe(_kprev, width='stretch', hide_index=True)
+
+                        existing_map = load_kindle_book_map()
+                        known_titles = set(existing_map["Tên Kindle"]) if not existing_map.empty else set()
+                        new_titles = sorted(t for t in k_df["Tên Kindle"].unique() if t not in known_titles)
+
+                        db_all = load_db()
+                        projects = sorted(db_all['Dự án'].dropna().astype(str).unique()) if not db_all.empty else []
+                        _INDEP = "— Nguồn độc lập (không phải Dự án) —"
+
+                        _confirm_edited = pd.DataFrame(columns=["Tên Kindle", "Ghép với Dự án", "Nhãn hiển thị (nếu độc lập)"])
+                        if new_titles:
+                            st.markdown(
+                                f"**{len(new_titles)} cuốn/nguồn mới** cần xác nhận trước khi lưu — ghép với 1 "
+                                f"Dự án đã có, hoặc để nguyên \"{_INDEP}\" và tự đặt tên hiển thị (vd tạp chí đọc "
+                                "định kỳ). Các cuốn/nguồn đã từng xác nhận trước đây tự động dùng lại, không hỏi lại.")
+                            _sugg = {t: (_fuzzy_match_project(t, projects) or _INDEP) for t in new_titles}
+                            _confirm_tbl = pd.DataFrame({
+                                "Tên Kindle": new_titles,
+                                "Ghép với Dự án": [_sugg[t] for t in new_titles],
+                                "Nhãn hiển thị (nếu độc lập)": new_titles,
+                            })
+                            _confirm_edited = st.data_editor(
+                                _confirm_tbl, hide_index=True, width='stretch', key="kindle_map_editor",
+                                column_config={
+                                    "Tên Kindle": st.column_config.TextColumn("Tên Kindle", disabled=True),
+                                    "Ghép với Dự án": st.column_config.SelectboxColumn(
+                                        "Ghép với Dự án", options=[_INDEP] + projects,
+                                        help="Chọn đúng Dự án nếu đây là 1 cuốn sách bạn đang theo dõi; để "
+                                             f"nguyên \"{_INDEP}\" nếu không (vd tạp chí)."),
+                                    "Nhãn hiển thị (nếu độc lập)": st.column_config.TextColumn(
+                                        "Nhãn hiển thị (nếu độc lập)",
+                                        help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong app."),
+                                },
+                            )
+                        else:
+                            st.caption("Mọi cuốn/nguồn trong file này đã từng được ghép từ trước.")
+
+                        if st.button("Xác nhận nạp dữ liệu Kindle", type="primary", key="tbtn_kindle_confirm"):
+                            if not _confirm_edited.empty:
+                                _is_indep = _confirm_edited["Ghép với Dự án"] == _INDEP
+                                _map_rows = pd.DataFrame({
+                                    "Tên Kindle": _confirm_edited["Tên Kindle"],
+                                    "Dự án": _confirm_edited["Ghép với Dự án"].where(~_is_indep, None),
+                                    "Nhãn": _confirm_edited["Nhãn hiển thị (nếu độc lập)"].where(
+                                        _is_indep, _confirm_edited["Ghép với Dự án"]),
+                                })
+                                save_kindle_book_map_upsert(_map_rows)
+                            existing_kh = load_kindle_highlights()
+                            existing_hashes = set(
+                                _kindle_dedupe_hash(r["Tên Kindle"], r["Vị trí"], r["Nội dung"])
+                                for r in existing_kh.to_dict("records")) if not existing_kh.empty else set()
+                            new_hashes = k_df.apply(
+                                lambda r: _kindle_dedupe_hash(r["Tên Kindle"], r["Vị trí"], r["Nội dung"]), axis=1)
+                            n_new = int((~new_hashes.isin(existing_hashes)).sum())
+                            n_dup = len(k_df) - n_new
+                            save_kindle_highlights_bulk(k_df)
+                            st.session_state['kindle_import_msg'] = (
+                                f"Đã thêm {n_new} trích dẫn/ghi chú mới (bỏ {n_dup} trùng đã có từ trước).")
                             st.rerun()
 
     with st.expander("2. Phân loại", expanded=True):
@@ -5872,7 +6192,9 @@ elif nav == "Tuỳ biến":
                                       (WORK_CALENDAR_FILE, load_work_calendar()),
                                       (READING_LOG_FILE, load_reading_log()),
                                       (SETTINGS_FILE, _settings_df),
-                                      (HEALTH_METRICS_FILE, load_health_metrics())]:
+                                      (HEALTH_METRICS_FILE, load_health_metrics()),
+                                      (KINDLE_HIGHLIGHTS_FILE, load_kindle_highlights()),
+                                      (KINDLE_BOOK_MAP_FILE, load_kindle_book_map())]:
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
                 st.download_button("Tải bản sao lưu", _buf.getvalue(),
@@ -5911,6 +6233,8 @@ elif nav == "Tuỳ biến":
                             parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
                         if HEALTH_METRICS_FILE in names:
                             parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
+                        if KINDLE_HIGHLIGHTS_FILE in names:
+                            parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
                     if parts:
                         ok_zip = True
                         st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
@@ -5942,6 +6266,16 @@ elif nav == "Tuỳ biến":
                         # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
                         # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
                         save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
+                    # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
+                    # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
+                    # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
+                    if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
+                        _sb_delete_all("kindle_highlights", "dedupe_hash")
+                        _sb_delete_all("kindle_book_map", "kindle_title")
+                    if KINDLE_BOOK_MAP_FILE in names:
+                        save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
+                    if KINDLE_HIGHLIGHTS_FILE in names:
+                        save_kindle_highlights_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
                 st.cache_data.clear()
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
@@ -5959,6 +6293,8 @@ elif nav == "Tuỳ biến":
                 _sb_delete_all("reading_log", "uid")
                 _sb_delete_all("settings", "key")
                 _sb_delete_all("health_metrics", "id")
+                _sb_delete_all("kindle_highlights", "dedupe_hash")
+                _sb_delete_all("kindle_book_map", "kindle_title")
                 st.cache_data.clear()
                 st.success("Đã xoá toàn bộ dữ liệu!")
                 time.sleep(1)
@@ -6198,6 +6534,15 @@ elif nav == "Hướng dẫn":
                 "được mà không phải đi qua Báo cáo trước.")
 
         guide_item(
+            "reading_detail.png", "Trích dẫn Kindle mỗi ngày",
+            "Thẻ trích dẫn ngay đầu trang (chỉ hiện nếu đã từng import trích dẫn Kindle, xem \"Tải trích dẫn "
+            "Kindle\" ở tab Tuỳ biến): 1 highlight/note ngẫu nhiên, lấy từ TOÀN BỘ dữ liệu Kindle đã lưu (không "
+            "chỉ riêng ngày đang xem). Câu được chọn **cố định trong đúng 1 ngày thật hôm nay** (không phụ "
+            "thuộc ngày đang xem trên trang) — tải lại trang hay lùi/tiến xem ngày khác vẫn ra cùng 1 câu, chỉ "
+            "đổi khi sang ngày mới, đúng cảm giác \"quote of the day\".",
+            where="Hôm nay")
+
+        guide_item(
             "day_timeline.png", "Dòng thời gian trong ngày",
             "Dải ngang biểu diễn 24 giờ của ngày đang xem, mỗi phiên tập trung vẽ thành 1 khối tại đúng vị trí "
             "giờ nó diễn ra, tô màu theo Danh mục. Đọc trực quan hơn bảng liệt kê: nhìn một lần biết ngay buổi "
@@ -6394,6 +6739,15 @@ elif nav == "Hướng dẫn":
             where="Sách → Chi tiết · Gundam → Chi tiết")
 
         guide_item(
+            "reading_detail.png", "Trích dẫn & Ghi chú Kindle",
+            "Mục điều kiện (không đánh số, chỉ hiện khi có dữ liệu — giống \"Nhật ký đọc\" ở Báo cáo → Dự án): "
+            "toàn bộ highlight/note Kindle đã ghép với đúng cuốn đang xem (xem \"Tải trích dẫn Kindle\" ở tab "
+            "Tuỳ biến để ghép tên sách Kindle với Dự án), xếp theo ngày thêm — **mới nhất lên trước**, khác "
+            "\"Nhật ký đọc\" xếp cũ trước vì đây giống lật lại nhật ký hơn là theo dõi tiến độ xuôi thời gian. "
+            "Ghi chú riêng (note) hiện chữ nghiêng để phân biệt với highlight nguyên văn.",
+            where="Sách → Chi tiết")
+
+        guide_item(
             "gundam.png", "Vì sao Gundam cần \"suy luận\" series",
             "Forest chỉ có đúng 1 tag chung \"Gundam\" — không có Dự án riêng cho từng series như Rừng Na Uy "
             "hay Harry Potter có thể trùng tên 1 Dự án Forest. Vậy khi bạn bấm giờ Forest với tag \"Gundam\", "
@@ -6493,7 +6847,13 @@ elif nav == "Hướng dẫn":
             "- **Tải lên từ Reminder** — nạp file `reading_log.csv` do Shortcut \"Xuất tiến độ đọc\" xuất từ "
             "Apple Reminders, mỗi lần tải lên **thay thế toàn bộ** dữ liệu Sách/Gundam cũ (khác hẳn cách Forest "
             "CSV chỉ cộng thêm) — vì Reminders phản ánh đúng trạng thái hiện tại của toàn bộ list, không phải 1 "
-            "lát cắt thời gian như CSV Forest.",
+            "lát cắt thời gian như CSV Forest.\n"
+            "- **Tải trích dẫn Kindle** — nạp file `My Clippings.txt` (Kindle tự tạo file này, nằm ngay trong "
+            "bộ nhớ máy khi cắm Kindle vào máy tính qua USB). Mỗi cuốn/nguồn **mới gặp lần đầu** cần xác nhận "
+            "ghép với 1 Dự án đã có (gợi ý sẵn theo tên gần giống nhất) hoặc để \"Nguồn độc lập\" kèm tên tự đặt "
+            "(vd tạp chí đọc định kỳ, không phải sách theo dõi tiến độ) — xác nhận 1 lần, các lần tải file mới "
+            "sau tự nhớ đúng cuốn/nguồn đó. Tải lại **toàn bộ** file (Kindle luôn xuất cộng dồn từ trước tới "
+            "giờ, không phải chỉ phần mới) vẫn an toàn — trích dẫn trùng tự động bị bỏ qua, không nhân đôi.",
             where="Tuỳ biến → 1. Dữ liệu đầu vào")
 
         guide_item(
@@ -6547,7 +6907,7 @@ elif nav == "Hướng dẫn":
             "prep_backup.png", "5. Quản lý hệ thống",
             "3 thao tác trên toàn bộ dữ liệu:\n\n"
             "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, ghi chú nhanh, lịch, "
-            "sách/Gundam, cài đặt màu, chỉ số Sức khoẻ) thành "
+            "sách/Gundam, trích dẫn Kindle, cài đặt màu, chỉ số Sức khoẻ) thành "
             "1 file .zip, tên tự kèm ngày giờ. App tự nhớ **ngày sao lưu gần nhất** (bảng `settings`) — nếu chưa "
             "từng sao lưu, hoặc lần gần nhất đã quá 30 ngày, 1 dòng nhắc nhỏ hiện ngay phía trên nút này.\n"
             "- **Khôi phục** — tải 1 file .zip đã sao lưu để phục hồi đúng nguyên trạng tại thời điểm đó, dùng "

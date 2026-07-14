@@ -67,6 +67,32 @@ create table if not exists reading_log (
   primary key (uid, completed_date)
 );
 
+-- Trích dẫn/ghi chú Kindle, nạp từ file "My Clippings.txt" (xem parse_kindle_clippings() trong
+-- app.py) -- mỗi dòng là 1 highlight/note gốc. Khoá theo dedupe_hash (băm từ tên sách + vị trí +
+-- nội dung, tính lại được y hệt từ dữ liệu thô) thay vì (uid, ...) như work_calendar/reading_log,
+-- vì Kindle KHÔNG có id ổn định cho từng entry, và file xuất luôn chứa TOÀN BỘ lịch sử cộng dồn
+-- (cũ + mới) mỗi lần export -- import lặp lại nhiều lần (hoặc từ nhiều thiết bị Kindle khác nhau)
+-- chỉ upsert thêm dòng thật sự mới, không cần xoá sạch trước như reading_log.
+create table if not exists kindle_highlights (
+  dedupe_hash text primary key,
+  kindle_title text not null,  -- tên sách GHI NGUYÊN VĂN dòng đầu mỗi entry trong Clippings.txt
+  author text,
+  kind text not null,          -- 'highlight' | 'note' (Bookmark bị bỏ qua lúc parse, không có nội dung)
+  content text not null,
+  location text,                -- vị trí/trang Kindle, giữ nguyên chuỗi gốc (vd "183-185")
+  added_at timestamp
+);
+
+-- Ánh xạ tên sách Kindle (kindle_title, khớp NGUYÊN VĂN với kindle_highlights.kindle_title) sang
+-- 1 Dự án đã có trong bảng mapping, hoặc để trống (project = NULL) kèm nhãn tự đặt nếu là nguồn
+-- không thuộc Dự án nào (vd tạp chí đọc định kỳ) -- xem UI xác nhận lúc import trong app.py. Lưu 1
+-- lần lúc xác nhận, các lần import sau tự nhớ theo đúng kindle_title, không hỏi lại.
+create table if not exists kindle_book_map (
+  kindle_title text primary key,
+  project text,   -- NULL = nguồn độc lập, không gắn Dự án nào
+  label text not null
+);
+
 -- Cài đặt app dạng key/value (hiện dùng cho màu accent, xem mục "Giao diện" trong tab Tuỳ
 -- biến) -- optional: nếu bảng này chưa tồn tại hoặc Supabase lỗi, app tự rơi về mặc định
 -- (Teal), không crash (xem load_settings() trong app.py).
@@ -106,6 +132,8 @@ alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
 alter table settings enable row level security;
 alter table health_metrics enable row level security;
+alter table kindle_highlights enable row level security;
+alter table kindle_book_map enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -116,6 +144,8 @@ create policy "anon full access" on work_calendar for all using (true) with chec
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
 create policy "anon full access" on health_metrics for all using (true) with check (true);
+create policy "anon full access" on kindle_highlights for all using (true) with check (true);
+create policy "anon full access" on kindle_book_map for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
