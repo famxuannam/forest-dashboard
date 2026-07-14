@@ -80,7 +80,27 @@ create table if not exists kindle_highlights (
   kind text not null,          -- 'highlight' | 'note' (Bookmark bị bỏ qua lúc parse, không có nội dung)
   content text not null,
   location text,                -- vị trí/trang Kindle, giữ nguyên chuỗi gốc (vd "183-185")
-  added_at timestamp
+  added_at timestamp,
+  parent_hash text             -- xem alter table ngay dưới đây (cột thêm sau, không nằm trong
+                                -- create table gốc)
+);
+
+-- Cột thêm sau khi bảng đã tồn tại thật (không nằm trong create table gốc ở trên vì "create
+-- table if not exists" không tự thêm cột mới cho bảng ĐÃ có sẵn) -- "alter table add column if
+-- not exists" an toàn để chạy lại nhiều lần. parent_hash: chỉ có giá trị ở ghi chú BẠN TỰ THÊM
+-- trong app (nút "+ thêm ghi chú" ở 1 quote cụ thể, xem add_kindle_note() trong app.py) -- trỏ
+-- về đúng dedupe_hash của highlight/note nó là câu trả lời, để hiện lồng đúng dưới quote đó
+-- trong "Nhật ký đọc". NULL với mọi entry nhập thẳng từ Clippings.txt (kể cả note gốc Kindle --
+-- note đó được LỒNG HIỂN THỊ dưới highlight cùng "Vị trí" bằng suy luận lúc render, không phải
+-- quan hệ lưu trong DB, nên không cần parent_hash).
+alter table kindle_highlights add column if not exists parent_hash text;
+
+-- Sổ đen các trích dẫn/ghi chú Kindle đã xoá trong app (nút Xoá, xem delete_kindle_highlight()
+-- trong app.py) -- cùng vai trò với deleted_sessions nhưng riêng cho Kindle: My Clippings.txt
+-- luôn xuất TOÀN BỘ lịch sử cộng dồn, nên nếu chỉ xoá khỏi kindle_highlights mà không ghi nhớ ở
+-- đây, lần import file cũ tiếp theo sẽ vô tình chèn lại y hệt dòng vừa xoá.
+create table if not exists deleted_kindle_highlights (
+  dedupe_hash text primary key
 );
 
 -- Ánh xạ tên sách Kindle (kindle_title, khớp NGUYÊN VĂN với kindle_highlights.kindle_title) sang
@@ -134,6 +154,7 @@ alter table settings enable row level security;
 alter table health_metrics enable row level security;
 alter table kindle_highlights enable row level security;
 alter table kindle_book_map enable row level security;
+alter table deleted_kindle_highlights enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -146,6 +167,7 @@ create policy "anon full access" on settings for all using (true) with check (tr
 create policy "anon full access" on health_metrics for all using (true) with check (true);
 create policy "anon full access" on kindle_highlights for all using (true) with check (true);
 create policy "anon full access" on kindle_book_map for all using (true) with check (true);
+create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
