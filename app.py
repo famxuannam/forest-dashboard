@@ -4513,9 +4513,11 @@ st.markdown(
     .kq-text { font-size: 13.5px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
     .kq-note .kq-text { font-style: italic; color: var(--text-2); }
     .kq-loc { display: block; margin-top: 5px; font-size: 11px; color: var(--text-3); }
-    /* Quote ngẫu nhiên (cố định theo ngày) ở đầu trang Hôm nay -- xem _kindle_quote_of_day() */
+    /* Quote ngẫu nhiên (cố định theo ngày) trong trang Hôm nay -- xem _kindle_quote_of_day().
+       KHÔNG đặt margin cố định ở đây -- margin (top/ngang) truyền qua style= tại nơi gọi vì vị
+       trí thẻ này đổi tuỳ ngày đang xem có phiên hay không, xem _kindle_quote_card_html(). */
     .kq-daily { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 18px 24px 20px; margin-bottom: 16px; }
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 18px 24px 20px; }
     .kq-daily-mark { font-size: 34px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
         opacity: .55; margin-bottom: -6px; }
     .kq-daily-text { font-size: 14.5px; line-height: 1.6; color: var(--text); font-style: italic;
@@ -5120,6 +5122,21 @@ def _kindle_quote_of_day():
     return kh.iloc[idx]
 
 
+def _kindle_quote_card_html(kq, style=""):
+    """HTML thẻ quote-of-the-day (._kq từ _kindle_quote_of_day()) -- tách hàm vì render_day_report
+    cần vẽ CÙNG 1 thẻ này ở 2 vị trí khác nhau tuỳ ngày đang xem có phiên hay không (cuối "1. Tổng
+    quan ngày" nếu có phiên, dưới "Tham khảo cho lên kế hoạch" nếu không), mỗi vị trí cần margin
+    khác nhau để thẳng hàng đúng bề ngang với thẻ liền trước -- xem 2 chỗ gọi trong
+    render_day_report()."""
+    return (
+        f"<div class='kq-daily' style='{style}'>"
+        "<div class='kq-daily-mark'>“</div>"
+        f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
+        f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>"
+        "</div>"
+    )
+
+
 def render_day_report(df):
     """Nội dung trang "Hôm nay" -- mục đầu tiên trên nav bar, trang mặc định khi mở app. Tách
     thành hàm riêng (thay vì viết trực tiếp trong khối if nav=="Hôm nay":) vì day-jump link
@@ -5196,14 +5213,8 @@ def render_day_report(df):
     if _upd_tail:
         _inject_relative_time_ticker()
 
+    # Tính trước, vẽ SAU (vị trí tuỳ nhánh rỗng/có phiên bên dưới) -- xem _kindle_quote_card_html().
     _kq = _kindle_quote_of_day()
-    if _kq is not None:
-        st.markdown(
-            "<div class='kq-daily'>"
-            f"<div class='kq-daily-mark'>{'“'}</div>"
-            f"<div class='kq-daily-text'>{html_escape(str(_kq['Nội dung']))}</div>"
-            f"<div class='kq-daily-src'>— {html_escape(str(_kq['Cuốn sách']))}</div>"
-            "</div>", unsafe_allow_html=True)
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
@@ -5228,6 +5239,12 @@ def render_day_report(df):
             # 20px (thay vì mặc định 0) tạo khoảng cách rõ ràng hơn trước khi vào "Ghi chú ngày".
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
+
+        # Quote-of-the-day (nếu có dữ liệu Kindle) đứng NGAY DƯỚI "Tham khảo cho lên kế hoạch" --
+        # cùng margin ngang 16px (khớp padding trong của st.expander) để 2 thẻ liền kề thẳng hàng
+        # đúng bề ngang với "Ghi chú ngày" bên dưới, dù thẻ này KHÔNG nằm trong expander nào.
+        if _kq is not None:
+            st.markdown(_kindle_quote_card_html(_kq, "margin:0 16px 20px;"), unsafe_allow_html=True)
 
         with st.expander("Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
@@ -5287,6 +5304,13 @@ def render_day_report(df):
 
             render_session_bar(day_df)
             render_day_timeline(day_df, sel, df)
+
+            # Quote-of-the-day (nếu có dữ liệu Kindle) đứng cuối "1. Tổng quan ngày", ngay dưới
+            # dòng thời gian -- nằm TRONG expander nên tự thẳng hàng bề ngang với các thẻ phía
+            # trên (render_stat_panel/render_session_bar), không cần margin ngang riêng như bản
+            # đứng ngoài expander ở nhánh ngày rỗng bên dưới.
+            if _kq is not None:
+                st.markdown(_kindle_quote_card_html(_kq, "margin-top:14px;"), unsafe_allow_html=True)
 
         with st.expander("2. Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
@@ -6535,11 +6559,13 @@ elif nav == "Hướng dẫn":
 
         guide_item(
             "reading_detail.png", "Trích dẫn Kindle mỗi ngày",
-            "Thẻ trích dẫn ngay đầu trang (chỉ hiện nếu đã từng import trích dẫn Kindle, xem \"Tải trích dẫn "
-            "Kindle\" ở tab Tuỳ biến): 1 highlight/note ngẫu nhiên, lấy từ TOÀN BỘ dữ liệu Kindle đã lưu (không "
-            "chỉ riêng ngày đang xem). Câu được chọn **cố định trong đúng 1 ngày thật hôm nay** (không phụ "
-            "thuộc ngày đang xem trên trang) — tải lại trang hay lùi/tiến xem ngày khác vẫn ra cùng 1 câu, chỉ "
-            "đổi khi sang ngày mới, đúng cảm giác \"quote of the day\".",
+            "Thẻ trích dẫn (chỉ hiện nếu đã từng import trích dẫn Kindle, xem \"Tải trích dẫn Kindle\" ở tab "
+            "Tuỳ biến): 1 highlight/note ngẫu nhiên, lấy từ TOÀN BỘ dữ liệu Kindle đã lưu (không chỉ riêng ngày "
+            "đang xem). Câu được chọn **cố định trong đúng 1 ngày thật hôm nay** (không phụ thuộc ngày đang xem "
+            "trên trang) — tải lại trang hay lùi/tiến xem ngày khác vẫn ra cùng 1 câu, chỉ đổi khi sang ngày "
+            "mới, đúng cảm giác \"quote of the day\". Vị trí thẻ tuỳ ngày đang xem: cuối mục \"1. Tổng quan "
+            "ngày\" (ngay dưới Dòng thời gian) nếu ngày đó có phiên; ngay dưới panel \"Tham khảo cho lên kế "
+            "hoạch\" nếu ngày đó chưa có phiên nào.",
             where="Hôm nay")
 
         guide_item(
