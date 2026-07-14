@@ -18,8 +18,9 @@ cặp hàm:
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | (upsert trực tiếp trong nơi dùng)  | Nội bộ (màu accent...)            |
 | `health_metrics`   | `load_health_metrics()` | `save_health_metrics_bulk()` (upsert, nhập tay/import JSON) · `save_health_metrics_raw_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng nhập tay hoặc dán JSON (trang Sức khoẻ) |
-| `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (upsert theo `dedupe_hash` tự tính lại, KHÔNG xoá sạch trước) | File `My Clippings.txt` xuất từ Kindle |
+| `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (insert-nếu-mới theo `dedupe_hash` tự tính lại từ file, ignore_duplicates -- dùng cho import) · `save_kindle_highlights_raw_bulk()` (ghi đè đúng `dedupe_hash`/`parent_hash` có sẵn, chỉ dùng khi Khôi phục) · `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` (sửa/xoá/thêm ghi chú trong app) | File `My Clippings.txt` xuất từ Kindle + người dùng sửa/thêm trong app |
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
+| `deleted_kindle_highlights` | `load_deleted_kindle()` | `add_deleted_kindle()` (cộng dồn) · `save_deleted_kindle()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá trích dẫn Kindle trong app) |
 
 Mỗi `load_*` bọc 1 lần đọc bảng Supabase, cache bằng `@st.cache_data`; `save_*`/`sync_*` tương ứng
 ghi xong rồi **bắt buộc** gọi `st.cache_data.clear()` — quên bước này là bug kinh điển (UI hiện dữ
@@ -55,15 +56,38 @@ khác cần nhớ khi sửa:
 - Có mặt trong cả 3 thao tác ở tab Tuỳ biến (Sao lưu/Khôi phục/Làm mới) -- thêm bảng Supabase mới
   nào có ý nghĩa tồn tại lâu dài cũng nên soát lại 3 chỗ này, không chỉ viết `load_*`/`save_*`.
 
-## `kindle_highlights`/`kindle_book_map`: khoá theo băm nội dung, không theo uid
+## `kindle_highlights`/`kindle_book_map`/`deleted_kindle_highlights`: khoá theo băm nội dung, sửa/xoá được trong app
 
 Kindle không có id ổn định cho từng highlight/note, và `My Clippings.txt` luôn xuất TOÀN BỘ lịch sử
 cộng dồn (cũ + mới) mỗi lần export — khác `work_calendar`/`reading_log` (khoá theo uid nguồn gốc).
 Giải pháp: `_kindle_dedupe_hash(kindle_title, location, content)` băm SHA-256 làm khoá chính
-(`dedupe_hash`), tính lại được y hệt từ chính dữ liệu thô — không cần lưu/truyền riêng. Nhờ vậy
-`save_kindle_highlights_bulk()` dùng **upsert cộng dồn** (không `_sb_delete_all` trước như
-`reading_log`): import lại cùng file, hoặc file từ nhiều thiết bị Kindle khác nhau, chỉ thêm dòng
-thật sự mới, dòng trùng tự bị bỏ qua qua `on_conflict`.
+(`dedupe_hash`) LÚC TẠO/IMPORT. **Sau khi có tính năng Sửa nội dung, hash này KHÔNG còn tính lại
+được từ dữ liệu hiện tại nữa** — nội dung có thể đã khác bản gốc lúc băm — nên mọi thao tác
+sửa/xoá/gắn ghi chú phải dùng đúng cột `dedupe_hash` đọc từ `load_kindle_highlights()`, tuyệt đối
+không gọi lại `_kindle_dedupe_hash()` để suy ngược khoá từ nội dung đang hiển thị.
+
+- `save_kindle_highlights_bulk(df)` — dùng cho **import** (df là nội dung THÔ vừa đọc từ
+  `parse_kindle_clippings()`, tự tính `dedupe_hash` từ đó): `upsert(..., ignore_duplicates=True)`
+  = INSERT, bỏ qua nếu trùng khoá (KHÔNG update) — đây chính là cơ chế giữ nguyên bản đã Sửa khi
+  import lại cùng file: dòng đó vẫn tính ra đúng hash cũ nhưng bị bỏ qua thay vì ghi đè. Dòng đã
+  bị Xoá (`dedupe_hash` nằm trong `deleted_kindle_highlights`) phải được UI import tự lọc bỏ TRƯỚC
+  khi gọi hàm này — `ignore_duplicates` chỉ chặn ghi đè, không chặn việc chèn lại 1 dòng đã xoá hẳn
+  (không còn trong bảng nên không đụng độ khoá).
+- `save_kindle_highlights_raw_bulk(df)` — **CHỈ dùng khi Khôi phục từ bản sao lưu** (df đọc từ CSV
+  backup, đã có sẵn cột `dedupe_hash`/`parent_hash` gốc): insert thẳng theo đúng khoá cũ, KHÔNG
+  tính lại — y hệt lý do `health_metrics` cần 2 hàm ghi riêng (raw vs upsert thường), xem mục dưới.
+- `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` — sửa/xoá/
+  thêm ghi chú trực tiếp trong app (mục "2. Nhật ký đọc" ở Sách/Gundam → Chi tiết). `delete_*` vừa
+  xoá khỏi `kindle_highlights` vừa ghi `dedupe_hash` vào sổ đen `deleted_kindle_highlights` (cùng
+  vai trò `deleted_sessions`, ngăn import lại file cũ hồi sinh dòng đã xoá) + cascade xoá các ghi
+  chú BẠN TỰ THÊM gắn với nó qua `parent_hash`. `add_kindle_note(parent_row, content)` tạo 1 dòng
+  `kind='note'` mới với `parent_hash` trỏ về đúng highlight/note cha, COPY nguyên "Vị trí"/"Ngày
+  thêm" của cha (để luôn nhóm đúng ngày khi hiển thị, xem `_render_reading_kindle_days()` trong
+  app.py).
+- `parent_hash` CHỈ có giá trị ở ghi chú tạo qua `add_kindle_note()` — ghi chú GỐC từ Kindle (nhập
+  thẳng từ Clippings.txt) luôn có `parent_hash = NULL`; lúc RENDER, app tự lồng loại ghi chú này
+  xuống dưới 1 highlight cùng ngày có `location` trùng khớp (suy luận hiển thị, không lưu quan hệ
+  vào DB) — xem `_render_kindle_day_quotes()`.
 
 `kindle_book_map` ánh xạ `kindle_title` (tên sách GHI NGUYÊN VĂN trong Clippings.txt, có thể khác
 tên Dự án Forest tự đặt tay ở dấu câu/phụ đề) sang 1 Dự án đã có (`project`), hoặc để `NULL` kèm
@@ -74,11 +98,22 @@ nhận/sửa tay trước khi lưu, và chỉ hỏi 1 lần cho mỗi `kindle_ti
 THỜI ĐIỂM ĐỌC (không lưu tên hiển thị trực tiếp trong `kindle_highlights`) để đổi ánh xạ sau này tự
 áp dụng lại cho toàn bộ lịch sử, không cần sửa từng dòng.
 
-Vì 2 bảng này dùng save-function kiểu **upsert cộng dồn** (không phải "xoá sạch rồi chèn lại" như
-đa số bảng khác), luồng Khôi phục từ bản sao lưu phải tự gọi `_sb_delete_all()` cho cả 2 bảng
-TRƯỚC KHI gọi `save_kindle_book_map_upsert()`/`save_kindle_highlights_bulk()`, để giữ đúng ngữ
-nghĩa "ghi đè toàn bộ" của Khôi phục (xem khối `elif nav == "Tuỳ biến"` → mục "5. Quản lý hệ
-thống" → nút "Xác nhận Khôi phục" trong app.py).
+`kindle_book_map` dùng save-function kiểu **upsert cộng dồn** (không phải "xoá sạch rồi chèn lại"
+như đa số bảng khác), nên luồng Khôi phục từ bản sao lưu phải tự gọi `_sb_delete_all()` cho cả
+`kindle_highlights` lẫn `kindle_book_map` TRƯỚC KHI gọi `save_kindle_book_map_upsert()`/
+`save_kindle_highlights_raw_bulk()`, để giữ đúng ngữ nghĩa "ghi đè toàn bộ" của Khôi phục (xem
+khối `elif nav == "Tuỳ biến"` → mục "5. Quản lý hệ thống" → nút "Xác nhận Khôi phục" trong app.py).
+
+Mục "2. Nhật ký đọc" (Sách/Gundam → Chi tiết) là nơi DUY NHẤT trong app vẽ quote/note Kindle bằng
+`st.columns()` thật (không phải HTML tĩnh `.jrows` như mọi nơi khác dùng `_reading_rows_html()`) —
+vì cột nội dung cần nút Sửa/Xoá/+ Ghi chú thật (`st.button`), không nhét vào 1 chuỗi HTML được. Xem
+`_render_reading_kindle_days()`/`_render_kindle_day_quotes()`/`_render_kindle_quote_row()` trong
+app.py, cùng khuôn 2 cột + icon nút nhỏ với hàng "Ghi chú nhanh" (`qnote_row`) trong
+`render_note_editor()`. Quote/note trong 1 ngày xếp theo **"Vị trí" Kindle tăng dần**
+(`_kindle_location_sort_key()`), KHÔNG theo giờ và KHÔNG có nút sắp xếp tay — quyết định đã chốt
+với người dùng: Reminders chỉ ghi NGÀY hoàn thành chương (không có giờ) nên không thể suy luận
+đáng tin quote thuộc chương nào trong 1 ngày đọc nhiều chương, còn "Vị trí" tăng dần theo trang
+sách lại tự nhiên đúng thứ tự đọc thật (đọc tuần tự).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 
