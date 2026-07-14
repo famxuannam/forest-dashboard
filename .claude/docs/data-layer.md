@@ -18,6 +18,8 @@ cặp hàm:
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | (upsert trực tiếp trong nơi dùng)  | Nội bộ (màu accent...)            |
 | `health_metrics`   | `load_health_metrics()` | `save_health_metrics_bulk()` (upsert, nhập tay/import JSON) · `save_health_metrics_raw_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng nhập tay hoặc dán JSON (trang Sức khoẻ) |
+| `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (upsert theo `dedupe_hash` tự tính lại, KHÔNG xoá sạch trước) | File `My Clippings.txt` xuất từ Kindle |
+| `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
 
 Mỗi `load_*` bọc 1 lần đọc bảng Supabase, cache bằng `@st.cache_data`; `save_*`/`sync_*` tương ứng
 ghi xong rồi **bắt buộc** gọi `st.cache_data.clear()` — quên bước này là bug kinh điển (UI hiện dữ
@@ -52,6 +54,31 @@ khác cần nhớ khi sửa:
   toàn bộ** (xoá sạch rồi chèn lại), CHỈ dùng trong luồng Khôi phục từ bản sao lưu ở tab Tuỳ biến.
 - Có mặt trong cả 3 thao tác ở tab Tuỳ biến (Sao lưu/Khôi phục/Làm mới) -- thêm bảng Supabase mới
   nào có ý nghĩa tồn tại lâu dài cũng nên soát lại 3 chỗ này, không chỉ viết `load_*`/`save_*`.
+
+## `kindle_highlights`/`kindle_book_map`: khoá theo băm nội dung, không theo uid
+
+Kindle không có id ổn định cho từng highlight/note, và `My Clippings.txt` luôn xuất TOÀN BỘ lịch sử
+cộng dồn (cũ + mới) mỗi lần export — khác `work_calendar`/`reading_log` (khoá theo uid nguồn gốc).
+Giải pháp: `_kindle_dedupe_hash(kindle_title, location, content)` băm SHA-256 làm khoá chính
+(`dedupe_hash`), tính lại được y hệt từ chính dữ liệu thô — không cần lưu/truyền riêng. Nhờ vậy
+`save_kindle_highlights_bulk()` dùng **upsert cộng dồn** (không `_sb_delete_all` trước như
+`reading_log`): import lại cùng file, hoặc file từ nhiều thiết bị Kindle khác nhau, chỉ thêm dòng
+thật sự mới, dòng trùng tự bị bỏ qua qua `on_conflict`.
+
+`kindle_book_map` ánh xạ `kindle_title` (tên sách GHI NGUYÊN VĂN trong Clippings.txt, có thể khác
+tên Dự án Forest tự đặt tay ở dấu câu/phụ đề) sang 1 Dự án đã có (`project`), hoặc để `NULL` kèm
+`label` tự đặt nếu là nguồn không thuộc Dự án nào (vd tạp chí đọc định kỳ). `_fuzzy_match_project()`
+(dùng `difflib`, không thêm thư viện fuzzy ngoài) chỉ GỢI Ý trong UI import — người dùng luôn xác
+nhận/sửa tay trước khi lưu, và chỉ hỏi 1 lần cho mỗi `kindle_title` mới gặp (đã có trong
+`kindle_book_map` thì các lần import sau tự nhớ). `load_kindle_highlights()` JOIN 2 bảng này ở
+THỜI ĐIỂM ĐỌC (không lưu tên hiển thị trực tiếp trong `kindle_highlights`) để đổi ánh xạ sau này tự
+áp dụng lại cho toàn bộ lịch sử, không cần sửa từng dòng.
+
+Vì 2 bảng này dùng save-function kiểu **upsert cộng dồn** (không phải "xoá sạch rồi chèn lại" như
+đa số bảng khác), luồng Khôi phục từ bản sao lưu phải tự gọi `_sb_delete_all()` cho cả 2 bảng
+TRƯỚC KHI gọi `save_kindle_book_map_upsert()`/`save_kindle_highlights_bulk()`, để giữ đúng ngữ
+nghĩa "ghi đè toàn bộ" của Khôi phục (xem khối `elif nav == "Tuỳ biến"` → mục "5. Quản lý hệ
+thống" → nút "Xác nhận Khôi phục" trong app.py).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 
