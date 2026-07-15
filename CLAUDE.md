@@ -56,7 +56,7 @@ timezone và luồng đồng bộ dữ liệu) ở [`.claude/docs/data-layer.md`
 Các quy tắc dưới đây là bất biến của dự án — **không tự ý thay đổi hay giả định khác đi** khi chưa
 xác nhận với người dùng:
 
-- **Kiến trúc 1 file**: toàn bộ app nằm trong `app.py` (~5500 dòng). Không tách frontend/backend,
+- **Kiến trúc 1 file**: toàn bộ app nằm trong `app.py` (~7800 dòng). Không tách frontend/backend,
   không tạo module component riêng — đây là quyết định kiến trúc đã chốt, không phải nợ kỹ thuật
   cần dọn.
 - **Giờ luôn qua `_today_vn()`**, không bao giờ `date.today()` trần — server có thể chạy UTC, lệch

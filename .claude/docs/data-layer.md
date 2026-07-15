@@ -12,12 +12,12 @@ cặp hàm:
 |--------------------|-----------------------|-------------------------------------|-----------------------------------|
 | `sessions`         | `load_db()`           | `save_db()`                        | CSV xuất từ Forest               |
 | `mapping`          | `load_mapping()`      | `save_mapping()`                   | Người dùng gán tay trong app      |
-| `deleted_sessions` | `load_deleted()`      | `add_deleted()`                    | Nội bộ (khi xoá phiên trong app)  |
-| `notes`            | `load_notes()`        | (lưu trong hàm render ghi chú)     | Người dùng gõ trong app           |
+| `deleted_sessions` | `load_deleted()`      | `add_deleted()` (cộng dồn khi xoá phiên trong app) · `save_deleted()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá phiên trong app)  |
+| `notes`            | `load_notes()`        | `save_note(day, text)` (lưu/sửa 1 ngày, gọi trong hàm render ghi chú; rỗng = xoá) · `save_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng gõ trong app           |
 | `quick_notes`      | `load_quick_notes()`  | (Shortcut iOS tự INSERT qua REST API) · `update_quick_note()`/`delete_quick_note()` (sửa/xoá lẻ trong app) · `save_quick_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Shortcut iOS (không qua app) |
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
-| `settings`         | `load_settings()`     | (upsert trực tiếp trong nơi dùng)  | Nội bộ (màu accent...)            |
+| `settings`         | `load_settings()`     | `save_setting(key, value)` (upsert trực tiếp trong nơi dùng) · `save_settings_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (màu accent...)            |
 | `health_metrics`   | `load_health_metrics()` | `save_health_metrics_bulk()` (upsert, nhập tay/import JSON) · `save_health_metrics_raw_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng nhập tay hoặc dán JSON (trang Sức khoẻ) |
 | `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (insert-nếu-mới theo `dedupe_hash` tự tính lại từ file, ignore_duplicates -- dùng cho import) · `save_kindle_highlights_raw_bulk()` (ghi đè đúng `dedupe_hash`/`parent_hash` có sẵn, chỉ dùng khi Khôi phục) · `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` (sửa/xoá/thêm ghi chú trong app) | File `My Clippings.txt` xuất từ Kindle + người dùng sửa/thêm trong app |
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |

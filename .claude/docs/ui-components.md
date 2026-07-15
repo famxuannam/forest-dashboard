@@ -30,16 +30,24 @@ giá trị mặc định của hàm vì điều đó ảnh hưởng TẤT CẢ n
 
 - `guide_item(image, title, markdown_body, where=..., tip=...)` — 1 mục giải thích tính năng, có
   ảnh minh hoạ (từ `assets/help/`), dùng cho nội dung "cách dùng" ổn định lâu dài.
-- `guide_update(pr_no, title, bullets)` — 1 mục trong sub-tab "Cập nhật", không có ảnh (vì UI đổi
-  nhanh qua nhiều bản nhỏ, chụp ảnh sẽ lỗi thời ngay), chỉ tiêu đề + số PR + gạch đầu dòng. Thêm 1
-  mục mới ở đây khi thay đổi có ảnh hưởng thấy được tới người dùng — số `pr_no` phải khớp đúng số
-  PR thật trên GitHub sau khi merge (không đoán số trước khi PR tồn tại).
+- `guide_update(pr_no, title, bullets, latest_pr_lines=None, total_lines_at_pr=None)` — 1 mục
+  trong sub-tab "Cập nhật", không có ảnh (vì UI đổi nhanh qua nhiều bản nhỏ, chụp ảnh sẽ lỗi thời
+  ngay), chỉ tiêu đề + số PR + gạch đầu dòng. Thêm 1 mục mới ở đây khi thay đổi có ảnh hưởng thấy
+  được tới người dùng — số `pr_no` phải khớp đúng số PR thật trên GitHub sau khi merge (không đoán
+  số trước khi PR tồn tại). 2 tham số cuối tuỳ chọn, hiện thành chip nhỏ cạnh nhãn "PR #...", tra
+  tay qua GitHub API/`git show <commit>:app.py | wc -l` tại thời điểm viết mục — KHÔNG tự tính lại
+  lúc runtime: `total_lines_at_pr` = tổng số dòng `app.py` tại commit merge PR mới nhất trong cụm
+  (quy mô toàn bộ mã nguồn theo thời gian), `latest_pr_lines` = số dòng đổi (additions+deletions)
+  của riêng PR mới nhất đó (quy mô 1 đợt thay đổi).
 
 Nội dung tab "Hướng dẫn" là tài liệu người dùng cuối, không phải code phụ trợ — chỉ sửa khi thay
 đổi thực sự ảnh hưởng tới trải nghiệm người dùng, không sửa như tác dụng phụ của 1 việc khác.
 
-## `DTBL` (bảng số liệu dạng heat table)
+## Bảng số liệu dạng heat table (`DTBL_CSS`)
 
-Style + hàm dựng bảng số liệu có tô màu theo giá trị (heat cell), dùng ở các mục "Bảng số liệu
-theo ngày/kỳ". Màu heat cell lấy theo hue suy ra từ `ACCENT` (xem `theming.md`) — không hardcode
-thang màu riêng cho bảng mới, tái dùng cùng cơ chế hue để đổi accent tự động đổi luôn bảng.
+Style (`DTBL_CSS`) + các hàm dựng bảng số liệu có tô màu theo giá trị (heat cell): `_heat_cell()`
+tính màu 1 ô, dùng bởi `render_data_table()`/`render_detail_table()`/`render_period_table()`/
+`render_health_log_table()` — mỗi hàm ứng với 1 kiểu bảng (theo kỳ/theo dự án/theo ngày sức khoẻ)
+nhưng cùng chung style/cơ chế tô màu này. Màu heat cell lấy theo hue suy ra từ `ACCENT` (xem
+`theming.md`) — không hardcode thang màu riêng cho bảng mới, tái dùng cùng cơ chế hue để đổi
+accent tự động đổi luôn bảng.
