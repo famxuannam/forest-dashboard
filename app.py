@@ -2009,7 +2009,7 @@ def render_session_bar(df):
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
-        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<div class='glass-card' style='padding:16px 18px;margin-top:10px;'>"
         "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
         f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
@@ -2555,7 +2555,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                 {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
             ]},
         ]}],
-        card_style="padding:20px;margin-top:14px;",
+        card_style="padding:20px;margin-top:10px;",
     )
 
     # Thẻ 3: Kỳ này — thẻ độc lập
@@ -2566,7 +2566,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
             {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
             _sec_timeslot,
         ]}],
-        card_style="padding:20px;margin-top:14px;",
+        card_style="padding:20px;margin-top:10px;",
     )
 
     render_session_bar(df_books)
@@ -2612,7 +2612,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     track_min = max(len(months) * 70, 320)
     st.markdown(f"""
 <style>
-.rtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
+.rtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:10px;}}
 .rtl-legend{{display:flex;gap:16px;margin:0 0 10px {name_w + 8}px;font-size:12px;color:var(--text-2);}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-body{{display:flex;align-items:flex-start;}}
@@ -2667,7 +2667,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
         rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
         rows_html += '</tr>'
     st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap" style="margin-top:14px;">
+<div class="dtbl-wrap" style="margin-top:10px;">
 <div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">{labels['detail_label']}</div>
 <table class="dtbl">
 <thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
@@ -2874,7 +2874,7 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:10px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
@@ -4436,12 +4436,16 @@ st.markdown(
     }
 
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
-    
+    /* Thu gọn khoảng cách mặc định GIỮA các thành phần Streamlit xếp dọc (1rem mặc định khá
+       rộng, tạo cảm giác "trống trải" kiểu app hệ thống hơn là sổ tay) -- !important trong
+       stylesheet vẫn thắng inline style (không !important) mà Streamlit tự gắn cho gap này. */
+    [data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
+
     .glass-card {
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 20px;
+        padding: 16px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
 
@@ -4508,41 +4512,41 @@ st.markdown(
 
     /* ===== Bảng tổng quan gọn (hero + chip) ===== */
     .stat-panel .sp-hero { display: flex; flex-wrap: wrap; }
-    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 18px; border-right: 1px solid var(--divider); }
+    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 14px; border-right: 1px solid var(--divider); }
     .stat-panel .sp-hi:first-child { padding-left: 2px; }
     .stat-panel .sp-hi:last-child { border-right: none; }
     .stat-panel .sp-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
+    .stat-panel .sp-v { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
     /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
-    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; }
     .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
-    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
+    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
     @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
     /* white-space KHÔNG nowrap (khác vẻ ngoài "viên thuốc" gọn thường thấy) -- vài chip mang giá
        trị tự do dài (vd "Phần gần nhất" là tên chương/tập, không có độ dài cố định) sẽ tràn ra
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    .stat-panel .chip { border-radius: 10px; padding: 7px 12px; font-size: 13px; white-space: normal;
+    .stat-panel .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
     .stat-panel .chip .ck { color: var(--text-2); }
     .stat-panel .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw { background: rgba(var(--accent-rgb),0.10); }
-    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 8px 0 2px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 8px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
-    /* .sp-row có margin-top:12px để tách với .sp-hero phía trên -- khi KHÔNG có hero (vd panel
+    /* .sp-row có margin-top để tách với .sp-hero phía trên -- khi KHÔNG có hero (vd panel
        "Tham khảo cho lên kế hoạch" chỉ có sections, không hero_items), .sp-row là con đầu tiên
-       nên margin đó cộng dồn với padding 20px của card, làm lề trên dày hơn lề dưới rõ rệt. */
+       nên margin đó cộng dồn với padding của card, làm lề trên dày hơn lề dưới rõ rệt. */
     .stat-panel > .sp-row:first-child { margin-top: 0; }
     .stat-panel .chip.tw .ck { color: var(--accent-dark); }
     .stat-panel .chip.tw .cv { color: var(--accent); }
-    .section-hd { font-size: 15px; font-weight: 700; color: var(--text); margin: 22px 0 6px; letter-spacing: -0.2px; }
+    .section-hd { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 16px 0 6px; letter-spacing: -0.2px; }
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.rtl-card, .dtbl-wrap). */
-    .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 12px; }
+    .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 10px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -4557,7 +4561,7 @@ st.markdown(
         border-radius: 0 !important;
     }
     [data-testid="stExpander"] summary {
-        padding: 8px 2px !important;
+        padding: 6px 2px !important;
         border-bottom: 2px solid var(--border) !important;
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
@@ -4583,7 +4587,7 @@ st.markdown(
        kế thừa nền "trong suốt" từ cha. Thiếu dòng này, mục mở rộng hiện khối xám lạc tông ngay khi
        bấm mở -- lỗi đã có từ đầu (không phải regression của bản "Sổ Tay"), giờ mới bị chú ý vì nền
        trang đổi từ xám nhạt Apple sang giấy ấm nên độ lệch tông rõ hơn hẳn. */
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; background: transparent !important; }
+    [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 10px !important; background: transparent !important; }
 
     /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
     [data-testid="stButtonGroup"] { margin-bottom: 10px; }
@@ -4743,7 +4747,7 @@ st.markdown(
         .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
 
         /* Thẻ gọn lại, bớt khoảng trống thừa (height:auto để không bị kéo giãn khi xếp dọc) */
-        .glass-card { padding: 14px !important; height: auto !important; }
+        .glass-card { padding: 12px !important; height: auto !important; }
         .glass-card h3 { font-size: 26px !important; margin: 4px 0 !important; }
         /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao và tạo khoảng cách giữa các ô */
         [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
@@ -4923,7 +4927,22 @@ st.markdown(
        "hôm qua/hôm nay/mai" vẫn là st.button() THẬT (cần on_click để giữ nguyên logic nhảy
        ngày/keyboard-shortcut-free-form cũ) -- CSS đè lại để trông như chữ thường/link, không
        phải nút bấm. */
-    .st-key-day_nav_row { margin: 4px 0 6px; }
+    /* Cả khối "Thứ, ngày" + hàng điều hướng gộp thành 1 CARD riêng (cùng format thẻ .glass-card:
+       nền var(--card)/viền/bo góc/đổ bóng) nhưng HẸP hơn (chỉ vừa đúng nội dung, không full-width
+       như các thẻ khác) rồi CĂN GIỮA trang -- gợi cảm giác 1 tờ lịch xé để bàn/treo tường, tách
+       biệt khỏi khối nội dung report bên dưới. min-width chặn thẻ co quá hẹp khi ngày ngắn (vd
+       "Chủ Nhật, 1 Tháng 1" ngắn hơn nhiều so với tên thứ dài nhất). */
+    .st-key-day_nav_row {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02);
+        padding: 16px 32px;
+        width: max-content;
+        min-width: 320px;
+        max-width: 100%;
+        margin: 4px auto 20px auto;
+    }
     .st-key-day_nav_links.stHorizontalBlock { margin-top: 6px; justify-content: center !important; align-items: center !important; gap: 4px !important; }
     .st-key-day_nav_links .dnl-dot { color: var(--text-4); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
     .st-key-day_nav_links div[data-testid="stButton"] button {
@@ -4964,7 +4983,7 @@ st.markdown(
     }
 
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
-    .st-key-day_top3 { margin-top: 14px; }
+    .st-key-day_top3 { margin-top: 10px; }
     /* Ghi chú nhanh: badge giờ nhỏ (.qn-time) + chữ ghi chú thường NGOÀI badge (.qn-text, cùng
        cỡ/màu .note-html) -- khác .jchip (cả giờ lẫn chữ đều tô nền), vì quick note nay là 1 câu
        đọc như ghi chú thật, không phải 1 nhãn nhỏ. .qn-line dùng ở bản CHỈ ĐỌC (Nhật ký
@@ -5684,7 +5703,7 @@ def render_day_report(df):
             # trên (render_stat_panel/render_session_bar), không cần margin ngang riêng như bản
             # đứng ngoài expander ở nhánh ngày rỗng bên dưới.
             if _kq is not None:
-                st.markdown(_kindle_quote_card_html(_kq, "margin-top:14px;"), unsafe_allow_html=True)
+                st.markdown(_kindle_quote_card_html(_kq, "margin-top:10px;"), unsafe_allow_html=True)
 
         with st.expander("2. Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
