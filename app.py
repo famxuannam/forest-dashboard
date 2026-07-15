@@ -336,8 +336,8 @@ TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng T
 def _teal_shades(n, l_lo=None, l_hi=None):
     """Sinh n sắc độ (cùng hue với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại từ thời accent
     mặc định là Xanh ngọc #00a3ad, nay chỉ còn là tên gọi lịch sử) từ nhạt (l_lo) đến đậm (l_hi)
-    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, Giờ tập trung theo thứ, thanh Phân bổ
-    độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
+    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, thanh Phân bổ độ dài phiên) để đồng bộ một
+    họ màu thay vì mỗi nơi một tông riêng.
     Mặc định (không truyền l_lo/l_hi) ĐẢO CHIỀU ramp khi dark: trên nền tối, teal L thấp
     (đậm ở light) gần như tàng hình còn L cao (nhạt ở light) nổi bật nhất -- nếu giữ nguyên
     chiều, "nhiều giờ" sẽ trông như "ít giờ". Dark dùng dải sáng hơn hẳn (0.22->0.72, mờ tối
@@ -2297,44 +2297,6 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
         )
 
 
-def render_dayhour_heatmap(scope_df):
-    """Bản đồ nhiệt 7 thứ × 24 giờ: ô càng đậm = trung bình giờ/ngày (chỉ tính ngày CÓ
-    hoạt động ở đúng thứ đó) ở khung giờ đó của thứ đó càng cao -> nhận ra 'tập trung tốt
-    nhất vào sáng thứ mấy' mà không bị pha loãng bởi các ngày trống trong khoảng xem."""
-    if scope_df.empty:
-        return
-    d = _explode_session_hours(scope_df, 'Thứ')
-    if d.empty:
-        return
-    wd_count = scope_df.groupby('Thứ')['Ngày'].nunique()
-
-    grp = d.groupby(['Thứ', 'Khung giờ'])['giờ'].sum()
-    full = pd.MultiIndex.from_product([DAYS_ORDER, range(24)], names=['Thứ', 'Khung giờ'])
-    cell = grp.reindex(full, fill_value=0.0).reset_index(name='giờ')
-    cell['TB'] = cell.apply(lambda r: r['giờ'] / max(int(wd_count.get(r['Thứ'], 1)), 1), axis=1)
-    cell['TB_txt'] = cell['TB'].map(_fmt_hours_long)
-
-    # Thứ ra trục ngang (nhãn ở trên), giờ xuống trục dọc (nhãn mỗi 2h) -> lưới cao, hẹp
-    # Step rộng hơn (54 thay vì 46) để có chỗ cho chữ trục to hơn mà không bị chật/đè nhau.
-    chart = alt.Chart(cell).mark_rect(cornerRadius=2).encode(
-        x=alt.X('Thứ:O', sort=DAYS_ORDER, title='',
-                axis=alt.Axis(labelAngle=0, orient='top', tickSize=0, domain=False, labelFontSize=12)),
-        y=alt.Y('Khung giờ:O', title='Khung giờ (0h - 23h)',
-                axis=alt.Axis(values=list(range(0, 24, 2)), tickSize=0, domain=False,
-                               labelFontSize=12, titleFontSize=12)),
-        # Đầu nhạt lấy từ cùng dải _teal_shades (khớp tông với Biểu đồ lịch) thay vì xám
-        # trung tính -> cả dải đều là sắc teal, không bị xỉn/xám ở vùng giá trị thấp.
-        color=alt.Color('TB:Q', scale=alt.Scale(range=[_teal_shades(7)[0], _teal_shades(7)[-1]]), legend=None),
-        tooltip=[alt.Tooltip('Thứ:N'), alt.Tooltip('Khung giờ:O', title='Giờ'),
-                 alt.Tooltip('TB_txt:N', title='TB giờ/ngày')],
-    ).properties(width=alt.Step(54), height=alt.Step(26), background='transparent').configure_view(strokeWidth=0)
-    # width='content' (không 'stretch') -> tôn trọng alt.Step nên ô không bị kéo dài, tự căn giữa thẻ
-    # background='transparent' ở properties(): Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu
-    # nền trang, không phải trong suốt) -> để trong suốt cho nền thẻ bọc ngoài (--card, đổi theo
-    # IS_DARK) lộ ra, tránh canvas SVG lệch tông với phần đệm/viền thẻ bao quanh.
-    st.altair_chart(chart, width='content')
-
-
 def _streak_stats(streak_df):
     """Số liệu chuỗi ngày trên toàn lịch sử: tổng số ngày có hoạt động, chuỗi
     dài nhất, chuỗi hiện tại (còn hiệu lực nếu lần gần nhất là hôm nay/hôm qua),
@@ -2475,13 +2437,14 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
 
 def _render_period_secondary_expanders(df_period, full_df, selected_key, kind, trend_group_col,
                                         trend_group_label, cat_order, pie_key, trend_key, hourly_key):
-    """Mục "2. Nhật ký" -> "8. Bảng số liệu" ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu trúc y
+    """Mục "2. Nhật ký" -> "6. Bảng số liệu" ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu trúc y
     hệt nhau (khác nhánh Năm, vốn có bộ mục hoàn toàn khác: Biểu đồ lịch + Đọc sách & Gundam thay
-    vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên -- không đủ giống để gộp chung, xem nhánh
-    Năm riêng trong dispatch "Báo cáo"). Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind
-    ('week'/'month' cho render_notes_journal), trend_group_col/label/cat_order (nhóm theo Thứ ở
-    Tuần, theo Ngày ở Tháng), và các key fragment (giữ NGUYÊN key gốc để không đổi hành vi/state
-    đã có của từng widget)."""
+    vì Nhật ký/Phân bổ/Xu hướng/Khung giờ -- không đủ giống để gộp chung, xem nhánh Năm riêng
+    trong dispatch "Báo cáo"). Đã bỏ "Giờ tập trung theo thứ"/"Phân bố độ dài phiên" (ít dùng theo
+    phản hồi thực tế) khỏi cả Tuần lẫn Tháng -- xoá 1 lần ở đây áp dụng cho cả 2 vì dùng chung hàm.
+    Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind ('week'/'month' cho render_notes_journal),
+    trend_group_col/label/cat_order (nhóm theo Thứ ở Tuần, theo Ngày ở Tháng), và các key fragment
+    (giữ NGUYÊN key gốc để không đổi hành vi/state đã có của từng widget)."""
     with st.expander("2. Nhật ký", expanded=True):
         render_notes_journal(selected_key, kind, full_df)
     with st.expander("3. Phân bổ thời gian", expanded=False):
@@ -2490,11 +2453,7 @@ def _render_period_secondary_expanders(df_period, full_df, selected_key, kind, t
         frag_period_trend(df_period, trend_key, "Danh mục", trend_group_col, trend_group_label, cat_order=cat_order)
     with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
         frag_hourly(df_period, hourly_key, "Danh mục", with_range=False)
-    with st.expander("6. Giờ tập trung theo thứ", expanded=False):
-        render_dayhour_heatmap(df_period)
-    with st.expander("7. Phân bố độ dài phiên", expanded=False):
-        render_session_histogram(df_period)
-    with st.expander("8. Bảng số liệu", expanded=False):
+    with st.expander("6. Bảng số liệu", expanded=False):
         render_detail_table(df_period)
 
 
@@ -2628,6 +2587,51 @@ def _assign_gundam_sessions(gundam_sessions, rl_gundam, overrides=None):
     return merged.drop(columns=['_d', 'Cuốn sách'])
 
 
+def _render_gundam_series_override(gundam_sessions, rl_gundam, gundam_df, gundam_overrides):
+    """"Sửa gán series tự động" -- chỉ có ý nghĩa khi có TỪ 2 series trở lên (1 series duy nhất
+    thì suy luận "lần hoàn thành gần nhất" không thể sai). Không đánh số (mục điều kiện, cùng
+    tiền lệ "Nhật ký đọc" ở Báo cáo -> Dự án) và mặc định đóng vì hiếm khi cần tới. CHỈ gọi từ
+    sub-tab "Tổng quan" (qua extra_overview= của render_reading_log()) -- không lặp lại ở "Chi
+    tiết", phản hồi thực tế là 1 nơi (Tổng quan) đã đủ, không cần thấy 2 lần."""
+    _series_opts = sorted(rl_gundam['Cuốn sách'].unique()) if not rl_gundam.empty else []
+    if len(_series_opts) <= 1 or gundam_sessions.empty:
+        return
+    with st.expander("Sửa gán series tự động", expanded=False):
+        st.caption(
+            "Forest chỉ có 1 tag \"Gundam\" chung, không phân biệt series -- mỗi ngày có "
+            "phiên Gundam được tự động gán vào series có lần hoàn thành gần nhất trên "
+            "Reminders. Nếu 2 series xem xen kẽ nhau, suy luận này có thể đoán sai; sửa "
+            "lại đúng series cho ngày đó rồi bấm Lưu."
+        )
+        _auto_df = _assign_gundam_sessions(gundam_sessions, rl_gundam)  # KHÔNG override, để so sánh
+        _auto_by_day = dict(zip(_auto_df['Ngày'], _auto_df['Dự án']))
+        _by_day = (gundam_df.groupby('Ngày')
+                   .agg(Giờ=('Thời lượng (Phút)', lambda s: round(s.sum() / 60, 1)),
+                        Series=('Dự án', 'first'))
+                   .reset_index().sort_values('Ngày', ascending=False))
+        _by_day['Gán tay'] = _by_day['Ngày'].isin(gundam_overrides.keys())
+        edited_gu = st.data_editor(
+            _by_day, hide_index=True, width='stretch', key="gundam_override_editor",
+            column_config={
+                "Ngày": st.column_config.DateColumn("Ngày", format="DD/MM/YYYY", disabled=True),
+                "Giờ": st.column_config.NumberColumn("Giờ", disabled=True),
+                "Series": st.column_config.SelectboxColumn("Series", options=_series_opts),
+                "Gán tay": st.column_config.CheckboxColumn("Gán tay", disabled=True,
+                                                            help="Ngày này đang dùng series gán tay, khác kết quả suy luận tự động"),
+            })
+        if st.button("Lưu gán series", type="primary", key="tbtn_gundam_override_save"):
+            for _, r in edited_gu.iterrows():
+                _day, _series = r["Ngày"], r["Series"]
+                if _series == _auto_by_day.get(_day):
+                    if _day in gundam_overrides:
+                        delete_gundam_override(_day)
+                else:
+                    save_gundam_override(_day, _series)
+            st.success("Đã lưu gán series.")
+            time.sleep(1)
+            st.rerun()
+
+
 def _render_kindle_favorites_tab():
     """Sub-tab "Yêu thích" (trang Sách, không có ở Gundam -- xem show_favorites ở render_reading_log()):
     duyệt lại mọi trích dẫn/ghi chú Kindle đã đánh dấu ⭐, gộp theo cuốn sách. Đây thuần là 1 cách
@@ -2648,7 +2652,7 @@ def _render_kindle_favorites_tab():
 
 
 def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS,
-                        show_favorites=True):
+                        show_favorites=True, extra_overview=None):
     """Bảng + timeline + tóm tắt cho từng cuốn sách (đọc tuần tự), GỘP 2 nguồn: phiên Forest
     (nhóm Danh mục = Reading) và phần đã đọc đồng bộ từ Apple Reminders (reading_log_df). Một
     cuốn sách chỉ cần có mặt ở MỘT trong 2 nguồn là đủ để lên bảng -- cột thuộc nguồn còn thiếu
@@ -2662,7 +2666,13 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     show_favorites=False ở trang Gundam (xem nơi gọi) -- sub-tab "Yêu thích" duyệt lại trích dẫn
     Kindle đã đánh dấu ⭐, chỉ có ý nghĩa cho SÁCH (trích dẫn gắn với nội dung sách, không áp dụng
-    cho việc xem Gundam)."""
+    cho việc xem Gundam).
+
+    extra_overview: callable tuỳ chọn, gọi thêm SAU nội dung chính của sub-tab "Tổng quan" (bên
+    trong đúng `with _tab_overview:`) -- dùng cho "Sửa gán series tự động" ở trang Gundam, mục này
+    chỉ nên hiện ở Tổng quan (nơi thấy cả bảng series), không cần lặp lại ở Chi tiết. Đặt PARAM ở
+    đây thay vì gọi rời sau render_reading_log() ở nơi gọi vì code cũ gọi rời sẽ nằm NGOÀI mọi
+    st.tabs() -> hiện cố định dưới cả 2 tab bất kể đang xem tab nào."""
     if df_books.empty and reading_log_df.empty:
         st.info(labels['empty_msg'])
         return
@@ -2781,6 +2791,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
                                   _sec_timeslot, _today, labels)
+        if extra_overview is not None:
+            extra_overview()
 
     with _tab_detail:
         _render_reading_detail(t, reading_log_df, labels)
@@ -3409,6 +3421,19 @@ def _render_health_report(df_health):
             st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
         else:
             _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
+            if not _abn_latest.empty:
+                # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
+                # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
+                # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
+                # Đơn vị, Khoảng tham chiếu) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
+                # cùng 1 xét nghiệm) -- chỉ giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn
+                # thông dụng, dễ đọc hơn tên đầy đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt
+                # nhanh) -- Lịch sử Sức khoẻ vẫn giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
+                _abn_latest = (
+                    _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
+                    .sort_values('_namelen')
+                    .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Khoảng tham chiếu'], keep='first')
+                    .drop(columns='_namelen'))
             if _abn_latest.empty:
                 st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
             else:
@@ -4334,14 +4359,27 @@ def guide_item(img, title, body_md, tip=None, where=None):
             st.info(tip, icon=":material/lightbulb:")
 
 
-def guide_update(pr_no, title, bullets):
+def guide_update(pr_no, title, bullets, latest_pr_lines=None):
     """Một mục trong tab "Cập nhật": không có ảnh (đổi UI qua nhiều bản nhỏ nên chụp ảnh sẽ lỗi
     thời rất nhanh) -- chỉ tiêu đề + số PR + danh sách gạch đầu dòng, dùng chung khung thẻ với
-    guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2)."""
+    guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2).
+
+    latest_pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục này)
+    của PR MỚI NHẤT trong cụm pr_no (vd pr_no="182-184" -> số dòng của #184) -- hiện thành 1 chip
+    nhỏ cạnh nhãn "PR #...", cho thấy quy mô thay đổi mã nguồn qua từng đợt. Không tự tính lại
+    mỗi lần chạy (app không gọi GitHub API lúc runtime, không phải kiến trúc phù hợp cho 1
+    dashboard cá nhân) -- số liệu tĩnh, cần điền tay khi thêm mục Cập nhật mới."""
     with st.container(border=True, key=f"guide_update_{pr_no}"):
+        _chip = ""
+        if latest_pr_lines is not None:
+            _chip = (
+                "<span style='font-size:11px;font-weight:600;color:var(--accent);"
+                "background:rgba(var(--accent-rgb),0.12);border-radius:999px;padding:2px 9px;'>"
+                f"{latest_pr_lines} dòng thay đổi</span>")
         st.markdown(
-            f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
-            f"text-transform:uppercase;letter-spacing:.5px;'>PR #{pr_no}</div>",
+            "<div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>"
+            f"<span style='font-size:11px;font-weight:700;color:var(--text-2);"
+            f"text-transform:uppercase;letter-spacing:.5px;'>PR #{pr_no}</span>{_chip}</div>",
             unsafe_allow_html=True)
         st.markdown(f"#### {title}")
         st.markdown("\n".join(f"- {b}" for b in bullets))
@@ -4425,13 +4463,6 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
         g['Ngày'] = pd.to_datetime(g['Ngày'])
     fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
-
-@st.fragment
-def frag_heatmap(scope_df, key):
-    """Mục Giờ tập trung theo thứ — bộ chọn khoảng thời gian riêng."""
-    df_heat = range_radio(scope_df, key=key)
-    render_dayhour_heatmap(df_heat)
 
 
 @st.fragment
@@ -5252,7 +5283,7 @@ st.markdown(
        Đặt SAU rule margin-bottom:2px chung ở trên để thắng theo thứ tự (cùng độ đặc hiệu). */
     [class*="st-key-kqrow_fav_"] {
         background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 12px 16px; margin-bottom: 10px !important;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin-bottom: 10px !important;
     }
     [class*="st-key-kqrow_fav_"]:last-child { margin-bottom: 0 !important; }
     /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
@@ -6027,10 +6058,13 @@ def render_day_report(df):
         with st.expander("2. Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
 
-        with st.expander("3. Phân bổ thời gian", expanded=False):
+        with st.expander("3. Ngày này năm trước", expanded=False):
+            render_on_this_day(sel, df)
+
+        with st.expander("4. Phân bổ thời gian", expanded=False):
             frag_pie(day_df, "rad_day", "Dự án")
 
-        with st.expander("4. Danh sách phiên", expanded=False):
+        with st.expander("5. Danh sách phiên", expanded=False):
             rows_html = ''
             for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
                 s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
@@ -6050,9 +6084,6 @@ def render_day_report(df):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-
-        with st.expander("5. Ngày này năm trước", expanded=False):
-            render_on_this_day(sel, df)
 
 
 # ==========================================
@@ -6085,20 +6116,6 @@ elif nav == "Báo cáo":
                 num_days = df['Ngày'].nunique() or 1
                 base_avg = total_hrs / num_days
 
-                # Phong độ 7 ngày gần đây so với mức trung bình của chính mình
-                recent7 = df[df['Ngày'] >= (_today_vn() - timedelta(days=6))]
-                r_days = recent7['Ngày'].nunique()
-                recent_chips = []
-                if r_days > 0:
-                    r_avg = (recent7['Thời lượng (Phút)'].sum() / 60) / r_days
-                    _delta = None
-                    if base_avg > 0:
-                        _pct = (r_avg - base_avg) / base_avg * 100
-                        _c = "#34c759" if _pct > 0 else "#ff3b30" if _pct < 0 else "#86868b"
-                        _delta = (f"{_pct:+.0f}% vs thường lệ", _c)
-                    recent_chips.append({"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(r_avg)}", "delta": _delta})
-                recent_chips.append({"k": "Số ngày hoạt động", "v": f"{r_days}/7"})
-
                 s_stat = _streak_stats(df)
                 by_wd = _weekday_avg(df)
                 overall_top3 = _top_days(df, 3)
@@ -6108,7 +6125,6 @@ elif nav == "Báo cáo":
                         {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
                         {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
                     ]},
-                    {"label": "7 ngày gần đây", "chips": recent_chips},
                     {"label": "Chuỗi ngày", "chips": [
                         {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
                         {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
@@ -6146,11 +6162,7 @@ elif nav == "Báo cáo":
                 frag_trend(df, "trend_main", "Danh mục")
             with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
                 frag_hourly(df, "hour_main", "Danh mục")
-            with st.expander("5. Giờ tập trung theo thứ", expanded=False):
-                frag_heatmap(df, "range_heat")
-            with st.expander("6. Phân bố độ dài phiên", expanded=False):
-                render_session_histogram(df)
-            with st.expander("7. Bảng số liệu", expanded=False):
+            with st.expander("5. Bảng số liệu", expanded=False):
                 frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
@@ -6270,12 +6282,22 @@ elif nav == "Báo cáo":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
             proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Danh mục'].first()
+            # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách (đúng điều kiện books_df ở nhánh
+            # "Nhật ký đọc sách" bên dưới: Danh mục == BOOKS_GROUP, KHÔNG nằm trong BOOKS_EXCLUDE)
+            # thì bỏ khỏi danh sách chọn ở đây -- xem số liệu qua trang Sách (đủ ngữ cảnh sách/tác
+            # giả/tiến độ đọc), không cần lặp lại tuỳ chọn ở Báo cáo → Dự án nữa. Gundam/The
+            # Economist (nằm trong BOOKS_EXCLUDE) vẫn giữ nguyên -- không "đã có trong phần Sách".
+            _book_projects = set(
+                df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique())
             # Mục rỗng đứng đầu -- mặc định KHÔNG chọn sẵn nhóm/dự án nào khi mới vào trang,
             # giống hệt selectbox "Chọn 1 cuốn/series" ở sub-tab Chi tiết (Sách/Gundam).
             _placeholder = ("none", "— Chọn để xem chi tiết —")
             _opts, _labels = [_placeholder], {_placeholder: _placeholder[1]}
             for _c in sorted(df['Danh mục'].dropna().unique()):
-                _projs = sorted(proj_to_cat[proj_to_cat == _c].index.tolist())
+                _projs = [p for p in sorted(proj_to_cat[proj_to_cat == _c].index.tolist())
+                          if p not in _book_projects]
+                if not _projs:
+                    continue
                 if _projs == [_c]:  # dự án chưa gán nhóm (nhóm trùng tên dự án) -> coi như một dự án độc lập
                     _o = ("proj", _c); _opts.append(_o); _labels[_o] = f"{_c}  ·  Dự án"
                 else:
@@ -6425,47 +6447,10 @@ elif nav == "Gundam":
                                                rl_gundam['Ngày hoàn thành'].max() if not rl_gundam.empty else None]
                     if v is not None and pd.notna(v)]
         latest_overall_g = max(_cands_g) if _cands_g else None
-        render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS, show_favorites=False)
-
-        # Sửa gán series tự động -- chỉ có ý nghĩa khi có TỪ 2 series trở lên (1 series duy nhất
-        # thì suy luận "lần hoàn thành gần nhất" không thể sai). Không đánh số (mục điều kiện,
-        # cùng tiền lệ "Nhật ký đọc" ở Báo cáo -> Dự án) và mặc định đóng vì hiếm khi cần tới.
-        _series_opts = sorted(rl_gundam['Cuốn sách'].unique()) if not rl_gundam.empty else []
-        if len(_series_opts) > 1 and not gundam_sessions.empty:
-            with st.expander("Sửa gán series tự động", expanded=False):
-                st.caption(
-                    "Forest chỉ có 1 tag \"Gundam\" chung, không phân biệt series -- mỗi ngày có "
-                    "phiên Gundam được tự động gán vào series có lần hoàn thành gần nhất trên "
-                    "Reminders. Nếu 2 series xem xen kẽ nhau, suy luận này có thể đoán sai; sửa "
-                    "lại đúng series cho ngày đó rồi bấm Lưu."
-                )
-                _auto_df = _assign_gundam_sessions(gundam_sessions, rl_gundam)  # KHÔNG override, để so sánh
-                _auto_by_day = dict(zip(_auto_df['Ngày'], _auto_df['Dự án']))
-                _by_day = (gundam_df.groupby('Ngày')
-                           .agg(Giờ=('Thời lượng (Phút)', lambda s: round(s.sum() / 60, 1)),
-                                Series=('Dự án', 'first'))
-                           .reset_index().sort_values('Ngày', ascending=False))
-                _by_day['Gán tay'] = _by_day['Ngày'].isin(gundam_overrides.keys())
-                edited_gu = st.data_editor(
-                    _by_day, hide_index=True, width='stretch', key="gundam_override_editor",
-                    column_config={
-                        "Ngày": st.column_config.DateColumn("Ngày", format="DD/MM/YYYY", disabled=True),
-                        "Giờ": st.column_config.NumberColumn("Giờ", disabled=True),
-                        "Series": st.column_config.SelectboxColumn("Series", options=_series_opts),
-                        "Gán tay": st.column_config.CheckboxColumn("Gán tay", disabled=True,
-                                                                    help="Ngày này đang dùng series gán tay, khác kết quả suy luận tự động"),
-                    })
-                if st.button("Lưu gán series", type="primary", key="tbtn_gundam_override_save"):
-                    for _, r in edited_gu.iterrows():
-                        _day, _series = r["Ngày"], r["Series"]
-                        if _series == _auto_by_day.get(_day):
-                            if _day in gundam_overrides:
-                                delete_gundam_override(_day)
-                        else:
-                            save_gundam_override(_day, _series)
-                    st.success("Đã lưu gán series.")
-                    time.sleep(1)
-                    st.rerun()
+        render_reading_log(
+            gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS, show_favorites=False,
+            extra_overview=lambda: _render_gundam_series_override(
+                gundam_sessions, rl_gundam, gundam_df, gundam_overrides))
 # ==========================================
 # TRANG: SỨC KHOẺ
 # ==========================================
@@ -6720,7 +6705,7 @@ elif nav == "Tuỳ biến":
                             st.session_state['kindle_import_msg'] = _msg + ")."
                             st.rerun()
 
-    with st.expander("2. Phân loại", expanded=True):
+    with st.expander("2. Phân loại", expanded=False):
         db_current = load_db()
         mapping_df = load_mapping()
         all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
@@ -6809,7 +6794,7 @@ elif nav == "Tuỳ biến":
                     f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
-    with st.expander("4. Giao diện", expanded=True):
+    with st.expander("4. Giao diện", expanded=False):
         _preset_items = list(ACCENT_PRESETS.items())
         _per_row = 5
         _swatch_css = "<style>"
@@ -7087,20 +7072,17 @@ elif nav == "Hướng dẫn":
             where="Mọi trang Báo cáo · Sách · Gundam")
 
         guide_item(
-            "hourly.png", "Xu hướng theo khung giờ & Giờ tập trung theo thứ",
-            "2 biểu đồ đọc cùng nhau ra 1 bức tranh đầy đủ: đường 24 khung giờ trả lời \"hay tập trung lúc "
-            "nào\" (sáng sớm, trưa, hay khuya); lưới nhiệt 7 thứ × 24 giờ trả lời \"giờ nào của thứ nào\". Biết "
-            "được khung giờ mạnh nhất giúp xếp việc khó đúng lúc đầu óc còn sung sức nhất.",
-            tip="Lưới nhiệt tính trung bình theo số ngày *có hoạt động* của đúng thứ đó, không phải tổng số lần "
-                "thứ đó xuất hiện trên lịch — 1 thứ ít hoạt động sẽ không bị pha loãng trông nhạt hơn thực tế.",
-            where="Mọi trang Báo cáo · Sách · Gundam")
+            "hourly.png", "Xu hướng theo khung giờ",
+            "Đường 24 khung giờ trả lời \"hay tập trung lúc nào\" (sáng sớm, trưa, hay khuya) — biết được khung "
+            "giờ mạnh nhất giúp xếp việc khó đúng lúc đầu óc còn sung sức nhất.",
+            where="Báo cáo → Tổng quan/Tuần/Tháng")
 
         guide_item(
             "histogram.png", "Phân bố độ dài phiên",
             "Biểu đồ cột chia phiên tập trung theo khoảng 5 phút một, kèm đường mốc tại 25′/50′/90′ (khớp đúng "
             "3 ranh giới của Thanh phân bố độ dài phiên) và 1 đường đánh dấu độ dài trung bình — xem hình dạng "
             "phân bố chi tiết hơn thanh %, hữu ích khi muốn biết độ dài phiên phổ biến nhất là bao nhiêu.",
-            where="Mọi trang Báo cáo · Sách · Gundam")
+            where="Báo cáo → Dự án")
 
         guide_item(
             "table.png", "Bảng số liệu",
@@ -7186,7 +7168,7 @@ elif nav == "Hướng dẫn":
             "làm gì khác mọi ngày còn lại.\n"
             "- **Đọc lại Nhật ký tuần**: lướt lại ghi chú 7 ngày liên tiếp thường lộ ra pattern mà từng ngày "
             "riêng lẻ không thấy được.\n"
-            "- **Nhìn Giờ tập trung theo thứ + Biểu đồ lịch** mỗi 2-3 tuần một lần: nếu dữ liệu nói mạnh nhất "
+            "- **Nhìn Xu hướng theo khung giờ + Biểu đồ lịch** mỗi 2-3 tuần một lần: nếu dữ liệu nói mạnh nhất "
             "8-11h sáng, xếp việc khó vào đúng khung đó tuần tới.",
             where="Báo cáo → Tuần")
 
@@ -7571,9 +7553,9 @@ elif nav == "Hướng dẫn":
                 "thống** (sao lưu/khôi phục/làm mới). 3 mục đầu và mục cuối đi theo đúng thứ tự thao tác thực tế "
                 "khi mới dùng app (nạp → phân loại → kiểm tra lại → sao lưu); riêng Giao diện là tuỳ chỉnh "
                 "không liên quan tới luồng dữ liệu đó nên xếp riêng, ngay trước Quản lý hệ thống.\n\n"
-                "**1, 2, 4 mở sẵn khi vào trang** (đúng 3 mục hay đụng tới nhất theo thói quen dùng thực tế); "
-                "**3 và 5 đóng mặc định** — bấm để mở khi cần, tránh cuộn qua bảng dữ liệu thô hay khu vực xoá "
-                "sạch mỗi lần chỉ định ghé qua đổi màu.")
+                "**Chỉ mục 1 mở sẵn khi vào trang** (mục hay đụng tới nhất — nạp dữ liệu mới); **2, 3, 4, 5 đóng "
+                "mặc định** — bấm để mở khi cần, tránh cuộn qua bảng phân loại/dữ liệu thô/màu sắc/khu vực xoá "
+                "sạch mỗi lần chỉ định ghé qua nạp dữ liệu.")
 
         guide_item(
             "prep_data_input.png", "1. Dữ liệu đầu vào",
@@ -7634,8 +7616,8 @@ elif nav == "Hướng dẫn":
             "**1 màu accent chọn ra lan toả tới 3 nơi khác nhau, bằng 3 cơ chế khác nhau**:\n"
             "- **Nút bấm/khung viền/chip** — qua biến CSS (`:root { --accent: ...; }`), toàn bộ stylesheet tham "
             "chiếu tới biến này thay vì mã màu cứng.\n"
-            "- **Biểu đồ đơn sắc/bảng nhiệt** (Biểu đồ lịch, Giờ tập trung theo thứ, Thanh phân bố độ dài phiên, "
-            "heat cell của Bảng số liệu) — KHÔNG qua CSS, mà qua Python: màu accent được đổi thành 1 giá trị "
+            "- **Biểu đồ đơn sắc/bảng nhiệt** (Biểu đồ lịch, Thanh phân bố độ dài phiên, heat cell của Bảng số "
+            "liệu) — KHÔNG qua CSS, mà qua Python: màu accent được đổi thành 1 giá trị "
             "**hue** (sắc độ trên vòng thuần sắc), rồi mọi dải màu này tự xoay theo đúng hue đó, giữ nguyên độ "
             "bão hoà và khoảng độ sáng nhạt→đậm — nên đổi màu accent tự động đổi TẤT CẢ biểu đồ đơn sắc cùng "
             "lúc, không cần sửa từng biểu đồ riêng.\n"
@@ -7676,8 +7658,6 @@ elif nav == "Hướng dẫn":
     # SUB-TAB: CẬP NHẬT
     # ==========================================
     with _guide_tabs[7]:
-        st.caption("Các tính năng mới đáng chú ý, gộp theo đợt — mới nhất lên trước.")
-
         guide_update("182-184", "Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng", [
             "**Trích dẫn hôm nay** — thẻ chuyển lên đầu trang Hôm nay (ngay dưới \"Ngày đang xem\"), nền accent "
             "đặc, chữ trích dẫn cỡ lớn kiểu chữ sách, kèm tên tác giả cạnh tên sách.",
@@ -7689,14 +7669,14 @@ elif nav == "Hướng dẫn":
             "giữ lại bản đầy đủ nhất thay vì nhân đôi thành nhiều trích dẫn.",
             "Kèm theo: sửa vài lỗi giao diện (tab Gundam mất kiểu dáng, nút ★ chồng lên chữ), dọn heading dư "
             "thừa ở nhiều bảng số liệu, chữ Thứ trong Nhật ký đổi từ số sang chữ đầy đủ (Thứ Tư thay vì Thứ 4).",
-        ])
+        ], latest_pr_lines=69)
         guide_update("181", "Rà soát & đơn giản hoá theo phản hồi thực tế", [
             "Bớt: Top 3 Danh mục/Dự án ở Hôm nay/Báo cáo→Tuần, biểu đồ Gantt tự vẽ ở Sách/Gundam→Tổng quan, vài "
             "phím tắt ít dùng (Shift+1-5, [ ], f/r/l).",
             "Thêm: nút \"Gộp\" ghi chú nhanh vào ghi chú chính, sửa gán series Gundam tay khi suy luận tự động "
             "đoán sai, view \"Chỉ số bất thường\" ở lần khám Sức khoẻ mới nhất, Tìm kiếm mở rộng sang Ghi chú "
             "nhanh, checkbox xác nhận cho \"Khôi phục\", gộp 2 UI đồng bộ CalDAV thành 1.",
-        ])
+        ], latest_pr_lines=960)
         guide_update("158-165", "Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS", [
             "**Bảng vàng** — Bảng số liệu mỗi trang Báo cáo giờ có thêm \"Ngày nổi bật\" (top ngày nhiều giờ "
             "nhất trong kỳ đang xem), cộng **Kỷ lục** toàn thời gian (chung và riêng theo Nhóm/Dự án) gắn "
@@ -7705,16 +7685,16 @@ elif nav == "Hướng dẫn":
             "duyệt; mỗi dòng sửa/xoá được riêng, tách biệt với Ghi chú chính. Xem mục \"Ghi chú nhanh từ iOS\" "
             "trong tab Hôm nay.",
             "Kèm theo: gọn lại bố cục di động, sửa chip Bảng số liệu tràn khung khi giá trị dài.",
-        ])
+        ], latest_pr_lines=46)
         guide_update("166-167", "Logo mới, đồng bộ phong cách nút gọn toàn app", [
             "Đổi logo sang thiết kế mới, tự đổi màu theo đúng accent đang chọn thay vì 1 màu cố định.",
             "Đồng bộ phong cách nút bấm gọn (ôm sát chữ, không cao quá khổ) cho toàn bộ nút trong tab Tuỳ biến.",
-        ])
+        ], latest_pr_lines=79)
         guide_update("155,157", "Đồng bộ nhanh làm phương án mặc định", [
             "Tab \"1. Dữ liệu đầu vào\" giờ ưu tiên **Đồng bộ nhanh** — 1 nút nạp cả Forest, Reminder và lịch "
             "Work cùng lúc từ file Shortcut đã tải lên, thay vì phải làm 3 bước tay riêng lẻ.",
             "3 cách tải tay cũ vẫn còn, gộp vào 1 khối thu gọn \"Dự phòng\" — dùng khi cần thao tác riêng lẻ.",
-        ])
+        ], latest_pr_lines=338)
         guide_update("132,133,136,137", "Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc", [
             "**Báo cáo → Năm** — bản tổng kết 1 năm cụ thể: hero số liệu, Biểu đồ lịch trọn năm, Đọc sách & "
             "Gundam trong năm, Bảng số liệu.",
@@ -7724,16 +7704,16 @@ elif nav == "Hướng dẫn":
             "tự chọn theo cài đặt hệ thống.",
             "**Nhịp làm việc** — mục mới trong Hướng dẫn, hướng dẫn cách dùng app theo ngày/tuần/tháng thay vì "
             "chỉ mô tả tính năng.",
-        ])
+        ], latest_pr_lines=79)
         guide_update("141-146", "Thêm phím tắt bàn phím cho toàn app", [
             "1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm nay và focus thẳng vào ô soạn, "
             "/ focus vào ô Tìm kiếm, Esc bỏ focus mà không xoá từ khoá đang gõ.",
             "Xem đầy đủ danh sách phím tắt ở mục \"Phím tắt bàn phím\" trong tab Tổng quan.",
-        ])
+        ], latest_pr_lines=15)
         guide_update("125,126,139,140", "Trang Hôm nay, 14 màu accent, logo & wordmark", [
             "**Hôm nay** ra đời — tách từ lát cắt \"Ngày\" trong Báo cáo, thành mục đầu tiên và mặc định trên "
             "thanh điều hướng vì đây là trang mở nhiều nhất mỗi ngày.",
             "Bảng màu accent mở rộng lên **14 màu**, chọn qua bản xem trước tương tác, áp dụng ngay cho nút, "
             "biểu đồ và bảng nhiệt toàn app.",
             "Thêm logo và wordmark \"Forest Dashboard\" thay cho tiêu đề chữ trơn.",
-        ])
+        ], latest_pr_lines=6)
