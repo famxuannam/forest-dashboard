@@ -90,6 +90,15 @@ không gọi lại `_kindle_dedupe_hash()` để suy ngược khoá từ nội d
   thẳng từ Clippings.txt) luôn có `parent_hash = NULL`; lúc RENDER, app tự lồng loại ghi chú này
   xuống dưới 1 highlight cùng ngày có `location` trùng khớp (suy luận hiển thị, không lưu quan hệ
   vào DB) — xem `_render_kindle_day_quotes()`.
+- `is_favorite` (cột boolean, mặc định `false`) đánh dấu 1 trích dẫn/ghi chú "Yêu thích" — bật/tắt
+  qua `set_kindle_highlight_favorite(dedupe_hash, is_favorite)`, cũng khoá theo `dedupe_hash` như
+  mọi thao tác sửa/xoá khác ở trên. Đọc lại qua cột `Yêu thích` do `load_kindle_highlights()` rename
+  ra. `save_kindle_highlights_bulk()` (import) CỐ Ý không đụng tới cột này (`ignore_duplicates=True`
+  không ghi đè dòng đã có, cột mới insert dùng default `false` của Postgres) — favorite không bao
+  giờ bị mất khi import lại cùng file. `save_kindle_highlights_raw_bulk()` (Khôi phục) có đọc/ghi lại
+  `is_favorite` từ CSV backup như các cột khác. UI dùng cột này ở 2 chỗ: nút ⭐ trên mỗi dòng ở
+  "2. Nhật ký đọc" (`_render_kindle_quote_row()`) và sub-tab "Yêu thích" riêng (trang Sách, không có
+  ở Gundam — `_render_kindle_favorites_tab()`, lọc `Yêu thích == True` rồi group theo `Cuốn sách`).
 
 `kindle_book_map` ánh xạ `kindle_title` (tên sách GHI NGUYÊN VĂN trong Clippings.txt, có thể khác
 tên Dự án Forest tự đặt tay ở dấu câu/phụ đề) sang 1 Dự án đã có (`project`), hoặc để `NULL` kèm

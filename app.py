@@ -183,8 +183,8 @@ GUNDAM_LABELS = dict(
 )
 
 # Tên thứ tiếng Việt (dùng chung mọi nơi)
-VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
-           "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
+VN_DAYS = {"Monday": "Thứ Hai", "Tuesday": "Thứ Ba", "Wednesday": "Thứ Tư", "Thursday": "Thứ Năm",
+           "Friday": "Thứ Sáu", "Saturday": "Thứ Bảy", "Sunday": "Chủ Nhật"}
 
 # Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
@@ -818,15 +818,16 @@ def load_kindle_highlights():
     _kindle_dedupe_hash() để suy ngược khoá."""
     sb = _get_supabase()
     res = sb.table("kindle_highlights").select(
-        "dedupe_hash,kindle_title,author,kind,content,location,added_at,parent_hash").execute()
+        "dedupe_hash,kindle_title,author,kind,content,location,added_at,parent_hash,is_favorite").execute()
     cols = ["Tên Kindle", "Tác giả", "Loại", "Nội dung", "Vị trí", "Ngày thêm", "Cuốn sách", "Dự án",
-            "dedupe_hash", "parent_hash"]
+            "dedupe_hash", "parent_hash", "Yêu thích"]
     if not res.data:
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(res.data).rename(columns={
         "kindle_title": "Tên Kindle", "author": "Tác giả", "kind": "Loại",
-        "content": "Nội dung", "location": "Vị trí", "added_at": "Ngày thêm"})
+        "content": "Nội dung", "location": "Vị trí", "added_at": "Ngày thêm", "is_favorite": "Yêu thích"})
     df["Ngày thêm"] = pd.to_datetime(df["Ngày thêm"], format='ISO8601', errors='coerce')
+    df["Yêu thích"] = df["Yêu thích"].fillna(False).astype(bool)
     bm = load_kindle_book_map()
     bm_idx = bm.set_index("Tên Kindle")[["Dự án", "Nhãn"]] if not bm.empty else pd.DataFrame(columns=["Dự án", "Nhãn"])
 
@@ -890,6 +891,9 @@ def save_kindle_highlights_raw_bulk(df):
             "location": (str(r["Vị trí"]) if pd.notna(r.get("Vị trí")) and str(r["Vị trí"]).strip() else None),
             "added_at": (_fmt_ts(r["Ngày thêm"]) if pd.notna(r.get("Ngày thêm")) else None),
             "parent_hash": (str(r["parent_hash"]) if pd.notna(r.get("parent_hash")) and str(r["parent_hash"]).strip() else None),
+            # .get() với mặc định "False" -- bản sao lưu cũ (trước khi có tính năng Yêu thích)
+            # không có cột này trong CSV, phải rơi về false thay vì KeyError.
+            "is_favorite": str(r.get("Yêu thích", "False")).strip().lower() == "true",
         } for r in df.to_dict("records")]
         for i in range(0, len(recs), 500):
             sb.table("kindle_highlights").insert(recs[i:i + 500]).execute()
@@ -906,6 +910,14 @@ def update_kindle_highlight_content(dedupe_hash, content):
         return
     sb = _get_supabase()
     sb.table("kindle_highlights").update({"content": content}).eq("dedupe_hash", dedupe_hash).execute()
+    st.cache_data.clear()
+
+
+def set_kindle_highlight_favorite(dedupe_hash, is_favorite):
+    """Bật/tắt đánh dấu Yêu thích cho 1 trích dẫn/ghi chú Kindle -- nút ⭐ ở "Nhật ký đọc" và ở
+    thẻ "Trích dẫn hôm nay" gọi thẳng hàm này. Không đụng dedupe_hash/nội dung, chỉ đổi 1 cột."""
+    sb = _get_supabase()
+    sb.table("kindle_highlights").update({"is_favorite": bool(is_favorite)}).eq("dedupe_hash", dedupe_hash).execute()
     st.cache_data.clear()
 
 
@@ -2095,7 +2107,7 @@ def render_session_bar(df):
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
-        "<div class='glass-card' style='padding:16px 18px;margin-top:10px;'>"
+        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
         "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
         f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
@@ -2569,7 +2581,27 @@ def _assign_gundam_sessions(gundam_sessions, rl_gundam, overrides=None):
     return merged.drop(columns=['_d', 'Cuốn sách'])
 
 
-def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS):
+def _render_kindle_favorites_tab():
+    """Sub-tab "Yêu thích" (trang Sách, không có ở Gundam -- xem show_favorites ở render_reading_log()):
+    duyệt lại mọi trích dẫn/ghi chú Kindle đã đánh dấu ⭐, gộp theo cuốn sách. Đây thuần là 1 cách
+    LỌC khác của cùng bảng kindle_highlights (Yêu thích == True), không phải dữ liệu riêng -- tái
+    dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh dấu được
+    thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó."""
+    kh = load_kindle_highlights()
+    favs = kh[kh['Yêu thích']] if not kh.empty else kh
+    if favs.empty:
+        st.info("Chưa có trích dẫn nào được đánh dấu Yêu thích — bấm ⭐ trên 1 trích dẫn ở mục "
+                "\"2. Nhật ký đọc\" (tab Chi tiết) hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
+                "nay để lưu lại đây, thỉnh thoảng mở ra đọc lại cho vui.")
+        return
+    for book, grp in favs.groupby('Cuốn sách'):
+        st.markdown(f"<span class='rl-book'>{html_escape(str(book))}</span>", unsafe_allow_html=True)
+        for _, r in grp.sort_values('Vị trí', key=lambda s: s.map(_kindle_location_sort_key)).iterrows():
+            _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_")
+
+
+def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS,
+                        show_favorites=True):
     """Bảng + timeline + tóm tắt cho từng cuốn sách (đọc tuần tự), GỘP 2 nguồn: phiên Forest
     (nhóm Danh mục = Reading) và phần đã đọc đồng bộ từ Apple Reminders (reading_log_df). Một
     cuốn sách chỉ cần có mặt ở MỘT trong 2 nguồn là đủ để lên bảng -- cột thuộc nguồn còn thiếu
@@ -2579,7 +2611,11 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     Dùng chung cho tab "Nhật ký đọc sách" (labels=READING_LABELS, mặc định) và tab "Gundam"
     (labels=GUNDAM_LABELS) -- chỉ khác CHỮ hiển thị, tên cột nội bộ (vd 'Cuốn sách', 'Trạng
-    thái') giữ nguyên bất kể labels nào đang dùng."""
+    thái') giữ nguyên bất kể labels nào đang dùng.
+
+    show_favorites=False ở trang Gundam (xem nơi gọi) -- sub-tab "Yêu thích" duyệt lại trích dẫn
+    Kindle đã đánh dấu ⭐, chỉ có ý nghĩa cho SÁCH (trích dẫn gắn với nội dung sách, không áp dụng
+    cho việc xem Gundam)."""
     if df_books.empty and reading_log_df.empty:
         st.info(labels['empty_msg'])
         return
@@ -2686,8 +2722,14 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             for _, r in reading.iterrows()
         ]})
 
-    _tab_overview, _tab_detail = st.tabs([":material/bar_chart: Tổng quan", ":material/search: Chi tiết"],
-                                          key="rl_view_tabs")
+    # Key riêng theo show_favorites (không dùng chung 1 key cho Sách/Gundam như trước) -- Sách có
+    # 3 tab, Gundam chỉ 2, dùng chung key cho 2 bộ tab khác số lượng dễ vỡ trạng thái tab đang chọn
+    # khi chuyển qua lại giữa 2 trang.
+    _tab_labels = [":material/bar_chart: Tổng quan", ":material/search: Chi tiết"]
+    if show_favorites:
+        _tab_labels.append(":material/star: Yêu thích")
+    _tabs = st.tabs(_tab_labels, key="rl_view_tabs" if show_favorites else "rl_view_tabs_gd")
+    _tab_overview, _tab_detail = _tabs[0], _tabs[1]
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -2695,6 +2737,10 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     with _tab_detail:
         _render_reading_detail(t, reading_log_df, labels)
+
+    if show_favorites:
+        with _tabs[2]:
+            _render_kindle_favorites_tab()
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -2729,7 +2775,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                 {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
             ]},
         ]}],
-        card_style="padding:20px;margin-top:10px;",
+        card_style="padding:20px;margin-top:14px;",
     )
 
     # Thẻ 3: Kỳ này — thẻ độc lập
@@ -2740,7 +2786,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
             {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
             _sec_timeslot,
         ]}],
-        card_style="padding:20px;margin-top:10px;",
+        card_style="padding:20px;margin-top:14px;",
     )
 
     render_session_bar(df_books)
@@ -2770,7 +2816,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
         rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
         rows_html += '</tr>'
     st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap" style="margin-top:10px;">
+<div class="dtbl-wrap" style="margin-top:14px;">
 <div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">{labels['detail_label']}</div>
 <table class="dtbl">
 <thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
@@ -2977,7 +3023,7 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:10px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
@@ -3773,30 +3819,39 @@ def _render_kindle_day_quotes(day_kh):
             _render_kindle_quote_row(child, is_reply=True)
 
 
-def _render_kindle_quote_row(r, is_reply=False):
-    """1 dòng quote/note Kindle + cụm nút Sửa/Xoá/+ Ghi chú -- cùng bố cục hàng thật (st.columns)
-    và cùng phong cách nút (icon nhỏ, nền trong suốt) với hàng "Ghi chú nhanh" (qnote_row) trong
-    render_note_editor(): đọc = chữ + icon mờ bám phải; bấm Sửa = textarea + ✓ Cập nhật/✕ Huỷ;
-    bấm + = ô nhập ghi chú mới bên dưới + ✓ Lưu/✕ Huỷ. Xoá KHÔNG hỏi xác nhận (giống hệt Ghi chú
-    nhanh) -- quyết định đã chốt với người dùng. is_reply=True (ghi chú đang lồng dưới 1 highlight)
-    -> thụt lề riêng qua CSS ([class*="st-key-kqreply_"]) + KHÔNG có nút "+" (ghi chú không trả
-    lời được ghi chú)."""
+def _render_kindle_quote_row(r, is_reply=False, key_suffix=""):
+    """1 dòng quote/note Kindle + cụm nút Yêu thích/Sửa/Xoá/+ Ghi chú -- cùng bố cục hàng thật
+    (st.columns) và cùng phong cách nút (icon nhỏ, nền trong suốt) với hàng "Ghi chú nhanh"
+    (qnote_row) trong render_note_editor(): đọc = chữ + icon mờ bám phải; bấm Sửa = textarea +
+    ✓ Cập nhật/✕ Huỷ; bấm + = ô nhập ghi chú mới bên dưới + ✓ Lưu/✕ Huỷ. Xoá KHÔNG hỏi xác nhận
+    (giống hệt Ghi chú nhanh) -- quyết định đã chốt với người dùng. is_reply=True (ghi chú đang
+    lồng dưới 1 highlight) -> thụt lề riêng qua CSS ([class*="st-key-kqreply_"]) + KHÔNG có nút
+    "+" (ghi chú không trả lời được ghi chú).
+
+    key_suffix: cùng 1 highlight (dedupe_hash) có thể được vẽ ở HAI nơi khác nhau trong CÙNG 1
+    lần chạy trang -- vd 1 trích dẫn Yêu thích của cuốn đang mở ở "Chi tiết" cũng xuất hiện lại ở
+    sub-tab "Yêu thích" ngay bên cạnh (st.tabs() vẽ HẾT mọi tab trong 1 lần chạy, không chỉ tab
+    đang active). 2 lần gọi cùng dùng key mặc định sẽ đụng khoá (StreamlitDuplicateElementKey) --
+    nơi gọi thứ 2 (vd _render_kindle_favorites_tab()) PHẢI truyền key_suffix riêng để tách khoá.
+    Chèn NGAY TRƯỚC hash (giữa tiền tố cố định "kqrow_"/"kqreply_"/"kqnew_" và hash) thay vì đặt ở
+    đầu toàn bộ key -- giữ nguyên các tiền tố này làm chuỗi con để CSS
+    ([class*="st-key-kqrow_"] v.v.) vẫn khớp bất kể key_suffix là gì."""
     h = r['dedupe_hash']
-    edit_key = f"kq_edit_{h}"
-    addnote_key = f"kq_addnote_{h}"
-    with st.container(key=f"{'kqreply' if is_reply else 'kqrow'}_{h}"):
+    edit_key = f"kq_edit_{key_suffix}{h}"
+    addnote_key = f"kq_addnote_{key_suffix}{h}"
+    with st.container(key=f"kq{'reply' if is_reply else 'row'}_{key_suffix}{h}"):
         rc1, rc2 = st.columns([15, 3])
         if st.session_state.get(edit_key, False):
             with rc1:
-                st.text_area("Sửa", value=str(r['Nội dung']), key=f"kq_input_{h}",
+                st.text_area("Sửa", value=str(r['Nội dung']), key=f"kq_input_{key_suffix}{h}",
                              label_visibility="collapsed", height=68)
             with rc2:
                 with st.container(horizontal=True, gap="small"):
-                    if st.button("", icon=":material/check:", key=f"kq_save_{h}", help="Cập nhật"):
-                        update_kindle_highlight_content(h, st.session_state.get(f"kq_input_{h}", ""))
+                    if st.button("", icon=":material/check:", key=f"kq_save_{key_suffix}{h}", help="Cập nhật"):
+                        update_kindle_highlight_content(h, st.session_state.get(f"kq_input_{key_suffix}{h}", ""))
                         st.session_state[edit_key] = False
                         st.rerun()
-                    if st.button("", icon=":material/close:", key=f"kq_canceledit_{h}", help="Huỷ"):
+                    if st.button("", icon=":material/close:", key=f"kq_canceledit_{key_suffix}{h}", help="Huỷ"):
                         st.session_state[edit_key] = False
                         st.rerun()
         else:
@@ -3811,31 +3866,37 @@ def _render_kindle_quote_row(r, is_reply=False):
                     unsafe_allow_html=True)
             with rc2:
                 with st.container(horizontal=True, gap="small"):
+                    _fav = bool(r.get('Yêu thích', False))
+                    if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
+                                 key=f"kq_favbtn_{'on' if _fav else 'off'}_{key_suffix}{h}",
+                                 help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                        set_kindle_highlight_favorite(h, not _fav)
+                        st.rerun()
                     if not is_reply:
-                        if st.button("", icon=":material/add_comment:", key=f"kq_addbtn_{h}", help="Thêm ghi chú"):
+                        if st.button("", icon=":material/add_comment:", key=f"kq_addbtn_{key_suffix}{h}", help="Thêm ghi chú"):
                             st.session_state[addnote_key] = True
                             st.rerun()
-                    if st.button("", icon=":material/edit:", key=f"kq_editbtn_{h}", help="Sửa"):
+                    if st.button("", icon=":material/edit:", key=f"kq_editbtn_{key_suffix}{h}", help="Sửa"):
                         st.session_state[edit_key] = True
                         st.rerun()
-                    if st.button("", icon=":material/delete:", key=f"kq_delbtn_{h}", help="Xoá"):
+                    if st.button("", icon=":material/delete:", key=f"kq_delbtn_{key_suffix}{h}", help="Xoá"):
                         delete_kindle_highlight(h)
                         st.rerun()
         if not is_reply and st.session_state.get(addnote_key, False):
-            with st.container(key=f"kqnew_{h}"):
+            with st.container(key=f"kqnew_{key_suffix}{h}"):
                 nc1, nc2 = st.columns([15, 3])
                 with nc1:
-                    st.text_area("Ghi chú mới", key=f"kq_newnote_{h}", label_visibility="collapsed",
+                    st.text_area("Ghi chú mới", key=f"kq_newnote_{key_suffix}{h}", label_visibility="collapsed",
                                  height=60, placeholder="Viết ghi chú của bạn...")
                 with nc2:
                     with st.container(horizontal=True, gap="small"):
-                        if st.button("", icon=":material/check:", key=f"kq_newsave_{h}", help="Lưu"):
-                            _txt = st.session_state.get(f"kq_newnote_{h}", "")
+                        if st.button("", icon=":material/check:", key=f"kq_newsave_{key_suffix}{h}", help="Lưu"):
+                            _txt = st.session_state.get(f"kq_newnote_{key_suffix}{h}", "")
                             if _txt.strip():
                                 add_kindle_note(r, _txt)
                             st.session_state[addnote_key] = False
                             st.rerun()
-                        if st.button("", icon=":material/close:", key=f"kq_newcancel_{h}", help="Huỷ"):
+                        if st.button("", icon=":material/close:", key=f"kq_newcancel_{key_suffix}{h}", help="Huỷ"):
                             st.session_state[addnote_key] = False
                             st.rerun()
 
@@ -4610,17 +4671,24 @@ st.markdown(
         background-size: 20px 20px;
     }
 
-    .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
-    /* Thu gọn khoảng cách mặc định GIỮA các thành phần Streamlit xếp dọc (1rem mặc định khá
-       rộng, tạo cảm giác "trống trải" kiểu app hệ thống hơn là sổ tay) -- !important trong
-       stylesheet vẫn thắng inline style (không !important) mà Streamlit tự gắn cho gap này. */
-    [data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
+    /* padding-top PHẢI đủ lớn để nội dung nằm HẲN dưới [data-testid="stHeader"] của Streamlit --
+       thanh đó là position:absolute, height 60px CỐ ĐỊNH, z-index 999990 (rất cao), nền tô ĐẶC
+       cùng màu --bg (không trong suốt) -- không phải 1 dải trong suốt vô hại, mà đè hẳn lên phần
+       nội dung nằm trong 60px đầu trang, "che" mất (không phải bị cắt bởi overflow) logo/wordmark
+       nếu padding-top nhỏ hơn ~60px + đệm an toàn. Đã đo lại bằng Playwright (bounding box thật
+       của stHeader) sau khi bị che thật ở cả mobile lẫn desktop hẹp -- ĐỪNG giảm số này xuống dưới
+       ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước. */
+    .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
+    /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng bị siết xuống 0.6rem (đợt "thu
+       gọn"), phản hồi thực tế sau đó là quá sát/ngột ngạt, nới lại về mức trung dung (0.6rem gốc
+       Streamlit là 1rem) thay vì siết hay revert hẳn 1 trong 2 thái cực. */
+    [data-testid="stVerticalBlock"] { gap: 0.9rem !important; }
 
     .glass-card {
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 16px;
+        padding: 20px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
 
@@ -4694,7 +4762,7 @@ st.markdown(
     .stat-panel .sp-v { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
     /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
-    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; }
+    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 12px; }
     .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
     .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
     @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
@@ -4709,8 +4777,8 @@ st.markdown(
     .stat-panel .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw { background: rgba(var(--accent-rgb),0.10); }
-    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 8px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 8px; }
+    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
+    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
     /* .sp-row có margin-top để tách với .sp-hero phía trên -- khi KHÔNG có hero (vd panel
        "Tham khảo cho lên kế hoạch" chỉ có sections, không hero_items), .sp-row là con đầu tiên
@@ -4718,7 +4786,7 @@ st.markdown(
     .stat-panel > .sp-row:first-child { margin-top: 0; }
     .stat-panel .chip.tw .ck { color: var(--accent-dark); }
     .stat-panel .chip.tw .cv { color: var(--accent); }
-    .section-hd { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 16px 0 6px; letter-spacing: -0.2px; }
+    .section-hd { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 18px 0 8px; letter-spacing: -0.2px; }
     /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
        bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.dtbl-wrap). */
     .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 10px; }
@@ -4928,10 +4996,15 @@ st.markdown(
         h2, [data-testid="stHeading"] h2 { font-size: 1.35rem !important; }
         h3 { font-size: 1.1rem !important; }
         [data-testid="stExpander"] summary p { font-size: 15px !important; }
-        .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
+        /* padding-top GIỮ NGUYÊN bằng bản desktop (không giảm riêng cho mobile) -- xem chú thích
+           đầy đủ ở rule .block-container gốc phía trên: cả 2 breakpoint đều cần đủ khoảng trống
+           để lọt qua [data-testid="stHeader"] cố định 60px của Streamlit, mobile không phải
+           ngoại lệ. */
+        .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 4.5rem !important; }
 
-        /* Thẻ gọn lại, bớt khoảng trống thừa (height:auto để không bị kéo giãn khi xếp dọc) */
-        .glass-card { padding: 12px !important; height: auto !important; }
+        /* Thẻ gọn lại, bớt khoảng trống thừa (height:auto để không bị kéo giãn khi xếp dọc) --
+           16px (không phải 20px như desktop) vì màn hẹp vẫn cần tiết kiệm bề ngang hơn. */
+        .glass-card { padding: 16px !important; height: auto !important; }
         .glass-card h3 { font-size: 26px !important; margin: 4px 0 !important; }
         /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao và tạo khoảng cách giữa các ô */
         [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
@@ -5084,14 +5157,42 @@ st.markdown(
     [class*="st-key-kqrow_"] div[data-testid="stButton"] button[kind="secondary"]:hover,
     [class*="st-key-kqreply_"] div[data-testid="stButton"] button[kind="secondary"]:hover,
     [class*="st-key-kqnew_"] div[data-testid="stButton"] button[kind="secondary"]:hover { color: var(--text) !important; }
+    /* Icon ⭐ Yêu thích dùng chung font Material Symbols của Streamlit KHÔNG hỗ trợ trục biến FILL
+       (đã kiểm chứng qua Playwright: ép font-variation-settings 'FILL' 1 không đổi hình dạng icon) --
+       ":material/star:" và ":material/star_outline:" hiển thị giống hệt nhau (đều nét viền rỗng),
+       nên phân biệt trạng thái đã đánh dấu bằng MÀU accent thay vì hình dạng. Key nút đã gắn hậu tố
+       "_on_"/"_off_" ngay sau "kq_favbtn_"/"kq_daily_favbtn_" đúng theo trạng thái để chọn được. */
+    [class*="st-key-kq_favbtn_on_"] div[data-testid="stButton"] button[kind="secondary"] {
+        color: var(--accent) !important;
+    }
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
        hàng highlight cha phía trên. */
     [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
-    /* Quote ngẫu nhiên (cố định theo ngày) trong trang Hôm nay -- xem _kindle_quote_of_day().
-       KHÔNG đặt margin cố định ở đây -- margin (top/ngang) truyền qua style= tại nơi gọi vì vị
-       trí thẻ này đổi tuỳ ngày đang xem có phiên hay không, xem _kindle_quote_card_html(). */
-    .kq-daily { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 18px 24px 20px; }
+    /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
+       THẬT (không phải .jrows/.jrow HTML tĩnh -- xem _render_reading_kindle_days()), nên không tự
+       có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
+       các khối xếp dọc, quá sát khi Thứ/ngày xếp chồng ngay trên nhau qua nhiều ngày liền. Thêm
+       padding dọc + đường kẻ dưới cùng KHUÔN với .jrows .jrow để 2 nơi trông nhất quán. */
+    [class*="st-key-jkq_row_"] { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+    [class*="st-key-jkq_row_"]:last-child { border-bottom: none; }
+    /* "Trích dẫn hôm nay" -- xem _render_daily_quote_card()/_kindle_quote_of_day(). Nền phớt màu
+       accent (khác var(--card) trung tính của mọi thẻ khác trên trang) để mắt dừng lại ngay, đúng
+       mục tiêu không bị lướt qua như bản cũ (từng chôn ở cuối trang, cùng màu mọi thẻ số liệu
+       khác). st.container(border=True, key="kq_daily_card") tự có viền/bo góc/bóng qua rule
+       [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- chỉ cần ghi đè màu nền +
+       margin dưới ở đây, không cần định nghĩa lại toàn bộ khung. */
+    .st-key-kq_daily_card { background: rgba(var(--accent-rgb),0.07) !important;
+        border-color: rgba(var(--accent-rgb),0.35) !important; margin-bottom: 16px !important; }
+    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] {
+        background: transparent !important; border: none !important; box-shadow: none !important;
+        color: var(--text-3) !important; min-height: 0 !important; height: 26px !important;
+        padding: 0 4px !important;
+    }
+    /* Đã Yêu thích -> icon màu accent, lý do xem chú thích ở rule [class*="st-key-kq_favbtn_on_"]
+       phía trên (cùng hạn chế font Material Symbols không đổi hình dạng theo trạng thái). */
+    [class*="st-key-kq_daily_favbtn_on"] div[data-testid="stButton"] button[kind="secondary"] {
+        color: var(--accent) !important;
+    }
     .kq-daily-mark { font-size: 34px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
         opacity: .55; margin-bottom: -6px; }
     .kq-daily-text { font-size: 14.5px; line-height: 1.6; color: var(--text); font-style: italic;
@@ -5233,7 +5334,7 @@ NAV_SHORT = {
 }
 
 df = prep_analysis_data()
-DAYS_ORDER = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
+DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
 
 # Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab.
 # Danh mục (mặc định để tô màu) được nhận các màu cơ sở đẹp & tách biệt nhất trước,
@@ -5579,19 +5680,32 @@ def _kindle_quote_of_day():
     return kh.iloc[idx]
 
 
-def _kindle_quote_card_html(kq, style=""):
-    """HTML thẻ quote-of-the-day (._kq từ _kindle_quote_of_day()) -- tách hàm vì render_day_report
-    cần vẽ CÙNG 1 thẻ này ở 2 vị trí khác nhau tuỳ ngày đang xem có phiên hay không (cuối "1. Tổng
-    quan ngày" nếu có phiên, dưới "Tham khảo cho lên kế hoạch" nếu không), mỗi vị trí cần margin
-    khác nhau để thẳng hàng đúng bề ngang với thẻ liền trước -- xem 2 chỗ gọi trong
-    render_day_report()."""
-    return (
-        f"<div class='kq-daily' style='{style}'>"
-        "<div class='kq-daily-mark'>“</div>"
-        f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
-        f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>"
-        "</div>"
-    )
+def _render_daily_quote_card(kq):
+    """Thẻ "Trích dẫn hôm nay" (kq từ _kindle_quote_of_day()) -- đứng NGAY DƯỚI card "Ngày đang
+    xem", TRƯỚC mọi nội dung khác của trang Hôm nay (kể cả khi ngày đang xem trống phiên), thay vì
+    chôn ở cuối "1. Tổng quan ngày"/dưới "Tham khảo cho lên kế hoạch" như bản cũ -- phản hồi thực
+    tế là quá dễ bị lướt qua ở vị trí cũ. Có nhãn ".card-label" (đúng khuôn dùng chung toàn app,
+    không phải khối chữ nghiêng lạc lõng) + nền phớt màu accent (".kq-daily", xem CSS) để tách hẳn
+    khỏi các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh
+    như bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các
+    câu đã đánh dấu."""
+    with st.container(key="kq_daily_card", border=True):
+        c_lbl, c_fav = st.columns([6, 1])
+        with c_lbl:
+            st.markdown("<span class='card-label' style='margin:0;'>Trích dẫn hôm nay</span>",
+                        unsafe_allow_html=True)
+        with c_fav:
+            _fav = bool(kq.get('Yêu thích', False))
+            if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
+                         key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
+                         help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
+                st.rerun()
+        st.markdown(
+            "<div class='kq-daily-mark'>“</div>"
+            f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
+            f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>",
+            unsafe_allow_html=True)
 
 
 def render_day_report(df):
@@ -5670,8 +5784,11 @@ def render_day_report(df):
     if _upd_tail:
         _inject_relative_time_ticker()
 
-    # Tính trước, vẽ SAU (vị trí tuỳ nhánh rỗng/có phiên bên dưới) -- xem _kindle_quote_card_html().
+    # Trích dẫn hôm nay đứng NGAY ĐÂY (đầu trang, trước cả nhánh rỗng/có phiên bên dưới) -- xem
+    # _render_daily_quote_card().
     _kq = _kindle_quote_of_day()
+    if _kq is not None:
+        _render_daily_quote_card(_kq)
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
@@ -5696,12 +5813,6 @@ def render_day_report(df):
             # 20px (thay vì mặc định 0) tạo khoảng cách rõ ràng hơn trước khi vào "Ghi chú ngày".
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
-
-        # Quote-of-the-day (nếu có dữ liệu Kindle) đứng NGAY DƯỚI "Tham khảo cho lên kế hoạch" --
-        # cùng margin ngang 16px (khớp padding trong của st.expander) để 2 thẻ liền kề thẳng hàng
-        # đúng bề ngang với "Ghi chú ngày" bên dưới, dù thẻ này KHÔNG nằm trong expander nào.
-        if _kq is not None:
-            st.markdown(_kindle_quote_card_html(_kq, "margin:0 16px 20px;"), unsafe_allow_html=True)
 
         with st.expander("Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
@@ -5761,13 +5872,6 @@ def render_day_report(df):
             render_day_timeline(day_df, sel, df)
 
             render_session_bar(day_df)
-
-            # Quote-of-the-day (nếu có dữ liệu Kindle) đứng cuối "1. Tổng quan ngày", ngay dưới
-            # dòng thời gian -- nằm TRONG expander nên tự thẳng hàng bề ngang với các thẻ phía
-            # trên (render_stat_panel/render_session_bar), không cần margin ngang riêng như bản
-            # đứng ngoài expander ở nhánh ngày rỗng bên dưới.
-            if _kq is not None:
-                st.markdown(_kindle_quote_card_html(_kq, "margin-top:10px;"), unsafe_allow_html=True)
 
         with st.expander("2. Ghi chú ngày", expanded=True):
             render_note_editor(sel, sel_day_badges)
@@ -6170,7 +6274,7 @@ elif nav == "Gundam":
                                                rl_gundam['Ngày hoàn thành'].max() if not rl_gundam.empty else None]
                     if v is not None and pd.notna(v)]
         latest_overall_g = max(_cands_g) if _cands_g else None
-        render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS)
+        render_reading_log(gundam_df, latest_overall_g, rl_gundam, labels=GUNDAM_LABELS, show_favorites=False)
 
         # Sửa gán series tự động -- chỉ có ý nghĩa khi có TỪ 2 series trở lên (1 series duy nhất
         # thì suy luận "lần hoàn thành gần nhất" không thể sai). Không đánh số (mục điều kiện,
@@ -6981,14 +7085,15 @@ elif nav == "Hướng dẫn":
                 "được mà không phải đi qua Báo cáo trước.")
 
         guide_item(
-            "reading_detail.png", "Trích dẫn Kindle mỗi ngày",
+            "reading_detail.png", "Trích dẫn hôm nay",
             "Thẻ trích dẫn (chỉ hiện nếu đã từng import trích dẫn Kindle, xem \"Tải trích dẫn Kindle\" ở tab "
             "Tuỳ biến): 1 highlight/note ngẫu nhiên, lấy từ TOÀN BỘ dữ liệu Kindle đã lưu (không chỉ riêng ngày "
             "đang xem). Câu được chọn **cố định trong đúng 1 ngày thật hôm nay** (không phụ thuộc ngày đang xem "
             "trên trang) — tải lại trang hay lùi/tiến xem ngày khác vẫn ra cùng 1 câu, chỉ đổi khi sang ngày "
-            "mới, đúng cảm giác \"quote of the day\". Vị trí thẻ tuỳ ngày đang xem: cuối mục \"1. Tổng quan "
-            "ngày\" (ngay dưới Dòng thời gian) nếu ngày đó có phiên; ngay dưới panel \"Tham khảo cho lên kế "
-            "hoạch\" nếu ngày đó chưa có phiên nào.",
+            "mới, đúng cảm giác \"quote of the day\". Đứng NGAY ĐẦU trang Hôm nay (dưới card \"Ngày đang xem\", "
+            "trước mọi nội dung khác) với nền phớt màu accent riêng — không còn chôn ở cuối trang như trước, dễ "
+            "bị lướt qua. Bấm **⭐** trên thẻ để đánh dấu Yêu thích, xem lại toàn bộ trích dẫn đã đánh dấu ở "
+            "sub-tab \"Yêu thích\" (trang Sách).",
             where="Hôm nay")
 
         guide_item(
@@ -7202,15 +7307,25 @@ elif nav == "Hướng dẫn":
             "nghiêng). Trong ngày đọc nhiều chương, các trích dẫn tự xếp theo **Vị trí** trong sách (tăng dần) "
             "— đúng thứ tự đọc thật, không cần tự sắp xếp hay gán tay quote vào chương nào (Reminders chỉ ghi "
             "ngày hoàn thành, không có giờ, nên không có cách nào đáng tin để suy luận việc đó).\n\n"
-            "Mỗi trích dẫn có 3 icon mờ bám bên phải: **✎ Sửa** (mở ô nhập ngay tại chỗ, bấm ✓ Cập nhật/✕ Huỷ, "
-            "giống hệt cách sửa Ghi chú nhanh), **🗑 Xoá** (xoá ngay, không hỏi xác nhận), và **➕ Thêm ghi chú** "
-            "(viết 1 ghi chú của riêng bạn, gắn hẳn vào đúng trích dẫn đó — hiện thụt lề ngay bên dưới). Mọi "
-            "sửa/xoá/ghi chú thêm được lưu lại vĩnh viễn trong Supabase — tải lại đúng file My Clippings.txt cũ "
-            "(Kindle luôn xuất lại toàn bộ lịch sử) sẽ **không ghi đè** nội dung đã sửa và **không hồi sinh** "
-            "trích dẫn đã xoá.",
+            "Mỗi trích dẫn có 4 icon mờ bám bên phải: **⭐ Yêu thích** (đánh dấu để xem lại ở sub-tab \"Yêu "
+            "thích\", không giới hạn theo cuốn đang xem), **➕ Thêm ghi chú** (viết 1 ghi chú của riêng bạn, gắn "
+            "hẳn vào đúng trích dẫn đó — hiện thụt lề ngay bên dưới), **✎ Sửa** (mở ô nhập ngay tại chỗ, bấm ✓ "
+            "Cập nhật/✕ Huỷ, giống hệt cách sửa Ghi chú nhanh), và **🗑 Xoá** (xoá ngay, không hỏi xác nhận). Mọi "
+            "sửa/xoá/ghi chú thêm/đánh dấu Yêu thích được lưu lại vĩnh viễn trong Supabase — tải lại đúng file "
+            "My Clippings.txt cũ (Kindle luôn xuất lại toàn bộ lịch sử) sẽ **không ghi đè** nội dung đã sửa và "
+            "**không hồi sinh** trích dẫn đã xoá.",
             tip="Ghi chú Kindle gốc (viết ngay trên máy đọc) tự động lồng xuống dưới highlight cùng \"Vị trí\" "
                 "nếu khớp được — không cần bạn tự gắn tay như ghi chú bạn thêm trong app.",
             where="Sách → Chi tiết")
+
+        guide_item(
+            "reading_log.png", "Yêu thích",
+            "Sub-tab riêng (chỉ có ở trang Sách, không có ở Gundam) gộp TOÀN BỘ trích dẫn/ghi chú Kindle đã "
+            "đánh dấu ⭐ Yêu thích, từ mọi cuốn sách, xếp theo tên sách rồi theo Vị trí trong sách — nơi để "
+            "thỉnh thoảng mở ra đọc lại những đoạn từng thấy hay, không cần nhớ nó nằm ở cuốn nào hay lục lại "
+            "từng cuốn một. Mỗi dòng vẫn có đủ 4 icon Yêu thích/Thêm ghi chú/Sửa/Xoá giống hệt \"2. Nhật ký "
+            "đọc\" — bấm ⭐ lần nữa ngay tại đây để bỏ đánh dấu.",
+            where="Sách → Yêu thích")
 
         guide_item(
             "gundam.png", "Vì sao Gundam cần \"suy luận\" series",
