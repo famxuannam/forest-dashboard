@@ -4230,9 +4230,14 @@ def _logo_mark_svg(size):
     ACCENT (không gradient), viền 1.5px màu ACCENT đậm hơn (_darken factor=0.75, đủ tương phản để
     thấy viền trên nền ACCENT nhạt mà không quá gắt như bản skeuomorphic cũ), 5 vạch trắng-ngà
     (màu {{card}} light -- '#fdfbf5', luôn sáng hơn mọi ACCENT nên không cần đổi theo IS_DARK)
-    cao thấp so le. viewBox cố định 0 0 44 44 -- size chỉ đổi width/height, không đổi hình học."""
+    cao thấp so le. viewBox cố định 0 0 44 44 -- size chỉ đổi width/height, không đổi hình học.
+    Toạ độ x/y CĂN GIỮA cả cụm 5 vạch trong khung 44x44 (lề trái/phải đều 7px, lề trên/dưới quanh
+    vạch cao nhất đều 10.5px) -- bản gốc copy nguyên từ design handoff bị lệch trái ~2px (lề trái
+    9px, lề phải chỉ 5px) do người thiết kế không cân lại toạ độ khi thu nhỏ viewBox, đã phát hiện
+    qua phản hồi thực tế nên tính lại đây, KHÔNG đổi tỉ lệ chiều cao so le giữa các vạch (vẫn giữ
+    dáng "nhịp phiên" tự nhiên, không phải hình núi đối xứng cứng nhắc)."""
     dark = _darken(ACCENT, 0.75)
-    bars = [(9, 24, 11), (15.5, 17, 18), (22, 12, 23), (28.5, 19, 16), (35, 26, 9)]
+    bars = [(7, 22.5, 11), (13.5, 15.5, 18), (20, 10.5, 23), (26.5, 17.5, 16), (33, 24.5, 9)]
     bar_svg = "".join(
         f"<rect x='{x}' y='{y}' width='4' height='{h}' rx='1.5' fill='#fdfbf5'></rect>"
         for x, y, h in bars
@@ -4271,12 +4276,18 @@ def _wordmark_html(layout="header"):
             "letter-spacing:0.08em;'>Dashboard</span></div></div>"
         )
     mark, forest_sz, dash_sz, gap_outer = 48, 36, 14, 14
+    # Cột chữ (Forest + Dashboard) lệch thấp hơn tâm thị giác của mark khi canh align-items:center
+    # theo bounding-box thô: span "Forest" có line-height:1.5 (buộc phải giữ, xem docstring) đệm
+    # thêm ~9px KHÔNG THẤY ở phía trên chữ, kéo trọng tâm thị giác của cả cột xuống dưới so với
+    # trọng tâm hình học của nó -- lấy margin-top âm trên CHÍNH CỘT (không đụng vào span "Forest"/
+    # line-height của nó, tránh đánh thức lại lỗi WebKit đã note trong docstring) để bù lại, canh
+    # mark thẳng hàng thật với chữ "Forest" thay vì thẳng hàng với bounding-box cả cột.
     return (
         f"<style>{_LOGO_FONT_FACE}</style>"
         f"<div style='display:flex;flex-direction:row;align-items:center;justify-content:center;"
         f"gap:{gap_outer}px;'>"
         f"{_logo_mark_svg(mark)}"
-        "<div style='display:flex;flex-direction:column;gap:2px;'>"
+        "<div style='display:flex;flex-direction:column;gap:2px;margin-top:-8px;'>"
         f"<span style=\"font-family:'Source Serif 4',serif;font-weight:500;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1.5;-webkit-font-smoothing:antialiased;"
         "transform:translateZ(0);display:inline-block;\">Forest</span>"
