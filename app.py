@@ -2807,7 +2807,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     # Thẻ 2: Hoạt động — thẻ độc lập, tách khỏi thẻ trên
     render_stat_panel(
         hero_items=[],
-        groups=[{"label": "Hoạt động", "sections": [
+        sections=[
             {"label": labels['streak_label'], "chips": [
                 {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
                 {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
@@ -2821,18 +2821,18 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                 {"k": "7 ngày", "v": f"{_fmt_hours_short(_pace(7))}/ngày"},
                 {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
             ]},
-        ]}],
+        ],
         card_style="padding:20px;margin-top:14px;",
     )
 
     # Thẻ 3: Kỳ này — thẻ độc lập
     render_stat_panel(
         hero_items=[],
-        groups=[{"label": "Kỳ này", "sections": [
+        sections=[
             {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
             {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
             _sec_timeslot,
-        ]}],
+        ],
         card_style="padding:20px;margin-top:14px;",
     )
 
@@ -5261,10 +5261,10 @@ st.markdown(
         color: var(--accent) !important;
     }
     .kq-daily-mark { font-size: 52px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
-        opacity: .5; }
-    /* Chữ trích dẫn to hẳn (14.5px -> 19px, thêm weight 500) -- dễ đọc từ xa hơn, đúng vai trò
+        opacity: .5; margin-bottom: -14px; }
+    /* Chữ trích dẫn to hẳn (14.5px -> 21px, thêm weight 500) -- dễ đọc từ xa hơn, đúng vai trò
        "điểm dừng mắt" của thẻ thay vì chữ nhỏ ngang hàng nội dung phụ khác trên trang. */
-    .kq-daily-text { font-size: 19px; line-height: 1.5; font-weight: 500; color: var(--text);
+    .kq-daily-text { font-size: 21px; line-height: 1.5; font-weight: 500; color: var(--text);
         font-style: italic; white-space: pre-wrap; }
     /* margin-top 10px -> 24px (bản cũ tên sách dính sát đáy thẻ) + căn phải + chữ to/đậm hơn hẳn
        (12px/600 -> 14.5px/700) -- xứng tầm là điểm kết thay vì chữ chú thích mờ nhạt. */
@@ -5762,11 +5762,22 @@ def _render_daily_quote_card(kq):
     các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh như
     bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các câu
     đã đánh dấu. Margin ngang 16px (thay vì full-width như card "Ngày đang xem" phía trên) để khớp
-    đúng bề rộng các card số liệu bên dưới (nằm trong expander có padding riêng)."""
+    đúng bề rộng các card số liệu bên dưới (nằm trong expander có padding riêng).
+
+    Dấu "/chữ trích dẫn/tên sách gộp CHUNG 1 lệnh st.markdown (không tách dấu " ra cột riêng như
+    bản đầu) -- 2 block Streamlit liền kề luôn cộng dồn thêm khoảng cách (gap 0.9rem của
+    stVerticalBlock + margin riêng từng block), tách dấu " to (52px) ra 1 block riêng phía trên
+    làm khoảng trống phía trên chữ trích dẫn bị đẩy rộng ra rõ rệt so với cỡ chữ, đúng phản hồi
+    thực tế "khung to chữ nhỏ, mất cân đối". Gộp lại 1 block + margin-top âm trên .kq-daily-mark
+    kéo chữ lên sát ngay dưới dấu " để cân đối hẳn."""
     with st.container(key="kq_daily_card", border=True):
-        c_mark, c_fav = st.columns([6, 1])
-        with c_mark:
-            st.markdown("<div class='kq-daily-mark'>“</div>", unsafe_allow_html=True)
+        c_text, c_fav = st.columns([6, 1])
+        with c_text:
+            st.markdown(
+                "<div class='kq-daily-mark'>“</div>"
+                f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
+                f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>",
+                unsafe_allow_html=True)
         with c_fav:
             _fav = bool(kq.get('Yêu thích', False))
             if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
@@ -5774,10 +5785,6 @@ def _render_daily_quote_card(kq):
                          help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                 st.rerun()
-        st.markdown(
-            f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
-            f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>",
-            unsafe_allow_html=True)
 
 
 def render_day_report(df):
