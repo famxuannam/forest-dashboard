@@ -95,6 +95,12 @@ create table if not exists kindle_highlights (
 -- quan hệ lưu trong DB, nên không cần parent_hash).
 alter table kindle_highlights add column if not exists parent_hash text;
 
+-- Đánh dấu "Yêu thích" 1 trích dẫn/ghi chú Kindle -- nút ⭐ ở "Nhật ký đọc" và ở thẻ "Trích dẫn
+-- hôm nay" (trang Hôm nay), gộp lại xem ở sub-tab "Yêu thích" (trang Sách, không có ở Gundam).
+-- default false để mọi dòng cũ (import từ trước khi có tính năng này) không tự nhiên thành yêu
+-- thích hết.
+alter table kindle_highlights add column if not exists is_favorite boolean not null default false;
+
 -- Sổ đen các trích dẫn/ghi chú Kindle đã xoá trong app (nút Xoá, xem delete_kindle_highlight()
 -- trong app.py) -- cùng vai trò với deleted_sessions nhưng riêng cho Kindle: My Clippings.txt
 -- luôn xuất TOÀN BỘ lịch sử cộng dồn, nên nếu chỉ xoá khỏi kindle_highlights mà không ghi nhớ ở
