@@ -394,6 +394,16 @@ def _sb_delete_all(table, not_null_col):
     khớp mọi dòng, không phụ thuộc kiểu dữ liệu/giá trị cụ thể của bảng."""
     _get_supabase().table(table).delete().not_.is_(not_null_col, "null").execute()
 
+def _load_simple_table(table, select, rename, cols):
+    """Khuôn đọc chung cho các bảng phẳng KHÔNG có bước chuẩn hoá kiểu dữ liệu riêng sau rename
+    (không datetime, không astype) -- chỉ select -> đổi tên cột EN->VN -> DataFrame rỗng đúng
+    cols nếu bảng trống. KHÔNG dùng chung được cho load_db/load_deleted/load_notes/... (có thêm
+    bước chuẩn hoá chuỗi giờ ISO8601 hoặc parse datetime ngay sau rename, xem từng hàm đó)."""
+    res = _get_supabase().table(table).select(select).execute()
+    if not res.data:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(res.data).rename(columns=rename)[cols]
+
 def save_db(df):
     sb = _get_supabase()
     _sb_delete_all("sessions", "id")
@@ -408,12 +418,8 @@ def save_db(df):
 
 @st.cache_data
 def load_mapping():
-    sb = _get_supabase()
-    res = sb.table("mapping").select("project,category").execute()
-    cols = ["Dự án", "Danh mục"]
-    if not res.data:
-        return pd.DataFrame(columns=cols)
-    return pd.DataFrame(res.data).rename(columns={"project": "Dự án", "category": "Danh mục"})[cols]
+    return _load_simple_table("mapping", "project,category",
+                               {"project": "Dự án", "category": "Danh mục"}, ["Dự án", "Danh mục"])
 
 def save_mapping(df):
     sb = _get_supabase()
@@ -741,13 +747,10 @@ def _kindle_dedupe_hash(kindle_title, location, content):
 
 @st.cache_data
 def load_kindle_book_map():
-    sb = _get_supabase()
-    res = sb.table("kindle_book_map").select("kindle_title,project,label").execute()
-    cols = ["Tên Kindle", "Dự án", "Nhãn"]
-    if not res.data:
-        return pd.DataFrame(columns=cols)
-    return pd.DataFrame(res.data).rename(columns={
-        "kindle_title": "Tên Kindle", "project": "Dự án", "label": "Nhãn"})[cols]
+    return _load_simple_table(
+        "kindle_book_map", "kindle_title,project,label",
+        {"kindle_title": "Tên Kindle", "project": "Dự án", "label": "Nhãn"},
+        ["Tên Kindle", "Dự án", "Nhãn"])
 
 
 def save_kindle_book_map_upsert(df):
@@ -964,11 +967,7 @@ def add_kindle_note(parent_row, content):
 @st.cache_data
 def load_deleted_kindle():
     """Sổ đen dedupe_hash các trích dẫn/ghi chú Kindle đã xoá trong app -- xem delete_kindle_highlight()."""
-    sb = _get_supabase()
-    res = sb.table("deleted_kindle_highlights").select("dedupe_hash").execute()
-    if not res.data:
-        return pd.DataFrame(columns=["dedupe_hash"])
-    return pd.DataFrame(res.data)
+    return _load_simple_table("deleted_kindle_highlights", "dedupe_hash", {}, ["dedupe_hash"])
 
 
 def add_deleted_kindle(hashes):
