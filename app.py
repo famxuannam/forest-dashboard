@@ -4602,12 +4602,15 @@ st.markdown(
     }
 
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
-       Element container mặc định co theo nội dung -> ép full width rồi căn giữa. Set trên CẢ
-       stButtonGroup (để nó giãn full-width, làm khung chứa) LẪN role="radiogroup" bên trong (để
-       chính flex container chứa nút được căn giữa/wrap -- xem ghi chú "QUAN TRỌNG" phía trên). */
+       Element container mặc định co theo nội dung -> ép full width rồi căn giữa. `width:100%`
+       trên chính role="radiogroup" (thử trước đây) KHÔNG ăn -- vẫn ra đúng bề rộng khít nội dung
+       (đã đo bounding box xác nhận, không rõ nguyên nhân sâu, có thể do BaseWeb tự tính lại kích
+       thước bằng JS). Đổi hướng: KHÔNG ép radiogroup rộng 100% nữa -- để nó tự nhiên rộng vừa nội
+       dung (fit-content), rồi biến chính stButtonGroup (khối NGOÀI, vốn đã rộng đủ 100% nav bar)
+       thành flex container với justify-content:center để tự căn giữa đứa con fit-content đó. */
     .st-key-nav { width: 100% !important; }
-    .st-key-nav [data-testid="stButtonGroup"] { width: 100% !important; }
-    .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
 
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
@@ -4616,8 +4619,8 @@ st.markdown(
        chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên
        dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn). */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; gap: 0 !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
     .st-key-bc_sub_picker button, .st-key-hm_sub_picker button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
