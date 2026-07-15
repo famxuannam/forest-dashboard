@@ -21,8 +21,10 @@ deep-link kiểu `?nav=Hôm nay&day=2026-07-04` hoạt động qua reload trang 
 widget `st.segmented_control` trả về, link chia sẻ sẽ không mở đúng trang.
 
 Hệ quả khi sửa code: đừng gán trực tiếp vào biến widget để "chuyển trang" bằng tay — phải set
-`st.session_state["nav"]` (và/hoặc `st.query_params`) rồi `st.rerun()`, đúng pattern đã dùng ở các
-chỗ điều hướng bằng phím tắt (`goUploadTab` trong JS, xem `keyboard-shortcuts.md`).
+`st.session_state["nav"]` (và/hoặc `st.query_params`) rồi `st.rerun()`. Phím tắt điều hướng (JS,
+xem `keyboard-shortcuts.md`) đi theo hướng khác: tự bấm (`.click()`) đúng nút nav đã có sẵn trong
+DOM qua `clickNavByLabel()`, tận dụng lại toàn bộ cơ chế session_state/query_params này thay vì tự
+set trực tiếp từ phía JS.
 
 ## Cấp điều hướng thứ 2: `BAOCAO_SUBS` và `day_picker()`
 
@@ -30,9 +32,6 @@ chỗ điều hướng bằng phím tắt (`goUploadTab` trong JS, xem `keyboard
   seed/ghi lại qua `?sub=` — **cùng 1 pattern hệt `NAV`/`?nav=`**, kể cả nếu bạn không đọc lại code
   chi tiết, áp y hệt cách suy luận.
 - `day_picker()` (dùng ở trang "Hôm nay") làm điều tương tự với `?day=` cho việc chọn ngày cụ thể.
-- Phím tắt `Shift+1`..`Shift+5` nhảy sub-tab Báo cáo theo **index trong `BAOCAO_SUBS`** — đổi thứ
-  tự list này tự động đổi luôn phím tắt tương ứng, không cần sửa gì ở JS (xem
-  `keyboard-shortcuts.md`).
 
 ## Việc cần làm khi thêm 1 trang/sub-tab mới
 
