@@ -7,7 +7,9 @@ cụ thể (đặc biệt bên trong ô ghi chú).
 
 Hàm này gọi `components.html(js, height=0)` với 1 chuỗi JS lớn, xử lý:
 
-- Phím số `1`-`7`: nhảy nav chính (index theo `NAV`).
+- Phím số `1`-`8` (tự khớp theo số lượng mục hiện có trong `NAV`, không phải hằng số cố định —
+  thêm/bớt mục `NAV` thì số phím tối đa tự đổi theo, cần cập nhật lại con số này trong doc):
+  nhảy nav chính (index theo `NAV`).
 - `n`/`/`/`?`, phím mũi tên trái/phải (chỉ ở trang Hôm nay): các shortcut điều hướng nhanh khác
   (n = mở nhanh ghi chú chính của hôm nay, / = focus ô Tìm kiếm, ? = bật/tắt bảng trợ giúp).
 - Các phím tắt này chủ động **bị bỏ qua khi đang gõ trong 1 ô input** (input/textarea đang focus) —
