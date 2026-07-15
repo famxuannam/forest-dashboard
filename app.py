@@ -504,7 +504,7 @@ def save_notes_bulk(df):
 @st.cache_data(ttl=30)
 def load_quick_notes():
     """Ghi chú nhanh -- "hộp thư nháp" trong ngày, ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG
-    qua app, xem guide_item "Ghi chú nhanh"). Không tự động gộp vào Ghi chú chính, nhưng có nút
+    qua app, xem chương "Trong ngày" của trang Trợ giúp). Không tự động gộp vào Ghi chú chính, nhưng có nút
     "Gộp" ở render_note_editor() để người dùng chủ động chọn lúc nào tổng hợp (xem docstring hàm
     đó) -- 2 bảng vẫn tách biệt, chỉ có 1 thao tác 1 chiều nối nội dung + xoá quick note gốc.
     ttl=30 (khác load_notes() cache vô hạn) vì bảng này có thể bị thay đổi từ NGOÀI vòng save_*/
@@ -4400,74 +4400,88 @@ def render_period_table(df, time_col):
 """, unsafe_allow_html=True)
 
 
-def guide_item(img, title, body_md, tip=None, where=None):
-    """Một mục trong trang Hướng dẫn: ảnh minh hoạ + giải thích chi tiết (+ mẹo). Key khoá theo cả
-    img lẫn title (không chỉ img) -- vài sub-tab cố ý dùng lại cùng 1 ảnh minh hoạ cho 1 góc nhìn
-    khác, chỉ khoá theo img sẽ đụng key trùng giữa 2 guide_item khác nhau.
+# --- Helpers trang Trợ giúp: tour cuộn dọc, mọi thẻ/minh hoạ vẽ bằng HTML thuần ---
+# Chỉ dùng token màu (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở dark mode và mọi
+# màu accent. HTML build thành chuỗi liền mạch (không dòng trống giữa khối) -- markdown parser
+# của st.markdown cắt khối HTML tại dòng trống. CSS namespace "help-" nằm trong khối CSS chính.
 
-    Ảnh full-width phía TRÊN, nội dung phía dưới -- đổi từ layout 2 cột cũ (ảnh cột trái ~45%
-    quá nhỏ để đọc rõ chi tiết khi ảnh chụp thật thường rộng cả nghìn px). Mỗi ảnh có 2 bản riêng
-    theo theme: bản light dùng đúng tên `img`, bản dark thêm hậu tố "_dark" trước phần mở rộng
-    (vd "stat_panel.png" -> "stat_panel_dark.png") -- tự chọn theo IS_DARK, rơi về bản light nếu
-    bản dark chưa chụp (graceful, không lỗi, không hiện ảnh sai theme còn hơn crash)."""
-    _title_slug = re.sub(r'[^a-zA-Z0-9]+', '_', title).strip('_')[:40]
-    with st.container(border=True, key=f"guide_{img}_{_title_slug}"):
-        if where:
-            st.markdown(f"<div style='font-size:11px;font-weight:700;color:var(--text-2);"
-                        f"text-transform:uppercase;letter-spacing:.5px;'>{where}</div>",
-                        unsafe_allow_html=True)
-        st.markdown(f"#### {title}")
-        _base, _ext = os.path.splitext(img)
-        _variant = f"{_base}_dark{_ext}" if IS_DARK else img
-        _p = os.path.join("assets", "help", _variant)
-        if not os.path.exists(_p):
-            _p = os.path.join("assets", "help", img)
-        if os.path.exists(_p):
-            st.image(_p, use_container_width=True)
-        st.markdown(body_md)
-        if tip:
-            st.info(tip, icon=":material/lightbulb:")
+_HELP_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
-def guide_update(pr_no, title, bullets, latest_pr_lines=None, total_lines_at_pr=None):
-    """Một mục trong tab "Cập nhật": không có ảnh (đổi UI qua nhiều bản nhỏ nên chụp ảnh sẽ lỗi
-    thời rất nhanh) -- chỉ tiêu đề + số PR + danh sách gạch đầu dòng, dùng chung khung thẻ với
-    guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2).
+def help_kbd(*keys):
+    """Dãy phím kiểu keycap: help_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
+    Trả về string HTML để nhúng vào bảng/đoạn văn khác, không tự render."""
+    return "<span class='help-kplus'>+</span>".join(
+        f"<kbd class='help-kbd'>{k}</kbd>" for k in keys)
 
-    latest_pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục này)
-    của PR MỚI NHẤT trong cụm pr_no (vd pr_no="182-184" -> số dòng của #184) -- hiện thành 1 chip
-    nhỏ cạnh nhãn "PR #...", cho thấy quy mô thay đổi mã nguồn qua từng đợt.
 
-    total_lines_at_pr: tổng số dòng CỦA CẢ app.py (wc -l) tại đúng commit merge PR mới nhất trong
-    cụm (tra qua `git show <commit>:app.py | wc -l`) -- hiện thành 1 chip đứng TRƯỚC chip
-    latest_pr_lines, cho thấy quy mô toàn bộ mã nguồn lớn dần theo thời gian (khác latest_pr_lines
-    -- chỉ đo riêng 1 PR). 2 cụm PR "132,133,136,137" và "125,126,139,140" không còn commit gốc
-    riêng lẻ trong lịch sử git (đã bị squash/rebase gộp cùng các PR lân cận ở thời điểm đó) --
-    dùng tạm số dòng tại commit gần nhất còn truy được (#142) cho cả 2, chỉ mang tính ước lượng.
+def help_table(headers, rows):
+    """Bảng tra nhanh (cheat-sheet). rows: list[list[str]], cell là HTML thô (nhúng được
+    help_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
+    Trả về string HTML (bọc sẵn khối cuộn ngang cho màn hẹp)."""
+    _thead = "".join(f"<th>{h}</th>" for h in headers)
+    _tbody = "".join(
+        "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+    return ("<div class='help-tblwrap'><table class='help-tbl'>"
+            f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
-    Cả 2 số liệu đều KHÔNG tự tính lại mỗi lần chạy (app không gọi GitHub API/git lúc runtime,
-    không phải kiến trúc phù hợp cho 1 dashboard cá nhân) -- số liệu tĩnh, cần điền tay khi thêm
-    mục Cập nhật mới."""
-    with st.container(border=True, key=f"guide_update_{pr_no}"):
-        _chips = []
-        if total_lines_at_pr is not None:
-            _chips.append(
-                "<span style='font-size:11px;font-weight:600;color:var(--text-2);"
-                "background:var(--chip);border-radius:999px;padding:2px 9px;'>"
-                f"{total_lines_at_pr} dòng mã nguồn</span>")
-        if latest_pr_lines is not None:
-            _chips.append(
-                "<span style='font-size:11px;font-weight:600;color:var(--accent);"
-                "background:rgba(var(--accent-rgb),0.12);border-radius:999px;padding:2px 9px;'>"
-                f"{latest_pr_lines} dòng thay đổi</span>")
-        _chip = "".join(_chips)
-        st.markdown(
-            "<div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>"
-            f"<span style='font-size:11px;font-weight:700;color:var(--text-2);"
-            f"text-transform:uppercase;letter-spacing:.5px;'>PR #{pr_no}</span>{_chip}</div>",
-            unsafe_allow_html=True)
-        st.markdown(f"#### {title}")
-        st.markdown("\n".join(f"- {b}" for b in bullets))
+
+def help_chapter(anchor, num, kicker, title, lead=None):
+    """Header 1 chương của trang Trợ giúp: số thứ tự lớn mờ màu accent + dòng kicker in hoa +
+    tiêu đề + đoạn dẫn. anchor là id cho chip mục lục nhảy tới (href='#help-chN' -- CSS
+    scroll-margin-top của .help-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề)."""
+    _lead = f"<p class='help-ch-lead'>{lead}</p>" if lead else ""
+    st.markdown(
+        f"<div class='help-ch' id='{anchor}'>"
+        f"<div class='help-ch-num'>{num:02d}</div>"
+        f"<div class='help-ch-kicker'>{kicker}</div>"
+        f"<h2 class='help-ch-title'>{title}</h2>{_lead}</div>",
+        unsafe_allow_html=True)
+
+
+def help_block(html):
+    """Bọc 1 khối HTML vào thẻ .help-card (thay cho st.container(border=True) của trang
+    Hướng dẫn bản cũ -- không cần key container nên không đụng rule CSS glass-card chung)."""
+    st.markdown(f"<div class='help-card'>{html}</div>", unsafe_allow_html=True)
+
+
+def help_faq_item(question, answer_md):
+    """1 câu hỏi FAQ = expander native (đã ăn style expander sẵn có của app). Cố ý KHÔNG đánh
+    số như expander trang báo cáo -- FAQ tra theo câu hỏi, không đọc tuần tự."""
+    with st.expander(question):
+        st.markdown(answer_md)
+
+
+def render_help_changelog(entries):
+    """Timeline "Nhật ký phát triển": mỗi entry là 1 chấm tròn accent nối đường dọc, header gồm
+    nhãn PR + 2 chip số liệu, rồi tiêu đề đậm + bullets (hỗ trợ **đậm** kiểu markdown).
+
+    entries: list[dict] khai báo tay, mỗi dict gồm pr / title / bullets / pr_lines / total_lines.
+    Giữ nguyên ngữ nghĩa 2 chip của guide_update() bản cũ:
+    - total_lines: tổng số dòng CỦA CẢ app.py (wc -l) tại commit merge PR mới nhất trong cụm
+      (tra qua `git show <commit>:app.py | wc -l`) -- chip nền xám, đứng trước.
+    - pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục) của PR
+      MỚI NHẤT trong cụm pr (vd pr="182-184" -> số dòng của #184) -- chip nền accent.
+    2 cụm PR "132,133,136,137" và "125,126,139,140" không còn commit gốc riêng trong lịch sử git
+    (đã bị squash/rebase gộp) -- dùng tạm số dòng tại commit gần nhất còn truy được (#142).
+    Cả 2 số liệu đều KHÔNG tự tính lại lúc runtime (app không gọi GitHub API/git khi chạy) --
+    số tĩnh, điền tay khi thêm mục mới."""
+    _parts = ["<div class='help-tl'>"]
+    for e in entries:
+        _chips = ""
+        if e.get("total_lines") is not None:
+            _chips += f"<span class='help-chip'>{e['total_lines']} dòng mã nguồn</span>"
+        if e.get("pr_lines") is not None:
+            _chips += f"<span class='help-chip help-chip-acc'>{e['pr_lines']} dòng thay đổi</span>"
+        _lis = "".join(
+            "<li>" + _HELP_BOLD_RE.sub(r"<b>\1</b>", b) + "</li>" for b in e["bullets"])
+        _parts.append(
+            f"<div class='help-tl-item'><span class='help-tl-dot'></span>"
+            f"<div class='help-tl-head'><span class='help-tl-pr'>PR #{e['pr']}</span>{_chips}</div>"
+            f"<div class='help-tl-title'>{e['title']}</div>"
+            f"<ul class='help-tl-ul'>{_lis}</ul></div>")
+    _parts.append("</div>")
+    st.markdown("".join(_parts), unsafe_allow_html=True)
 
 
 # --- FRAGMENT: cô lập rerun cho từng mục biểu đồ có bộ điều khiển riêng ---
@@ -5106,15 +5120,6 @@ st.markdown(
        segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
     [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
 
-    /* Sub-tab của trang Hướng dẫn -- cùng khuôn Tổng quan/Chi tiết (Sách/Gundam) ở trên, tái
-       dùng nguyên 2 rule để 3 nơi trong app nhất quán 1 kiểu "tab gạch chân". Key đặt
-       "help_subtabs" (không phải "guide_...") CỐ Ý -- tránh khớp nhầm rule
-       [class*="st-key-guide"] bên dưới (khớp theo tiền tố con chuỗi, "guide_tabs" sẽ vô tình
-       ăn theo kiểu thẻ card nền trắng của guide_item/guide_update, làm cả thanh tab bị bọc
-       khung trắng thay vì để lộ nền xám của trang, như đã xảy ra và cần sửa). */
-    .st-key-help_subtabs [role="tablist"] { justify-content: center !important; flex-wrap: wrap !important; }
-    .st-key-help_subtabs [role="tablist"]::after { display: none !important; }
-
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa */
     .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
@@ -5257,19 +5262,118 @@ st.markdown(
     .ql-indent-3 { margin-left: 6.0em !important; } .ql-indent-4 { margin-left: 8.0em !important; }
     .ql-indent-5 { margin-left: 10em !important; } .ql-indent-6 { margin-left: 12em !important; }
 
-    /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước, hướng dẫn) trông
+    /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước) trông
        như glass-card ===== */
-    .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
+    .st-key-note_card, [class*="st-key-jcard"] {
         border-radius: 10px !important;
         border-color: var(--border) !important;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
         background: var(--card) !important;
     }
-    /* Box "mẹo" trong tab Hướng dẫn: nền tông teal (accent), thay vì xanh dương mặc định
-       của st.info() -> chỉ áp trong các thẻ guide_*, không đụng st.info() ở nơi khác. */
-    [class*="st-key-guide"] [data-testid="stAlertContainer"] { background-color: rgba(var(--accent-rgb),0.10) !important; }
-    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] * { color: var(--accent-dark) !important; }
-    [class*="st-key-guide"] [data-testid="stAlertContentInfo"] svg { fill: var(--accent-dark) !important; }
+
+    /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
+       Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
+       (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
+    .help-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
+        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent); }
+    .help-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+        text-transform: uppercase; color: var(--accent-dark); }
+    .help-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
+        margin: 6px 0 8px; line-height: 1.15; }
+    .help-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
+    .help-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .help-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
+        text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
+        border-radius: 999px; padding: 5px 12px; }
+    .help-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
+    /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
+    .help-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    .help-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
+        line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
+    .help-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+        text-transform: uppercase; color: var(--text-2); }
+    .help-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    .help-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
+    .help-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
+        font-size: 14px; color: var(--text); line-height: 1.6; }
+    .help-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
+    .help-card ul, .help-card ol { margin: 6px 0 2px; padding-left: 20px; }
+    .help-card li { margin: 4px 0; }
+    .help-cap { font-size: 12px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+    .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px; margin: 10px 0; }
+    .help-grid .help-card { margin: 0; }
+    .help-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px; font-weight: 600; color: var(--text); background: var(--card);
+        border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 6px;
+        padding: 1px 7px; line-height: 1.5; }
+    .help-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
+    .help-tblwrap { overflow-x: auto; }
+    .help-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .help-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+        color: var(--text-2); text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--border); }
+    .help-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
+        vertical-align: top; line-height: 1.5; }
+    .help-tbl tr:last-child td { border-bottom: none; }
+    .help-tbl td:first-child { white-space: nowrap; }
+    .help-chip { display: inline-block; font-size: 11px; font-weight: 600; color: var(--text-2);
+        background: var(--chip); border-radius: 999px; padding: 2px 9px; }
+    .help-chip-acc { color: var(--accent); background: rgba(var(--accent-rgb),0.12); }
+    /* Sơ đồ luồng dữ liệu (chương Nạp dữ liệu & đồng bộ) */
+    .help-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+    .help-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
+        border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
+    .help-flow-hub { border-color: var(--accent); color: var(--accent-dark);
+        background: rgba(var(--accent-rgb),0.10); }
+    .help-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
+    .help-flow-col { display: flex; flex-direction: column; gap: 6px; }
+    /* Minh hoạ heatmap thu nhỏ: 8 bậc alpha theo accent, nhại thang màu Biểu đồ lịch thật */
+    .help-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
+    .help-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
+    .help-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
+    .help-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
+    .help-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
+    .help-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
+    .help-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
+    .help-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
+    .help-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
+    /* Minh hoạ dòng thời gian trong ngày */
+    .help-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
+        margin: 12px 0 4px; overflow: hidden; }
+    .help-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
+        background: rgba(var(--accent-rgb),0.55); }
+    .help-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
+    .help-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
+        margin-top: 3px; }
+    /* Minh hoạ xu hướng + đường trung bình động */
+    .help-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
+        margin: 12px 0 4px; }
+    .help-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
+    .help-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
+        border-top: 2px dashed var(--accent); }
+    /* Timeline changelog (chương Nhật ký phát triển) */
+    .help-tl { margin: 8px 0; }
+    .help-tl-item { position: relative; padding: 0 0 22px 26px; border-left: 2px solid var(--divider);
+        margin-left: 5px; }
+    .help-tl-item:last-child { padding-bottom: 4px; border-left-color: transparent; }
+    .help-tl-dot { position: absolute; left: -6px; top: 3px; width: 10px; height: 10px;
+        border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+    .help-tl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .help-tl-pr { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+        color: var(--text-2); }
+    .help-tl-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 4px 0 2px; }
+    .help-tl-ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--text);
+        line-height: 1.55; }
+    .help-tl-ul li { margin: 3px 0; }
+    @media (max-width: 640px) {
+        .help-hero { padding: 22px 18px; }
+        .help-hero .hh-title { font-size: 26px; }
+        .help-ch-num { font-size: 40px; }
+        .help-flow { flex-direction: column; align-items: flex-start; }
+        .help-flow-arr::after { content: "↓"; padding: 0; }
+        .help-heat { grid-template-columns: repeat(10, 13px); }
+    }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
        Dựng bằng HTML tự thân (1 khối st.markdown duy nhất mỗi thẻ) thay vì st.columns()
@@ -5314,7 +5418,7 @@ st.markdown(
     .jchip.book::before { content: "menu_book"; }
     .jchip.gundam::before { content: "tv"; }
     /* Nhãn tên sách phía trên chip các phần đã đọc (box Đọc sách, Nhật ký đọc sách) -- nhại
-       đúng pattern nhãn nhỏ đã dùng cho where= của guide_item và box "Lịch Work" cũ. */
+       đúng pattern nhãn nhỏ kiểu eyebrow (in hoa, 11px) đã dùng cho box "Lịch Work" cũ. */
     .rl-book { display: block; font-size: 11px; font-weight: 700; color: var(--text-2);
         text-transform: uppercase; letter-spacing: .5px; margin: 0 0 4px 2px; }
     /* Trích dẫn/ghi chú Kindle trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết, xem
@@ -7097,716 +7201,465 @@ elif nav == "Tuỳ biến":
 # TAB HƯỚNG DẪN
 # ==========================================
 elif nav == "Hướng dẫn":
-    _guide_tabs = st.tabs([
-        ":material/auto_awesome: Tổng quan",
-        ":material/self_improvement: Nhịp làm việc",
-        ":material/today: Hôm nay",
-        ":material/summarize: Báo cáo",
-        ":material/menu_book: Sách & Gundam",
-        ":material/monitor_heart: Sức khoẻ",
-        ":material/tune: Tuỳ biến",
-        ":material/new_releases: Cập nhật",
-    ], key="help_subtabs")
+    # Trang Trợ giúp: tour cuộn dọc theo hành trình 1 ngày sử dụng (thay cho 8 sub-tab ngang
+    # + screenshot của bản cũ). Toàn bộ minh hoạ vẽ thuần HTML/CSS bằng token màu (var(--accent-rgb),
+    # var(--chip)...) nên tự ăn theo dark mode lẫn màu accent đang chọn, không cần chụp lại ảnh
+    # theo theme như thời còn assets/help/. Nội dung mỗi chương chỉ giữ phần "luật ngầm" của app
+    # (ngữ nghĩa đồng bộ, timezone, cách đọc số) — phần mô tả hiển nhiên nhìn UI là hiểu thì bỏ.
+
+    # --- Hero + mục lục ---
+    st.markdown(
+        "<div class='help-hero'>"
+        "<div class='hh-kicker'>Trợ giúp</div>"
+        "<div class='hh-title'>Một vòng Forest Dashboard</div>"
+        "<div class='hh-sub'>App này là cái gương, không phải bàn làm việc — không đặt mục tiêu, "
+        "không nhắc nhở, chỉ nhìn lại những gì Forest đã ghi. Vì vậy hướng dẫn này không đi theo "
+        "từng trang, mà theo đúng một ngày của bạn: sáng lên kế hoạch, trong ngày không mở app, "
+        "tối đóng ngày 5 phút — rồi thu nhỏ dần ra tuần, tháng, năm.</div>"
+        "<div class='help-toc'>"
+        "<a class='help-toc-chip' href='#help-ch1'>1 · Buổi sáng</a>"
+        "<a class='help-toc-chip' href='#help-ch2'>2 · Trong ngày</a>"
+        "<a class='help-toc-chip' href='#help-ch3'>3 · Cuối ngày</a>"
+        "<a class='help-toc-chip' href='#help-ch4'>4 · Tuần &amp; tháng</a>"
+        "<a class='help-toc-chip' href='#help-ch5'>5 · Sách · Gundam · Sức khoẻ</a>"
+        "<a class='help-toc-chip' href='#help-ch6'>6 · Dữ liệu &amp; đồng bộ</a>"
+        "<a class='help-toc-chip' href='#help-ch7'>7 · Tuỳ biến</a>"
+        "<a class='help-toc-chip' href='#help-ch8'>8 · Câu hỏi thường gặp</a>"
+        "<a class='help-toc-chip' href='#help-ch9'>9 · Nhật ký phát triển</a>"
+        "</div></div>",
+        unsafe_allow_html=True)
 
     # ==========================================
-    # SUB-TAB: TỔNG QUAN
+    # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
-    with _guide_tabs[0]:
-        with st.container(border=True, key="guide_intro"):
-            st.markdown("#### Forest Dashboard là gì")
-            st.markdown(
-                "App **không đặt mục tiêu và không nhắc nhở** — Forest đã làm việc đó rồi. Forest Dashboard chỉ "
-                "làm một việc: lấy dữ liệu phiên tập trung bạn đã có, cộng 2 nguồn tuỳ chọn (lịch hẹn Work, tiến "
-                "độ đọc sách/xem Gundam), rồi **nhìn lại** — tập trung nhiều nhất vào khung giờ nào, thói quen "
-                "đang mạnh lên hay chùng xuống, một cuốn sách mất bao lâu để đọc xong. Toàn bộ app mang tính "
-                "nhìn lại quá khứ, không phải một bộ đếm ngược hay thanh tiến độ.\n\n"
-                "Thanh điều hướng trên cùng có 8 mục: **Hôm nay** (trang mặc định, 1 ngày cụ thể) · **Báo cáo** "
-                "(Tổng quan/Tuần/Tháng/Năm/Dự án) · **Sách** / **Gundam** (nhật ký đọc/xem) · **Sức khoẻ** (chỉ "
-                "số xét nghiệm máu định kỳ — mục nhập liệu duy nhất của app, khác phần còn lại thuần hồi cứu) · "
-                "**Tìm kiếm** (tra ghi chú/lịch/sách·Gundam cũ) · **Tuỳ biến** (nạp dữ liệu, phân loại, đổi màu, "
-                "sao lưu) · **Trợ giúp** — trang bạn đang xem.\n\n"
-                "Nhiều biểu đồ/bảng dưới đây xuất hiện giống hệt nhau ở nhiều trang khác nhau — có chủ đích: đọc "
-                "quen 1 biểu đồ ở Hôm nay là đọc được y hệt biểu đồ đó ở Báo cáo, Sách hay Gundam. Mục này liệt "
-                "kê từng thành phần dùng chung đó một lần duy nhất; các tab sau chỉ nói phần khác biệt riêng của "
-                "từng trang.")
-
-        guide_item(
-            "stat_panel.png", "Bảng số liệu tổng quan",
-            "Mẫu hero + nhóm chip dùng ở gần như mọi trang: 1-2 con số lớn nhất ở trên cùng (vd Tổng giờ, Số "
-            "cây), rồi các nhóm số liệu phụ xếp thành hàng chip nhỏ bên dưới, mỗi nhóm có nhãn xám in hoa. Nhìn "
-            "hero trước để nắm bức tranh chung, chỉ cần tra chip khi muốn đào sâu 1 con số cụ thể.",
-            tip="Chip viền đậm màu accent là chip đang nổi bật — vd trạng thái Đang đọc của 1 cuốn sách, hoặc "
-                "chuỗi ngày hiện tại nếu đang giữ kỷ lục.",
-            where="Hôm nay · Mọi trang Báo cáo · Sách · Gundam")
-
-        guide_item(
-            "session_bar.png", "Thanh phân bố độ dài phiên",
-            "Thanh ngang chia theo % thời lượng, xếp phiên tập trung vào 5 nhóm theo độ dài: Tối thiểu (≤10 "
-            "phút), Ngắn (dưới 25 phút), Trung bình (25 đến dưới 50 phút), Dài (50 đến dưới 90 phút), Rất Dài "
-            "(từ 90 phút trở lên). Nhìn thanh này để biết ngay hôm/kỳ đó phần lớn là phiên chớp nhoáng hay phiên "
-            "sâu — 2 kiểu ngày có cùng tổng giờ vẫn có thể rất khác nhau ở chỗ này.",
-            tip="Nhãn % chỉ hiện trên đoạn đủ rộng — đoạn quá mỏng vẫn còn màu, di chuột vào vẫn xem được giá "
-                "trị.",
-            where="Mọi trang Báo cáo · Sách · Gundam (mục Tổng quan)")
-
-        guide_item(
-            "calendar.png", "Biểu đồ lịch",
-            "Lưới ô mỗi ô là 1 ngày, càng đậm càng tập trung nhiều giờ. Thang màu chia 8 bậc cố định theo mốc "
-            "giờ tuyệt đối, không co giãn theo dữ liệu đang xem — nhờ vậy \"đậm bằng nhau\" luôn có nghĩa \"số "
-            "giờ bằng nhau\" dù đang xem tháng nào, so sánh được giữa các đợt xem khác nhau mà không bị lệch "
-            "chuẩn vì 1 ngày bất thường.",
-            where="Báo cáo → Tổng quan · Báo cáo → Dự án")
-
-        guide_item(
-            "trend.png", "Xu hướng theo thời gian",
-            "Biểu đồ cột theo ngày/tuần/tháng, cộng 1 đường trung bình động 7 ngày. Đường này tính cả những "
-            "ngày không có phiên nào (0 giờ), không chỉ ngày có hoạt động — nên phản ánh đúng nhịp độ thực tế: "
-            "nghỉ liền vài ngày sẽ thấy đường đi xuống rõ, thay vì bị làm mượt đi.",
-            where="Mọi trang Báo cáo · Sách · Gundam")
-
-        guide_item(
-            "hourly.png", "Xu hướng theo khung giờ",
-            "Đường 24 khung giờ trả lời \"hay tập trung lúc nào\" (sáng sớm, trưa, hay khuya) — biết được khung "
-            "giờ mạnh nhất giúp xếp việc khó đúng lúc đầu óc còn sung sức nhất.",
-            where="Báo cáo → Tổng quan/Tuần/Tháng")
-
-        guide_item(
-            "histogram.png", "Phân bố độ dài phiên",
-            "Biểu đồ cột chia phiên tập trung theo khoảng 5 phút một, kèm đường mốc tại 25′/50′/90′ (khớp đúng "
-            "3 ranh giới của Thanh phân bố độ dài phiên) và 1 đường đánh dấu độ dài trung bình — xem hình dạng "
-            "phân bố chi tiết hơn thanh %, hữu ích khi muốn biết độ dài phiên phổ biến nhất là bao nhiêu.",
-            where="Báo cáo → Dự án")
-
-        guide_item(
-            "table.png", "Bảng số liệu",
-            "Bảng chi tiết theo Danh mục/Dự án qua các kỳ, ô tô đậm theo cường độ giờ — càng đậm càng nhiều giờ, "
-            "so sánh trong cả bảng (không phải riêng từng hàng) nên nhìn 1 lần là biết Dự án nào đang chiếm "
-            "nhiều thời gian nhất. Dấu ▾ đỏ cạnh 1 ô nghĩa là kỳ đó giảm còn ≤40% so với kỳ liền trước — tín "
-            "hiệu sụt giảm rõ rệt, đáng dừng lại xem tại sao.",
-            tip="Cột Tổng luôn để trắng không tô — cột đó cộng dồn cả kỳ nên luôn là số lớn nhất, tô đậm sẽ "
-                "không thêm thông tin gì.",
-            where="Mọi trang Báo cáo · Sách · Gundam")
-
-        guide_item(
-            "shortcuts.png", "Phím tắt bàn phím",
-            "Dùng được từ bất kỳ trang nào (trừ khi con trỏ đang ở trong 1 ô nhập liệu). Bấm **?** bất kỳ lúc "
-            "nào để hiện/ẩn bảng tóm tắt ngay trong app.\n\n"
-            "**Điều hướng nhanh:**\n"
-            "- **1 – 7**: nhảy tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải.\n"
-            "- **N**: mở ngay ô soạn Ghi chú ngày của hôm nay dù đang ở trang nào, tự cuộn tới và focus sẵn.\n"
-            "- **/**: focus vào ô Tìm kiếm, tự nhảy tới trang Tìm kiếm nếu đang ở trang khác. **Esc** để bỏ con "
-            "trỏ ra khỏi ô mà không xoá từ khoá đang gõ.\n\n"
-            "**Theo ngữ cảnh:**\n"
-            "- **← / →**: ở Hôm nay — lùi/tiến 1 ngày.\n"
-            "- **Ctrl/Cmd + Enter** / **Esc**: khi đang soạn Ghi chú ngày — lưu / huỷ thay đổi.",
-            tip="Không dùng được khi đang giữ Ctrl/Cmd/Alt, và mọi phím tắt (trừ Ctrl/Cmd+Enter, Esc trong ô "
-                "Quill) tự tắt khi con trỏ đang ở trong bất kỳ ô nhập liệu nào.",
-            where="Toàn app")
+    help_chapter(
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
+        "Mở app khi chưa trồng cây nào vẫn có ích: trang Hôm nay tự chuyển sang chế độ tham khảo "
+        "cho lên kế hoạch.")
+    # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
+    _daybar = "".join(
+        f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
+        for l, w, c in [(9, 7, ""), (17, 5, "d2"), (24, 3, ""), (38, 8, "d2"),
+                        (48, 4, ""), (60, 6, ""), (68, 3, "d2"), (83, 7, "")])
+    help_block(
+        "<h4>Dòng thời gian trong ngày</h4>"
+        f"<div class='help-daybar'>{_daybar}</div>"
+        "<div class='help-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
+        "<div class='help-cap'>Mỗi khối là 1 phiên tập trung, đặt đúng vị trí giờ nó diễn ra, tô màu theo "
+        "Nhóm — nhìn 1 lần biết ngay buổi nào dồn vào việc gì, có bị ngắt quãng nhiều không.</div>")
+    help_block(
+        "<h4>Ngày chưa có phiên nào thì xem gì</h4>"
+        "<ul>"
+        "<li><b>Tham khảo cho lên kế hoạch</b> — panel thay chỗ dòng thời gian khi ngày còn trống, cho 2 con "
+        "số tính từ <b>ngày khác</b>: tổng giờ + số phiên của đúng thứ này tuần trước, và trung bình đúng thứ "
+        "này qua toàn bộ lịch sử. So theo <b>đúng thứ</b> (Thứ Bảy so với Thứ Bảy), không phải 7 ngày liền "
+        "trước — nhịp làm việc lặp theo thứ trong tuần hơn là theo khoảng cách ngày.</li>"
+        "<li><b>Lịch hẹn Work</b> của ngày vẫn hiện đủ trong Ghi chú ngày — biết còn bao nhiêu khung giờ trống "
+        "trước khi xếp việc.</li>"
+        "<li><b>Trích dẫn hôm nay</b> — 1 highlight/note Kindle ngẫu nhiên ở đầu trang, chọn cố định theo "
+        "<b>ngày thật</b>: tải lại trang hay lùi/tiến ngày đang xem vẫn ra đúng câu đó, chỉ đổi khi sang ngày "
+        "mới.</li>"
+        "<li>“Hôm nay” luôn tính theo <b>giờ Việt Nam</b> — server chạy múi giờ nào cũng không làm ngày bị "
+        "lệch sớm/muộn 7 tiếng.</li>"
+        "</ul>")
 
     # ==========================================
-    # SUB-TAB: NHỊP LÀM VIỆC
+    # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
-    with _guide_tabs[1]:
-        with st.container(border=True, key="guide_workflow_intro"):
-            st.markdown("#### Dùng app này bao nhiêu là đủ")
-            st.markdown(
-                "**App này là cái gương, không phải bàn làm việc.** Thời gian nhìn vào gương không tự nó tạo ra "
-                "năng suất — nó chỉ giúp điều chỉnh. Mở dashboard nhiều lần trong ngày thường là dấu hiệu đang "
-                "trốn việc theo cách trông có vẻ chính đáng.\n\n"
-                "Thời gian hợp lý cho nhịp lõi: **~5 phút/ngày, ~15 phút cuối tuần, ~30 phút cuối tháng** — cộng "
-                "lại chưa tới 1% thời gian thức mỗi tuần. Bốn mục lõi dưới đây (Hàng ngày → Hàng năm) xếp theo "
-                "đúng nhịp đó, từ ngắn/thường xuyên nhất tới dài/hiếm nhất. Mục đầu tiên (Đầu ngày) là tuỳ chọn, "
-                "không tính vào nhịp ~5 phút/ngày.")
-
-        guide_item(
-            "planning_ref.png", "Đầu ngày (tuỳ chọn) — tham khảo trước khi lên kế hoạch",
-            "Nếu Pomodoro đầu tiên trong ngày là để lên kế hoạch trước khi bấm giờ Forest cho việc gì, mở "
-            "**Hôm nay** lúc đó vẫn có ích dù chưa có phiên nào:\n\n"
-            "- Lịch hẹn Work hôm đó vẫn hiện đầy đủ trong Ghi chú ngày — biết ngay còn bao nhiêu khung giờ "
-            "trống trước khi xếp việc.\n"
-            "- Panel **Tham khảo cho lên kế hoạch** cho 2 số tính từ lịch sử: tổng giờ đúng thứ này tuần trước, "
-            "và trung bình giờ đúng thứ này qua mọi tuần đã có dữ liệu — đủ để cân nhắc thứ này thường làm được "
-            "bao nhiêu trước khi chốt kế hoạch.\n\n"
-            "Nếu chợt nghĩ ra 1 ý tưởng/việc cần làm ngay lúc này, gõ luôn vào **Ghi chú nhanh** qua Shortcut "
-            "trên điện thoại thay vì cố nhớ — không cần mở app.",
-            tip="2 số tham chiếu tính theo đúng thứ (Thứ 7 so Thứ 7, không phải 7 ngày liền trước) — nhịp làm "
-                "việc thường lặp theo thứ trong tuần hơn là theo khoảng cách ngày liên tiếp.",
-            where="Hôm nay (khi ngày đang xem chưa có phiên nào)")
-
-        guide_item(
-            "note_editor.png", "Hàng ngày — 5 phút, nghi thức đóng ngày",
-            "Chọn 1 mốc cố định trong ngày (sau bữa tối, hoặc ngay trước khi tắt máy) — thói quen sống nhờ mốc "
-            "neo, không nhờ ý chí:\n\n"
-            "1. **Đồng bộ ngay** (Tuỳ biến → Dữ liệu đầu vào) — 1 nút gộp nạp cả Forest lẫn Reminder mới nhất. "
-            "Mọi giá trị của app phụ thuộc bước này — không đồng bộ thì không có gì để xem lại.\n"
-            "2. **Nhìn Hôm nay 1 phút**: dòng thời gian trong ngày + so sánh với đúng thứ này tuần trước. Câu "
-            "hỏi duy nhất cần trả lời: hôm nay có đúng như mình định không — không để tự khen hay tự trách, "
-            "chỉ để ghi nhận.\n"
-            "3. **Viết Ghi chú ngày 2-3 phút** — thói quen giá trị nhất trong toàn bộ app, nuôi cùng lúc 3 tính "
-            "năng khác: Nhật ký tuần/tháng, Tìm kiếm, và Ngày này năm trước. Nếu trong ngày đã có sẵn vài dòng "
-            "**Ghi chú nhanh** gửi từ điện thoại, đọc lại và gộp ý những dòng đó vào đây cho gọn thành 1 đoạn "
-            "hoàn chỉnh. Con số nói làm bao nhiêu, ghi chú nói làm gì và tại sao — một năm sau, cái thứ hai mới "
-            "là thứ đáng đọc lại.",
-            tip="Không nên mở Báo cáo tháng/năm hàng ngày — dữ liệu dài hạn nhìn mỗi ngày chỉ sinh nhiễu, một "
-                "ngày xấu không nói lên gì cả.",
-            where="Hôm nay · Tuỳ biến → Dữ liệu đầu vào")
-
-        guide_item(
-            "heatmap.png", "Hàng tuần — 15 phút, review có tác dụng điều chỉnh",
-            "Tuần là đơn vị đủ ngắn để sửa và đủ dài để có tín hiệu thật, làm vào sáng Thứ Hai hoặc tối Chủ "
-            "Nhật:\n\n"
-            "- **Báo cáo → Tuần**: xem tổng giờ so với tuần trước và so với trung bình (app đã tự cắt kỳ dở "
-            "dang nên số so sánh công bằng). Chênh lệch ±20% là dao động bình thường — chỉ hành động khi lệch "
-            "lớn và biết rõ lý do. Nếu tuần này lọt vào Ngày nổi bật trong Bảng số liệu, đáng để ý xem ngày đó "
-            "làm gì khác mọi ngày còn lại.\n"
-            "- **Đọc lại Nhật ký tuần**: lướt lại ghi chú 7 ngày liên tiếp thường lộ ra pattern mà từng ngày "
-            "riêng lẻ không thấy được.\n"
-            "- **Nhìn Xu hướng theo khung giờ + Biểu đồ lịch** mỗi 2-3 tuần một lần: nếu dữ liệu nói mạnh nhất "
-            "8-11h sáng, xếp việc khó vào đúng khung đó tuần tới.",
-            where="Báo cáo → Tuần")
-
-        guide_item(
-            "table.png", "Hàng tháng — 30 phút, kiểm tra tỉ trọng ưu tiên",
-            "Câu hỏi ở tầm tháng khác hẳn tầm tuần: không phải làm đủ giờ chưa mà là tỉ trọng có đúng ưu tiên "
-            "không. Xem Phân bổ thời gian và Bảng số liệu (Báo cáo → Tháng), chú ý dấu ▾ đỏ — nếu một việc được "
-            "gọi là ưu tiên mà chỉ chiếm 5% thời gian, con số đang nói thật hơn bạn.\n\n"
-            "Cuối tháng cũng là lúc: xem nhịp đọc sách/xem Gundam có đều không, cuốn nào treo quá lâu; kiểm tra "
-            "Dự án mới phát sinh đã gán Nhóm ở mục Phân loại chưa; và bấm Sao lưu nếu app đã nhắc — đừng bỏ qua "
-            "lời nhắc đó, chỉ 1 cú bấm.",
-            where="Báo cáo → Tháng · Tuỳ biến → Phân loại · Quản lý hệ thống")
-
-        guide_item(
-            "nam.png", "Hàng năm & không định kỳ",
-            "**Báo cáo → Năm** hợp để đọc vào tuần cuối tháng 12 hoặc dịp sinh nhật — đọc như đọc tổng kết, kèm "
-            "lướt Ngày này năm trước ở vài ngày đáng nhớ và Ngày nổi bật trong năm.\n\n"
-            "**Tìm kiếm** dùng theo nhu cầu chứ không theo lịch — bật lên khi cần trả lời \"lần trước gặp vấn đề "
-            "này xử lý thế nào?\". Giá trị của nó tỉ lệ thuận với độ chăm viết Ghi chú ngày, vì chỉ tìm được "
-            "trong những gì đã viết ra.",
-            where="Báo cáo → Năm · Tìm kiếm")
-
-        with st.container(border=True, key="guide_workflow_traps"):
-            st.markdown("#### Ba cái bẫy cần tránh")
-            st.markdown(
-                "1. **Tối ưu con số thay vì công việc** — trồng cây cho phiên đọc tin vặt để đủ chỉ tiêu giờ là "
-                "tự lừa mình bằng chính công cụ chống tự lừa. Số giờ là thước đo gián tiếp, không phải mục "
-                "tiêu.\n"
-                "2. **Chuỗi ngày đang giữ biến thành gông** — đứt chuỗi sau ngày ốm/ngày nghỉ đúng nghĩa là bình "
-                "thường. App cố tình đặt lời nhắc chuỗi đứt ở tông khích lệ — hãy đọc đúng tinh thần đó, không "
-                "phải lời trách.\n"
-                "3. **Review mà không có câu hỏi** — mỗi lần mở app nên có sẵn 1 câu hỏi (hôm nay thế nào? / "
-                "tuần này lệch gì? / tháng này đúng ưu tiên chưa?). Mở app không có câu hỏi là lướt số liệu "
-                "giải trí, không phải nhìn lại có chủ đích.\n\n"
-                "Nếu chỉ giữ được một thói quen duy nhất từ toàn bộ mục này: **viết ghi chú mỗi tối**. Mọi thứ "
-                "khác của app vẫn hoạt động khi lơ là, nhưng ghi chú bỏ trống một tháng là mất vĩnh viễn một "
-                "tháng ký ức — phần duy nhất của app không nạp lại được.")
+    help_chapter(
+        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — đừng mở app",
+        "Mở dashboard nhiều lần trong ngày thường là trốn việc theo cách trông có vẻ chính đáng. "
+        "Hai công cụ dưới đây tồn tại để bạn KHÔNG phải mở app giữa chừng.")
+    help_block(
+        "<h4>Ghi chú nhanh — hộp thư nháp từ iPhone</h4>"
+        "Một Shortcut (gọi qua Siri, Action Button, hoặc icon Màn hình chính) hỏi bạn gõ 1 dòng ý tưởng rồi "
+        "gửi <b>thẳng lên Supabase</b> — không mở trình duyệt, không đi qua app. Mỗi dòng gắn kèm giờ lúc gửi "
+        "(sửa nội dung sau đó không đổi giờ này) và nằm chờ trong Ghi chú ngày của đúng hôm đó, phía trên nhãn "
+        "“Ghi chú chính”. Đúng quy trình hộp thư nháp: ghi vội suốt ngày, tối tổng hợp lại một thể "
+        "(xem chương 3). Tìm kiếm cũng tra được nội dung ghi chú nhanh, phòng khi vài hôm chưa kịp gộp.")
+    _sc_rows = [
+        [help_kbd("1") + " … " + help_kbd("7"), "Nhảy tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải", "Toàn app"],
+        [help_kbd("N"), "Mở ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn", "Toàn app"],
+        [help_kbd("/"), "Focus ô Tìm kiếm, tự nhảy sang trang Tìm kiếm nếu đang ở trang khác", "Toàn app"],
+        [help_kbd("←") + " / " + help_kbd("→"), "Lùi / tiến 1 ngày", "Trang Hôm nay"],
+        [help_kbd("Ctrl/Cmd", "Enter"), "Lưu Ghi chú ngày đang soạn", "Trong ô ghi chú"],
+        [help_kbd("Esc"), "Huỷ soạn ghi chú · bỏ focus ô Tìm kiếm (không xoá từ khoá)", "Theo ngữ cảnh"],
+        [help_kbd("?"), "Hiện / ẩn bảng tóm tắt phím tắt ngay trong app", "Toàn app"],
+    ]
+    help_block(
+        "<h4>Phím tắt bàn phím</h4>"
+        + help_table(["Phím", "Tác dụng", "Phạm vi"], _sc_rows)
+        + "<div class='help-cap'>Mọi phím tắt tự tắt khi con trỏ đang ở trong một ô nhập liệu (trừ "
+        + help_kbd("Ctrl/Cmd", "Enter") + " và " + help_kbd("Esc")
+        + " trong ô ghi chú), và khi đang giữ Ctrl/Cmd/Alt.</div>")
 
     # ==========================================
-    # SUB-TAB: HÔM NAY
+    # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
-    with _guide_tabs[2]:
-        with st.container(border=True, key="guide_hn_intro"):
-            st.markdown("#### Hôm nay là gì")
-            st.markdown(
-                "Trang mở đầu tiên mỗi ngày, luôn xem đúng 1 ngày cụ thể (mặc định là hôm nay thật theo giờ "
-                "Việt Nam, không phụ thuộc múi giờ server). Từng là 1 lát cắt bên trong Báo cáo (gọi là "
-                "\"Ngày\") nhưng đã tách thành mục **đầu tiên, độc lập** trên thanh điều hướng — vào thẳng "
-                "được mà không phải đi qua Báo cáo trước.")
-
-        guide_item(
-            "reading_detail.png", "Trích dẫn hôm nay",
-            "Thẻ trích dẫn (chỉ hiện nếu đã từng import trích dẫn Kindle, xem \"Tải trích dẫn Kindle\" ở tab "
-            "Tuỳ biến): 1 highlight/note ngẫu nhiên, lấy từ TOÀN BỘ dữ liệu Kindle đã lưu (không chỉ riêng ngày "
-            "đang xem). Câu được chọn **cố định trong đúng 1 ngày thật hôm nay** (không phụ thuộc ngày đang xem "
-            "trên trang) — tải lại trang hay lùi/tiến xem ngày khác vẫn ra cùng 1 câu, chỉ đổi khi sang ngày "
-            "mới, đúng cảm giác \"quote of the day\". Đứng NGAY ĐẦU trang Hôm nay (dưới card \"Ngày đang xem\", "
-            "trước mọi nội dung khác) với nền phớt màu accent riêng — không còn chôn ở cuối trang như trước, dễ "
-            "bị lướt qua. Bấm **⭐** trên thẻ để đánh dấu Yêu thích, xem lại toàn bộ trích dẫn đã đánh dấu ở "
-            "sub-tab \"Yêu thích\" (trang Sách).",
-            where="Hôm nay")
-
-        guide_item(
-            "day_timeline.png", "Dòng thời gian trong ngày",
-            "Dải ngang biểu diễn 24 giờ của ngày đang xem, mỗi phiên tập trung vẽ thành 1 khối tại đúng vị trí "
-            "giờ nó diễn ra, tô màu theo Danh mục. Đọc trực quan hơn bảng liệt kê: nhìn một lần biết ngay buổi "
-            "sáng/chiều/tối hôm đó dồn vào việc gì, có bị ngắt quãng nhiều không.",
-            where="Hôm nay → Tổng quan ngày")
-
-        guide_item(
-            "planning_ref.png", "Khi ngày đang xem chưa có phiên nào",
-            "Trước khi phiên đầu tiên trong ngày được log — thường gặp nhất là mở app đầu ngày trước khi trồng "
-            "cây nào — mục \"1. Tổng quan ngày\" ở trên (dòng thời gian, chip so sánh) chưa có gì để vẽ nên "
-            "được thay bằng panel **\"Tham khảo cho lên kế hoạch\"**: tổng giờ + số phiên của đúng thứ này tuần "
-            "trước, và trung bình giờ của đúng thứ này qua toàn bộ lịch sử — 2 con số tính từ NGÀY KHÁC nên vẫn "
-            "hiện được dù ngày đang xem trống trơn. Ghi chú ngày (kèm chip lịch hẹn Work/sách·Gundam) và \"Ngày "
-            "này năm trước\" vẫn hiện bình thường bên dưới, không phụ thuộc gì vào việc đã có phiên hay chưa.",
-            where="Hôm nay (ngày đang xem chưa có phiên nào)")
-
-        guide_item(
-            "note_editor.png", "Ghi chú ngày (nhật ký)",
-            "Thẻ 2 cột: cột trái là Thứ/ngày, cột phải gộp **3 nguồn** cho đúng ngày đó — chip lịch hẹn Work (nếu "
-            "đã đồng bộ CalDAV), chip sách/Gundam đã đọc/xem xong hôm đó (kèm icon sách/TV tương ứng ngay đầu "
-            "chip để phân biệt nhanh 2 loại không cần đọc chữ), và ô ghi chú tự do dưới nhãn **Ghi chú chính** "
-            "(trình soạn thảo Quill, hỗ trợ chữ đậm/nghiêng/danh sách). Nếu ngày đang xem giữ **kỷ lục** (xem "
-            "mục \"Bảng vàng\" bên dưới), 1 chip kèm icon huy chương hiện thêm ở đầu, trước cả chip lịch. Nếu có "
-            "**ghi chú nhanh** đang chờ (xem mục ngay bên dưới), danh sách đó hiện ngay phía trên nhãn \"Ghi chú "
-            "chính\". Cùng 1 bố cục 2 cột này lặp lại ở thẻ **Nhật ký** của Báo cáo → Tháng/Tuần (khi đó là danh "
-            "sách nhiều ngày xếp dọc) — nhất quán để không phải học lại cách đọc.",
-            tip="Ô ghi chú không có khung viền bao quanh phần soạn thảo — cố ý bỏ khung để phần nhập liệu \"mở\" "
-                "hơn, không tạo cảm giác đang điền vào 1 form.",
-            where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký")
-
-        guide_item(
-            "quick_note.png", "Ghi chú nhanh từ iOS (Shortcuts)",
-            "Một Shortcut trên iPhone (Trợ lý Siri, Action Button, hoặc icon Màn hình chính) hỏi bạn gõ 1 dòng "
-            "ý tưởng, rồi gửi thẳng lên Supabase — **không đi qua app**, không cần mở trình duyệt. Mỗi lần gửi "
-            "tạo 1 quick note mới, gắn kèm giờ máy lúc gửi. Ngày nào có quick note đang chờ, danh sách đó hiện "
-            "ngay trong Ghi chú ngày, phía trên nhãn \"Ghi chú chính\" — mỗi dòng là 1 badge **giờ** nhỏ cộng "
-            "chữ ghi chú định dạng như ghi chú thường (không phải chip nhỏ). Đúng quy trình \"hộp thư nháp\": "
-            "ghi chú nhanh suốt ngày qua Siri, tối tổng hợp lại thành Ghi chú chính. Mỗi dòng có 3 nút: "
-            "**Gộp** (chèn nội dung dòng đó vào cuối ô soạn Ghi chú chính, tự mở ô soạn nếu chưa mở — dòng "
-            "chuyển sang gạch ngang mờ, chỉ THỰC SỰ bị xoá sau khi bạn bấm **Cập nhật** lưu Ghi chú chính; bấm "
-            "Huỷ hoặc Xoá ghi chú thì bỏ đánh dấu, quick note vẫn còn nguyên), **Sửa** (mở ô nhập ngay tại dòng "
-            "đó, sửa xong bấm Cập nhật/Huỷ), và **Xoá** (xoá thẳng, không qua Ghi chú chính). Sửa một dòng "
-            "thành trống rồi bấm Cập nhật cũng xoá luôn dòng đó, giống hệt hành vi Ghi chú chính. Nhật ký "
-            "Tuần/Tháng và Ngày này năm trước cũng hiện danh sách quick note của mỗi ngày (chỉ đọc, không có "
-            "nút Gộp/Sửa/Xoá ở 2 nơi đó — thao tác quản lý chỉ có tại đúng Ghi chú ngày của ngày đó). Tìm kiếm "
-            "cũng tra được nội dung ghi chú nhanh, phòng trường hợp vài hôm chưa kịp gộp/xoá.",
-            tip="Giờ hiện trên badge là lúc quick note được TẠO (Shortcut tự gửi lên) — sửa nội dung không đổi "
-                "lại giờ này.",
-            where="Hôm nay → Ghi chú ngày · Báo cáo → Tháng/Tuần → Nhật ký · Ngày này năm trước · Tìm kiếm")
-
-        guide_item(
-            "bang_vang.png", "Bảng vàng: Ngày nổi bật & Kỷ lục",
-            "2 khái niệm tách biệt, cả hai tính thẳng từ dữ liệu phiên mỗi lần tải trang (không lưu riêng nên "
-            "không bao giờ lỗi thời):\n\n"
-            "- **Ngày nổi bật** — top 1/2/3 ngày nhiều giờ nhất trong đúng phạm vi đang xem (Tổng quan = toàn "
-            "bộ lịch sử, Tuần/Tháng/Năm = đúng kỳ đang chọn), hiện như 1 nhóm chip trong **Bảng số liệu** của "
-            "trang đó. Đồng hạng nếu 2 ngày bằng tuyệt đối số giờ.\n"
-            "- **Kỷ lục** — ngày nhiều giờ nhất **toàn thời gian**, tính chung (top 3, hiện ở Bảng số liệu "
-            "Tổng quan) và tính riêng cho từng Nhóm/Dự án đã có từ **5 ngày dữ liệu trở lên** (chỉ giữ đúng 1 "
-            "ngày kỷ lục mỗi Nhóm/Dự án — ở Bảng số liệu Báo cáo → Dự án, chip này gộp chung ngày + số giờ và "
-            "mang tên \"Ngày nổi bật\" cho đồng bộ hình thức với Tuần/Tháng/Năm, dù vẫn cùng 1 khái niệm kỷ lục). "
-            "Mọi ngày giữ 1 trong các kỷ lục "
-            "này được gắn thêm 1 chip kèm icon huy chương trên Timeline (Hôm nay, Nhật ký Tuần/Tháng, Ngày này "
-            "năm trước) — 1 chip riêng cho mỗi kỷ lục nếu giữ nhiều cùng lúc, luôn xếp đầu tiên trước cả chip "
-            "Lịch. Icon này (và icon sách/TV trên chip đọc sách/Gundam cạnh đó) dùng chung font Material Symbols "
-            "mà Streamlit đã tự tải sẵn cho mọi icon khác trong app — không phải emoji, nên hiện đồng nhất trên "
-            "mọi thiết bị/trình duyệt thay vì tuỳ theo bộ font emoji của từng máy.",
-            tip="Chỉ \"Kỷ lục\" (toàn thời gian) mới lên chip Timeline — \"Ngày nổi bật\" theo Tuần/Tháng/Năm cố "
-                "tình KHÔNG gắn chip vì gần như tuần/tháng nào cũng có top 3 riêng, gắn hết sẽ mất cảm giác hiếm.",
-            where="Báo cáo → Tổng quan/Tuần/Tháng/Năm/Dự án · Hôm nay · Ngày này năm trước")
-
-        guide_item(
-            "otd.png", "Ngày này năm trước",
-            "Với ngày đang xem, tìm lại đúng ngày/tháng đó ở **mọi năm trước** và gộp **4 nguồn** cùng lúc: "
-            "phiên Forest, ghi chú, lịch hẹn Work, và sách/Gundam đã đọc/xem — năm nào có ít nhất 1 trong 4 "
-            "nguồn thì hiện dòng cho năm đó, sắp xếp năm gần nhất lên trên. Không cần năm đó phải có ghi chú mới "
-            "hiện — chỉ cần có lịch hẹn hoặc đã đọc xong 1 chương cũng đủ để dòng năm đó xuất hiện. Mục này càng "
-            "dùng lâu càng dày dữ liệu, vì mỗi năm trôi qua lại có thêm 1 \"ngày này năm trước\" mới để so sánh. "
-            "Năm nào rơi đúng vào ngày giữ kỷ lục cũng hiện chip kèm icon huy chương y hệt Ghi chú ngày.",
-            where="Hôm nay → Ngày này năm trước")
-
-        guide_item(
-            "search.png", "Tìm kiếm",
-            "Trang riêng trên thanh điều hướng, tra một từ khoá cùng lúc trên **cả 4 nguồn**: ghi chú chính, "
-            "ghi chú nhanh, tiêu đề lịch hẹn Work, và tên/phần sách·Gundam đã đọc·xem. Lọc trực tiếp trên text "
-            "thuần trong trình duyệt (không cần dịch vụ tìm kiếm riêng) nên gõ từ khoá xong bấm Enter là ra kết "
-            "quả ngay.\n\n"
-            "Kết quả gộp theo **ngày** — mỗi ngày khớp hiện 1 dòng, nhưng hiện ĐỦ CẢ 4 nguồn của đúng ngày đó "
-            "(không chỉ riêng phần vừa khớp), để không mất ngữ cảnh: tìm \"họp nhóm\" ra đúng ngày có lịch hẹn "
-            "đó, dòng kết quả cũng hiện luôn ghi chú và sách đã đọc hôm đó nếu có. Bấm vào Thứ/ngày để nhảy "
-            "thẳng sang Hôm nay của đúng ngày đó, xem đầy đủ chi tiết.",
-            tip="Cần gõ ít nhất 2 ký tự mới bắt đầu tìm, tránh lọc ra gần như cả lịch sử ghi chú chỉ với 1 chữ.",
-            where="Tìm kiếm")
+    help_chapter(
+        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất",
+        "Chọn 1 mốc cố định (sau bữa tối, hay ngay trước khi tắt máy) — thói quen sống nhờ mốc neo, "
+        "không nhờ ý chí.")
+    help_block(
+        "<h4>Ba bước, đúng thứ tự</h4>"
+        "<ol>"
+        "<li><b>Đồng bộ ngay</b> (Tuỳ biến → 1. Dữ liệu đầu vào) — 1 nút nạp cả Forest, Reminder lẫn lịch "
+        "Work. Mọi giá trị của app phụ thuộc bước này: không đồng bộ thì không có gì để nhìn lại.</li>"
+        "<li><b>Nhìn Hôm nay 1 phút</b> — dòng thời gian + chip so sánh với đúng thứ này tuần trước. Chỉ trả "
+        "lời đúng 1 câu: hôm nay có như mình định không — không để tự khen hay tự trách, chỉ để ghi nhận.</li>"
+        "<li><b>Viết Ghi chú ngày 2–3 phút</b> — nuôi cùng lúc 3 tính năng khác: Nhật ký tuần/tháng, Tìm "
+        "kiếm, và Ngày này năm trước. Con số nói làm <i>bao nhiêu</i>, ghi chú nói làm <i>gì và tại sao</i> — "
+        "một năm sau, cái thứ hai mới đáng đọc lại.</li>"
+        "</ol>")
+    help_block(
+        "<h4>Nút Gộp của ghi chú nhanh — xoá lúc nào?</h4>"
+        "Bấm <b>Gộp</b> trên 1 dòng ghi chú nhanh sẽ chèn nội dung dòng đó vào cuối ô soạn Ghi chú chính (tự "
+        "mở ô soạn nếu chưa mở) và gạch mờ dòng đó — nhưng dòng chỉ <b>thực sự bị xoá sau khi bạn bấm Cập "
+        "nhật</b> lưu Ghi chú chính. Bấm Huỷ (hoặc Xoá ghi chú chính) thì bỏ đánh dấu, ghi chú nhanh còn "
+        "nguyên. <b>Sửa</b> một dòng thành trống rồi Cập nhật cũng xoá luôn dòng đó, giống hệt hành vi của "
+        "Ghi chú chính.")
+    help_block(
+        "<h4>Vì sao ghi chú quan trọng hơn mọi biểu đồ</h4>"
+        "Ghi chú là dữ liệu <b>duy nhất không nạp lại được</b>: phiên Forest, tiến độ Reminders, trích dẫn "
+        "Kindle đều khôi phục được từ file gốc, nhưng ghi chú bỏ trống một tháng là mất vĩnh viễn một tháng "
+        "ký ức. Nếu chỉ giữ được đúng một thói quen từ toàn bộ trang này: <b>viết ghi chú mỗi tối</b>.")
 
     # ==========================================
-    # SUB-TAB: BÁO CÁO
+    # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
-    with _guide_tabs[3]:
-        with st.container(border=True, key="guide_bc_intro"):
-            st.markdown("#### Báo cáo là gì")
-            st.markdown(
-                "Cùng nguồn dữ liệu phiên Forest như Hôm nay, nhưng nhìn theo lát cắt rộng hơn 1 ngày: Tổng "
-                "quan (toàn bộ lịch sử), Năm, Tháng, Tuần, hoặc lọc theo 1 Dự án/Nhóm cụ thể.")
-
-        guide_item(
-            "baocao_kyxem.png", "Chọn kỳ xem — 5 lát cắt của Báo cáo",
-            "Thanh gạch chân ở đầu trang Báo cáo, chọn 1 trong 5 lát cắt:\n\n"
-            "- **Tổng quan** — toàn bộ lịch sử đã nạp, không lọc theo kỳ nào; lát cắt mặc định khi vào trang, vì "
-            "đây là bức tranh rộng nhất, hợp để bắt đầu.\n"
-            "- **Năm** — tổng kết 1 năm cụ thể, xem thêm ở mục riêng ngay bên dưới.\n"
-            "- **Tháng** / **Tuần** — 2 lát cắt dùng chung đúng 1 cấu trúc 8 mục đánh số (chỉ khác đơn vị thời "
-            "gian nhóm theo), có thêm bộ chọn kỳ cụ thể (tháng nào/tuần nào) và thẻ Nhật ký liệt kê từng ngày "
-            "trong kỳ đó.\n"
-            "- **Dự án** — lọc toàn bộ báo cáo về đúng 1 Danh mục hoặc 1 Dự án đã chọn, dùng khi muốn xem sâu "
-            "riêng 1 việc thay vì cả bức tranh chung.\n\n"
-            "Tháng và Tuần dùng chung đúng 1 khuôn 8 mục không phải trùng lặp code cho vui — cùng 1 bộ biểu đồ "
-            "áp được cho bất kỳ độ dài kỳ nào, không cần thiết kế riêng cho từng đơn vị thời gian.\n\n"
-            "**Mục \"1. Tổng quan\" của Năm/Tháng/Tuần đều có 2 dòng so sánh nhỏ dưới mỗi số** — \"vs [Năm/"
-            "Tháng/Tuần] trước\" (đúng kỳ liền kề) và \"vs Trung bình\" (trung bình mọi kỳ khác, không tính kỳ "
-            "đang xem). Nếu kỳ đang xem là kỳ **hiện tại và chưa kết thúc** (vd mới qua 3 ngày đầu tháng), app "
-            "tự động cắt CẢ 2 baseline so sánh xuống đúng cùng số ngày đã trôi qua — 1 dòng caption nhỏ phía "
-            "trên bảng số liệu sẽ nói rõ khi nào việc cắt này đang diễn ra. Không có bước cắt này, so tổng 3 "
-            "ngày với tổng cả tháng trước sẽ luôn ra số âm rất lớn, trông như sụt giảm nghiêm trọng dù thực ra "
-            "chỉ vì tháng chưa đi hết.",
-            where="Báo cáo")
-
-        guide_item(
-            "nam.png", "Báo cáo → Năm",
-            "Bản tổng kết 1 năm cụ thể, cố ý gọn hơn hẳn Tháng/Tuần (chỉ 4 mục thay vì 8) vì đây là trang xem "
-            "\"để có cảm giác tổng thể\" chứ không cần đào sâu từng biểu đồ:\n\n"
-            "1. **Tổng quan** — 5 số hero (Tổng thời gian, Thời gian/ngày, Số cây, Số cây/ngày, Thời gian/phiên) "
-            "kèm so sánh với năm trước/trung bình các năm khác, cộng Top 3 Danh mục, Top 3 Dự án, và \"Ngày nổi "
-            "bật\" (xem mục \"Bảng vàng\" ở trên) trong năm.\n"
-            "2. **Biểu đồ lịch** — lưới nhiệt trọn năm đang chọn, không kéo dài sang năm khác (khác các trang "
-            "Báo cáo khác luôn hiện lưới tới tận hôm nay).\n"
-            "3. **Đọc sách & Gundam trong năm** — đếm nhanh số phần đã đọc/xem và số cuốn·series có hoạt động "
-            "trong năm, không đi sâu phân loại \"Đã xong/Đang đọc\" (xem chi tiết đầy đủ ở tab Sách/Gundam).\n"
-            "4. **Bảng số liệu** — bảng chi tiết theo Danh mục/Dự án của riêng năm đó.",
-            where="Báo cáo → Năm")
-
-        guide_item(
-            "pie.png", "Phân bổ thời gian",
-            "Biểu đồ tròn chia % thời lượng theo Danh mục trong đúng kỳ đang xem (Tháng hoặc Tuần) — trả lời "
-            "nhanh câu hỏi \"kỳ này thời gian dồn vào đâu nhiều nhất\" mà không cần đọc hết bảng số liệu chi "
-            "tiết bên dưới.",
-            where="Báo cáo → Tháng · Báo cáo → Tuần")
-
-        guide_item(
-            "baocao_duan.png", "Báo cáo theo Dự án",
-            "Chọn 1 Nhóm (Danh mục) hoặc 1 Dự án cụ thể từ danh sách thả xuống — mặc định **chưa chọn gì** khi "
-            "mới vào trang (không tự động hiện Dự án đầu tiên), buộc phải chủ động chọn để tránh nhầm đang xem "
-            "đúng Dự án mình muốn. Sau khi chọn, cấu trúc rút gọn còn 5 mục (bỏ Nhật ký và Phân bổ thời gian vì "
-            "không có khái niệm \"kỳ\" ở đây — đây là toàn bộ lịch sử của riêng Dự án đó) — dùng khi muốn theo "
-            "dõi tiến triển của 1 việc cụ thể xuyên suốt, ví dụ so Biểu đồ lịch của \"Deep Work\" tháng này với "
-            "tháng trước. Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên còn thêm 1 nhóm chip \"Ngày nổi bật\" (ngày "
-            "nhiều giờ nhất toàn thời gian của riêng Nhóm/Dự án đó) trong Bảng số liệu — xem mục \"Bảng vàng\" "
-            "ở trên.",
-            where="Báo cáo → Dự án")
-
-    # ==========================================
-    # SUB-TAB: SÁCH & GUNDAM
-    # ==========================================
-    with _guide_tabs[4]:
-        with st.container(border=True, key="guide_rl_intro"):
-            st.markdown("#### 1 Reminder List = 1 cuốn sách/series")
-            st.markdown(
-                "Sách và Gundam đọc chung **một bảng dữ liệu** (`reading_log`, nạp từ file Apple Reminders xuất "
-                "qua Shortcuts) và chạy chung **một hàm hiển thị** — 2 trang tách biệt trên thanh điều hướng chỉ "
-                "khác nhau ở một bộ nhãn chữ (đọc/xem, phần/tập, sách/series...), không phải 2 đoạn code riêng.\n\n"
-                "Quy ước đặt tên: mỗi **Reminder List** trên điện thoại là 1 cuốn sách/series, đặt tên dạng "
-                "\"Tác giả - Tên sách\" (hoặc \"Gundam - Tên series\"); mỗi **Reminder đã tick hoàn thành** "
-                "trong list đó là 1 phần/chương/tập đã đọc/xem xong. App tách tên hiển thị bằng cách cắt theo "
-                "dấu **\"-\" đầu tiên** trong tên list, ưu tiên dạng có khoảng trắng \" - \" (fallback về dấu "
-                "\"-\" liền nếu không có khoảng trắng) — phần **sau** dấu gạch là tên hiển thị, phần **trước** "
-                "(tác giả, hoặc chữ \"Gundam\") bị bỏ. List nào có tên bắt đầu bằng chữ \"gundam\" (không "
-                "phân biệt hoa/thường) tự động được xếp vào trang Gundam thay vì Sách.")
-
-        guide_item(
-            "reading_log.png", "Tổng quan (Sách/Gundam)",
-            "Hero + chip theo nhóm (giống \"Bảng số liệu tổng quan\" ở sub-tab Tổng quan phía trước), cộng "
-            "thanh phân bố và bảng \"Chi tiết từng cuốn\" liệt kê từng cuốn/series theo tiến độ (bắt đầu/gần "
-            "nhất/số ngày/tổng giờ...). Mỗi cuốn/series được ghép từ **tối đa 2 nguồn**: phiên Forest (nếu tên "
-            "Dự án Forest trùng khớp tên sách) và các phần đã tick trong Reminders — 1 cuốn có thể chỉ có 1 "
-            "trong 2 nguồn, hoặc cả 2 cùng lúc; ô nào thiếu dữ liệu vì thiếu nguồn hiện dấu gạch ngang \"—\" "
-            "thay vì để trống hay báo lỗi.",
-            where="Sách → Tổng quan · Gundam → Tổng quan")
-
-        guide_item(
-            "reading_detail.png", "Chi tiết (Sách/Gundam)",
-            "Chọn đúng 1 cuốn/series (mặc định chưa chọn gì) để xem sâu 4 mục: **1. Số liệu** (hero + nhóm chip "
-            "Mốc thời gian/Nhịp độ/Trạng thái riêng của cuốn đó), **2. Nhật ký đọc** (từng phần đã hoàn thành, "
-            "theo ngày), **3. Biểu đồ lịch** (tô đậm theo số phần đọc/ngày thay vì số giờ, vì \"1 ngày đọc 3 "
-            "chương\" có ý nghĩa hơn số giờ với sách chỉ theo dõi qua Reminders), **4. Bảng số liệu theo ngày**.\n\n"
-            "**Cách tính \"Số ngày\"** đáng chú ý riêng: lấy **hợp** ngày sớm nhất và muộn nhất giữa CẢ "
-            "2 nguồn, không chỉ tính khi có phiên Forest — cuốn chỉ theo dõi qua Reminders vẫn ra đúng \"Số "
-            "ngày\" thay vì hiện trống. Cụ thể: nếu chỉ có Forest, lấy khoảng ngày của Forest; nếu chỉ có "
-            "Reminders, lấy khoảng ngày của Reminders; nếu có cả 2 (vd đang bấm giờ Forest rồi sau đó chuyển "
-            "sang chỉ tick Reminders), lấy ngày bắt đầu SỚM NHẤT và ngày kết thúc MUỘN NHẤT giữa 2 nguồn — trải "
-            "dài đúng theo thực tế đọc, không bị cắt cụt vì đổi cách theo dõi giữa chừng.",
-            where="Sách → Chi tiết · Gundam → Chi tiết")
-
-        guide_item(
-            "reading_detail.png", "Trích dẫn Kindle gộp trong Nhật ký đọc",
-            "Highlight/note Kindle của cuốn đang xem (xem \"Tải trích dẫn Kindle\" ở tab Tuỳ biến để ghép tên "
-            "sách Kindle với Dự án) hiện thẳng trong mục **2. Nhật ký đọc**, đúng ngày bạn thêm nó — chip chương "
-            "đã hoàn thành hôm đó hiện trước, trích dẫn hiện ngay bên dưới cùng ngày đó, dạng đoạn văn thường "
-            "(không đóng khung riêng), dấu **\"** màu accent mở đầu highlight, icon **✎** mở đầu ghi chú (chữ "
-            "nghiêng). Trong ngày đọc nhiều chương, các trích dẫn tự xếp theo **Vị trí** trong sách (tăng dần) "
-            "— đúng thứ tự đọc thật, không cần tự sắp xếp hay gán tay quote vào chương nào (Reminders chỉ ghi "
-            "ngày hoàn thành, không có giờ, nên không có cách nào đáng tin để suy luận việc đó).\n\n"
-            "Mỗi trích dẫn có 4 icon mờ bám bên phải: **⭐ Yêu thích** (đánh dấu để xem lại ở sub-tab \"Yêu "
-            "thích\", không giới hạn theo cuốn đang xem), **➕ Thêm ghi chú** (viết 1 ghi chú của riêng bạn, gắn "
-            "hẳn vào đúng trích dẫn đó — hiện thụt lề ngay bên dưới), **✎ Sửa** (mở ô nhập ngay tại chỗ, bấm ✓ "
-            "Cập nhật/✕ Huỷ, giống hệt cách sửa Ghi chú nhanh), và **🗑 Xoá** (xoá ngay, không hỏi xác nhận). Mọi "
-            "sửa/xoá/ghi chú thêm/đánh dấu Yêu thích được lưu lại vĩnh viễn trong Supabase — tải lại đúng file "
-            "My Clippings.txt cũ (Kindle luôn xuất lại toàn bộ lịch sử) sẽ **không ghi đè** nội dung đã sửa và "
-            "**không hồi sinh** trích dẫn đã xoá.",
-            tip="Ghi chú Kindle gốc (viết ngay trên máy đọc) tự động lồng xuống dưới highlight cùng \"Vị trí\" "
-                "nếu khớp được — không cần bạn tự gắn tay như ghi chú bạn thêm trong app.",
-            where="Sách → Chi tiết")
-
-        guide_item(
-            "reading_log.png", "Yêu thích",
-            "Sub-tab riêng (chỉ có ở trang Sách, không có ở Gundam) gộp TOÀN BỘ trích dẫn/ghi chú Kindle đã "
-            "đánh dấu ⭐ Yêu thích, từ mọi cuốn sách, xếp theo tên sách rồi theo Vị trí trong sách — nơi để "
-            "thỉnh thoảng mở ra đọc lại những đoạn từng thấy hay, không cần nhớ nó nằm ở cuốn nào hay lục lại "
-            "từng cuốn một. Mỗi dòng vẫn có đủ 4 icon Yêu thích/Thêm ghi chú/Sửa/Xoá giống hệt \"2. Nhật ký "
-            "đọc\" — bấm ⭐ lần nữa ngay tại đây để bỏ đánh dấu.",
-            where="Sách → Yêu thích")
-
-        guide_item(
-            "gundam.png", "Vì sao Gundam cần \"suy luận\" series",
-            "Forest chỉ có đúng 1 tag chung \"Gundam\" — không có Dự án riêng cho từng series như Rừng Na Uy "
-            "hay Harry Potter có thể trùng tên 1 Dự án Forest. Vậy khi bạn bấm giờ Forest với tag \"Gundam\", "
-            "app không có cách nào biết chắc bạn đang xem series nào **trừ khi suy luận từ dữ liệu Reminders**: "
-            "với mỗi ngày có phiên gắn tag Gundam, app tìm lần hoàn thành Reminder (ở BẤT KỲ series Gundam nào) "
-            "**gần ngày đó nhất về mặt thời gian** — có thể là trước hoặc sau, miễn là gần nhất — rồi gán cả "
-            "ngày đó cho đúng series của lần hoàn thành đó. Nếu bạn chỉ đang xem 1 series tại 1 thời điểm (kịch "
-            "bản phổ biến), suy luận này gần như luôn đúng; nếu xem xen kẽ nhiều series cùng lúc, ngày ở giữa 2 "
-            "lần hoàn thành sẽ được gán về phía gần hơn.\n\n"
-            "Đoán sai vẫn có thể xảy ra (đúng lúc xem xen kẽ) — expander **\"Sửa gán series tự động\"** cuối "
-            "trang Gundam (chỉ hiện khi có từ 2 series trở lên) liệt kê từng ngày có phiên Gundam kèm series "
-            "đang được gán, cho sửa lại tay qua ô chọn rồi bấm **Lưu gán series**. Ngày đã sửa tay hiện dấu "
-            "\"Gán tay\" — sửa lại đúng bằng series suy luận tự động ban đầu sẽ tự bỏ dấu này (coi như huỷ gán "
-            "tay, quay về suy luận tự động).",
-            tip="Không có \"không suy luận được\" — ngay cả phiên trước lần hoàn thành Reminder đầu tiên hoặc "
-                "sau lần cuối cùng vẫn được gán về mốc gần nhất hiện có (đầu hoặc cuối), không bị bỏ sót.",
-            where="Gundam")
+    help_chapter(
+        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có câu hỏi",
+        "Tuần đủ ngắn để sửa và đủ dài để có tín hiệu thật (~15 phút, sáng Thứ Hai hoặc tối Chủ Nhật). "
+        "Câu hỏi tầm tháng khác hẳn: không phải “đủ giờ chưa” mà là “tỉ trọng có đúng ưu "
+        "tiên không” (~30 phút). Mở app mà không có sẵn câu hỏi là lướt số liệu giải trí.")
+    _q_rows = [
+        ["Thời gian dồn vào đâu?", "Phân bổ thời gian (biểu đồ tròn)", "Báo cáo → Tháng / Tuần"],
+        ["Hay tập trung lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tuần / Tháng"],
+        ["Nhịp đang lên hay chùng xuống?", "Xu hướng + đường trung bình 7 ngày", "Mọi trang Báo cáo"],
+        ["Ngày làm sâu hay vụn vặt?", "Thanh phân bố độ dài phiên", "Mọi trang Báo cáo · Sách · Gundam"],
+        ["Việc nào đang bị bỏ rơi?", "Bảng số liệu — để ý dấu ▾ đỏ", "Báo cáo → Tháng"],
+        ["Ngày nào đỉnh nhất?", "Bảng vàng: Ngày nổi bật &amp; Kỷ lục", "Bảng số liệu của từng trang"],
+        ["Một việc tiến triển ra sao?", "Báo cáo → Dự án (lọc riêng 1 Nhóm/Dự án)", "Báo cáo → Dự án"],
+    ]
+    help_block(
+        "<h4>Câu hỏi nào — biểu đồ nào</h4>"
+        + help_table(["Câu hỏi", "Nhìn vào", "Ở đâu"], _q_rows))
+    _heat_lv = [0, 1, 3, 2, 0, 4, 6, 2, 1, 0, 5, 7, 3, 1,
+                2, 0, 1, 4, 5, 2, 0, 3, 6, 1, 2, 4, 0, 2,
+                1, 3, 0, 2, 6, 1, 4, 0, 2, 5, 1, 3, 7, 0,
+                4, 2, 5, 0, 1, 3, 2, 6, 0, 1, 4, 2, 0, 5]
+    _heat = "".join(f"<i class='h{v}'></i>" for v in _heat_lv)
+    _bar_h = [35, 55, 20, 70, 45, 4, 12, 60, 80, 50, 30, 65, 40, 92, 55, 25, 70, 45, 60, 35]
+    _bars = "".join(f"<i style='height:{h}%'></i>" for h in _bar_h)
+    st.markdown(
+        "<div class='help-grid'>"
+        "<div class='help-card'><h4>Biểu đồ lịch — thang tuyệt đối</h4>"
+        f"<div class='help-heat'>{_heat}</div>"
+        "<div class='help-cap'>8 bậc màu neo theo mốc giờ cố định, không co giãn theo dữ liệu đang xem — "
+        "“đậm bằng nhau” luôn nghĩa là “số giờ bằng nhau”, so sánh được giữa các tháng mà "
+        "không bị 1 ngày bất thường kéo lệch chuẩn.</div></div>"
+        "<div class='help-card'><h4>Xu hướng — đường trung bình thật thà</h4>"
+        f"<div class='help-bars'>{_bars}<span class='avg'></span></div>"
+        "<div class='help-cap'>Đường trung bình động 7 ngày tính cả những ngày 0 giờ, không chỉ ngày có hoạt "
+        "động — nghỉ liền vài hôm sẽ thấy đường đi xuống rõ, thay vì bị làm mượt đi.</div></div>"
+        "</div>", unsafe_allow_html=True)
+    help_block(
+        "<h4>Đọc số cho đúng — 4 luật ngầm</h4>"
+        "<ul>"
+        "<li><b>Kỳ dở dang được cắt để so công bằng</b> — nếu kỳ đang xem chưa kết thúc (vd mới qua 3 ngày đầu "
+        "tháng), cả 2 baseline “vs kỳ trước” và “vs Trung bình” tự cắt xuống đúng cùng số "
+        "ngày đã trôi qua; 1 dòng caption phía trên Bảng số liệu nói rõ khi việc cắt đang diễn ra. Không có "
+        "bước này, 3 ngày so với cả tháng trước sẽ luôn trông như sụt giảm nghiêm trọng.</li>"
+        "<li><b>±20% là dao động bình thường</b> — chỉ hành động khi lệch lớn <i>và</i> biết rõ lý do.</li>"
+        "<li><b>Dấu ▾ đỏ trong Bảng số liệu</b> = kỳ đó giảm còn ≤40% so với kỳ liền trước — tín hiệu đáng "
+        "dừng lại hỏi tại sao. Ô tô đậm so trong <i>cả bảng</i> (không phải riêng từng hàng); cột Tổng cố ý "
+        "để trắng vì luôn là số lớn nhất.</li>"
+        "<li><b>Kỷ lục ≠ Ngày nổi bật</b> — Ngày nổi bật là top ngày trong đúng kỳ đang xem; Kỷ lục là top "
+        "<i>toàn thời gian</i> (chung, và riêng cho Nhóm/Dự án đã có ≥5 ngày dữ liệu). Chỉ Kỷ lục mới được "
+        "gắn chip huy chương lên Timeline — tuần nào cũng có top 3 riêng, gắn hết sẽ mất cảm giác hiếm.</li>"
+        "</ul>")
+    help_block(
+        "<h4>Ba cái bẫy cần tránh</h4>"
+        "<ol>"
+        "<li><b>Tối ưu con số thay vì công việc</b> — trồng cây cho phiên đọc tin vặt để đủ chỉ tiêu giờ là "
+        "tự lừa mình bằng chính công cụ chống tự lừa. Số giờ là thước đo gián tiếp, không phải mục tiêu.</li>"
+        "<li><b>Chuỗi ngày biến thành gông</b> — đứt chuỗi sau ngày ốm/ngày nghỉ đúng nghĩa là bình thường; "
+        "lời nhắc chuỗi đứt cố ý đặt ở tông khích lệ, hãy đọc đúng tinh thần đó.</li>"
+        "<li><b>Review không có câu hỏi</b> — mỗi lần mở app nên có sẵn 1 câu: hôm nay thế nào? tuần này lệch "
+        "gì? tháng này đúng ưu tiên chưa?</li>"
+        "</ol>")
 
     # ==========================================
-    # SUB-TAB: SỨC KHOẺ
+    # CHƯƠNG 5: SÁCH, GUNDAM & SỨC KHOẺ
     # ==========================================
-    with _guide_tabs[5]:
-        with st.container(border=True, key="guide_health_intro"):
-            st.markdown("#### Trang duy nhất CÓ nhập liệu tay")
-            st.markdown(
-                "Toàn bộ phần còn lại của app thuần hồi cứu — chỉ hiển thị lại dữ liệu Forest đã ghi nhận. Trang "
-                "**Sức khoẻ** là ngoại lệ duy nhất: không có nguồn tự động nào xuất được kết quả xét nghiệm máu ra "
-                "file, nên bạn tự nhập. Quy trình gợi ý: chụp ảnh 2 phiếu xét nghiệm (Huyết học + Sinh hóa) mỗi "
-                "lần đi khám, đưa ảnh vào Claude và nhờ đọc + xuất đúng định dạng JSON, dán vào tab Dữ liệu đầu "
-                "vào.\n\n"
-                "3 sub-tab (cùng kiểu \"Chọn kỳ xem\" ở trang Báo cáo, không phải `st.tabs()`) chia theo đúng 3 "
-                "việc khác nhau: **Báo cáo** (chỉ xem, không nhập), **Lịch sử** (sửa/xoá), **Dữ liệu đầu vào** "
-                "(nhập mới).")
-
-        guide_item(
-            "suckhoe.png", "Sub-tab Báo cáo — số liệu + biểu đồ",
-            "Mở trang là thấy ngay expander **\"Chỉ số bất thường · lần khám [ngày]\"** — liệt kê MỌI chỉ số "
-            "ngoài khoảng tham chiếu của đúng lần khám gần nhất (gộp cả Huyết học lẫn Sinh hóa nếu khám cùng "
-            "ngày), không cần chọn Nhóm/Chỉ số trước mới thấy. Không có chỉ số nào bất thường thì hiện dòng "
-            "xác nhận xanh thay vì danh sách.\n\n"
-            "Bên dưới đó mới tới phần chọn **Nhóm** rồi **Chỉ số** để đào sâu 1 chỉ số cụ thể, 2 mục tự cập "
-            "nhật theo lựa chọn:\n\n"
-            "**1. Số liệu** — hero là giá trị **gần nhất** (kèm ngày đo + so với lần đo liền trước), cộng chip "
-            "Số quan sát/Khoảng thời gian/Trung bình/Cao nhất/Thấp nhất, và chip riêng đếm số lần **ngoài khoảng "
-            "tham chiếu** trên tổng số lần đo (tô nổi bật nếu có).\n\n"
-            "**2. Biểu đồ theo dõi** — xu hướng theo thời gian: dải xám là khoảng tham chiếu (khoảng bình "
-            "thường) tại đúng thời điểm đo — vì khoảng này có thể đổi theo lab/máy xét nghiệm qua các năm; điểm "
-            "đỏ là giá trị nằm ngoài khoảng đó.",
-            where="Sức khoẻ → Báo cáo")
-
-        guide_item(
-            "suckhoe.png", "Sub-tab Lịch sử & Dữ liệu đầu vào",
-            "**Lịch sử** — chọn Năm rồi mở đúng lần khám cần xem/sửa: mỗi tiêu đề expander hiện luôn số chỉ số "
-            "bất thường trong lần khám đó nếu có (vd \"12 chỉ số, 2 bất thường\"), và bảng sửa có thêm cột "
-            "**Bất thường** (⚠️, chỉ đọc — tự tính lại từ Giá trị/Khoảng tham chiếu, không sửa trực tiếp được ở "
-            "cột này) để nhất quán với sub-tab Báo cáo. Sửa lại bảng chỉ số (Chỉ số/Giá trị/Đơn vị/Khoảng tham "
-            "chiếu) rồi Lưu thay đổi, hoặc Xoá cả lần xét nghiệm nếu nhập nhầm.\n\n"
-            "**Dữ liệu đầu vào** — 2 cách nhập, **Import hàng loạt** đặt lên trước vì là luồng chính: dán 1 khối "
-            "JSON gồm nhiều lần khám cùng lúc (xem mục \"Xem định dạng JSON mẫu\" ngay trong trang), có bước Xem "
-            "trước rồi mới Xác nhận lưu — cách nhanh nhất để nạp dữ liệu nhiều năm cũ hoặc kết quả Claude vừa đọc "
-            "từ ảnh. **Nhập kết quả xét nghiệm** (gõ tay từng lần khám) xếp sau, dùng khi chỉ có 1 lần khám lẻ "
-            "hoặc muốn sửa nhanh không qua JSON.",
-            where="Sức khoẻ → Lịch sử · Sức khoẻ → Dữ liệu đầu vào")
-
-        with st.container(border=True, key="guide_health_json"):
-            st.markdown("#### Định dạng JSON để nhờ Claude xuất từ ảnh")
-            st.markdown(
-                "Khi đưa ảnh phiếu xét nghiệm vào Claude, yêu cầu xuất đúng khuôn dưới đây (mỗi phần tử trong "
-                "list là 1 phiếu/1 nhóm chỉ số của 1 lần khám — 1 lần khám có 2 phiếu Huyết học + Sinh hóa thì ra "
-                "2 phần tử cùng `test_date` khác `category`), rồi dán nguyên văn vào ô \"Dán nội dung JSON\" ở "
-                "mục 1 (Import hàng loạt) trong tab Dữ liệu đầu vào:")
-            st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
-            st.markdown(
-                "`ref_raw` chấp nhận các dạng thường gặp trên phiếu: khoảng đủ (`\"4.2 - 5.4\"`), chỉ có trần "
-                "trên (`\"< 5\"`), chỉ có sàn dưới (`\"> 10\"`) — dạng khác (vd kết quả định tính \"Âm tính\") vẫn "
-                "lưu được, chỉ không vẽ được lên biểu đồ/không phát hiện bất thường.")
+    help_chapter(
+        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ",
+        "Sách và Gundam đọc chung một bảng dữ liệu và một hàm hiển thị — 2 trang chỉ khác bộ nhãn chữ "
+        "(đọc/xem, phần/tập). Sức khoẻ là trang duy nhất có nhập liệu tay.")
+    help_block(
+        "<h4>Quy ước đặt tên trong Apple Reminders</h4>"
+        "Mỗi <b>Reminder List</b> = 1 cuốn sách/series, tên dạng “Tác giả - Tên sách”; mỗi reminder "
+        "đã tick = 1 phần/chương/tập đã xong. App cắt tên hiển thị theo dấu <b>“-” đầu tiên</b> (ưu "
+        "tiên dạng có khoảng trắng “ - ”): phần sau dấu gạch là tên hiển thị, phần trước bị bỏ. List "
+        "có tên bắt đầu bằng “gundam” (không phân biệt hoa thường) tự xếp vào trang Gundam.")
+    help_block(
+        "<h4>“Số ngày” tính kiểu gì khi có 2 nguồn</h4>"
+        "Mỗi cuốn/series ghép từ tối đa 2 nguồn: phiên Forest (khi tên Dự án trùng tên sách) và các phần đã "
+        "tick trong Reminders. “Số ngày” lấy <b>hợp</b> của cả 2 — ngày bắt đầu sớm nhất tới ngày "
+        "kết thúc muộn nhất giữa 2 nguồn — nên đổi cách theo dõi giữa chừng (bấm giờ Forest rồi chuyển sang "
+        "chỉ tick Reminders) không làm khoảng thời gian bị cắt cụt. Ô thiếu nguồn hiện “—” thay vì "
+        "để trống hay báo lỗi.")
+    help_block(
+        "<h4>Gundam: vì sao phải “suy luận” series</h4>"
+        "Forest chỉ có đúng 1 tag chung “Gundam”, nên với mỗi ngày có phiên gắn tag đó, app tìm lần "
+        "tick Reminder (ở bất kỳ series nào) <b>gần ngày đó nhất về thời gian</b> — trước hoặc sau đều được — "
+        "rồi gán cả ngày cho series đó. Xem 1 series tại 1 thời điểm thì gần như luôn đúng; xem xen kẽ nhiều "
+        "series thì ngày nằm giữa 2 lần tick được gán về phía gần hơn — sai thì sửa tay ở expander <b>“Sửa "
+        "gán series tự động”</b> cuối trang Gundam (ngày sửa tay mang dấu “Gán tay”; sửa lại "
+        "trùng với suy luận tự động thì dấu này tự mất).")
+    help_block(
+        "<h4>Trích dẫn Kindle — sửa một lần, bền vĩnh viễn</h4>"
+        "Mọi thao tác trên trích dẫn (sửa, xoá, ⭐ Yêu thích, thêm ghi chú riêng) lưu hẳn vào Supabase: nạp "
+        "lại file <code>My Clippings.txt</code> cũ — Kindle luôn xuất cộng dồn toàn bộ lịch sử — sẽ <b>không "
+        "ghi đè</b> nội dung đã sửa và <b>không hồi sinh</b> trích dẫn đã xoá. Highlight tô bằng bút cảm ứng "
+        "thường sinh nhiều bản nháp (cùng sách, cách nhau dưới 2 phút, câu sau nối dài câu trước) — app tự "
+        "gộp và chỉ giữ bản đầy đủ nhất. Trong Nhật ký đọc, trích dẫn tự xếp theo <b>Vị trí</b> trong sách — "
+        "đúng thứ tự đọc thật, không cần gán tay quote vào chương.")
+    help_block(
+        "<h4>Sức khoẻ — nhập bằng ảnh + Claude</h4>"
+        "Quy trình gợi ý: chụp 2 phiếu xét nghiệm (Huyết học + Sinh hóa) mỗi lần khám, đưa ảnh vào Claude nhờ "
+        "đọc và xuất đúng khuôn JSON bên dưới, rồi dán vào <b>Import hàng loạt</b> (Sức khoẻ → Dữ liệu đầu "
+        "vào) — có bước Xem trước rồi mới Xác nhận lưu. Mở trang Báo cáo là thấy ngay expander <b>“Chỉ số "
+        "bất thường”</b> của lần khám gần nhất, không cần chọn gì trước. Khoảng tham chiếu "
+        "(<code>ref_raw</code>) chấp nhận các dạng thường gặp: “4.2 - 5.4”, “&lt; 5”, "
+        "“&gt; 10” — dạng khác (vd “Âm tính”) vẫn lưu được, chỉ không vẽ lên biểu đồ.")
+    with st.expander("Xem định dạng JSON mẫu để nhờ Claude xuất từ ảnh"):
+        st.markdown(
+            "Mỗi phần tử trong list là 1 phiếu (1 nhóm chỉ số) của 1 lần khám — 1 lần khám có 2 phiếu "
+            "Huyết học + Sinh hóa thì ra 2 phần tử cùng `test_date` khác `category`:")
+        st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
 
     # ==========================================
-    # SUB-TAB: TUỲ BIẾN
+    # CHƯƠNG 6: NẠP DỮ LIỆU & ĐỒNG BỘ
     # ==========================================
-    with _guide_tabs[6]:
-        with st.container(border=True, key="guide_tb_intro"):
-            st.markdown("#### 5 mục của tab Tuỳ biến")
-            st.markdown(
-                "Mọi thứ điều khiển \"app trông ra sao\" và \"dữ liệu đến từ đâu\" đều gom về đúng 1 trang, "
-                "đánh số 1-5: **Dữ liệu đầu vào** (nạp dữ liệu mới), **Phân loại** (gán Dự án vào Nhóm), "
-                "**Dữ liệu làm việc hiện tại** (xem/xoá phiên thô), **Giao diện** (màu accent), **Quản lý hệ "
-                "thống** (sao lưu/khôi phục/làm mới). 3 mục đầu và mục cuối đi theo đúng thứ tự thao tác thực tế "
-                "khi mới dùng app (nạp → phân loại → kiểm tra lại → sao lưu); riêng Giao diện là tuỳ chỉnh "
-                "không liên quan tới luồng dữ liệu đó nên xếp riêng, ngay trước Quản lý hệ thống.\n\n"
-                "**Chỉ mục 1 mở sẵn khi vào trang** (mục hay đụng tới nhất — nạp dữ liệu mới); **2, 3, 4, 5 đóng "
-                "mặc định** — bấm để mở khi cần, tránh cuộn qua bảng phân loại/dữ liệu thô/màu sắc/khu vực xoá "
-                "sạch mỗi lần chỉ định ghé qua nạp dữ liệu.")
-
-        guide_item(
-            "prep_data_input.png", "1. Dữ liệu đầu vào",
-            "**Đồng bộ nhanh** hiện trực tiếp làm phương án mặc định — dành cho Shortcut iOS chạy từ share sheet: "
-            "khi Export CSV từ Forest, Shortcut lấy luôn file backup Reminder rồi tải cả 2 lên bucket Supabase "
-            "Storage (tên file bắt đầu bằng `forest`/`reminder`, vd `forest_2026-07-06.csv`). Bấm **Đồng bộ "
-            "ngay** để app tự tìm file mới nhất mỗi loại, nạp vào DB theo đúng luật của các cách thủ công bên "
-            "dưới (Forest cộng thêm, Reminder thay thế toàn bộ), đồng bộ luôn lịch Work qua CalDAV, rồi xoá các "
-            "file cũ hơn trong bucket — gộp 3 thao tác thủ công thành 1 nút. Chưa tạo Shortcut/bucket thì mục "
-            "này chỉ hiện \"chưa có\", không ảnh hưởng gì tới các cách tải tay bên dưới.\n\n"
-            "3 cách còn lại chỉ là phương án dự phòng, gộp chung trong 1 khối thu gọn (\"Dự phòng\") — chỉ "
-            "cần mở khi Đồng bộ nhanh chưa dùng được hoặc cần thao tác riêng lẻ:\n"
-            "- **Tải lên từ Forest** — nạp file CSV xuất từ app Forest. Mỗi lần tải lên chỉ **thêm dữ liệu mới**, "
-            "tự động bỏ qua phiên trùng lặp (so theo giờ bắt đầu/kết thúc) và phiên đã từng bị xoá trước đó — "
-            "nạp lại cùng 1 file nhiều lần không sợ bị nhân đôi dữ liệu.\n"
-            "- **Đồng bộ lịch** — kéo lịch hẹn từ Apple Calendar (lịch \"Work\") qua CalDAV, chọn preset khoảng "
-            "ngày quanh hôm nay (±30/±90/±180 ngày) hoặc bấm **Khoảng khác…** để tự chọn 2 mốc Từ ngày/Đến ngày "
-            "tuỳ ý — dùng khi cần lấp dữ liệu lịch cũ cho mục *Ngày này năm trước*, không cần dùng thường "
-            "xuyên. Chỉ 1 nút **Đồng bộ ngay** duy nhất cho cả 2 cách chọn.\n"
-            "- **Tải lên từ Reminder** — nạp file `reading_log.csv` do Shortcut \"Xuất tiến độ đọc\" xuất từ "
-            "Apple Reminders, mỗi lần tải lên **thay thế toàn bộ** dữ liệu Sách/Gundam cũ (khác hẳn cách Forest "
-            "CSV chỉ cộng thêm) — vì Reminders phản ánh đúng trạng thái hiện tại của toàn bộ list, không phải 1 "
-            "lát cắt thời gian như CSV Forest.\n"
-            "- **Tải trích dẫn Kindle** — nạp file `My Clippings.txt` (Kindle tự tạo file này, nằm ngay trong "
-            "bộ nhớ máy khi cắm Kindle vào máy tính qua USB). Mỗi cuốn/nguồn **mới gặp lần đầu** cần xác nhận "
-            "ghép với 1 Dự án đã có (gợi ý sẵn theo tên gần giống nhất) hoặc để \"Nguồn độc lập\" kèm tên tự đặt "
-            "(vd tạp chí đọc định kỳ, không phải sách theo dõi tiến độ) — xác nhận 1 lần, các lần tải file mới "
-            "sau tự nhớ đúng cuốn/nguồn đó. Tải lại **toàn bộ** file (Kindle luôn xuất cộng dồn từ trước tới "
-            "giờ, không phải chỉ phần mới) vẫn an toàn — trích dẫn trùng tự động bị bỏ qua, không nhân đôi. Nếu "
-            "hay tô highlight bằng bút cảm ứng: Kindle ghi lại MỖI LẦN đầu bút dịch chuyển như 1 highlight riêng "
-            "trong `My Clippings.txt` (cách nhau vài giây, câu sau dài hơn câu trước) — app tự nhận ra các bản "
-            "nháp này (cùng sách, cách nhau dưới 2 phút, nội dung nối dài nhau) và chỉ giữ lại bản đầy đủ nhất, "
-            "không tạo ra nhiều highlight trùng ý cho cùng 1 lần tô.",
-            where="Tuỳ biến → 1. Dữ liệu đầu vào")
-
-        guide_item(
-            "prep_classify.png", "2. Phân loại",
-            "Gán mỗi Dự án Forest vào 1 Nhóm (Danh mục) — vd Dự án \"Deep Work\"/\"Viết báo cáo\" cùng gán "
-            "vào Nhóm \"Công việc\". Nhóm dùng để gộp các biểu đồ/bảng theo cấp cao hơn Dự án đơn lẻ. Dự án "
-            "chưa gán Nhóm nào vẫn hoạt động bình thường (tự đứng riêng, không thuộc Nhóm nào) — phân loại là "
-            "tuỳ chọn để gọn báo cáo, không bắt buộc để app chạy được.",
-            where="Tuỳ biến → 2. Phân loại")
-
-        guide_item(
-            "prep_worktable.png", "3. Dữ liệu làm việc hiện tại",
-            "Bảng thô liệt kê từng phiên đã nạp (giờ bắt đầu/kết thúc, Dự án, thời lượng), phân trang 100 dòng "
-            "mỗi trang khi dữ liệu nhiều. Chọn 1 hoặc nhiều dòng rồi xoá (nút **màu đỏ cảnh báo** — xoá ngay, "
-            "không hỏi lại) — phiên bị xoá được ghi nhớ riêng (bảng `deleted_sessions`) để nếu sau này nạp lại "
-            "đúng file CSV cũ, phiên đó không tự động xuất hiện lại.",
-            where="Tuỳ biến → 3. Dữ liệu làm việc hiện tại")
-
-        guide_item(
-            "giao_dien.png", "4. Giao diện — màu accent",
-            "6 màu đất/mộc mạc để chọn (Đất nung/Nghệ/Rêu/Chàm biển/Chàm/Mận), hợp với tông giấy ấm của giao "
-            "diện. Bấm 1 màu là áp "
-            "dụng **ngay lập tức**, không cần nút \"Lưu\" riêng — màu được ghi vào Supabase (bảng `settings`) "
-            "nên vẫn giữ nguyên qua các lần mở lại app.\n\n"
-            "**1 màu accent chọn ra lan toả tới 3 nơi khác nhau, bằng 3 cơ chế khác nhau**:\n"
-            "- **Nút bấm/khung viền/chip** — qua biến CSS (`:root { --accent: ...; }`), toàn bộ stylesheet tham "
-            "chiếu tới biến này thay vì mã màu cứng.\n"
-            "- **Biểu đồ đơn sắc/bảng nhiệt** (Biểu đồ lịch, Thanh phân bố độ dài phiên, heat cell của Bảng số "
-            "liệu) — KHÔNG qua CSS, mà qua Python: màu accent được đổi thành 1 giá trị "
-            "**hue** (sắc độ trên vòng thuần sắc), rồi mọi dải màu này tự xoay theo đúng hue đó, giữ nguyên độ "
-            "bão hoà và khoảng độ sáng nhạt→đậm — nên đổi màu accent tự động đổi TẤT CẢ biểu đồ đơn sắc cùng "
-            "lúc, không cần sửa từng biểu đồ riêng.\n"
-            "- **Ô ghi chú (trình soạn thảo Quill)** — chạy trong 1 iframe riêng biệt, CSS của trang chính không "
-            "chạm tới được; app tự tiêm 1 đoạn `<style>` khác vào bên trong iframe đó, lặp lại mỗi 400ms để "
-            "chống việc Streamlit dựng lại iframe làm mất style đã tiêm.\n\n"
-            "Nếu bảng `settings` chưa được tạo trên Supabase, hoặc giá trị lưu trong đó bị hỏng (kể cả 1 màu "
-            "cũ đã bỏ khỏi bảng 6 màu hiện tại), app **tự rơi về màu \"Chàm biển\" mặc định** thay vì báo lỗi "
-            "hay crash — tính năng đổi màu hoàn toàn tuỳ chọn, không có nó app vẫn chạy bình thường.\n\n"
-            "**Chế độ tối (dark mode)**: app tự đổi giao diện tối/sáng theo đúng cài đặt hệ thống của thiết bị "
-            "(hoặc theo lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu đã tự đổi khác "
-            "với hệ thống) — **không có nút bật/tắt riêng trong app**, vì Streamlit chưa cho phép đổi theme "
-            "bằng code lúc đang chạy, chỉ đọc được theme hiện tại để tự tô đúng màu theo. Toàn bộ nút, thẻ, "
-            "biểu đồ, bảng nhiệt, ô ghi chú đều có phiên bản màu riêng cho chế độ tối; màu accent đang chọn vẫn "
-            "giữ nguyên và tự sáng/tối lại cho hợp với nền mới.",
-            where="Tuỳ biến → 4. Giao diện")
-
-        guide_item(
-            "prep_backup.png", "5. Quản lý hệ thống",
-            "3 thao tác trên toàn bộ dữ liệu, cả 3 nút đều tô **màu đỏ cảnh báo** (khác màu trung tính của mọi "
-            "nút khác trong app) vì đều phá huỷ/ghi đè dữ liệu không thể hoàn tác:\n\n"
-            "- **Sao lưu** — đóng gói mọi bảng (phiên, phân loại, ghi chú, ghi chú nhanh, lịch, "
-            "sách/Gundam, gán series Gundam đã sửa tay, trích dẫn Kindle, cài đặt màu, chỉ số Sức khoẻ) thành "
-            "1 file .zip, tên tự kèm ngày giờ. App tự nhớ **ngày sao lưu gần nhất** (bảng `settings`) — nếu chưa "
-            "từng sao lưu, hoặc lần gần nhất đã quá 30 ngày, 1 dòng nhắc nhỏ hiện ngay phía trên nút này.\n"
-            "- **Khôi phục** — tải 1 file .zip đã sao lưu để phục hồi đúng nguyên trạng tại thời điểm đó, dùng "
-            "khi chuyển máy/trình duyệt hoặc muốn quay lại 1 mốc dữ liệu cũ. Bắt buộc tick ô xác nhận \"Tôi xác "
-            "nhận muốn ghi đè toàn bộ dữ liệu hiện tại\" trước khi nút Xác nhận Khôi phục bật lên được — cùng "
-            "mức bảo vệ với Làm mới bên cạnh, vì đây cũng là thao tác ghi đè toàn bộ không thể hoàn tác.\n"
-            "- **Làm mới** — xoá sạch toàn bộ dữ liệu để bắt đầu lại, bắt buộc tick ô xác nhận trước khi bấm vì "
-            "thao tác không thể hoàn tác.",
-            tip="Dữ liệu đã lưu bền vững trên Supabase (không mất khi khởi động lại/redeploy app), nhưng vẫn nên "
-                "tải bản sao lưu định kỳ làm lớp an toàn thứ hai — dòng nhắc 30 ngày ở trên chính là để nhớ việc "
-                "này, không cần tự đặt lịch riêng.",
-            where="Tuỳ biến → 5. Quản lý hệ thống")
+    help_chapter(
+        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật của từng nguồn",
+        "Một nút Đồng bộ ngay làm hết việc hằng ngày. Bảng dưới là “luật” từng nguồn tuân theo — "
+        "đáng đọc một lần để không bao giờ sợ nạp trùng hay mất dữ liệu.")
+    help_block(
+        "<h4>Đường đi của dữ liệu</h4>"
+        "<div class='help-flow'>"
+        "<span class='help-flow-col'><span class='help-flow-node'>Forest CSV</span>"
+        "<span class='help-flow-node'>Reminders</span></span>"
+        "<span class='help-flow-arr'></span>"
+        "<span class='help-flow-node'>Shortcut iOS</span>"
+        "<span class='help-flow-arr'></span>"
+        "<span class='help-flow-node'>Bucket Storage</span>"
+        "<span class='help-flow-arr'></span>"
+        "<span class='help-flow-node help-flow-hub'>Đồng bộ ngay</span>"
+        "<span class='help-flow-arr'></span>"
+        "<span class='help-flow-node'>Dashboard</span>"
+        "</div>"
+        "<div class='help-cap'>Shortcut chạy từ share sheet khi Export CSV từ Forest: lấy luôn file backup "
+        "Reminder rồi tải cả 2 lên bucket Supabase Storage (tên file bắt đầu bằng <code>forest</code>/"
+        "<code>reminder</code>, vd <code>forest_2026-07-06.csv</code>). Nút Đồng bộ ngay tìm file mới nhất "
+        "mỗi loại, nạp theo đúng luật bảng dưới, kéo luôn lịch Work qua CalDAV trong cùng cú bấm, rồi dọn "
+        "file cũ trong bucket. Riêng <code>My Clippings.txt</code> (Kindle) tải tay, không qua bucket.</div>")
+    _sync_rows = [
+        ["Forest CSV", "Cộng thêm", "Bỏ qua phiên trùng (so theo giờ bắt đầu/kết thúc) và phiên đã từng bị "
+         "xoá — nạp lại cùng 1 file bao nhiêu lần cũng không nhân đôi"],
+        ["Reminders", "<b>Thay thế toàn bộ</b>", "File phản ánh trạng thái hiện tại của mọi list, không phải "
+         "1 lát cắt thời gian — nên ghi đè sạch thay vì cộng dồn"],
+        ["Kindle My Clippings", "Cộng thêm", "Trích dẫn trùng tự bỏ qua; bản nháp bút cảm ứng tự gộp; "
+         "sửa/xoá/⭐ đã làm trong app không bị ghi đè hay hồi sinh"],
+        ["Lịch Work (CalDAV)", "Thay theo khoảng ngày", "Preset ±30/±90/±180 ngày quanh hôm nay, hoặc tự chọn "
+         "2 mốc — dùng khoảng rộng khi cần lấp lịch cũ cho Ngày này năm trước"],
+    ]
+    help_block(
+        "<h4>Cộng thêm hay thay thế?</h4>"
+        + help_table(["Nguồn", "Kiểu nạp", "Chống trùng &amp; lưu ý"], _sync_rows))
+    help_block(
+        "<h4>Xoá phiên là xoá có trí nhớ</h4>"
+        "Xoá phiên ở <b>3. Dữ liệu làm việc hiện tại</b> (nút đỏ — xoá ngay, không hỏi lại) được ghi nhớ "
+        "riêng trong bảng <code>deleted_sessions</code>: sau này nạp lại đúng file CSV cũ, phiên đó "
+        "<b>không tự sống lại</b>. Với sách/nguồn Kindle mới gặp lần đầu, app hỏi ghép với 1 Dự án đã có "
+        "(gợi ý theo tên gần giống nhất) hoặc để “Nguồn độc lập” — xác nhận 1 lần, các lần tải "
+        "sau tự nhớ.")
 
     # ==========================================
-    # SUB-TAB: CẬP NHẬT
+    # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
     # ==========================================
-    with _guide_tabs[7]:
-        guide_update("182-184", "Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng", [
-            "**Trích dẫn hôm nay** — thẻ chuyển lên đầu trang Hôm nay (ngay dưới \"Ngày đang xem\"), nền accent "
-            "đặc, chữ trích dẫn cỡ lớn kiểu chữ sách, kèm tên tác giả cạnh tên sách.",
-            "**Yêu thích** — bấm ★ trên bất kỳ trích dẫn/ghi chú Kindle nào để lưu lại, xem gộp toàn bộ ở "
-            "sub-tab \"Yêu thích\" riêng (trang Sách) — mỗi trích dẫn nằm trong 1 thẻ nền riêng cho dễ đọc, "
-            "thay vì hàng chữ trần.",
-            "**Import Kindle thông minh hơn** — tự nhận diện và gộp các bản \"nháp\" do tô highlight bằng bút "
-            "cảm ứng sinh ra (nhiều dòng gần giống nhau, cách nhau vài giây, câu sau dài hơn câu trước), chỉ "
-            "giữ lại bản đầy đủ nhất thay vì nhân đôi thành nhiều trích dẫn.",
-            "Kèm theo: sửa vài lỗi giao diện (tab Gundam mất kiểu dáng, nút ★ chồng lên chữ), dọn heading dư "
-            "thừa ở nhiều bảng số liệu, chữ Thứ trong Nhật ký đổi từ số sang chữ đầy đủ (Thứ Tư thay vì Thứ 4).",
-        ], latest_pr_lines=69, total_lines_at_pr=7690)
-        guide_update("181", "Rà soát & đơn giản hoá theo phản hồi thực tế", [
-            "Bớt: Top 3 Danh mục/Dự án ở Hôm nay/Báo cáo→Tuần, biểu đồ Gantt tự vẽ ở Sách/Gundam→Tổng quan, vài "
-            "phím tắt ít dùng (Shift+1-5, [ ], f/r/l).",
-            "Thêm: nút \"Gộp\" ghi chú nhanh vào ghi chú chính, sửa gán series Gundam tay khi suy luận tự động "
-            "đoán sai, view \"Chỉ số bất thường\" ở lần khám Sức khoẻ mới nhất, Tìm kiếm mở rộng sang Ghi chú "
-            "nhanh, checkbox xác nhận cho \"Khôi phục\", gộp 2 UI đồng bộ CalDAV thành 1.",
-        ], latest_pr_lines=960, total_lines_at_pr=7448)
-        guide_update("158-165", "Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS", [
-            "**Bảng vàng** — Bảng số liệu mỗi trang Báo cáo giờ có thêm \"Ngày nổi bật\" (top ngày nhiều giờ "
-            "nhất trong kỳ đang xem), cộng **Kỷ lục** toàn thời gian (chung và riêng theo Nhóm/Dự án) gắn "
-            "thành chip huy chương trên Timeline. Xem chi tiết ở mục \"Bảng vàng\" trong tab Hôm nay.",
-            "**Ghi chú nhanh** — Shortcut trên iPhone gửi thẳng 1 dòng ý tưởng lên app, không cần mở trình "
-            "duyệt; mỗi dòng sửa/xoá được riêng, tách biệt với Ghi chú chính. Xem mục \"Ghi chú nhanh từ iOS\" "
-            "trong tab Hôm nay.",
-            "Kèm theo: gọn lại bố cục di động, sửa chip Bảng số liệu tràn khung khi giá trị dài.",
-        ], latest_pr_lines=46, total_lines_at_pr=6115)
-        guide_update("166-167", "Logo mới, đồng bộ phong cách nút gọn toàn app", [
-            "Đổi logo sang thiết kế mới, tự đổi màu theo đúng accent đang chọn thay vì 1 màu cố định.",
-            "Đồng bộ phong cách nút bấm gọn (ôm sát chữ, không cao quá khổ) cho toàn bộ nút trong tab Tuỳ biến.",
-        ], latest_pr_lines=79, total_lines_at_pr=6162)
-        guide_update("155,157", "Đồng bộ nhanh làm phương án mặc định", [
-            "Tab \"1. Dữ liệu đầu vào\" giờ ưu tiên **Đồng bộ nhanh** — 1 nút nạp cả Forest, Reminder và lịch "
-            "Work cùng lúc từ file Shortcut đã tải lên, thay vì phải làm 3 bước tay riêng lẻ.",
-            "3 cách tải tay cũ vẫn còn, gộp vào 1 khối thu gọn \"Dự phòng\" — dùng khi cần thao tác riêng lẻ.",
-        ], latest_pr_lines=338, total_lines_at_pr=5654)
-        guide_update("132,133,136,137", "Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc", [
-            "**Báo cáo → Năm** — bản tổng kết 1 năm cụ thể: hero số liệu, Biểu đồ lịch trọn năm, Đọc sách & "
-            "Gundam trong năm, Bảng số liệu.",
-            "**Tìm kiếm** — trang riêng tra từ khoá cùng lúc trên ghi chú, lịch hẹn Work và sách/Gundam đã "
-            "đọc·xem, gộp kết quả theo ngày.",
-            "**Chế độ tối** — toàn bộ giao diện (nút, biểu đồ, bảng nhiệt, ô ghi chú) có phiên bản màu riêng, "
-            "tự chọn theo cài đặt hệ thống.",
-            "**Nhịp làm việc** — mục mới trong Hướng dẫn, hướng dẫn cách dùng app theo ngày/tuần/tháng thay vì "
-            "chỉ mô tả tính năng.",
-        ], latest_pr_lines=79, total_lines_at_pr=5089)
-        guide_update("141-146", "Thêm phím tắt bàn phím cho toàn app", [
-            "1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm nay và focus thẳng vào ô soạn, "
-            "/ focus vào ô Tìm kiếm, Esc bỏ focus mà không xoá từ khoá đang gõ.",
-            "Xem đầy đủ danh sách phím tắt ở mục \"Phím tắt bàn phím\" trong tab Tổng quan.",
-        ], latest_pr_lines=15, total_lines_at_pr=5139)
-        guide_update("125,126,139,140", "Trang Hôm nay, 14 màu accent, logo & wordmark", [
-            "**Hôm nay** ra đời — tách từ lát cắt \"Ngày\" trong Báo cáo, thành mục đầu tiên và mặc định trên "
-            "thanh điều hướng vì đây là trang mở nhiều nhất mỗi ngày.",
-            "Bảng màu accent mở rộng lên **14 màu**, chọn qua bản xem trước tương tác, áp dụng ngay cho nút, "
-            "biểu đồ và bảng nhiệt toàn app.",
-            "Thêm logo và wordmark \"Forest Dashboard\" thay cho tiêu đề chữ trơn.",
-        ], latest_pr_lines=6, total_lines_at_pr=5089)
+    help_chapter(
+        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện",
+        "Mọi thứ điều khiển “app trông ra sao” và “dữ liệu đến từ đâu” gom về 1 trang, "
+        "đánh số 1–5 theo đúng thứ tự thao tác khi mới dùng: nạp → phân loại → kiểm tra → (giao diện) → sao lưu.")
+    help_block(
+        "<h4>Một màu accent, lan ra ba nơi, bằng ba cơ chế</h4>"
+        "<ul>"
+        "<li><b>Nút / khung viền / chip</b> — qua biến CSS <code>--accent</code>, toàn bộ stylesheet tham "
+        "chiếu biến này thay vì mã màu cứng.</li>"
+        "<li><b>Biểu đồ đơn sắc / bảng nhiệt</b> — không qua CSS mà qua Python: màu được đổi thành 1 giá trị "
+        "<b>hue</b>, mọi dải màu nhạt→đậm tự xoay theo — đổi accent là đổi tất cả biểu đồ cùng lúc.</li>"
+        "<li><b>Ô ghi chú (Quill)</b> — chạy trong iframe riêng, CSS trang chính không chạm tới được; app tự "
+        "tiêm 1 đoạn style vào trong iframe, lặp lại định kỳ để không mất khi Streamlit dựng lại iframe.</li>"
+        "</ul>"
+        "Chọn màu là áp ngay, không có nút Lưu — giá trị ghi vào bảng <code>settings</code> trên Supabase. "
+        "Bảng chưa tạo hay giá trị hỏng thì app tự rơi về màu “Chàm biển” mặc định, không crash.")
+    help_block(
+        "<h4>Dark mode — vì sao không có nút riêng</h4>"
+        "App tự đổi tối/sáng theo cài đặt hệ thống (hoặc lựa chọn thủ công trong menu ⋮ góc phải trên của "
+        "Streamlit). Streamlit chưa cho code đổi theme lúc đang chạy — app chỉ đọc được theme hiện tại rồi tô "
+        "đúng bộ màu tương ứng, kể cả biểu đồ, bảng nhiệt và ô ghi chú.")
+    help_block(
+        "<h4>Sao lưu — lớp an toàn thứ hai</h4>"
+        "Dữ liệu đã bền trên Supabase (không mất khi app khởi động lại/redeploy), nhưng <b>Sao lưu</b> đóng "
+        "gói mọi bảng thành 1 file .zip tải về làm lớp an toàn thứ hai — app tự nhắc khi lần sao lưu gần nhất "
+        "quá 30 ngày. <b>Khôi phục</b> và <b>Làm mới</b> đều ghi đè/xoá toàn bộ không hoàn tác được, nên bắt "
+        "buộc tick ô xác nhận trước khi nút bật lên; cả 3 nút cố ý tô đỏ, khác mọi nút trung tính còn lại. "
+        "Việc gán Dự án vào Nhóm (mục <b>2. Phân loại</b>) là tuỳ chọn để gọn báo cáo — Dự án chưa gán vẫn "
+        "hoạt động bình thường.")
+
+    # ==========================================
+    # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
+    # ==========================================
+    help_chapter(
+        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp",
+        "Những câu hay tự hỏi nhất khi nhìn số liệu — mỗi câu trả lời trong 30 giây.")
+    help_faq_item(
+        "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi không?",
+        "Không. Forest CSV nạp theo kiểu **cộng thêm có chống trùng**: phiên nào trùng giờ bắt đầu/kết thúc "
+        "với phiên đã có sẽ bị bỏ qua. Nạp cùng 1 file bao nhiêu lần kết quả vẫn y nguyên.")
+    help_faq_item(
+        "Tôi đã xoá 1 phiên — nạp lại CSV thì nó có “sống lại” không?",
+        "Không. Phiên bị xoá được ghi nhớ trong bảng `deleted_sessions` (xoá có trí nhớ) — mọi lần nạp CSV "
+        "sau đó đều bỏ qua đúng phiên này, kể cả khi file gốc vẫn còn nó.")
+    help_faq_item(
+        "Vì sao tháng này trông sụt mạnh so với tháng trước?",
+        "Kiểm tra trước hết: tháng này **đã đi hết chưa**. Với kỳ chưa kết thúc, app tự cắt baseline so sánh "
+        "về cùng số ngày đã trôi qua và ghi rõ bằng 1 dòng caption trên Bảng số liệu — nếu thấy caption đó, "
+        "con số so sánh đã công bằng rồi. Còn nếu kỳ đã trọn vẹn mà vẫn lệch: ±20% là dao động bình thường, "
+        "chỉ đáng hành động khi lệch lớn và bạn biết lý do.")
+    help_faq_item(
+        "Hai ngày cùng tổng giờ, vì sao “cảm giác” khác hẳn nhau?",
+        "Nhìn **Thanh phân bố độ dài phiên**: cùng 6 tiếng nhưng một ngày là 4 phiên dài 90 phút, ngày kia là "
+        "20 phiên vụn 15 phút — tổng bằng nhau, chất lượng tập trung rất khác. Muốn xem chi tiết hơn nữa có "
+        "**Phân bố độ dài phiên** (Báo cáo → Dự án) chia theo khoảng 5 phút.")
+    help_faq_item(
+        "Múi giờ nào quyết định “hôm nay”?",
+        "Giờ Việt Nam, luôn luôn — mọi phép tính ngày trong app đi qua cùng 1 hàm lấy giờ VN. Server chạy "
+        "UTC hay múi giờ nào khác cũng không làm ngày bị lệch sớm/muộn 7 tiếng.")
+    help_faq_item(
+        "Trích dẫn hôm nay đổi lúc nào?",
+        "Đúng 1 lần mỗi ngày, theo **ngày thật** hôm nay (không theo ngày đang xem trên trang). Tải lại trang, "
+        "lùi/tiến xem ngày khác — vẫn ra cùng 1 câu; sang ngày mới sẽ có câu mới. Câu được chọn ngẫu nhiên từ "
+        "toàn bộ trích dẫn Kindle đã nạp.")
+    help_faq_item(
+        "Gundam bị gán sai series thì sửa ở đâu?",
+        "Expander **“Sửa gán series tự động”** ở cuối trang Gundam (chỉ hiện khi có từ 2 series trở "
+        "lên): chọn lại series cho từng ngày rồi bấm Lưu gán series. Ngày sửa tay mang dấu “Gán tay” "
+        "— sửa lại trùng với suy luận tự động thì dấu này tự mất, coi như quay về tự động.")
+    help_faq_item(
+        "Đổi màu accent xong, biểu đồ có đổi theo không?",
+        "Có, ngay lập tức và tự động — kể cả Biểu đồ lịch, bảng nhiệt và ô ghi chú. Màu accent được đổi thành "
+        "1 giá trị hue rồi mọi dải màu đơn sắc xoay theo, nên không có biểu đồ nào bị “sót” màu cũ.")
+    help_faq_item(
+        "Phím tắt không chạy?",
+        "Gần như chắc chắn con trỏ đang nằm trong một ô nhập liệu — mọi phím tắt tự tắt khi đó (trừ "
+        "Ctrl/Cmd+Enter và Esc trong ô ghi chú). Bấm `Esc` hoặc click ra ngoài rồi thử lại; đang giữ "
+        "Ctrl/Cmd/Alt phím tắt cũng không nhận.")
+    help_faq_item(
+        "Ghi chú có mất khi app khởi động lại / redeploy không?",
+        "Không — mọi thứ nằm trên Supabase, không phụ thuộc vòng đời của app. Nhưng ghi chú là dữ liệu duy "
+        "nhất **không nạp lại được từ nguồn ngoài**, nên vẫn nên bấm Sao lưu định kỳ (app tự nhắc sau 30 "
+        "ngày) làm lớp an toàn thứ hai.")
+
+    # ==========================================
+    # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
+    # ==========================================
+    help_chapter(
+        "help-ch9", 9, "Changelog", "Nhật ký phát triển",
+        "Mỗi mục là 1 đợt PR đã merge, mới nhất trên cùng. Hai chip số dòng tra tay tại thời điểm viết "
+        "(app không gọi GitHub/git lúc chạy): tổng số dòng app.py tại commit merge, và số dòng thay đổi "
+        "của PR mới nhất trong đợt.")
+    HELP_CHANGELOG = [
+        dict(pr="182-184", pr_lines=69, total_lines=7690,
+             title="Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng",
+             bullets=[
+                 "**Trích dẫn hôm nay** — thẻ chuyển lên đầu trang Hôm nay (ngay dưới “Ngày đang xem”), "
+                 "nền accent đặc, chữ trích dẫn cỡ lớn kiểu chữ sách, kèm tên tác giả cạnh tên sách.",
+                 "**Yêu thích** — bấm ★ trên bất kỳ trích dẫn/ghi chú Kindle nào để lưu lại, xem gộp toàn bộ ở "
+                 "sub-tab “Yêu thích” riêng (trang Sách) — mỗi trích dẫn nằm trong 1 thẻ nền riêng cho "
+                 "dễ đọc, thay vì hàng chữ trần.",
+                 "**Import Kindle thông minh hơn** — tự nhận diện và gộp các bản “nháp” do tô highlight "
+                 "bằng bút cảm ứng sinh ra (nhiều dòng gần giống nhau, cách nhau vài giây, câu sau dài hơn câu "
+                 "trước), chỉ giữ lại bản đầy đủ nhất thay vì nhân đôi thành nhiều trích dẫn.",
+                 "Kèm theo: sửa vài lỗi giao diện (tab Gundam mất kiểu dáng, nút ★ chồng lên chữ), dọn heading "
+                 "dư thừa ở nhiều bảng số liệu, chữ Thứ trong Nhật ký đổi từ số sang chữ đầy đủ (Thứ Tư thay vì "
+                 "Thứ 4).",
+             ]),
+        dict(pr="181", pr_lines=960, total_lines=7448,
+             title="Rà soát & đơn giản hoá theo phản hồi thực tế",
+             bullets=[
+                 "Bớt: Top 3 Danh mục/Dự án ở Hôm nay/Báo cáo→Tuần, biểu đồ Gantt tự vẽ ở Sách/Gundam→Tổng "
+                 "quan, vài phím tắt ít dùng (Shift+1-5, [ ], f/r/l).",
+                 "Thêm: nút “Gộp” ghi chú nhanh vào ghi chú chính, sửa gán series Gundam tay khi suy "
+                 "luận tự động đoán sai, view “Chỉ số bất thường” ở lần khám Sức khoẻ mới nhất, Tìm "
+                 "kiếm mở rộng sang Ghi chú nhanh, checkbox xác nhận cho “Khôi phục”, gộp 2 UI đồng bộ "
+                 "CalDAV thành 1.",
+             ]),
+        dict(pr="158-165", pr_lines=46, total_lines=6115,
+             title="Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS",
+             bullets=[
+                 "**Bảng vàng** — Bảng số liệu mỗi trang Báo cáo giờ có thêm “Ngày nổi bật” (top ngày "
+                 "nhiều giờ nhất trong kỳ đang xem), cộng **Kỷ lục** toàn thời gian (chung và riêng theo "
+                 "Nhóm/Dự án) gắn thành chip huy chương trên Timeline.",
+                 "**Ghi chú nhanh** — Shortcut trên iPhone gửi thẳng 1 dòng ý tưởng lên app, không cần mở trình "
+                 "duyệt; mỗi dòng sửa/xoá được riêng, tách biệt với Ghi chú chính.",
+                 "Kèm theo: gọn lại bố cục di động, sửa chip Bảng số liệu tràn khung khi giá trị dài.",
+             ]),
+        dict(pr="166-167", pr_lines=79, total_lines=6162,
+             title="Logo mới, đồng bộ phong cách nút gọn toàn app",
+             bullets=[
+                 "Đổi logo sang thiết kế mới, tự đổi màu theo đúng accent đang chọn thay vì 1 màu cố định.",
+                 "Đồng bộ phong cách nút bấm gọn (ôm sát chữ, không cao quá khổ) cho toàn bộ nút trong tab "
+                 "Tuỳ biến.",
+             ]),
+        dict(pr="155,157", pr_lines=338, total_lines=5654,
+             title="Đồng bộ nhanh làm phương án mặc định",
+             bullets=[
+                 "Tab “1. Dữ liệu đầu vào” giờ ưu tiên **Đồng bộ nhanh** — 1 nút nạp cả Forest, "
+                 "Reminder và lịch Work cùng lúc từ file Shortcut đã tải lên, thay vì phải làm 3 bước tay "
+                 "riêng lẻ.",
+                 "3 cách tải tay cũ vẫn còn, gộp vào 1 khối thu gọn “Dự phòng” — dùng khi cần thao "
+                 "tác riêng lẻ.",
+             ]),
+        dict(pr="132,133,136,137", pr_lines=79, total_lines=5089,
+             title="Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc",
+             bullets=[
+                 "**Báo cáo → Năm** — bản tổng kết 1 năm cụ thể: hero số liệu, Biểu đồ lịch trọn năm, Đọc sách "
+                 "& Gundam trong năm, Bảng số liệu.",
+                 "**Tìm kiếm** — trang riêng tra từ khoá cùng lúc trên ghi chú, lịch hẹn Work và sách/Gundam "
+                 "đã đọc·xem, gộp kết quả theo ngày.",
+                 "**Chế độ tối** — toàn bộ giao diện (nút, biểu đồ, bảng nhiệt, ô ghi chú) có phiên bản màu "
+                 "riêng, tự chọn theo cài đặt hệ thống.",
+                 "**Nhịp làm việc** — mục mới trong Hướng dẫn, hướng dẫn cách dùng app theo ngày/tuần/tháng "
+                 "thay vì chỉ mô tả tính năng.",
+             ]),
+        dict(pr="141-146", pr_lines=15, total_lines=5139,
+             title="Thêm phím tắt bàn phím cho toàn app",
+             bullets=[
+                 "1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm nay và focus thẳng vào ô "
+                 "soạn, / focus vào ô Tìm kiếm, Esc bỏ focus mà không xoá từ khoá đang gõ.",
+                 "Xem đầy đủ danh sách phím tắt ở chương “Trong ngày” của trang Trợ giúp này.",
+             ]),
+        dict(pr="125,126,139,140", pr_lines=6, total_lines=5089,
+             title="Trang Hôm nay, 14 màu accent, logo & wordmark",
+             bullets=[
+                 "**Hôm nay** ra đời — tách từ lát cắt “Ngày” trong Báo cáo, thành mục đầu tiên và "
+                 "mặc định trên thanh điều hướng vì đây là trang mở nhiều nhất mỗi ngày.",
+                 "Bảng màu accent mở rộng lên **14 màu**, chọn qua bản xem trước tương tác, áp dụng ngay cho "
+                 "nút, biểu đồ và bảng nhiệt toàn app.",
+                 "Thêm logo và wordmark “Forest Dashboard” thay cho tiêu đề chữ trơn.",
+             ]),
+    ]
+    render_help_changelog(HELP_CHANGELOG)

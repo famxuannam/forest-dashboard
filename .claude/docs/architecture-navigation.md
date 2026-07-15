@@ -39,5 +39,5 @@ set trực tiếp từ phía JS.
 2. Thêm nhánh `elif` xử lý render — vị trí trong chuỗi if/elif không quan trọng, chỉ cần tồn tại.
 3. Nếu trang mới cần tham số riêng qua URL, làm theo đúng pattern seed-từ-query-param → ghi lại
    vào `session_state`/`query_params` — không tự chế cơ chế state khác.
-4. Cập nhật tab "Hướng dẫn" (`guide_item()`) nếu trang có ý nghĩa với người dùng cuối — xem
-   `ui-components.md`.
+4. Cập nhật trang "Trợ giúp" (thêm nội dung vào chương phù hợp, và/hoặc 1 mục `HELP_CHANGELOG`)
+   nếu trang có ý nghĩa với người dùng cuối — xem `ui-components.md`.

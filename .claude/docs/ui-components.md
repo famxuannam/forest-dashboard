@@ -26,22 +26,31 @@ giá trị mặc định của hàm vì điều đó ảnh hưởng TẤT CẢ n
 Đừng dùng `st.metric()` cho số liệu đơn giản; xem phần "Bẫy: `st.metric` bị ẩn toàn cục" trong
 `theming.md` để biết cách thay thế đúng.
 
-## Tab "Hướng dẫn": `guide_item()` và `guide_update()`
+## Trang "Trợ giúp" (key nav `"Hướng dẫn"`): tour cuộn dọc, helpers `help_*`
 
-- `guide_item(image, title, markdown_body, where=..., tip=...)` — 1 mục giải thích tính năng, có
-  ảnh minh hoạ (từ `assets/help/`), dùng cho nội dung "cách dùng" ổn định lâu dài.
-- `guide_update(pr_no, title, bullets, latest_pr_lines=None, total_lines_at_pr=None)` — 1 mục
-  trong sub-tab "Cập nhật", không có ảnh (vì UI đổi nhanh qua nhiều bản nhỏ, chụp ảnh sẽ lỗi thời
-  ngay), chỉ tiêu đề + số PR + gạch đầu dòng. Thêm 1 mục mới ở đây khi thay đổi có ảnh hưởng thấy
-  được tới người dùng — số `pr_no` phải khớp đúng số PR thật trên GitHub sau khi merge (không đoán
-  số trước khi PR tồn tại). 2 tham số cuối tuỳ chọn, hiện thành chip nhỏ cạnh nhãn "PR #...", tra
-  tay qua GitHub API/`git show <commit>:app.py | wc -l` tại thời điểm viết mục — KHÔNG tự tính lại
-  lúc runtime: `total_lines_at_pr` = tổng số dòng `app.py` tại commit merge PR mới nhất trong cụm
-  (quy mô toàn bộ mã nguồn theo thời gian), `latest_pr_lines` = số dòng đổi (additions+deletions)
-  của riêng PR mới nhất đó (quy mô 1 đợt thay đổi).
+Trang Trợ giúp là 1 trang cuộn dọc theo hành trình sử dụng (hero + mục lục chip anchor + 9
+chương), KHÔNG dùng screenshot — mọi minh hoạ vẽ thuần HTML/CSS bằng token màu nên tự đúng theme.
+Helpers (đều nằm cạnh nhau trong `app.py`, CSS namespace `help-` trong khối CSS chính):
 
-Nội dung tab "Hướng dẫn" là tài liệu người dùng cuối, không phải code phụ trợ — chỉ sửa khi thay
-đổi thực sự ảnh hưởng tới trải nghiệm người dùng, không sửa như tác dụng phụ của 1 việc khác.
+- `help_chapter(anchor, num, kicker, title, lead=None)` — header 1 chương, `anchor` khớp chip mục
+  lục `#help-chN` ở hero.
+- `help_block(html)` — 1 thẻ nội dung `.help-card`; `html` phải là chuỗi liền mạch (không dòng
+  trống giữa khối, markdown parser sẽ cắt).
+- `help_table(headers, rows)` / `help_kbd(*keys)` — bảng cheat-sheet và dãy phím keycap, trả về
+  string HTML để nhúng vào `help_block()`.
+- `help_faq_item(question, answer_md)` — 1 câu hỏi FAQ dạng `st.expander` (không đánh số).
+- `render_help_changelog(entries)` — timeline "Nhật ký phát triển", `entries` là list dict
+  `HELP_CHANGELOG` khai báo ngay trong nhánh dispatch. Thêm 1 mục mới (lên đầu list) khi thay đổi
+  có ảnh hưởng thấy được tới người dùng — `pr` phải khớp đúng số PR thật trên GitHub sau khi merge
+  (không đoán số trước khi PR tồn tại). 2 khoá số liệu tuỳ chọn hiện thành chip, tra tay tại thời
+  điểm viết mục — KHÔNG tự tính lại lúc runtime: `total_lines` = tổng số dòng `app.py` tại commit
+  merge PR mới nhất trong cụm (`git show <commit>:app.py | wc -l`), `pr_lines` = số dòng đổi
+  (additions+deletions, tra qua GitHub API) của riêng PR mới nhất đó.
+
+Nội dung trang Trợ giúp là tài liệu người dùng cuối, không phải code phụ trợ — chỉ sửa khi thay
+đổi thực sự ảnh hưởng tới trải nghiệm người dùng, không sửa như tác dụng phụ của 1 việc khác. Khi
+sửa, thêm nội dung vào đúng chương theo hành trình (buổi sáng → trong ngày → cuối ngày → review →
+nguồn phụ → đồng bộ → tuỳ biến → FAQ → changelog) thay vì mở chương mới.
 
 ## Bảng số liệu dạng heat table (`DTBL_CSS`)
 
