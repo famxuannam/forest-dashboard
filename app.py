@@ -185,7 +185,9 @@ GUNDAM_LABELS = dict(
 VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
            "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
 
-# Bảng màu phong cách Apple / Latte sáng
+# Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
+# CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
+# Nhật ký đọc sách) không thuộc phạm vi đổi hệ màu "Sổ Tay".
 MAC_COLORS = [
     "#007aff", # Blue (Primary)
     "#34c759", # Green
@@ -205,28 +207,24 @@ MAC_COLORS = [
     "#8e8e93", # Gray
 ]
 
+# Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Danh mục/Dự án, xem build_color_map())
+# -- hệ "Sổ Tay": đất nung/nghệ/rêu/chàm biển/chàm/mận + 2 màu bổ sung để đủ phân biệt khi nhiều
+# Danh mục/Dự án hơn 6. KHÔNG đổi theo accent đang chọn (khác heatmap/lịch, xem _teal_shades())
+# -- giữ luôn dễ phân biệt dù người dùng chọn accent nào.
+CHART_COLORS = ["#b5502e", "#c98a1f", "#5f7a41", "#1f6f6a", "#3d4f8f", "#7a3b5e", "#d8674a", "#8a9a6b"]
 
-# 14 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn từ bản mockup --
-# xếp theo thứ tự hue tăng dần (đỏ/cam/vàng -> xanh lá -> xanh dương -> tím) cho có thứ tự hợp
-# lý khi hiện thành lưới, riêng "Than chì" (gần như xám) xếp cuối vì không thuộc dải màu nào.
-# Lưu ý: 3 màu đầu (Hồng đào/Cam cháy/Vàng nắng) CỐ Ý trùng vùng tông app đang dùng cho cảnh báo
-# (cam, NUDGE_TONES "warn") / chuỗi đứt (đỏ, "neutral") -- người dùng đã xác nhận muốn có nhóm
-# màu này dù biết sẽ trông gần giống 2 trạng thái đó nếu chọn làm accent.
+
+# 6 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
+# đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
+# git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới).
 ACCENT_PRESETS = {
-    "Hồng đào": "#e25a66",
-    "Cam cháy": "#dc6018",
-    "Vàng nắng": "#e7bf23",
-    "Xanh lá": "#34c759",
-    "Ngọc lục bảo": "#00b386",
-    "Bạc hà đậm": "#0a7671",
-    "Xanh ngọc": "#00a3ad",      # mặc định, giữ NGUYÊN màu hiện tại
-    "Xanh lơ": "#32ade6",
-    "Xanh dương": "#007aff",
-    "Xanh hải quân đậm": "#203a6f",
-    "Chàm": "#5856d6",
-    "Tím than": "#2d2768",
-    "Tím": "#af52de",
-    "Than chì": "#6c737a",
+    "Đất nung": "#b5502e",
+    "Nghệ": "#c98a1f",
+    "Rêu": "#5f7a41",
+    "Chàm biển": "#1f6f6a",      # mặc định
+    "Chàm": "#3d4f8f",
+    "Mận": "#7a3b5e",
 }
 
 
@@ -316,12 +314,14 @@ try:
 except Exception:
     IS_DARK = False
 
-# Accent (màu nhấn) đang chọn -- fallback Teal mặc định nếu chưa từng chọn hoặc lỗi. PHẢI tính
-# TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó là câu lệnh cấp module chạy ngay khi
-# import, sớm hơn cả st.set_page_config()/cổng kiểm tra secrets Supabase.
-_accent_hex = _cached_settings().get("accent_hex", "#00a3ad")
-if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi tay) -> fallback an toàn
-    _accent_hex = "#00a3ad"
+# Accent (màu nhấn) đang chọn -- fallback "Chàm biển" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
+# khi giá trị đã lưu là 1 trong các preset cũ đã bị bỏ lúc rút gọn còn 6 màu -- không crash, chỉ
+# lặng lẽ rơi về mặc định mới). PHẢI tính TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó
+# là câu lệnh cấp module chạy ngay khi import, sớm hơn cả st.set_page_config()/cổng kiểm tra
+# secrets Supabase.
+_accent_hex = _cached_settings().get("accent_hex", "#1f6f6a")
+if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi tay/preset cũ đã bỏ) -> fallback an toàn
+    _accent_hex = "#1f6f6a"
 ACCENT = _accent_hex
 ACCENT_RGB = _hex_rgb_str(ACCENT)
 # ACCENT_DARK = "accent tương phản trên nền tint accent nhạt". Ở dark mode, nền tint đó lại
@@ -333,7 +333,8 @@ TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng T
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
-    """Sinh n sắc độ teal (cùng hue với accent #00a3ad) từ nhạt (l_lo) đến đậm (l_hi)
+    """Sinh n sắc độ (cùng hue với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại từ thời accent
+    mặc định là Xanh ngọc #00a3ad, nay chỉ còn là tên gọi lịch sử) từ nhạt (l_lo) đến đậm (l_hi)
     -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, Giờ tập trung theo thứ, thanh Phân bổ
     độ dài phiên) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
     Mặc định (không truyền l_lo/l_hi) ĐẢO CHIỀU ramp khi dark: trên nền tối, teal L thấp
@@ -348,10 +349,11 @@ def _teal_shades(n, l_lo=None, l_hi=None):
 
 
 def build_color_map(names):
-    """Gán màu cố định cho từng tên (Danh mục/Dự án). Ưu tiên bảng màu cơ sở;
-    nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
+    """Gán màu cố định cho từng tên (Danh mục/Dự án). Ưu tiên bảng màu cơ sở (CHART_COLORS,
+    CỐ ĐỊNH -- không đổi theo accent đang chọn, để biểu đồ luôn dễ phân biệt dù accent là màu
+    gì); nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
     (golden angle) để không bao giờ bị trùng màu, vẫn ổn định theo tên."""
-    colors = list(MAC_COLORS)
+    colors = list(CHART_COLORS)
     for k in range(len(names) - len(colors)):
         h = (0.61 + (k + 1) * 0.6180339887) % 1.0  # rải đều sắc độ
         colors.append(_hsl_hex(h, 0.62, 0.55))
@@ -2044,7 +2046,7 @@ def render_session_bar(df):
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
         "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
-        f"<div style='display:flex;height:24px;border-radius:8px;overflow:hidden;'>{seg}</div>"
+        f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
         unsafe_allow_html=True,
@@ -2645,7 +2647,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     track_min = max(len(months) * 70, 320)
     st.markdown(f"""
 <style>
-.rtl-card{{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
+.rtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:16px 24px;margin-top:14px;}}
 .rtl-legend{{display:flex;gap:16px;margin:0 0 10px {name_w + 8}px;font-size:12px;color:var(--text-2);}}
 .rtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 .rtl-body{{display:flex;align-items:flex-start;}}
@@ -2907,7 +2909,7 @@ def render_day_timeline(day_df, sel, df_all):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
@@ -3859,7 +3861,7 @@ def render_calendar_grid(scope_df, full_df):
 
 DTBL_CSS = """
 <style>
-.dtbl-wrap { overflow:auto; max-height:560px; border-radius:16px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
 .dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dtbl thead th { position:sticky; top:0; z-index:2; background:var(--bg); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
@@ -4190,76 +4192,43 @@ def frag_period_table(scope_df, key):
     render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 
 
-# --- LOGO: mark "vòng tuổi cây" (growth ring) skeuomorphic + wordmark, thiết kế nhập từ Claude
-# Design onboard (xem Forest_Dashboard_Logo_v2_Skeuomorphic_standalone.html) -- bản v2, thay bản
-# v1 phẳng (chỉ 3 vòng dash, không nền/không bóng): khối bo tròn kiểu iOS 6 phủ gradient dọc
-# sáng->tối + viền đậm + viền sáng mảnh bên trong + dải bóng (gloss) chéo phía trên, 3 vòng tuổi
-# cây (giữ nguyên tỉ lệ bán kính/dash bản v1, gợi ẩn dụ "mỗi vòng là một lần nhìn lại") vẽ 2 lớp:
-# lớp bóng đổ tối màu lệch xuống 1.5px (hiệu ứng khắc chìm) rồi lớp trắng nổi đè lên trên. Wordmark
-# "Forest" bằng font display Instrument Serif + nhãn "Dashboard" nhỏ/nhạt bên cạnh, giữ nguyên
-# không đổi (chỉ đổi mark). Cần dùng được ở CẢ 2 nơi: trang đăng nhập (chạy TRƯỚC khối inject :root
-# CSS var) và title chính (chạy SAU) -- nên tự chứa @font-face riêng + chọn màu chữ bằng literal
-# Python theo IS_DARK, không phụ thuộc var(--text)/var(--accent).
+# --- LOGO: mark "nhịp phiên" (session-rhythm bars) phẳng + wordmark, hệ thiết kế "Sổ Tay" (xem
+# design handoff) -- thay bản v2 skeuomorphic (khối bo tròn kiểu iOS 6 phủ gradient/gloss + 3
+# vòng tuổi cây khắc chìm): mark mới là 1 khối vuông bo góc TÔ ĐẶC 1 màu ACCENT (không gradient,
+# không gloss, không drop-shadow), chứa 5 vạch dọc cao thấp lệch nhau mô phỏng nhịp phiên tập
+# trung trong ngày -- ẩn dụ dữ liệu thay cho ẩn dụ "cây". Wordmark "Forest" đổi font display từ
+# Instrument Serif -> Source Serif 4 (weight 500), nhãn "Dashboard" nhỏ/nhạt bên cạnh giữ nguyên.
+# Cần dùng được ở CẢ 2 nơi: trang đăng nhập (chạy TRƯỚC khối inject :root CSS var) và title chính
+# (chạy SAU) -- nên tự chứa @font-face riêng + chọn màu chữ bằng literal Python theo IS_DARK,
+# không phụ thuộc var(--text)/var(--accent).
 @st.cache_resource
 def _logo_font_b64():
-    with open(os.path.join("assets", "fonts", "InstrumentSerif-Regular-latin.woff2"), "rb") as f:
+    with open(os.path.join("assets", "fonts", "SourceSerif4-Medium-latin.woff2"), "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 _LOGO_FONT_FACE = (
-    "@font-face { font-family:'Instrument Serif'; font-style:normal; font-weight:400; "
+    "@font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:500; "
     f"font-display:swap; src:url(data:font/woff2;base64,{_logo_font_b64()}) format('woff2'); "
     "unicode-range:U+0000-00FF,U+2018-201F; }"
 )
 
 
 def _logo_mark_svg(size):
-    """SVG mark skeuomorphic, TỰ ĐỔI theo ACCENT đang chọn (không hardcode teal của file thiết kế
-    gốc -- tái dùng _brighten()/_darken() đã có sẵn cho mọi màu accent khác trong app). Tỉ lệ
-    sáng/tối giữ tương đương bản thiết kế gốc (tính từ Xanh ngọc #00a3ad mặc định): fill trên
-    sáng hơn ACCENT (_brighten target_l=0.60), fill dưới tối hơn (_darken factor=0.65), viền +
-    vòng bóng đổ tối hơn nữa (_darken factor=0.42, dùng chung 1 màu cho cả viền lẫn vòng bóng --
-    2 màu này gần nhau tới mức khó phân biệt ở size nhỏ trong bản thiết kế gốc). viewBox cố định
-    0 0 100 100 -- size chỉ đổi width/height, không đổi hình học/tỉ lệ nét."""
-    top = _brighten(ACCENT, 0.60)
-    bottom = _darken(ACCENT, 0.65)
-    dark = _darken(ACCENT, 0.42)
-    shadow_dy = max(1, round(size / 34))
-    shadow_blur = max(1, round(size / 22))
+    """SVG mark phẳng "nhịp phiên" (5 vạch dọc), TỰ ĐỔI theo ACCENT đang chọn -- khối nền tô đặc
+    ACCENT (không gradient), viền 1.5px màu ACCENT đậm hơn (_darken factor=0.75, đủ tương phản để
+    thấy viền trên nền ACCENT nhạt mà không quá gắt như bản skeuomorphic cũ), 5 vạch trắng-ngà
+    (màu {{card}} light -- '#fdfbf5', luôn sáng hơn mọi ACCENT nên không cần đổi theo IS_DARK)
+    cao thấp so le. viewBox cố định 0 0 44 44 -- size chỉ đổi width/height, không đổi hình học."""
+    dark = _darken(ACCENT, 0.75)
+    bars = [(9, 24, 11), (15.5, 17, 18), (22, 12, 23), (28.5, 19, 16), (35, 26, 9)]
+    bar_svg = "".join(
+        f"<rect x='{x}' y='{y}' width='4' height='{h}' rx='1.5' fill='#fdfbf5'></rect>"
+        for x, y, h in bars
+    )
     return (
-        f"<svg width='{size}' height='{size}' viewBox='0 0 100 100' "
-        f"style='filter:drop-shadow(0 {shadow_dy}px {shadow_blur}px rgba(0,0,0,0.35));'>"
-        "<defs>"
-        f"<linearGradient id='fdFill{size}' x1='0' y1='0' x2='0' y2='1'>"
-        f"<stop offset='0' stop-color='{top}'></stop><stop offset='1' stop-color='{bottom}'></stop>"
-        "</linearGradient>"
-        f"<linearGradient id='fdGloss{size}' x1='0' y1='0' x2='0' y2='1'>"
-        "<stop offset='0' stop-color='#ffffff' stop-opacity='0.5'></stop>"
-        "<stop offset='1' stop-color='#ffffff' stop-opacity='0.06'></stop>"
-        "</linearGradient>"
-        "</defs>"
-        f"<rect x='4' y='4' width='92' height='92' rx='22' fill='url(#fdFill{size})' "
-        f"stroke='{dark}' stroke-width='1.5'></rect>"
-        "<rect x='5.5' y='5.5' width='89' height='89' rx='20.5' fill='none' "
-        "stroke='#ffffff' stroke-opacity='0.35' stroke-width='1.5'></rect>"
-        f"<g transform='translate(0,1.5)' stroke='{dark}' stroke-opacity='0.5' fill='none' stroke-linecap='round'>"
-        "<circle cx='50' cy='50' r='13' stroke-width='7' stroke-dasharray='50.6 31.1' "
-        "transform='rotate(-30 50 50)'></circle>"
-        "<circle cx='50' cy='50' r='24' stroke-width='5.5' stroke-dasharray='75.4 75.4' "
-        "transform='rotate(140 50 50)'></circle>"
-        "<circle cx='50' cy='50' r='34' stroke-width='4.5' stroke-dasharray='149.5 64.1' "
-        "transform='rotate(250 50 50)'></circle>"
-        "</g>"
-        "<g stroke='#ffffff' fill='none' stroke-linecap='round'>"
-        "<circle cx='50' cy='50' r='13' stroke-width='7' stroke-dasharray='50.6 31.1' "
-        "transform='rotate(-30 50 50)'></circle>"
-        "<circle cx='50' cy='50' r='24' stroke-width='5.5' stroke-opacity='0.8' stroke-dasharray='75.4 75.4' "
-        "transform='rotate(140 50 50)'></circle>"
-        "<circle cx='50' cy='50' r='34' stroke-width='4.5' stroke-opacity='0.6' stroke-dasharray='149.5 64.1' "
-        "transform='rotate(250 50 50)'></circle>"
-        "</g>"
-        "<path d='M 8 42 C 8 20, 20 8, 42 8 L 58 8 C 80 8, 92 20, 92 42 L 92 46 C 74 56, 30 56, 8 46 Z' "
-        f"fill='url(#fdGloss{size})'></path>"
-        "</svg>"
+        f"<svg width='{size}' height='{size}' viewBox='0 0 44 44'>"
+        f"<rect x='1' y='1' width='42' height='42' rx='9' fill='{ACCENT}' stroke='{dark}' stroke-width='1.5'></rect>"
+        f"{bar_svg}</svg>"
     )
 
 
@@ -4268,15 +4237,12 @@ def _wordmark_html(layout="header"):
     ("header", nằm ngang -- mark bên trái, cụm chữ Forest/Dashboard xếp dọc bên phải, gọn theo
     chiều cao vì header lặp lại trên MỌI trang, khác login chỉ hiện 1 lần nên giữ xếp dọc to).
 
-    Span "Forest" dùng line-height:1.5 (KHÔNG phải 1) -- Instrument Serif có cap-height/overshoot
-    của chữ hoa cao hơn hẳn chữ thường; line-height:1 để lại quá ít khoảng đệm phía trên nên trên
-    mobile Safari (đã xác nhận qua ảnh chụp thật) chữ "F" bị cắt cụt/vỡ nét phần trên, đọc nhầm
-    thành "rorest" -- Chromium desktop không tái hiện được lỗi này (khác biệt engine WebKit/Blink
-    khi xử lý half-leading của font có ascent bất thường), nên phải rộng rãi hơn số 1 an toàn thay
-    vì tin vào việc test trên Chromium là đủ. Từng thử 1.25 (PR #153) nhưng vẫn tái phát trên 1 số
-    máy/cỡ chữ, nên nâng lên 1.5 + thêm transform:translateZ(0) ép WebKit tạo compositing layer
-    riêng cho span này (khắc phục kinh điển cho lỗi WebKit "xé" chữ ở ranh giới sub-pixel, tách
-    rời 1 nét của glyph thành mảng riêng thay vì cắt cụt gọn gàng)."""
+    Span "Forest" vẫn giữ line-height:1.5 (KHÔNG phải 1) + transform:translateZ(0) dù đã đổi font
+    từ Instrument Serif sang Source Serif 4 -- workaround này chống lỗi WebKit "xé"/cắt cụt nét
+    chữ hoa ở ascent bất thường trên mobile Safari (đã xác nhận qua ảnh chụp thật với Instrument
+    Serif, Chromium desktop không tái hiện được vì khác engine xử lý half-leading), giữ phòng ngừa
+    tiếp cho Source Serif 4 (cũng là serif có cap-height/overshoot rõ, cùng lớp rủi ro) thay vì bỏ
+    workaround rồi phải tìm lại lỗi từ đầu nếu nó tái phát."""
     _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
     _text2 = "#98989d" if IS_DARK else "#6e6e73"
     if layout == "login":
@@ -4286,7 +4252,7 @@ def _wordmark_html(layout="header"):
             f"<div style='display:flex;flex-direction:column;align-items:center;gap:{gap_outer}px;'>"
             f"{_logo_mark_svg(mark)}"
             "<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
-            f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
+            f"<span style=\"font-family:'Source Serif 4',serif;font-weight:500;font-size:{forest_sz}px;"
             f"color:{_text};letter-spacing:0.01em;line-height:1.5;-webkit-font-smoothing:antialiased;"
             "transform:translateZ(0);display:inline-block;\">Forest</span>"
             f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
@@ -4299,7 +4265,7 @@ def _wordmark_html(layout="header"):
         f"gap:{gap_outer}px;'>"
         f"{_logo_mark_svg(mark)}"
         "<div style='display:flex;flex-direction:column;gap:2px;'>"
-        f"<span style=\"font-family:'Instrument Serif',serif;font-size:{forest_sz}px;"
+        f"<span style=\"font-family:'Source Serif 4',serif;font-weight:500;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1.5;-webkit-font-smoothing:antialiased;"
         "transform:translateZ(0);display:inline-block;\">Forest</span>"
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
@@ -4359,25 +4325,54 @@ if not _has_supabase_secrets:
         "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`) để đọc/ghi dữ liệu.")
     st.stop()
 
+# Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang Manrope thật
+# (tự host, không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác).
+# Biến trục (variable font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng
+# font-weight -- đỡ payload hơn hẳn vì app dùng nhiều mức đậm nhạt khác nhau (400/500/600/700/800)
+# rải khắp label/nút/chip/nav. 3 file riêng theo unicode-range (latin/latin-ext/vietnamese, bỏ
+# cyrillic/hy lạp không dùng tới) đúng cách Google Fonts tự chia subset -- BẮT BUỘC có "vietnamese"
+# (khác _LOGO_FONT_FACE chỉ cần "latin" vì wordmark "Forest"/"Dashboard" là tiếng Anh) vì font
+# này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app.
+@st.cache_resource
+def _body_font_b64():
+    out = {}
+    for name in ("latin", "latin-ext", "vietnamese"):
+        with open(os.path.join("assets", "fonts", f"Manrope-Variable-{name}.woff2"), "rb") as f:
+            out[name] = base64.b64encode(f.read()).decode()
+    return out
+
+_BODY_FONT_RANGES = {
+    "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+    "latin-ext": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+    "vietnamese": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+}
+_body_font_b64_cache = _body_font_b64()
+_BODY_FONT_FACE = "".join(
+    "@font-face { font-family:'Manrope'; font-style:normal; font-weight:200 800; "
+    f"font-display:swap; src:url(data:font/woff2;base64,{_body_font_b64_cache[_name]}) format('woff2'); "
+    f"unicode-range:{_ranges}; }}"
+    for _name, _ranges in _BODY_FONT_RANGES.items()
+)
+
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
-# con + f-string HTML rải rác) -- (light, dark), bảng dark theo đúng systemGray của Apple (app
-# đã tình cờ dùng đúng các mã hex đó ở light: #d1d1d6=gray4, #e5e5ea=gray5, #aeaeb2=gray2,
-# #c7c7cc=gray3...) nên có sẵn cặp tương ứng chuẩn, không phải tự chế màu mới.
+# con + f-string HTML rải rác) -- (light, dark). Hệ "Sổ Tay": giấy ấm/ngà thay vì xám hệ thống
+# iOS -- không còn đối xứng với bảng systemGray của Apple như bản cũ, mỗi cặp light/dark ở đây
+# chọn tay theo đúng bản thiết kế "Sổ Tay" (xem design handoff).
 _TOK = {
-    "bg":      ("#f5f5f7", "#1c1c1e"),
-    "card":    ("#ffffff", "#2c2c2e"),
-    "card-tl": ("rgba(255,255,255,0.8)", "rgba(58,58,60,0.8)"),   # nền input mờ (date/select)
-    "text":    ("#1d1d1f", "#f2f2f7"),
-    "text-2":  ("#86868b", "#98989d"),   # nhãn phụ (gộp cả #6e6e73/#9a9aa0 cũ)
-    "text-3":  ("#aeaeb2", "#636366"),   # nhãn mờ (gộp cả #a7a7ac cũ)
-    "text-4":  ("#c7c7cc", "#48484a"),   # rất mờ (gộp cả #cfcfd4/#d2d2d7 cũ)
-    "border":  ("#d1d1d6", "#3a3a3c"),
-    "chip":    ("#f0f1f4", "#3a3a3c"),   # nền chip (gộp cả #f7f7f9/#eef0f2/#fafafa cũ)
-    "divider": ("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)"),   # gộp mọi rgba(0,0,0,0.05-0.14)
+    "bg":      ("#f3efe4", "#1a1712"),
+    "card":    ("#fdfbf5", "#262117"),
+    "card-tl": ("rgba(253,251,245,0.85)", "rgba(38,33,23,0.85)"),   # nền input mờ (date/select)
+    "text":    ("#211c13", "#f1ece0"),
+    "text-2":  ("#6f6650", "#b3a688"),   # nhãn phụ (gộp cả #6e6e73/#9a9aa0 cũ)
+    "text-3":  ("#a39877", "#857a5f"),   # nhãn mờ (gộp cả #a7a7ac cũ)
+    "text-4":  ("#cabf9d", "#4f483a"),   # rất mờ (gộp cả #cfcfd4/#d2d2d7 cũ)
+    "border":  ("#ddd3b8", "#3c3628"),
+    "chip":    ("#ece4d0", "#322c20"),   # nền chip (gộp cả #f7f7f9/#eef0f2/#fafafa cũ)
+    "divider": ("rgba(33,28,19,0.14)", "rgba(255,255,255,0.12)"),   # gộp mọi rgba(0,0,0,0.05-0.14)
 }
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
-    f"<style>:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"<style>{_BODY_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
@@ -4386,20 +4381,30 @@ st.markdown(
     """
     <style>
     /* Đặt font trên html/body để kế thừa xuống; KHÔNG đặt !important rộng
-       lên mọi phần tử để tránh đè font của icon Material (Material Symbols). */
+       lên mọi phần tử để tránh đè font của icon Material (Material Symbols). Manrope tự host
+       qua _BODY_FONT_FACE (tiêm ở khối <style> ngay phía trên) -- fallback hệ thống giữ nguyên
+       phòng trường hợp @font-face lỗi/chưa kịp tải. */
     html, body, .stApp {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
+    /* Nền "giấy kẻ ngang" hệ "Sổ Tay": 1 vạch lề dọc màu accent (mô phỏng lề đỏ vở học sinh,
+       cách mép trái 45px) + các dòng kẻ ngang mảnh cách nhau 26-27px. CHỈ áp cho .stApp (nền
+       trang) -- KHÔNG được lan vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các
+       khối đó phải giữ mặt phẳng var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính
+       chỉ nằm ở phần lề trang xung quanh. */
     .stApp {
         background-color: var(--bg);
+        background-image:
+            linear-gradient(to right, transparent 45px, rgba(var(--accent-rgb),0.35) 45px, rgba(var(--accent-rgb),0.35) 46px, transparent 46px),
+            repeating-linear-gradient(to bottom, transparent, transparent 26px, var(--divider) 27px);
     }
-    
+
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
     
     .glass-card {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         padding: 20px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
@@ -4410,7 +4415,7 @@ st.markdown(
     div[data-testid="stButton"] button[kind="primary"] {
         background-color: var(--accent) !important;
         color: white !important;
-        border-radius: 8px !important;
+        border-radius: 7px !important;
         border: none !important;
         font-weight: 500 !important;
         padding: 6px 16px !important;
@@ -4425,7 +4430,7 @@ st.markdown(
     div[data-testid="stButton"] button[kind="secondary"] {
         background-color: var(--card) !important;
         color: var(--accent) !important;
-        border-radius: 8px !important;
+        border-radius: 7px !important;
         border: 1px solid var(--border) !important;
         font-weight: 500 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
@@ -4433,7 +4438,7 @@ st.markdown(
     div[data-testid="stButton"] button { width: 100%; }
 
     .stSelectbox > div > div, .stTextInput > div > div > input {
-        border-radius: 8px !important;
+        border-radius: 7px !important;
         border: 1px solid var(--border) !important;
         background-color: var(--card-tl) !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
@@ -4446,7 +4451,7 @@ st.markdown(
         margin: 0 auto !important;
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         padding: 14px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02);
     }
@@ -4471,7 +4476,7 @@ st.markdown(
     .stat-panel .sp-hi:first-child { padding-left: 2px; }
     .stat-panel .sp-hi:last-child { border-right: none; }
     .stat-panel .sp-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); }
+    .stat-panel .sp-v { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
     .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
     /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
     .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
@@ -4612,7 +4617,7 @@ st.markdown(
     div[data-testid="stDateInput"] [data-baseweb="input"] {
         background: var(--card-tl) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 8px !important;
+        border-radius: 7px !important;
         box-shadow: none !important;
     }
     div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
@@ -4728,7 +4733,7 @@ st.markdown(
     /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước, hướng dẫn) trông
        như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"], [class*="st-key-guide"] {
-        border-radius: 16px !important;
+        border-radius: 10px !important;
         border-color: var(--border) !important;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
         background: var(--card) !important;
@@ -4824,7 +4829,7 @@ st.markdown(
     /* Quote ngẫu nhiên (cố định theo ngày) trong trang Hôm nay -- xem _kindle_quote_of_day().
        KHÔNG đặt margin cố định ở đây -- margin (top/ngang) truyền qua style= tại nơi gọi vì vị
        trí thẻ này đổi tuỳ ngày đang xem có phiên hay không, xem _kindle_quote_card_html(). */
-    .kq-daily { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    .kq-daily { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 18px 24px 20px; }
     .kq-daily-mark { font-size: 34px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
         opacity: .55; margin-bottom: -6px; }
@@ -4853,7 +4858,7 @@ st.markdown(
        Tuần/Tháng, Ngày này năm trước) -- bản có nút sửa/xoá ở Ghi chú ngày dựng bằng
        st.columns() thật nên không cần .qn-line (đã có [class*="st-key-qnote_row_"] lo margin). */
     .qn-time { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-2);
-        background: var(--chip); border-radius: 8px; padding: 4px 9px; font-variant-numeric: tabular-nums;
+        background: var(--chip); border-radius: 7px; padding: 4px 9px; font-variant-numeric: tabular-nums;
         margin-right: 10px; vertical-align: middle; white-space: nowrap; }
     .qn-text { font-size: 14.5px; color: var(--text); line-height: 1.5; }
     .qn-line { padding: 4px 0; }
@@ -4944,13 +4949,13 @@ st.markdown(
 # Thanh điều hướng 1 hàng phẳng (kiểu iOS segmented control), icon Material cho từng trang.
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
-    "Hôm nay": ":material/today:",
-    "Báo cáo": ":material/summarize:",
+    "Hôm nay": ":material/wb_sunny:",
+    "Báo cáo": ":material/bar_chart:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/shield:",
     "Sức khoẻ": ":material/monitor_heart:",
     "Tìm kiếm": ":material/search:",
-    "Tuỳ biến": ":material/settings:",
+    "Tuỳ biến": ":material/tune:",
     "Hướng dẫn": ":material/help:",
 }
 # Nhãn ngắn để các tab vừa 1 hàng (key trang giữ nguyên).
@@ -5385,9 +5390,9 @@ def _inject_note_editor_shortcuts():
 # Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
 # cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
 BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
-BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Năm": ":material/celebration:",
-                        "Tháng": ":material/calendar_month:", "Tuần": ":material/calendar_view_week:",
-                        "Dự án": ":material/work:"}
+BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material/calendar_view_month:",
+                        "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
+                        "Dự án": ":material/folder:"}
 if "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
     st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
@@ -6491,7 +6496,7 @@ elif nav == "Tuỳ biến":
                 # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
                 # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong. Tên màu
                 # hiện thẳng trên nút (không chỉ tooltip) -- màu chữ tự chọn trắng/đen theo độ
-                # chói nền (_readable_text) để luôn đọc rõ với 14 màu khác nhau.
+                # chói nền (_readable_text) để luôn đọc rõ với 6 màu khác nhau.
                 _swatch_css += (
                     f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
                     f"background:{_hex} !important; color:{_txt_color} !important; "
@@ -7234,8 +7239,8 @@ elif nav == "Hướng dẫn":
 
         guide_item(
             "giao_dien.png", "4. Giao diện — màu accent",
-            "14 màu để chọn, xếp theo thứ tự sắc độ (đỏ/cam/vàng → xanh lá → xanh dương → tím, cuối cùng là "
-            "\"Than chì\" gần như xám) cho dễ dò theo dải cầu vồng thay vì danh sách rối mắt. Bấm 1 màu là áp "
+            "6 màu đất/mộc mạc để chọn (Đất nung/Nghệ/Rêu/Chàm biển/Chàm/Mận), hợp với tông giấy ấm của giao "
+            "diện. Bấm 1 màu là áp "
             "dụng **ngay lập tức**, không cần nút \"Lưu\" riêng — màu được ghi vào Supabase (bảng `settings`) "
             "nên vẫn giữ nguyên qua các lần mở lại app.\n\n"
             "**1 màu accent chọn ra lan toả tới 3 nơi khác nhau, bằng 3 cơ chế khác nhau**:\n"
@@ -7249,19 +7254,15 @@ elif nav == "Hướng dẫn":
             "- **Ô ghi chú (trình soạn thảo Quill)** — chạy trong 1 iframe riêng biệt, CSS của trang chính không "
             "chạm tới được; app tự tiêm 1 đoạn `<style>` khác vào bên trong iframe đó, lặp lại mỗi 400ms để "
             "chống việc Streamlit dựng lại iframe làm mất style đã tiêm.\n\n"
-            "Nếu bảng `settings` chưa được tạo trên Supabase, hoặc giá trị lưu trong đó bị hỏng, app **tự rơi "
-            "về màu Teal mặc định** thay vì báo lỗi hay crash — tính năng đổi màu hoàn toàn tuỳ chọn, không có "
-            "nó app vẫn chạy bình thường với đúng màu gốc từ trước tới nay.\n\n"
+            "Nếu bảng `settings` chưa được tạo trên Supabase, hoặc giá trị lưu trong đó bị hỏng (kể cả 1 màu "
+            "cũ đã bỏ khỏi bảng 6 màu hiện tại), app **tự rơi về màu \"Chàm biển\" mặc định** thay vì báo lỗi "
+            "hay crash — tính năng đổi màu hoàn toàn tuỳ chọn, không có nó app vẫn chạy bình thường.\n\n"
             "**Chế độ tối (dark mode)**: app tự đổi giao diện tối/sáng theo đúng cài đặt hệ thống của thiết bị "
             "(hoặc theo lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu đã tự đổi khác "
             "với hệ thống) — **không có nút bật/tắt riêng trong app**, vì Streamlit chưa cho phép đổi theme "
             "bằng code lúc đang chạy, chỉ đọc được theme hiện tại để tự tô đúng màu theo. Toàn bộ nút, thẻ, "
             "biểu đồ, bảng nhiệt, ô ghi chú đều có phiên bản màu riêng cho chế độ tối; màu accent đang chọn vẫn "
             "giữ nguyên và tự sáng/tối lại cho hợp với nền mới.",
-            tip="3 màu đầu tiên (Hồng đào/Cam cháy/Vàng nắng) cố ý gần tông với 2 trạng thái cảnh báo cố định "
-                "trong app (cam = chuỗi đang treo, đỏ = chuỗi đã đứt) — nếu chọn 1 trong 3 màu này làm accent, "
-                "2 trạng thái cảnh báo đó sẽ trông gần giống màu accent hơn bình thường. Đánh đổi này đã được "
-                "chấp nhận để có đủ lựa chọn màu ấm, không phải giới hạn kỹ thuật.",
             where="Tuỳ biến → 4. Giao diện")
 
         guide_item(
