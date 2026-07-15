@@ -4585,20 +4585,29 @@ st.markdown(
        gian"/"Gộp theo"/"Phân loại"/"Xem theo"...) hiện thành các nút RỜI (bo tròn 4 góc + có
        khoảng cách), không phải 1 dải liền khối kiểu mặc định Streamlit/BaseWeb (chỉ bo góc 2 đầu
        dải, nút giữa border-radius:0, margin-right:-1px đè khít viền lên nhau để trông liền mạch).
-       Áp DÙNG CHUNG cho mọi [data-testid="stButtonGroup"] -- 2 nơi cố tình khác kiểu (tab gạch
-       chân ở "Chọn kỳ xem"/"Xem theo", khối .st-key-bc_sub_picker/.st-key-hm_sub_picker ngay
-       dưới) tự ghi đè lại được vì đứng SAU trong stylesheet này, cùng độ đặc hiệu selector nên
-       nguồn sau thắng (xem thêm ghi chú "gap:0" ở khối đó). */
-    [data-testid="stButtonGroup"] { gap: 6px !important; }
+       QUAN TRỌNG: [data-testid="stButtonGroup"] chỉ là khối BỌC NGOÀI (1 <div> chứa đúng 1 con) --
+       flex container THẬT SỰ chứa các <button> là 1 [role="radiogroup"] LỒNG BÊN TRONG nó (đã xác
+       nhận qua DOM inspect: gap đặt ở stButtonGroup không có tác dụng gì vì nó không phải cha trực
+       tiếp của các nút, dù getComputedStyle vẫn báo "6px" -- giá trị đó chỉ tồn tại trên phần tử
+       không quyết định layout). Phải đặt gap/flex-wrap/justify-content lên đúng
+       [role="radiogroup"] thì khoảng cách mới thật sự hiện ra. Áp DÙNG CHUNG cho mọi
+       [data-testid="stButtonGroup"] -- 2 nơi cố tình khác kiểu (tab gạch chân ở "Chọn kỳ xem"/
+       "Xem theo", khối .st-key-bc_sub_picker/.st-key-hm_sub_picker ngay dưới) tự ghi đè lại được
+       vì đứng SAU trong stylesheet này, cùng độ đặc hiệu selector nên nguồn sau thắng (xem thêm
+       ghi chú "gap:0" ở khối đó). */
+    [data-testid="stButtonGroup"] [role="radiogroup"] { gap: 6px !important; }
     [data-testid="stButtonGroup"] button {
         border-radius: 7px !important;
         margin: 0 !important;
     }
 
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
-       Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
+       Element container mặc định co theo nội dung -> ép full width rồi căn giữa. Set trên CẢ
+       stButtonGroup (để nó giãn full-width, làm khung chứa) LẪN role="radiogroup" bên trong (để
+       chính flex container chứa nút được căn giữa/wrap -- xem ghi chú "QUAN TRỌNG" phía trên). */
     .st-key-nav { width: 100% !important; }
-    .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] { width: 100% !important; }
+    .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
 
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
@@ -4607,7 +4616,8 @@ st.markdown(
        chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên
        dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn). */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; gap: 0 !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; gap: 0 !important; }
     .st-key-bc_sub_picker button, .st-key-hm_sub_picker button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
