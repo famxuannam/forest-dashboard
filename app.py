@@ -3913,7 +3913,7 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix=""):
             with rc2:
                 with st.container(horizontal=True, gap="small"):
                     _fav = bool(r.get('Yêu thích', False))
-                    if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
+                    if st.button("★" if _fav else "☆",
                                  key=f"kq_favbtn_{'on' if _fav else 'off'}_{key_suffix}{h}",
                                  help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                         set_kindle_highlight_favorite(h, not _fav)
@@ -5215,6 +5215,16 @@ st.markdown(
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
        hàng highlight cha phía trên. */
     [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
+    /* Sub-tab "Yêu thích" (trang Sách, xem _render_kindle_favorites_tab()): mỗi trích dẫn bọc
+       trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo Ngày/Tuần/Tháng) --
+       thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Chỉ khớp key_suffix="fav_" (khớp
+       "kqrow_fav_", KHÔNG khớp "kqrow_" trơn của "2. Nhật ký đọc") nên không ảnh hưởng nơi khác.
+       Đặt SAU rule margin-bottom:2px chung ở trên để thắng theo thứ tự (cùng độ đặc hiệu). */
+    [class*="st-key-kqrow_fav_"] {
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 12px 16px; margin-bottom: 10px !important;
+    }
+    [class*="st-key-kqrow_fav_"]:last-child { margin-bottom: 0 !important; }
     /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
        THẬT (không phải .jrows/.jrow HTML tĩnh -- xem _render_reading_kindle_days()), nên không tự
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
@@ -5246,25 +5256,29 @@ st.markdown(
     }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_daily_quote_card()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
-       còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. */
+       còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
+       "★"/"☆" thật (xem docstring _render_daily_quote_card() -- không phải icon Material nữa) nên
+       CSS nhắm vào <p> chứa chữ (div[data-testid="stMarkdownContainer"] p bên trong button), KHÔNG
+       phải span[data-testid="stIconMaterial"] như trước. */
     .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] {
         background: rgba(var(--accent-rgb),0.12) !important; border: none !important; box-shadow: none !important;
-        color: var(--text-3) !important; width: 30px !important; height: 30px !important;
+        width: 30px !important; height: 30px !important;
         min-height: 0 !important; border-radius: 999px !important; padding: 0 !important;
     }
-    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] span[data-testid="stIconMaterial"] {
-        font-size: 17px !important;
+    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] p {
+        font-size: 18px !important; line-height: 1 !important; color: var(--text-3) !important;
     }
-    /* Đã Yêu thích -> icon màu accent, lý do xem chú thích ở rule [class*="st-key-kq_favbtn_on_"]
-       phía trên (cùng hạn chế font Material Symbols không đổi hình dạng theo trạng thái). */
-    [class*="st-key-kq_daily_favbtn_on"] div[data-testid="stButton"] button[kind="secondary"] {
+    /* Đã Yêu thích -> chữ "★" màu accent (hình dạng đặc/rỗng đã đủ phân biệt, màu chỉ để nhấn
+       thêm) -- xem chú thích [class*="st-key-kq_favbtn_on_"] phía trên cho lý do đổi hẳn sang ký
+       tự chữ thay vì icon font. */
+    [class*="st-key-kq_daily_favbtn_on"] div[data-testid="stButton"] button[kind="secondary"] p {
         color: var(--accent) !important;
     }
     /* Hàng "tên sách + nút ⭐" (st.container key="kq_daily_srcrow") -- canh 2 cột theo baseline
-       chung để chữ và nút trông "cùng 1 hàng" thay vì nút trôi lên/xuống lệch dòng chữ, và kéo
-       gần lại quote text phía trên (bù gap 0.9rem mặc định giữa 2 block Streamlit liền kề, xem
-       chú thích [class*="st-key-kq_daily_card"]). */
-    [class*="st-key-kq_daily_srcrow"] { margin-top: -6px; }
+       chung để chữ và nút trông "cùng 1 hàng" thay vì nút trôi lên/xuống lệch dòng chữ. margin-top
+       dương nhẹ (KHÔNG âm như bản trước) -- bản âm (-6px) làm nút ⭐ chạm/đè lên dòng cuối chữ
+       trích dẫn khi trích dẫn dài đủ 2-3 dòng, phản hồi thực tế là "trông không đẹp". */
+    [class*="st-key-kq_daily_srcrow"] { margin-top: 10px; }
     [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; }
     .kq-daily-mark { font-size: 52px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
         opacity: .5; margin-bottom: -14px; }
@@ -5272,10 +5286,10 @@ st.markdown(
        "điểm dừng mắt" của thẻ thay vì chữ nhỏ ngang hàng nội dung phụ khác trên trang. */
     .kq-daily-text { font-size: 21px; line-height: 1.5; font-weight: 500; color: var(--text);
         font-style: italic; white-space: pre-wrap; }
-    /* Tên sách nằm trong cột riêng cạnh nút ⭐ (xem .kq_daily_srcrow ở trên) nên KHÔNG cần margin-top
-       lớn nữa (24px của bản trước) -- chỉ còn margin nhỏ để tách khỏi quote text phía trên, cỡ/độ
-       đậm chữ (12px/600 -> 14.5px/700) giữ nguyên như bản đã duyệt. */
-    .kq-daily-src { margin: 0; font-size: 14.5px; color: var(--text); font-weight: 700;
+    /* Tên sách (+ tác giả nếu có, xem docstring _render_daily_quote_card()) nằm trong cột riêng
+       cạnh nút ⭐ -- cỡ chữ tăng thêm (14.5px -> 16.5px) theo phản hồi thực tế "Title còn bé" so
+       với chữ trích dẫn 21px phía trên. */
+    .kq-daily-src { margin: 0; font-size: 16.5px; color: var(--text); font-weight: 700;
         text-align: right; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
@@ -5780,7 +5794,19 @@ def _render_daily_quote_card(kq):
 
     Nút ⭐ ĐẶT CẠNH tên sách (hàng cuối, st.columns riêng) thay vì góc trên phải như bản đầu --
     phản hồi thực tế là nút trôi nổi 1 mình ở góc trên, không "gắn" vào đâu cả. Ghép cạnh tên sách
-    (đã canh phải sẵn) cho nút có 1 điểm neo rõ ràng, đọc tự nhiên như "— Rừng Na Uy ⭐"."""
+    (đã canh phải sẵn) cho nút có 1 điểm neo rõ ràng, đọc tự nhiên như "— Rừng Na Uy ⭐".
+
+    Nút dùng ký tự "★"/"☆" (BLACK STAR/WHITE STAR, chữ thường -- KHÔNG phải icon Material) làm
+    label thay vì icon=":material/star:"/"star_outline:" -- đã xác nhận font Material Symbols
+    Streamlit tự host không hỗ trợ trục biến FILL, 2 icon "star"/"star_outline" hiển thị GIỐNG HỆT
+    nhau (chỉ khác màu qua CSS), phản hồi thực tế là trạng thái đã chọn/chưa chọn không rõ. 2 ký tự
+    Unicode này có HÌNH DẠNG khác hẳn nhau (đặc/rỗng) theo mọi font hệ thống, không phụ thuộc biến
+    thể font nào -- phân biệt được ngay cả khi không nhìn màu.
+
+    Tên sách kèm TÁC GIẢ (cột "Tác giả" đọc thẳng từ kindle_highlights.author, do
+    parse_kindle_clippings() tách ra từ dòng "Tên sách (Tác giả)" trong My Clippings.txt lúc
+    import) -- chỉ nối thêm nếu có (một số nguồn không phải Kindle gốc, vd nhập tay, có thể thiếu
+    tác giả)."""
     with st.container(key="kq_daily_card", border=True):
         st.markdown(
             "<div class='kq-daily-mark'>“</div>"
@@ -5789,11 +5815,14 @@ def _render_daily_quote_card(kq):
         with st.container(key="kq_daily_srcrow"):
             c_src, c_fav = st.columns([10, 1])
             with c_src:
-                st.markdown(f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>",
-                            unsafe_allow_html=True)
+                _author = kq.get('Tác giả')
+                _src_txt = html_escape(str(kq['Cuốn sách']))
+                if pd.notna(_author) and str(_author).strip():
+                    _src_txt += f" · {html_escape(str(_author))}"
+                st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
             with c_fav:
                 _fav = bool(kq.get('Yêu thích', False))
-                if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
+                if st.button("★" if _fav else "☆",
                              key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
                              help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                     set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
