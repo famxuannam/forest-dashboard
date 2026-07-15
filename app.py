@@ -1425,7 +1425,8 @@ def filter_by_range(df_all, label):
 
 def range_radio(df_all, key, label="Khoảng thời gian"):
     """Segmented control chọn khoảng thời gian, trả về df đã lọc."""
-    rl = st.segmented_control(label, list(RANGE_OPTS.keys()), default="90 ngày", key=key)
+    rl = st.segmented_control(label, list(RANGE_OPTS.keys()), default="90 ngày", key=key,
+                               label_visibility="collapsed")
     return filter_by_range(df_all, rl or "90 ngày")
 
 def fmt_month(m):
@@ -4098,11 +4099,14 @@ def frag_trend(scope_df, key_prefix, default_color):
     """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại."""
     o1, o2, o3 = st.columns([5, 3, 2])
     with o1:
-        rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key=f"{key_prefix}_range")
+        rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
+                                   key=f"{key_prefix}_range", label_visibility="collapsed")
     with o2:
-        tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày", key=f"{key_prefix}_time")
+        tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày",
+                                     key=f"{key_prefix}_time", label_visibility="collapsed")
     with o3:
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                                     key=f"{key_prefix}_color", label_visibility="collapsed")
     rl = rl or "90 ngày"
     tcol = tcol or "Ngày"
     ccol = ccol or default_color
@@ -4122,19 +4126,23 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
     if with_range:
         c1, c2 = st.columns([5, 3])
         with c1:
-            rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày", key=f"{key_prefix}_range")
+            rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
+                                       key=f"{key_prefix}_range", label_visibility="collapsed")
         with c2:
-            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                                         key=f"{key_prefix}_color", label_visibility="collapsed")
         scope_df = filter_by_range(scope_df, rl or "90 ngày")
     else:
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=f"{key_prefix}_color")
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                                     key=f"{key_prefix}_color", label_visibility="collapsed")
     render_hourly_chart(scope_df, ccol or default_color)
 
 
 @st.fragment
 def frag_pie(scope_df, key, default_color):
     """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng."""
-    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key) or default_color
+    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                 label_visibility="collapsed") or default_color
     pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
     pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
     fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
@@ -4146,7 +4154,8 @@ def frag_pie(scope_df, key, default_color):
 def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
     Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig)."""
-    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key) or default_color
+    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                 label_visibility="collapsed") or default_color
     g = scope_df.groupby([group_col, ccol])['Thời lượng (Phút)'].sum().reset_index()
     g['Số giờ'] = g['Thời lượng (Phút)'] / 60
     if group_col == 'Ngày':
@@ -4174,12 +4183,14 @@ def frag_data_table(scope_df, key_prefix):
     cc1, cc2 = st.columns([5, 2])
     with cc1:
         range_label = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()),
-                                            default="90 ngày", key=f"{key_prefix}_range") or "90 ngày"
+                                            default="90 ngày", key=f"{key_prefix}_range",
+                                            label_visibility="collapsed") or "90 ngày"
         df_tbl = filter_by_range(scope_df, range_label)
     with cc2:
         smart_default = "Tuần" if range_label in ("30 ngày", "90 ngày") else "Tháng"
         view_opt = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default=smart_default,
-                                         key=f"{key_prefix}_view_{range_label}")
+                                         key=f"{key_prefix}_view_{range_label}",
+                                         label_visibility="collapsed")
     view_opt = view_opt or smart_default
     render_data_table(df_tbl, 'Tuần' if view_opt == "Tuần" else 'Tháng')
 
@@ -4187,7 +4198,8 @@ def frag_data_table(scope_df, key_prefix):
 @st.fragment
 def frag_period_table(scope_df, key):
     """Mục Bảng số liệu (Báo cáo theo dự án): xem theo Tuần/Tháng."""
-    grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key=key)
+    grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key=key,
+                                     label_visibility="collapsed")
     grp_view = grp_view or "Tháng"
     render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 
@@ -4387,16 +4399,22 @@ st.markdown(
     html, body, .stApp {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    /* Nền "giấy kẻ ngang" hệ "Sổ Tay": 1 vạch lề dọc màu accent (mô phỏng lề đỏ vở học sinh,
-       cách mép trái 45px) + các dòng kẻ ngang mảnh cách nhau 26-27px. CHỈ áp cho .stApp (nền
-       trang) -- KHÔNG được lan vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các
-       khối đó phải giữ mặt phẳng var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính
-       chỉ nằm ở phần lề trang xung quanh. */
+    /* Nền "giấy dot-grid" hệ "Sổ Tay" (đổi từ giấy kẻ ngang theo yêu cầu -- hợp gu sổ tay chấm bi
+       hơn vở kẻ ngang): vẫn giữ 1 vạch lề dọc màu accent (mô phỏng lề đỏ vở học sinh, cách mép
+       trái 45px) làm chữ ký thị giác chung, nhưng đổi các dòng kẻ ngang thành lưới chấm tròn nhỏ
+       cách đều 20px (radial-gradient lặp lại qua background-size, KHÔNG dùng repeating-linear-
+       gradient như bản kẻ ngang cũ). 2 lớp bg-image dùng chung 1 khai báo background-size -- lớp
+       vạch lề (linear-gradient) phải đứng TRƯỚC và nhận size "auto" (bằng nguyên khung trang, chỉ
+       vẽ đúng 1 lần) để không bị chia lưới 20px theo lớp chấm. CHỈ áp cho .stApp (nền trang) --
+       KHÔNG được lan vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó
+       phải giữ mặt phẳng var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm
+       ở phần lề trang xung quanh. */
     .stApp {
         background-color: var(--bg);
         background-image:
             linear-gradient(to right, transparent 45px, rgba(var(--accent-rgb),0.35) 45px, rgba(var(--accent-rgb),0.35) 46px, transparent 46px),
-            repeating-linear-gradient(to bottom, transparent, transparent 26px, var(--divider) 27px);
+            radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px);
+        background-size: auto, 20px 20px;
     }
 
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
@@ -4539,7 +4557,13 @@ st.markdown(
         letter-spacing: -0.4px !important;
         color: var(--text) !important;
     }
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; }
+    /* Streamlit tự tô nền secondaryBackgroundColor (.streamlit/config.toml) lên khối nội dung
+       BÊN TRONG expander -- rule "background:transparent" ở [data-testid="stExpander"]/details
+       phía trên KHÔNG lan tới đây vì stExpanderDetails là 1 div riêng, tự có màu nền của nó, không
+       kế thừa nền "trong suốt" từ cha. Thiếu dòng này, mục mở rộng hiện khối xám lạc tông ngay khi
+       bấm mở -- lỗi đã có từ đầu (không phải regression của bản "Sổ Tay"), giờ mới bị chú ý vì nền
+       trang đổi từ xám nhạt Apple sang giấy ấm nên độ lệch tông rõ hơn hẳn. */
+    [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding-top: 12px !important; background: transparent !important; }
 
     /* Thanh chọn trang (segmented control) căn giữa, cách nội dung một chút */
     [data-testid="stButtonGroup"] { margin-bottom: 10px; }
@@ -4557,6 +4581,20 @@ st.markdown(
         border-color: var(--accent) !important;
         box-shadow: 0 2px 5px rgba(var(--accent-rgb),0.3) !important;
     }
+    /* Theo mockup "Sổ Tay": MỌI segmented_control trong app (nav, bộ lọc biểu đồ "Khoảng thời
+       gian"/"Gộp theo"/"Phân loại"/"Xem theo"...) hiện thành các nút RỜI (bo tròn 4 góc + có
+       khoảng cách), không phải 1 dải liền khối kiểu mặc định Streamlit/BaseWeb (chỉ bo góc 2 đầu
+       dải, nút giữa border-radius:0, margin-right:-1px đè khít viền lên nhau để trông liền mạch).
+       Áp DÙNG CHUNG cho mọi [data-testid="stButtonGroup"] -- 2 nơi cố tình khác kiểu (tab gạch
+       chân ở "Chọn kỳ xem"/"Xem theo", khối .st-key-bc_sub_picker/.st-key-hm_sub_picker ngay
+       dưới) tự ghi đè lại được vì đứng SAU trong stylesheet này, cùng độ đặc hiệu selector nên
+       nguồn sau thắng (xem thêm ghi chú "gap:0" ở khối đó). */
+    [data-testid="stButtonGroup"] { gap: 6px !important; }
+    [data-testid="stButtonGroup"] button {
+        border-radius: 7px !important;
+        margin: 0 !important;
+    }
+
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
        Element container mặc định co theo nội dung -> ép full width rồi căn giữa. */
     .st-key-nav { width: 100% !important; }
@@ -4565,9 +4603,11 @@ st.markdown(
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
        .st-key-nav ở trên. Đổi thêm dáng nút từ pill sang tab gạch chân (giống Tổng quan/Chi tiết
-       ở Sách/Gundam) cho gọn và nhất quán, thay vì nền đặc teal như nav chính. */
+       ở Sách/Gundam) cho gọn và nhất quán, thay vì nền đặc teal như nav chính -- gap:0 để huỷ gap
+       chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên
+       dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn). */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; }
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; flex-wrap: wrap !important; width: 100% !important; gap: 0 !important; }
     .st-key-bc_sub_picker button, .st-key-hm_sub_picker button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
@@ -5608,6 +5648,12 @@ def render_day_report(df):
                 {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
             ], sections=_secs)
 
+            # Dòng thời gian đứng NGAY SAU stat panel (trước Top 3/Phân bổ độ dài phiên) -- theo
+            # đúng bố cục "Sổ Tay": nhìn được nhịp phiên trong ngày trước khi đọc số liệu tổng hợp
+            # bên dưới. Giữ nguyên phần chi tiết (trục giờ/dải mờ khung giờ điển hình/nhãn dự án)
+            # -- chỉ đổi VỊ TRÍ, không rút gọn nội dung.
+            render_day_timeline(day_df, sel, df)
+
             with st.container(key="day_top3"):
                 tc1, tc2 = st.columns(2)
                 with tc1:
@@ -5616,7 +5662,6 @@ def render_day_report(df):
                     render_top_3(day_df, 'Dự án', "Top 3 Dự án")
 
             render_session_bar(day_df)
-            render_day_timeline(day_df, sel, df)
 
             # Quote-of-the-day (nếu có dữ liệu Kindle) đứng cuối "1. Tổng quan ngày", ngay dưới
             # dòng thời gian -- nằm TRONG expander nên tự thẳng hàng bề ngang với các thẻ phía
@@ -6245,7 +6290,8 @@ elif nav == "Tuỳ biến":
                 with sc1:
                     sync_range = st.segmented_control("Khoảng đồng bộ",
                                                        ["-30 / +30 ngày", "-90 / +90 ngày", "-180 / +180 ngày"],
-                                                       default="-90 / +90 ngày", key="wc_range")
+                                                       default="-90 / +90 ngày", key="wc_range",
+                                                       label_visibility="collapsed")
                 sync_days = {"-30 / +30 ngày": 30, "-90 / +90 ngày": 90, "-180 / +180 ngày": 180}.get(sync_range or "-90 / +90 ngày", 90)
                 with sc2:
                     st.write("")
