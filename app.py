@@ -1805,6 +1805,21 @@ def _delta_t_hours(delta, label):
     return (f"{_fmt_hours_delta(delta)} {label}", c)
 
 
+def _period_elapsed_context(selected_key, current_key, pos_series, today_pos, noun):
+    """Gộp logic lặp lại 3 lần ở nhánh Tuần/Tháng/Năm (Báo cáo): nếu kỳ đang chọn CHƯA kết thúc
+    (đang là kỳ hiện tại), trả elapsed_mask cắt cả 2 baseline so sánh theo đúng phần đã trôi qua
+    (vd "2 ngày đầu tuần") + nhãn ngắn tương ứng, dùng cho _period_comparison() và
+    _render_period_overview_hero(). Kỳ đã khép hẳn (không phải kỳ hiện tại) -> mask=None,
+    _period_comparison() tự so full-vs-full như hành vi gốc. pos_series/today_pos: vị trí trong
+    kỳ (vd dayofweek+1/day/dayofyear) của df và của hôm nay -- do CALLER tính (khác nhau theo
+    Tuần/Tháng/Năm), hàm này chỉ so sánh <= today_pos, không tự suy ra cách tính vị trí."""
+    lbl_prev, lbl_avg = f"vs {noun} trước", "vs Trung bình"
+    if selected_key != current_key:
+        return None, lbl_prev, lbl_avg, None
+    clip_note = f"So sánh chỉ tính {today_pos} ngày đầu của {noun} trước/các {noun.lower()} khác cho công bằng."
+    return pos_series <= today_pos, lbl_prev, lbl_avg, clip_note
+
+
 def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None):
     """Baseline so sánh cho hero deltas (Tháng/Tuần/Năm dùng chung) -- (prev_metrics, avg_metrics),
     mỗi cái None hoặc {hrs,trees,hrs_day,trees_day,min_sess}. avg_metrics = trung bình các kỳ
@@ -6260,13 +6275,11 @@ elif nav == "Báo cáo":
             prev_week_key = (week_anchor - pd.Timedelta(days=7)).strftime('%G-W%V') if pd.notna(week_anchor) else None
 
             # Kỳ đang xem CHƯA kết thúc (đang là tuần hiện tại) -> cắt cả 2 baseline so sánh
-            # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng.
-            # Nhãn delta giữ NGẮN (xem chú thích tương ứng ở nhánh Tháng).
-            elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = None, "vs Tuần trước", "vs Trung bình", None
-            if selected_week == _today_vn().strftime('%G-W%V'):
-                _dow = _today_vn().isoweekday()
-                elapsed_mask_w = (df['Thời gian bắt đầu'].dt.dayofweek + 1) <= _dow
-                _clip_note_w = f"So sánh chỉ tính {_dow} ngày đầu của Tuần trước/các tuần khác cho công bằng."
+            # theo đúng phần đã trôi qua (vd "2 ngày đầu tuần"), cùng lý do đã áp dụng cho Tháng
+            # (xem docstring _period_elapsed_context, hàm dùng chung cho cả 3 nhánh Tuần/Tháng/Năm).
+            elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = _period_elapsed_context(
+                selected_week, _today_vn().strftime('%G-W%V'),
+                df['Thời gian bắt đầu'].dt.dayofweek + 1, _today_vn().isoweekday(), "Tuần")
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
@@ -6294,12 +6307,11 @@ elif nav == "Báo cáo":
             # đầy đủ (nếu không sẽ ra kiểu "-38h vs Tháng trước" dù mới qua 3/31 ngày, vô nghĩa).
             # Nhãn delta giữ NGẮN ("vs Tháng trước"/"vs Trung bình") dù có cắt hay không -- số
             # ngày cắt chỉ nói 1 lần qua st.caption() bên dưới, tránh nhắc lại 5 lần (1 lần/hero
-            # item) làm chữ dài, tự xuống dòng lem nhem trong cột hẹp.
-            elapsed_mask_m, lbl_prev_m, lbl_avg_m, _clip_note_m = None, "vs Tháng trước", "vs Trung bình", None
-            if selected_month == _today_vn().strftime('%Y-%m'):
-                _d = _today_vn().day
-                elapsed_mask_m = df['Thời gian bắt đầu'].dt.day <= _d
-                _clip_note_m = f"So sánh chỉ tính {_d} ngày đầu của Tháng trước/các tháng khác cho công bằng."
+            # item) làm chữ dài, tự xuống dòng lem nhem trong cột hẹp. Logic dùng chung với
+            # Tuần/Năm qua _period_elapsed_context (xem docstring).
+            elapsed_mask_m, lbl_prev_m, lbl_avg_m, _clip_note_m = _period_elapsed_context(
+                selected_month, _today_vn().strftime('%Y-%m'),
+                df['Thời gian bắt đầu'].dt.day, _today_vn().day, "Tháng")
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
 
             if not df_m.empty:
@@ -6319,13 +6331,12 @@ elif nav == "Báo cáo":
             prev_year_key = str(int(selected_year) - 1)
 
             # Kỳ đang xem CHƯA kết thúc (đang là năm hiện tại) -> cắt cả 2 baseline so sánh
-            # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần. Nhãn delta giữ
-            # NGẮN (xem chú thích tương ứng ở nhánh Tháng).
-            elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = None, "vs Năm trước", "vs Trung bình", None
-            if selected_year == str(_today_vn().year):
-                _doy = _today_vn().timetuple().tm_yday
-                elapsed_mask_y = df['Thời gian bắt đầu'].dt.dayofyear <= _doy
-                _clip_note_y = f"So sánh chỉ tính {_doy} ngày đầu của Năm trước/các năm khác cho công bằng."
+            # theo đúng phần đã trôi qua, cùng lý do đã áp dụng cho Tháng/Tuần qua
+            # _period_elapsed_context (xem docstring). Nhãn delta giữ NGẮN (xem chú thích tương
+            # ứng ở nhánh Tháng).
+            elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = _period_elapsed_context(
+                selected_year, str(_today_vn().year),
+                df['Thời gian bắt đầu'].dt.dayofyear, _today_vn().timetuple().tm_yday, "Năm")
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
