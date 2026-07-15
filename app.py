@@ -2709,18 +2709,40 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
 """, unsafe_allow_html=True)
 
 
+_KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn Kindle KHÔNG gắn Dự án (vd tạp chí)
+# trong ô chọn "Chi tiết" -- xem _render_reading_detail().
+
+
 def _render_reading_detail(t, reading_log_df, labels):
     """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện 4 mục đánh số
     -- 1. Số liệu (hero chip, tái dùng render_stat_panel), 2. Nhật ký đọc (_reading_rows_html),
     3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
-    ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels."""
-    _detail_opts = ["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
+    ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels.
+
+    Ô chọn CŨNG liệt kê thêm các nguồn Kindle KHÔNG gắn Dự án nào (vd tạp chí The Economist --
+    project để trống trong kindle_book_map lúc import, xem "Tải trích dẫn Kindle" ở tab Tuỳ biến)
+    -- các nguồn này không có tiến độ đọc (không phiên Forest, không phần Reminders) nên chọn vào
+    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 mục đánh số phía trên (vốn đều dựa trên
+    dữ liệu tiến độ mà nguồn độc lập không có)."""
+    _kh_all = load_kindle_highlights()
+    _indep_sources = (sorted(_kh_all[_kh_all['Dự án'].isna()]['Cuốn sách'].dropna().unique())
+                       if not _kh_all.empty else [])
+    _detail_opts = (["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
+                     + [f"{_KINDLE_INDEP_PREFIX}{s}" for s in _indep_sources])
     with st.container(key="rl_detail_select"):
         _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
                                     _detail_opts, key=f"rl_detail_{labels['item_col']}",
                                     label_visibility="collapsed")
     if _detail_sel == _detail_opts[0]:
         st.info(f"Chọn 1 {labels['item_col'].lower()} ở trên để xem chi tiết.")
+        return
+
+    if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
+        _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
+        _kh_src = _kh_all[_kh_all['Cuốn sách'] == _src]
+        with st.expander("Trích dẫn & Ghi chú", expanded=True):
+            with st.container(border=True, key="jcard_reading_detail_indep"):
+                _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
         return
 
     _row = t[t['Cuốn sách'] == _detail_sel].iloc[0]
@@ -2755,8 +2777,8 @@ def _render_reading_detail(t, reading_log_df, labels):
     with st.expander("2. Nhật ký đọc", expanded=True):
         # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
         # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
-        # là mục riêng -- xem _render_reading_kindle_days().
-        _kh_all = load_kindle_highlights()
+        # là mục riêng -- xem _render_reading_kindle_days(). _kh_all đã tính sẵn ở đầu hàm (dùng
+        # chung để liệt kê nguồn độc lập trong ô chọn phía trên), không gọi lại load lần 2.
         _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
         if not _rl_detail.empty or not _kh_book.empty:
             with st.container(border=True, key="jcard_reading_detail"):
