@@ -184,11 +184,6 @@ GUNDAM_LABELS = dict(
 # Tên thứ tiếng Việt (dùng chung mọi nơi)
 VN_DAYS = {"Monday": "Thứ 2", "Tuesday": "Thứ 3", "Wednesday": "Thứ 4", "Thursday": "Thứ 5",
            "Friday": "Thứ 6", "Saturday": "Thứ 7", "Sunday": "Chủ Nhật"}
-# Tên thứ dạng chữ đầy đủ ("Thứ Tư" thay vì "Thứ 4") -- CHỈ dùng cho tiêu đề Source Serif 4 to ở
-# đầu trang Hôm nay (xem day_picker()), không thay VN_DAYS ở trên vì chỗ khác trong app (nhãn
-# ngắn gọn ở Nhật ký/lịch/bảng...) vẫn cần dạng số ngắn gọn, đổi chung sẽ vỡ layout nhiều nơi.
-VN_DAYS_LONG = {"Monday": "Thứ Hai", "Tuesday": "Thứ Ba", "Wednesday": "Thứ Tư", "Thursday": "Thứ Năm",
-                "Friday": "Thứ Sáu", "Saturday": "Thứ Bảy", "Sunday": "Chủ Nhật"}
 
 # Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
@@ -1494,12 +1489,21 @@ def period_stepper(periods, key, fmt, current=None):
     return st.session_state[pk]
 
 
-def resolve_selected_day(active_days):
-    """Đọc/khởi tạo st.session_state["day_pick"] (ngày đang chọn ở trang Hôm nay) -> (sel, lo, hi),
-    KHÔNG vẽ gì cả -- tách riêng khỏi day_picker() (chỉ lo render) để render_day_report() gọi được
-    "sel" trước khi vẽ hàng điều hướng (vd để tính badge kỷ lục theo đúng ngày đang xem). Gọi lại
-    nhiều lần trong cùng 1 rerun là AN TOÀN/idempotent (chỉ đọc + clamp lại giá trị đã có, không có
-    tác dụng phụ)."""
+def day_picker(active_days):
+    """Chọn ngày: ◀ ▶ nhảy tới ngày CÓ hoạt động liền kề (▶ còn nhảy tới hi/hôm nay ở bước cuối
+    nếu hôm nay chưa có phiên -- xem _next_candidates) + lịch chọn ngày. Đọc query param
+    ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách "nav" đã làm ở st.query_params["nav"])
+    -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng tới đúng ngày.
+
+    hi lấy max(ngày có phiên gần nhất, HÔM NAY THẬT) -- không chỉ ngày có phiên gần nhất: nếu
+    chưa log phiên nào hôm nay (vd mới mở app đầu ngày để xem lịch/tham khảo trước khi lên kế
+    hoạch), hôm nay vẫn chưa có trong active_days, nhưng trang "Hôm nay" phải mặc định VÀO ĐÚNG
+    hôm nay (đúng tên trang) và lịch chọn ngày phải cho chọn được tới hôm nay, thay vì kẹt ở
+    ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn).
+
+    Không còn nút "Ngày gần nhất" riêng -- việc "về hôm nay" giờ nằm ở chỗ bấm lại mục "Hôm nay"
+    trên nav bar (xem callback gắn ở st.segmented_control(key="nav")), nút riêng trong trang là
+    thừa khi đã có lối tắt đó."""
     pk = "day_pick"
     lo, hi = active_days[0], max(active_days[-1], _today_vn())
     if pk not in st.session_state:
@@ -1512,32 +1516,11 @@ def resolve_selected_day(active_days):
                 _parsed = None
         st.session_state[pk] = _parsed if _parsed else hi
     st.session_state[pk] = min(max(st.session_state[pk], lo), hi)
-    return st.session_state[pk], lo, hi
-
-
-def day_picker(active_days):
-    """Chọn ngày: 2 DÒNG XẾP CHỒNG, CĂN GIỮA cả hai -- dòng trên "Thứ Tư, D Tháng M" (Source
-    Serif 4, chữ đầy đủ VN_DAYS_LONG, to), dòng dưới cụm nav chữ "‹ hôm qua · hôm nay · 📅 · mai ›"
-    (IBM Plex Mono, icon lịch xen GIỮA "hôm nay" và "mai") -- theo yêu cầu căn giữa cả cụm, không
-    còn tách trái/phải như bản trước (không còn dòng phụ "ngày hoạt động/cập nhật gần nhất" -- đã
-    bỏ theo yêu cầu trước đó). Icon lịch mở popover chứa st.date_input để nhảy tới NGÀY BẤT KỲ,
-    không chỉ liền kề. "hôm qua"/"mai" nhảy tới ngày CÓ hoạt động liền kề (mai còn nhảy tới hi/hôm nay ở
-    bước cuối nếu hôm nay chưa có phiên -- xem _next_candidates); "hôm nay" nhảy thẳng về hi bất
-    kể đang ở ngày nào. Đọc query param ?day=YYYY-MM-DD 1 lần khi session mới (giống hệt cách
-    "nav" đã làm ở st.query_params["nav"]) -- cho phép link từ Nhật ký (tuần/tháng) nhảy thẳng
-    tới đúng ngày.
-
-    hi lấy max(ngày có phiên gần nhất, HÔM NAY THẬT) -- không chỉ ngày có phiên gần nhất: nếu
-    chưa log phiên nào hôm nay (vd mới mở app đầu ngày để xem lịch/tham khảo trước khi lên kế
-    hoạch), hôm nay vẫn chưa có trong active_days, nhưng trang "Hôm nay" phải mặc định VÀO ĐÚNG
-    hôm nay (đúng tên trang) và lịch chọn ngày phải cho chọn được tới hôm nay, thay vì kẹt ở
-    ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn)."""
-    pk = "day_pick"
-    sel, lo, hi = resolve_selected_day(active_days)
+    sel = st.session_state[pk]
 
     def _next_candidates(cur):
         # Ngày CÓ hoạt động liền kề như cũ, CỘNG THÊM hi (hôm nay) làm nấc cuối nếu hôm nay
-        # chưa có phiên (nên không nằm trong active_days) -- không có bước này thì "mai" sẽ kẹt ở
+        # chưa có phiên (nên không nằm trong active_days) -- không có bước này thì ▶ sẽ kẹt ở
         # ngày hoạt động gần nhất, không bao giờ tới được hôm nay thật.
         cand = [d for d in active_days if d > cur]
         if hi not in active_days and hi > cur:
@@ -1552,31 +1535,85 @@ def day_picker(active_days):
         cand = _next_candidates(st.session_state[pk])
         if cand: st.session_state[pk] = min(cand)
 
-    def _today():
-        st.session_state[pk] = hi
-
-    vn_dow = VN_DAYS_LONG.get(pd.Timestamp(sel).day_name(), "")
-    with st.container(key="day_nav_row"):
-        st.markdown(
-            f"<div style=\"font-family:'Source Serif 4',serif;font-size:30px;color:var(--text);"
-            f"line-height:1.2;text-align:center;\">{vn_dow}, {sel.day} Tháng {sel.month}</div>",
-            unsafe_allow_html=True)
-        with st.container(key="day_nav_links", horizontal=True, gap="small"):
-            st.button("‹ hôm qua", key="day_prev_lnk", on_click=_prev,
-                      disabled=not [d for d in active_days if d < sel])
-            st.markdown("<span class='dnl-dot'>·</span>", unsafe_allow_html=True)
-            st.button("hôm nay", key="day_today_lnk", on_click=_today, disabled=sel == hi)
-            st.markdown("<span class='dnl-dot'>·</span>", unsafe_allow_html=True)
-            with st.popover("", icon=":material/calendar_month:"):
-                picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
-                                       format="DD/MM/YYYY", label_visibility="collapsed")
-            st.markdown("<span class='dnl-dot'>·</span>", unsafe_allow_html=True)
-            st.button("mai ›", key="day_next_lnk", on_click=_next,
-                      disabled=not _next_candidates(sel))
+    with st.container(key="day_stepper"):
+        c1, c2, c3 = st.columns([1, 8, 1], vertical_alignment="center")
+        with c1:
+            st.button("", icon=":material/chevron_left:", key="day_prev", on_click=_prev,
+                      disabled=not [d for d in active_days if d < sel], use_container_width=True)
+        with c2:
+            picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
+                                   format="DD/MM/YYYY", label_visibility="collapsed")
+        with c3:
+            st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
+                      disabled=not _next_candidates(sel), use_container_width=True)
     if picked != st.session_state[pk]:
         st.session_state[pk] = picked
         st.rerun()
     return st.session_state[pk]
+
+def format_relative(ts):
+    """Khoảng cách từ mốc thời gian tới hiện tại, dạng tiếng Việt: '1 ngày 12 giờ trước'.
+
+    ts (Thời gian kết thúc) luôn là naive wall-clock giờ Việt Nam (Forest ghi giờ điện thoại,
+    prep_analysis_data không đổi tz) -- TUYỆT ĐỐI không so với pd.Timestamp.now() trần, vì hàm
+    đó trả giờ hệ thống máy chủ chạy Streamlit (deploy production rất có thể là UTC, lệch 7 tiếng
+    so với giờ Việt Nam) chứ không phải giờ Việt Nam. Đã tự kiểm chứng: trên máy chủ chạy UTC,
+    pd.Timestamp.now() ra 15:53 trong khi giờ Việt Nam thực tế là 22:53 -- lệch đúng 7 tiếng,
+    khớp triệu chứng "thời gian hiển thị không chính xác". Dùng chung APP_TZ (đã định nghĩa cho
+    CalDAV) để tính "bây giờ" luôn theo giờ Việt Nam rồi bỏ tzinfo, khớp đúng kiểu naive của ts."""
+    if pd.isna(ts):
+        return "—"
+    ts = pd.Timestamp(ts)
+    # Khớp timezone: dữ liệu Forest có thể có tz (tz-aware, hiếm) hoặc không (naive, phổ biến)
+    now = pd.Timestamp.now(tz=ts.tz) if ts.tzinfo is not None else pd.Timestamp.now(tz=APP_TZ).tz_localize(None)
+    secs = (now - ts).total_seconds()
+    if secs < 60:
+        return "vừa xong"
+    days = int(secs // 86400)
+    hours = int((secs % 86400) // 3600)
+    mins = int((secs % 3600) // 60)
+    if days > 0:
+        return f"{days} ngày {hours} giờ trước"
+    if hours > 0:
+        return f"{hours} giờ {mins} phút trước"
+    return f"{mins} phút trước"
+
+
+def _inject_relative_time_ticker():
+    """Tự cập nhật text "X trước" của thẻ <b id='last-update-live' data-epoch='...'> mỗi 30s
+    bằng JS phía trình duyệt, không cần Streamlit rerun cả trang chỉ để số đếm nhích lên. So
+    Date.now() (epoch UTC thật của trình duyệt) với data-epoch (epoch UTC thật đã tính đúng theo
+    APP_TZ ở phía Python, xem render_day_report) -- CẢ HAI đều là epoch UTC tuyệt đối nên phép
+    trừ luôn đúng bất kể múi giờ máy chủ hay múi giờ máy người dùng đang ở đâu, tránh đúng loại
+    lỗi lệch múi giờ vừa sửa ở format_relative(). Logic format giữ y hệt format_relative() (bỏ
+    qua nhánh tz-aware vì epoch đã tự quy về UTC từ đầu)."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  function relText(ms){\n"
+        "    if (ms < 60000) return 'vừa xong';\n"
+        "    const secs = Math.floor(ms / 1000);\n"
+        "    const days = Math.floor(secs / 86400);\n"
+        "    const hours = Math.floor((secs % 86400) / 3600);\n"
+        "    const mins = Math.floor((secs % 3600) / 60);\n"
+        "    if (days > 0) return days + ' ngày ' + hours + ' giờ trước';\n"
+        "    if (hours > 0) return hours + ' giờ ' + mins + ' phút trước';\n"
+        "    return mins + ' phút trước';\n"
+        "  }\n"
+        "  function tick(){\n"
+        "    const el = window.parent.document.getElementById('last-update-live');\n"
+        "    if (!el) return;\n"
+        "    const epoch = parseInt(el.getAttribute('data-epoch'), 10);\n"
+        "    if (isNaN(epoch)) return;\n"
+        "    el.textContent = relText(Date.now() - epoch);\n"
+        "  }\n"
+        "  tick();\n"
+        "  setInterval(tick, 30000);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
 def _fmt_delta(d):
@@ -3838,9 +3875,9 @@ def render_calendar_grid(scope_df, full_df):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
-.dtbl { border-collapse:collapse; width:100%; font-size:13px; font-family:'IBM Plex Mono',monospace; }
+.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
 .dtbl thead th.lbl { z-index:3; background:var(--chip); }
 /* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
@@ -4417,22 +4454,16 @@ st.markdown(
     html, body, .stApp {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    /* Nền "giấy dot-grid" hệ "Sổ Tay" (đổi từ giấy kẻ ngang theo yêu cầu -- hợp gu sổ tay chấm bi
-       hơn vở kẻ ngang): vẫn giữ 1 vạch lề dọc màu accent (mô phỏng lề đỏ vở học sinh, cách mép
-       trái 45px) làm chữ ký thị giác chung, nhưng đổi các dòng kẻ ngang thành lưới chấm tròn nhỏ
-       cách đều 20px (radial-gradient lặp lại qua background-size, KHÔNG dùng repeating-linear-
-       gradient như bản kẻ ngang cũ). 2 lớp bg-image dùng chung 1 khai báo background-size -- lớp
-       vạch lề (linear-gradient) phải đứng TRƯỚC và nhận size "auto" (bằng nguyên khung trang, chỉ
-       vẽ đúng 1 lần) để không bị chia lưới 20px theo lớp chấm. CHỈ áp cho .stApp (nền trang) --
-       KHÔNG được lan vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó
-       phải giữ mặt phẳng var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm
-       ở phần lề trang xung quanh. */
+    /* Nền "giấy dot-grid" hệ "Sổ Tay": lưới chấm tròn nhỏ cách đều 20px (radial-gradient lặp lại
+       qua background-size). Bỏ vạch lề dọc màu accent trước đây (mô phỏng lề đỏ vở học sinh) theo
+       yêu cầu -- chỉ còn lưới chấm, không còn gạch. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
+       vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó phải giữ mặt phẳng
+       var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm ở phần lề trang
+       xung quanh. */
     .stApp {
         background-color: var(--bg);
-        background-image:
-            linear-gradient(to right, transparent 45px, rgba(var(--accent-rgb),0.35) 45px, rgba(var(--accent-rgb),0.35) 46px, transparent 46px),
-            radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px);
-        background-size: auto, 20px 20px;
+        background-image: radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px);
+        background-size: 20px 20px;
     }
 
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 2rem !important; }
@@ -4620,9 +4651,18 @@ st.markdown(
        vì đứng SAU trong stylesheet này, cùng độ đặc hiệu selector nên nguồn sau thắng (xem thêm
        ghi chú "gap:0" ở khối đó). */
     [data-testid="stButtonGroup"] [role="radiogroup"] { gap: 6px !important; }
+    /* BaseWeb tự làm TRONG SUỐT cạnh viền giáp nút đang chọn (border-left/right-color:
+       transparent) trên 2 nút LÂN CẬN -- di sản từ kiểu dải liền khối cũ (viền đè khít lên
+       nhau để trông liền mạch), giờ các nút đã tách rời có khoảng cách nên để lộ ra thành viền
+       nửa vời/mất nét ở đúng cạnh giáp nút được chọn (xác nhận qua DOM inspect: border-color
+       của nút lân cận trả về "... rgba(0,0,0,0) ..." ở 1 cạnh thay vì đều 4 cạnh). Ép lại đều
+       cả 4 cạnh theo đúng var(--border) để huỷ hoàn toàn hành vi cũ đó. */
     [data-testid="stButtonGroup"] button {
         border-radius: 7px !important;
         margin: 0 !important;
+    }
+    [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+        border-color: var(--border) !important;
     }
 
     /* Riêng thanh điều hướng trang: căn giữa cả hàng nút.
@@ -4770,6 +4810,12 @@ st.markdown(
         .glass-card[style*="display: flex"] { flex-direction: column !important; gap: 14px !important; }
         .glass-card[style*="display: flex"] > div { border-right: none !important; }
 
+        /* Card "Ngày đang xem" (render_day_report): cố định 1 dòng trên mọi bề rộng, nhưng phần
+           chữ nhãn + cụm "Cập nhật gần nhất" (kém thiết yếu hơn ngày/trạng thái đang xem) ẩn hẳn
+           trên điện thoại thay vì cố nhét -- tổng độ rộng các phần "không co" (nhãn đủ chữ +
+           ngày + trạng thái) đã vượt màn hình hẹp, nếu không ẩn sẽ bị cắt cụt giữa chữ (icon
+           nhãn vẫn giữ lại, không mất hẳn ý nghĩa "đây là nhãn"). */
+        .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
@@ -4921,67 +4967,6 @@ st.markdown(
         .st-key-note_row > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] >
             [data-testid="stColumn"]:first-child { border-right: none; }
     }
-    /* Hàng tiêu đề ngày (trang Hôm nay, xem day_picker()): "Thứ X, D Tháng M" (Source Serif 4)
-       CĂN GIỮA ở dòng trên, nav chữ "‹ hôm qua · hôm nay · mai ›" (IBM Plex Mono) + icon lịch mở
-       popover xen giữa CĂN GIỮA ở dòng dưới -- cả 2 dòng cùng căn giữa theo yêu cầu. 3 nút
-       "hôm qua/hôm nay/mai" vẫn là st.button() THẬT (cần on_click để giữ nguyên logic nhảy
-       ngày/keyboard-shortcut-free-form cũ) -- CSS đè lại để trông như chữ thường/link, không
-       phải nút bấm. */
-    /* Cả khối "Thứ, ngày" + hàng điều hướng gộp thành 1 CARD riêng (cùng format thẻ .glass-card:
-       nền var(--card)/viền/bo góc/đổ bóng) nhưng HẸP hơn (chỉ vừa đúng nội dung, không full-width
-       như các thẻ khác) rồi CĂN GIỮA trang -- gợi cảm giác 1 tờ lịch xé để bàn/treo tường, tách
-       biệt khỏi khối nội dung report bên dưới. min-width chặn thẻ co quá hẹp khi ngày ngắn (vd
-       "Chủ Nhật, 1 Tháng 1" ngắn hơn nhiều so với tên thứ dài nhất). */
-    .st-key-day_nav_row {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.02);
-        padding: 16px 32px;
-        width: max-content;
-        min-width: 320px;
-        max-width: 100%;
-        margin: 4px auto 20px auto;
-    }
-    .st-key-day_nav_links.stHorizontalBlock { margin-top: 6px; justify-content: center !important; align-items: center !important; gap: 4px !important; }
-    .st-key-day_nav_links .dnl-dot { color: var(--text-4); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
-    .st-key-day_nav_links div[data-testid="stButton"] button {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        color: var(--text-2) !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        padding: 4px 2px !important;
-        width: auto !important;
-        white-space: nowrap !important;
-    }
-    .st-key-day_nav_links div[data-testid="stButton"] button:hover:not(:disabled) {
-        color: var(--accent) !important;
-        transform: none !important;
-    }
-    .st-key-day_nav_links div[data-testid="stButton"] button:disabled {
-        color: var(--text-4) !important;
-        opacity: 1 !important;
-    }
-    /* Icon lịch (popover chứa st.date_input, cột 3 của day_nav_row): thu về kích thước nút icon
-       nhỏ, không nền/viền như nút phụ mặc định -- chỉ hiện màu khi hover, đồng bộ nav chữ cạnh nó.
-       Nút trigger của st.popover có testid RIÊNG (stPopoverButton), KHÔNG bọc trong
-       div[data-testid="stButton"] như st.button() thường -- khác cấu trúc DOM, phải chọn thẳng
-       theo testid này (đã xác nhận qua DOM inspect, không phải suy đoán). */
-    .st-key-day_nav_row [data-testid="stPopoverButton"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        color: var(--text-2) !important;
-        padding: 4px !important;
-    }
-    .st-key-day_nav_row [data-testid="stPopoverButton"]:hover {
-        color: var(--accent) !important;
-        transform: none !important;
-    }
-
     /* Top 3 (Báo cáo ngày): tách khỏi bảng số liệu phía trên */
     .st-key-day_top3 { margin-top: 10px; }
     /* Ghi chú nhanh: badge giờ nhỏ (.qn-time) + chữ ghi chú thường NGOÀI badge (.qn-text, cùng
@@ -5590,8 +5575,6 @@ def render_day_report(df):
         st.info("Chưa có dữ liệu. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
         return
     active_days = sorted(df['Ngày'].dropna().unique())
-    # Không còn dòng phụ "ngày hoạt động.../Cập nhật gần nhất..." dưới tiêu đề ngày (bỏ theo yêu
-    # cầu, cho gọn -- mockup gốc cũng không có dòng này) -- day_picker() giờ chỉ cần "active_days".
     sel = day_picker(active_days)
     day_df = df[df['Ngày'] == sel]
     vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
@@ -5600,6 +5583,65 @@ def render_day_report(df):
     # _compute_alltime_records() trong đó sẽ băm lại cả df mỗi phím gõ, mất hết tác dụng cô lập
     # của fragment.
     sel_day_badges = _compute_alltime_records(df)["day_badges"].get(sel)
+
+    _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
+            "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
+            "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
+    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _dot = "<span style='color:var(--border);flex:0 0 auto;'>·</span>"
+    # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
+    # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
+    # tiên, Tổng quan giờ không còn là sub-tab mặc định.
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_tail = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        # epoch UTC thật (không phải lệch theo múi giờ máy chủ/máy khách) -- localize đúng ts
+        # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
+        # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        # Giờ phút giây tuyệt đối (_abs_str) dời vào title= (tooltip hover) thay vì hiện luôn
+        # trong chữ -- giữ đúng 1 dòng gọn, phần lớn chỉ cần biết "khoảng bao lâu trước", số giờ
+        # chính xác là chi tiết tra cứu thêm chứ không phải thông tin ai cũng cần thấy ngay.
+        # Cả cụm (dấu chấm + chữ) bọc chung 1 span "dcx-upd" flex riêng -- vừa là 1 flex item
+        # DUY NHẤT của hàng ngoài (co dãn/ẩn được nguyên cụm qua class, không lệ thuộc thứ tự
+        # nhiều item rời rạc), vừa tự có overflow:hidden riêng để chữ bên trong elipsis đúng chỗ.
+        _upd_tail = (
+            "<span class='dcx-upd' style='display:flex;align-items:center;gap:9px;min-width:0;"
+            "overflow:hidden;flex:1 1 auto;'>"
+            f"{_dot}"
+            f"<span style='font-size:14.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;"
+            f"white-space:nowrap;min-width:0;' title='Cập nhật lúc {_abs_str}'>Cập nhật gần nhất "
+            f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
+            f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b></span></span>"
+        )
+    # 1 hàng gọn: nhãn thu lại thành thẻ nhỏ bo góc (khác kiểu chữ hoa rời trước đây) + 1 vạch
+    # dọc mảnh phân tách, rồi tới nội dung cùng 1 cỡ chữ (14.5px, chỉ khác màu/độ đậm để vẫn
+    # phân cấp) -- không còn đủ 3 cỡ chữ chen nhau trên 1 dòng như bản trước. Cụm "Cập nhật gần
+    # nhất" (ít quan trọng nhất, dài nhất) được phép co lại + hiện "…" khi màn hẹp vừa phải
+    # (flex:1 1 auto), và ẩn hẳn cùng chữ nhãn "Ngày đang xem" (chỉ còn icon) ở mobile thật hẹp
+    # (xem rule .dcx-upd/.dcx-lbltxt trong khối @media (max-width: 640px)) -- nếu không, tổng độ
+    # rộng các phần "không co" (nhãn đủ chữ + ngày + trạng thái) đã vượt quá màn hình điện thoại,
+    # bị cắt cụt giữa chữ thay vì gọn gàng.
+    st.markdown(
+        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
+        "<div style='display:flex;align-items:center;gap:10px;'>"
+        "<span style='display:flex;align-items:center;flex:0 0 auto;font-size:11.5px;font-weight:600;"
+        "color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:7px;"
+        "padding:4px 9px;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;'>"
+        f"{_evt}<span class='dcx-lbltxt'>Ngày đang xem</span></span>"
+        "<span style='width:1px;align-self:stretch;background:var(--divider);flex:0 0 auto;'></span>"
+        "<div style='display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;'>"
+        f"<span style='font-size:14.5px;color:var(--text);font-weight:600;white-space:nowrap;flex:0 0 auto;'>"
+        f"{vn_dow}, {sel:%d/%m/%Y}</span>"
+        f"{_dot}"
+        f"<span style='font-size:14.5px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;'>{_sub}</span>"
+        f"{_upd_tail}"
+        "</div></div></div>",
+        unsafe_allow_html=True)
+    if _upd_tail:
+        _inject_relative_time_ticker()
 
     # Tính trước, vẽ SAU (vị trí tuỳ nhánh rỗng/có phiên bên dưới) -- xem _kindle_quote_card_html().
     _kq = _kindle_quote_of_day()
