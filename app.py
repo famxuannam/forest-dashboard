@@ -4672,6 +4672,36 @@ _TABLE_FONT_FACE = "".join(
     for _subset, _ranges in _TABLE_FONT_RANGES.items()
 )
 
+# Font "Trích dẫn hôm nay" (Hôm nay -- .kq-daily-mark/-text/-src, xem _render_daily_quote_card())
+# -- Cormorant Garamond, tự host giống 2 font trên. Chọn qua mockup ảnh gửi người dùng duyệt (đã
+# thử 6 phương án, chọn phương án "mảnh, cao, trang trọng" này). CHỈ 2 kiểu chữ đang dùng thật
+# (SemiBold Italic 600 cho mark+quote text, Bold 700 thường cho tên sách/tác giả) x 2 subset
+# (latin + vietnamese -- trích dẫn chỉ tiếng Anh gốc hoặc tiếng Việt dịch, không cần latin-ext/
+# cyrillic như Manrope phải phủ rộng cho toàn bộ UI).
+@st.cache_resource
+def _quote_font_b64():
+    out = {}
+    for style_name in ("SemiBoldItalic", "Bold"):
+        for subset in ("latin", "vietnamese"):
+            with open(os.path.join("assets", "fonts", f"CormorantGaramond-{style_name}-{subset}.woff2"), "rb") as f:
+                out[(style_name, subset)] = base64.b64encode(f.read()).decode()
+    return out
+
+_QUOTE_FONT_STYLES = {"SemiBoldItalic": ("italic", 600), "Bold": ("normal", 700)}
+_QUOTE_FONT_RANGES = {
+    "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+    "vietnamese": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+}
+_quote_font_b64_cache = _quote_font_b64()
+_QUOTE_FONT_FACE = "".join(
+    "@font-face { font-family:'Cormorant Garamond'; "
+    f"font-style:{_style}; font-weight:{_weight}; font-display:swap; "
+    f"src:url(data:font/woff2;base64,{_quote_font_b64_cache[(_style_name, _subset)]}) format('woff2'); "
+    f"unicode-range:{_ranges}; }}"
+    for _style_name, (_style, _weight) in _QUOTE_FONT_STYLES.items()
+    for _subset, _ranges in _QUOTE_FONT_RANGES.items()
+)
+
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
 # con + f-string HTML rải rác) -- (light, dark). Hệ "Sổ Tay": giấy ấm/ngà thay vì xám hệ thống
 # iOS -- không còn đối xứng với bảng systemGray của Apple như bản cũ, mỗi cặp light/dark ở đây
@@ -4690,7 +4720,7 @@ _TOK = {
 }
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
-    f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
@@ -5280,17 +5310,17 @@ st.markdown(
        trích dẫn khi trích dẫn dài đủ 2-3 dòng, phản hồi thực tế là "trông không đẹp". */
     [class*="st-key-kq_daily_srcrow"] { margin-top: 10px; }
     [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; }
-    .kq-daily-mark { font-size: 52px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
+    /* Font Cormorant Garamond (xem _QUOTE_FONT_FACE) -- chọn qua mockup ảnh gửi duyệt, cỡ chữ
+       chỉnh LỚN HƠN bản Manrope cũ (mark 52->58px, text 21->23px, src 16.5->17.5px) vì đây là
+       kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
+       đậm/vuông vức) nếu giữ nguyên số cũ. */
+    .kq-daily-mark { font-size: 58px; line-height: 1; color: var(--accent);
+        font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-style: italic;
         opacity: .5; margin-bottom: -14px; }
-    /* Chữ trích dẫn to hẳn (14.5px -> 21px, thêm weight 500) -- dễ đọc từ xa hơn, đúng vai trò
-       "điểm dừng mắt" của thẻ thay vì chữ nhỏ ngang hàng nội dung phụ khác trên trang. */
-    .kq-daily-text { font-size: 21px; line-height: 1.5; font-weight: 500; color: var(--text);
-        font-style: italic; white-space: pre-wrap; }
-    /* Tên sách (+ tác giả nếu có, xem docstring _render_daily_quote_card()) nằm trong cột riêng
-       cạnh nút ⭐ -- cỡ chữ tăng thêm (14.5px -> 16.5px) theo phản hồi thực tế "Title còn bé" so
-       với chữ trích dẫn 21px phía trên. */
-    .kq-daily-src { margin: 0; font-size: 16.5px; color: var(--text); font-weight: 700;
-        text-align: right; }
+    .kq-daily-text { font-size: 23px; line-height: 1.45; font-weight: 600; color: var(--text);
+        font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; white-space: pre-wrap; }
+    .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
+        font-family: 'Cormorant Garamond', Georgia, serif; text-align: right; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
@@ -7645,9 +7675,28 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # SUB-TAB: CẬP NHẬT
     # ==========================================
-    with _guide_tabs[6]:
+    with _guide_tabs[7]:
         st.caption("Các tính năng mới đáng chú ý, gộp theo đợt — mới nhất lên trước.")
 
+        guide_update("182-184", "Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng", [
+            "**Trích dẫn hôm nay** — thẻ chuyển lên đầu trang Hôm nay (ngay dưới \"Ngày đang xem\"), nền accent "
+            "đặc, chữ trích dẫn cỡ lớn kiểu chữ sách, kèm tên tác giả cạnh tên sách.",
+            "**Yêu thích** — bấm ★ trên bất kỳ trích dẫn/ghi chú Kindle nào để lưu lại, xem gộp toàn bộ ở "
+            "sub-tab \"Yêu thích\" riêng (trang Sách) — mỗi trích dẫn nằm trong 1 thẻ nền riêng cho dễ đọc, "
+            "thay vì hàng chữ trần.",
+            "**Import Kindle thông minh hơn** — tự nhận diện và gộp các bản \"nháp\" do tô highlight bằng bút "
+            "cảm ứng sinh ra (nhiều dòng gần giống nhau, cách nhau vài giây, câu sau dài hơn câu trước), chỉ "
+            "giữ lại bản đầy đủ nhất thay vì nhân đôi thành nhiều trích dẫn.",
+            "Kèm theo: sửa vài lỗi giao diện (tab Gundam mất kiểu dáng, nút ★ chồng lên chữ), dọn heading dư "
+            "thừa ở nhiều bảng số liệu, chữ Thứ trong Nhật ký đổi từ số sang chữ đầy đủ (Thứ Tư thay vì Thứ 4).",
+        ])
+        guide_update("181", "Rà soát & đơn giản hoá theo phản hồi thực tế", [
+            "Bớt: Top 3 Danh mục/Dự án ở Hôm nay/Báo cáo→Tuần, biểu đồ Gantt tự vẽ ở Sách/Gundam→Tổng quan, vài "
+            "phím tắt ít dùng (Shift+1-5, [ ], f/r/l).",
+            "Thêm: nút \"Gộp\" ghi chú nhanh vào ghi chú chính, sửa gán series Gundam tay khi suy luận tự động "
+            "đoán sai, view \"Chỉ số bất thường\" ở lần khám Sức khoẻ mới nhất, Tìm kiếm mở rộng sang Ghi chú "
+            "nhanh, checkbox xác nhận cho \"Khôi phục\", gộp 2 UI đồng bộ CalDAV thành 1.",
+        ])
         guide_update("158-165", "Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS", [
             "**Bảng vàng** — Bảng số liệu mỗi trang Báo cáo giờ có thêm \"Ngày nổi bật\" (top ngày nhiều giờ "
             "nhất trong kỳ đang xem), cộng **Kỷ lục** toàn thời gian (chung và riêng theo Nhóm/Dự án) gắn "
