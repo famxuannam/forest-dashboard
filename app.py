@@ -167,7 +167,7 @@ READING_LABELS = dict(
     item_col="Cuốn sách", count_label="Số cuốn", days_label="Ngày đọc",
     parts_label="Số phần đã đọc", part_recent_label="Phần gần nhất", part_word="phần",
     verb="đọc", ongoing="Đang đọc", empty_msg="Chưa có dữ liệu sách trong nhóm này.",
-    detail_label="Chi tiết từng cuốn", timeslot_label="Khung giờ đọc",
+    timeslot_label="Khung giờ đọc",
     timeslot_best="Hay đọc nhất", streak_label="Chuỗi đọc", pace_days_label="Số ngày đọc",
     pace_pct_label="% ngày có đọc", avg_hr_label="TB giờ/cuốn", avg_days_label="TB ngày/cuốn",
     fastest_label="Đọc nhanh nhất",
@@ -176,7 +176,7 @@ GUNDAM_LABELS = dict(
     READING_LABELS, item_col="Series", count_label="Số series", days_label="Ngày xem",
     parts_label="Số tập đã xem", part_recent_label="Tập gần nhất", part_word="tập",
     verb="xem", ongoing="Đang xem", empty_msg="Chưa có dữ liệu Gundam trong nhóm này.",
-    detail_label="Chi tiết từng series", timeslot_label="Khung giờ xem",
+    timeslot_label="Khung giờ xem",
     timeslot_best="Hay xem nhất", streak_label="Chuỗi xem", pace_days_label="Số ngày xem",
     pace_pct_label="% ngày có xem", avg_hr_label="TB giờ/series", avg_days_label="TB ngày/series",
     fastest_label="Xem nhanh nhất",
@@ -1225,9 +1225,57 @@ def parse_kindle_clippings(raw):
         added_at = pd.to_datetime(added_m.group(1), errors='coerce') if added_m else pd.NaT
         rows.append({'Tên Kindle': title, 'Tác giả': author, 'Loại': kind, 'Nội dung': content,
                      'Vị trí': location, 'Ngày thêm': added_at})
-    stats = {'raw': len(blocks), 'valid': len(rows), 'bookmarks': n_bookmark, 'invalid': n_invalid}
     cols = ['Tên Kindle', 'Tác giả', 'Loại', 'Nội dung', 'Vị trí', 'Ngày thêm']
-    return pd.DataFrame(rows, columns=cols), stats
+    df = pd.DataFrame(rows, columns=cols)
+    df, n_pen_merged = _collapse_kindle_pen_duplicates(df)
+    stats = {'raw': len(blocks), 'valid': len(df), 'bookmarks': n_bookmark, 'invalid': n_invalid,
+             'pen_merged': n_pen_merged}
+    return df, stats
+
+
+def _collapse_kindle_pen_duplicates(df):
+    """Gộp các highlight "nháp" do tô bằng bút cảm ứng (không phải chọn từ nhanh) sinh ra: Kindle
+    ghi lại MỖI LẦN đầu bút dịch chuyển như 1 highlight riêng trong My Clippings.txt, cách nhau vài
+    giây, nội dung câu sau luôn là PHẦN MỞ RỘNG (tiền tố + thêm chữ) của câu trước -- chỉ có bản
+    CUỐI CÙNG (dài/đầy đủ nhất) mới là highlight thật người dùng muốn giữ, 3-4 bản trước chỉ là
+    trạng thái trung gian lúc đang kéo bút. Heuristic: cùng sách + cùng Loại 'highlight' + cách
+    nhau tối đa 120 giây + nội dung bản trước là TIỀN TỐ (sau khi rstrip khoảng trắng) của bản sau
+    -> coi là 1 chuỗi nháp, chỉ giữ bản dài nhất (luôn là bản cuối chuỗi trong thực tế, nhưng lấy
+    max() để chắc chắn không phụ thuộc thứ tự). Ghi chú (Loại 'note') KHÔNG áp dụng -- gõ tay 1 lần
+    rồi lưu, không có kiểu nháp tăng dần này. Trả về (df đã gộp, số dòng đã bỏ vì là bản nháp)."""
+    if df.empty:
+        return df, 0
+    keep_mask = pd.Series(True, index=df.index)
+
+    def _flush(cluster):
+        if len(cluster) < 2:
+            return
+        longest = max(cluster, key=lambda i: len(str(df.loc[i, 'Nội dung'])))
+        for i in cluster:
+            if i != longest:
+                keep_mask.loc[i] = False
+
+    for _title, g in df[df['Loại'] == 'highlight'].groupby('Tên Kindle'):
+        g = g.sort_values('Ngày thêm', kind='stable')
+        cluster = []  # index list của chuỗi nháp đang gộp
+        prev_i = None
+        for i, row in g.iterrows():
+            if prev_i is None:
+                cluster = [i]
+            else:
+                prev_row = df.loc[prev_i]
+                gap_ok = (pd.notna(row['Ngày thêm']) and pd.notna(prev_row['Ngày thêm'])
+                          and (row['Ngày thêm'] - prev_row['Ngày thêm']).total_seconds() <= 120)
+                is_extension = str(row['Nội dung']).startswith(str(prev_row['Nội dung']).rstrip())
+                if gap_ok and is_extension:
+                    cluster.append(i)
+                else:
+                    _flush(cluster)
+                    cluster = [i]
+            prev_i = i
+        _flush(cluster)
+    n_dropped = int((~keep_mask).sum())
+    return df[keep_mask].reset_index(drop=True), n_dropped
 
 
 def _fuzzy_match_project(title, projects):
@@ -2108,7 +2156,6 @@ def render_session_bar(df):
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
-        "<div style='font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Phân bố độ dài phiên</div>"
         f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
@@ -2754,7 +2801,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
             {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
             {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
         ],
-        groups=[{"label": "Tổng kết", "sections": _grp_summary}],
+        sections=_grp_summary,
     )
 
     # Thẻ 2: Hoạt động — thẻ độc lập, tách khỏi thẻ trên
@@ -2817,7 +2864,6 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
         rows_html += '</tr>'
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap" style="margin-top:14px;">
-<div class="card-label" style="padding:14px 16px 0;margin:0 0 8px;">{labels['detail_label']}</div>
 <table class="dtbl">
 <thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
@@ -4787,9 +4833,6 @@ st.markdown(
     .stat-panel .chip.tw .ck { color: var(--accent-dark); }
     .stat-panel .chip.tw .cv { color: var(--accent); }
     .section-hd { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 18px 0 8px; letter-spacing: -0.2px; }
-    /* Nhãn nhóm màu xanh đặt BÊN TRONG thẻ (giống .sp-glabel) nhưng dùng độc lập, không cần
-       bọc trong .stat-panel -> tái dùng cho các thẻ tự dựng HTML khác (.dtbl-wrap). */
-    .card-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 10px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
     [data-testid="stExpander"] {
@@ -4906,12 +4949,16 @@ st.markdown(
         background: transparent !important; color: var(--accent) !important; font-weight: 600 !important;
         border-bottom-color: var(--accent) !important; box-shadow: none !important;
     }
-    .st-key-rl_view_tabs [role="tablist"] { justify-content: center !important; }
+    /* [class*=...] (substring), KHÔNG phải .st-key-rl_view_tabs (class chính xác) -- Sách dùng
+       key "rl_view_tabs", Gundam dùng "rl_view_tabs_gd" (tách riêng để không đụng state tab khi
+       chuyển qua lại 2 trang, xem render_reading_log()); chọn theo class chính xác trước đây chỉ
+       khớp Sách, khiến tab Gundam mất hẳn 2 rule căn giữa/ẩn vạch xám bên dưới. */
+    [class*="st-key-rl_view_tabs"] [role="tablist"] { justify-content: center !important; }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
        segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
-    .st-key-rl_view_tabs [role="tablist"]::after { display: none !important; }
+    [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
 
     /* Sub-tab của trang Hướng dẫn -- cùng khuôn Tổng quan/Chi tiết (Sách/Gundam) ở trên, tái
        dùng nguyên 2 rule để 3 nơi trong app nhất quán 1 kiểu "tab gạch chân". Key đặt
@@ -5178,26 +5225,51 @@ st.markdown(
     /* "Trích dẫn hôm nay" -- xem _render_daily_quote_card()/_kindle_quote_of_day(). Nền phớt màu
        accent (khác var(--card) trung tính của mọi thẻ khác trên trang) để mắt dừng lại ngay, đúng
        mục tiêu không bị lướt qua như bản cũ (từng chôn ở cuối trang, cùng màu mọi thẻ số liệu
-       khác). st.container(border=True, key="kq_daily_card") tự có viền/bo góc/bóng qua rule
-       [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- chỉ cần ghi đè màu nền +
-       margin dưới ở đây, không cần định nghĩa lại toàn bộ khung. */
-    .st-key-kq_daily_card { background: rgba(var(--accent-rgb),0.07) !important;
-        border-color: rgba(var(--accent-rgb),0.35) !important; margin-bottom: 16px !important; }
+       khác). Nền dùng color-mix() (KHÔNG phải rgba(...,0.07) như bản trước) -- rgba trong suốt để
+       lộ hoạ tiết chấm nền (.stApp) xuyên qua thẻ, phản hồi thực tế là "nhìn không giống thẻ thật".
+       color-mix() trộn ra 1 màu ĐẶC, vẫn tự đổi đúng theo theme sáng/tối vì var(--card) đổi theo
+       IS_DARK. st.container(border=True, key="kq_daily_card") tự có viền/bo góc/bóng qua rule
+       [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
+       margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
+       để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
+    .st-key-kq_daily_card {
+        background: color-mix(in srgb, var(--accent) 13%, var(--card)) !important;
+        border-color: color-mix(in srgb, var(--accent) 28%, var(--card)) !important;
+        padding: 26px 26px 22px !important;
+        /* margin ngang KHÔNG tự co width lại được -- Streamlit tự set width:100% (theo content-box
+           của khối cha) trên container này, percentage đó phớt lờ margin của chính nó (đúng chuẩn
+           CSS), nên chỉ margin suông sẽ đẩy lệch phải mà KHÔNG co bề rộng, đo bằng Playwright bounding
+           box xác nhận (x dịch +16 nhưng width giữ nguyên, đè hẳn ra ngoài card số liệu bên dưới).
+           Phải ép width bằng calc() để trừ đúng 32px (2 bên) thay vì trông chờ margin tự co. */
+        width: calc(100% - 32px) !important;
+        margin: 0 16px 16px !important;
+    }
+    /* Nút ⭐ to hơn hẳn bản cũ (26px cao -> 40px, bo tròn) -- phản hồi thực tế là khó bấm/khó thấy
+       ở size cũ, đây là hành động chính duy nhất của thẻ nên xứng đáng chiếm không gian hơn các
+       nút Sửa/Xoá/+ Ghi chú nhỏ ở "2. Nhật ký đọc". */
     .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] {
         background: transparent !important; border: none !important; box-shadow: none !important;
-        color: var(--text-3) !important; min-height: 0 !important; height: 26px !important;
-        padding: 0 4px !important;
+        color: var(--text-3) !important; width: 40px !important; height: 40px !important;
+        min-height: 0 !important; border-radius: 999px !important; padding: 0 !important;
+    }
+    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] span[data-testid="stIconMaterial"] {
+        font-size: 26px !important;
     }
     /* Đã Yêu thích -> icon màu accent, lý do xem chú thích ở rule [class*="st-key-kq_favbtn_on_"]
        phía trên (cùng hạn chế font Material Symbols không đổi hình dạng theo trạng thái). */
     [class*="st-key-kq_daily_favbtn_on"] div[data-testid="stButton"] button[kind="secondary"] {
         color: var(--accent) !important;
     }
-    .kq-daily-mark { font-size: 34px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
-        opacity: .55; margin-bottom: -6px; }
-    .kq-daily-text { font-size: 14.5px; line-height: 1.6; color: var(--text); font-style: italic;
-        white-space: pre-wrap; }
-    .kq-daily-src { margin-top: 10px; font-size: 12px; color: var(--text-2); font-weight: 600; }
+    .kq-daily-mark { font-size: 52px; line-height: 1; color: var(--accent); font-family: Georgia, serif;
+        opacity: .5; }
+    /* Chữ trích dẫn to hẳn (14.5px -> 19px, thêm weight 500) -- dễ đọc từ xa hơn, đúng vai trò
+       "điểm dừng mắt" của thẻ thay vì chữ nhỏ ngang hàng nội dung phụ khác trên trang. */
+    .kq-daily-text { font-size: 19px; line-height: 1.5; font-weight: 500; color: var(--text);
+        font-style: italic; white-space: pre-wrap; }
+    /* margin-top 10px -> 24px (bản cũ tên sách dính sát đáy thẻ) + căn phải + chữ to/đậm hơn hẳn
+       (12px/600 -> 14.5px/700) -- xứng tầm là điểm kết thay vì chữ chú thích mờ nhạt. */
+    .kq-daily-src { margin-top: 24px; font-size: 14.5px; color: var(--text); font-weight: 700;
+        text-align: right; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
@@ -5684,16 +5756,17 @@ def _render_daily_quote_card(kq):
     """Thẻ "Trích dẫn hôm nay" (kq từ _kindle_quote_of_day()) -- đứng NGAY DƯỚI card "Ngày đang
     xem", TRƯỚC mọi nội dung khác của trang Hôm nay (kể cả khi ngày đang xem trống phiên), thay vì
     chôn ở cuối "1. Tổng quan ngày"/dưới "Tham khảo cho lên kế hoạch" như bản cũ -- phản hồi thực
-    tế là quá dễ bị lướt qua ở vị trí cũ. Có nhãn ".card-label" (đúng khuôn dùng chung toàn app,
-    không phải khối chữ nghiêng lạc lõng) + nền phớt màu accent (".kq-daily", xem CSS) để tách hẳn
-    khỏi các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh
-    như bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các
-    câu đã đánh dấu."""
+    tế là quá dễ bị lướt qua ở vị trí cũ. KHÔNG còn nhãn chữ "Trích dẫn hôm nay" phía trên (bản
+    trước) -- dấu " lớn ở góc đã đủ báo hiệu đây là 1 trích dẫn; nền phớt accent ĐẶC (không còn
+    rgba trong suốt lộ chấm nền, xem CSS .st-key-kq_daily_card dùng color-mix()) để tách hẳn khỏi
+    các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh như
+    bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các câu
+    đã đánh dấu. Margin ngang 16px (thay vì full-width như card "Ngày đang xem" phía trên) để khớp
+    đúng bề rộng các card số liệu bên dưới (nằm trong expander có padding riêng)."""
     with st.container(key="kq_daily_card", border=True):
-        c_lbl, c_fav = st.columns([6, 1])
-        with c_lbl:
-            st.markdown("<span class='card-label' style='margin:0;'>Trích dẫn hôm nay</span>",
-                        unsafe_allow_html=True)
+        c_mark, c_fav = st.columns([6, 1])
+        with c_mark:
+            st.markdown("<div class='kq-daily-mark'>“</div>", unsafe_allow_html=True)
         with c_fav:
             _fav = bool(kq.get('Yêu thích', False))
             if st.button("", icon=":material/star:" if _fav else ":material/star_outline:",
@@ -5702,7 +5775,6 @@ def _render_daily_quote_card(kq):
                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                 st.rerun()
         st.markdown(
-            "<div class='kq-daily-mark'>“</div>"
             f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>"
             f"<div class='kq-daily-src'>— {html_escape(str(kq['Cuốn sách']))}</div>",
             unsafe_allow_html=True)
@@ -6491,6 +6563,8 @@ elif nav == "Tuỳ biến":
                             _extra_parts.append(f"{k_stats['bookmarks']} bookmark không có nội dung")
                         if k_stats['invalid']:
                             _extra_parts.append(f"{k_stats['invalid']} dòng không nhận dạng được")
+                        if k_stats['pen_merged']:
+                            _extra_parts.append(f"{k_stats['pen_merged']} bản nháp bút cảm ứng đã gộp lại")
                         _extra = f" (bỏ {', '.join(_extra_parts)})" if _extra_parts else ""
                         st.caption(f"Đọc được **{k_stats['valid']}** trích dẫn/ghi chú hợp lệ từ "
                                    f"**{k_df['Tên Kindle'].nunique()}** cuốn/nguồn{_extra}. Xem trước:")
@@ -7449,7 +7523,11 @@ elif nav == "Hướng dẫn":
             "ghép với 1 Dự án đã có (gợi ý sẵn theo tên gần giống nhất) hoặc để \"Nguồn độc lập\" kèm tên tự đặt "
             "(vd tạp chí đọc định kỳ, không phải sách theo dõi tiến độ) — xác nhận 1 lần, các lần tải file mới "
             "sau tự nhớ đúng cuốn/nguồn đó. Tải lại **toàn bộ** file (Kindle luôn xuất cộng dồn từ trước tới "
-            "giờ, không phải chỉ phần mới) vẫn an toàn — trích dẫn trùng tự động bị bỏ qua, không nhân đôi.",
+            "giờ, không phải chỉ phần mới) vẫn an toàn — trích dẫn trùng tự động bị bỏ qua, không nhân đôi. Nếu "
+            "hay tô highlight bằng bút cảm ứng: Kindle ghi lại MỖI LẦN đầu bút dịch chuyển như 1 highlight riêng "
+            "trong `My Clippings.txt` (cách nhau vài giây, câu sau dài hơn câu trước) — app tự nhận ra các bản "
+            "nháp này (cùng sách, cách nhau dưới 2 phút, nội dung nối dài nhau) và chỉ giữ lại bản đầy đủ nhất, "
+            "không tạo ra nhiều highlight trùng ý cho cùng 1 lần tô.",
             where="Tuỳ biến → 1. Dữ liệu đầu vào")
 
         guide_item(
