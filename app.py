@@ -1004,10 +1004,36 @@ HEALTH_METRICS_COLS = ["id", "Ngày lấy mẫu", "Nhóm", "Chỉ số", "Giá t
                         "Đơn vị", "Khoảng tham chiếu", "Ref thấp", "Ref cao"]
 
 
+def _backfill_ref_range(df):
+    """Đồng bộ Khoảng tham chiếu của mỗi Chỉ số theo lần khám GẦN NHẤT có ghi nhận giá trị này --
+    phiếu xét nghiệm cùng 1 chỉ số qua các lần khám thường lấy chung 1 khoảng tham chiếu (cùng
+    máy/lab), lệch nhau chỉ là do cách ghi (thiếu hẳn, hoặc dấu cách khác nhau quanh dấu </≤) chứ
+    không phải khoảng tham chiếu thật sự đổi -- áp GHI ĐÈ khoảng của lần gần nhất lên MỌI lần khám
+    cũ hơn của cùng (Nhóm, Chỉ số), kể cả những lần đã có sẵn giá trị khác. Không đổi các cột khác
+    (Giá trị/Giá trị gốc) -- chỉ chuẩn hoá 3 cột khoảng tham chiếu."""
+    if df.empty:
+        return df
+    df = df.sort_values('Ngày lấy mẫu')
+    # CHÚ Ý: không dùng groupby(...).apply(hàm trả nguyên group) -- pandas (>=2.2) âm thầm loại
+    # bỏ chính các cột dùng làm khoá group ("Nhóm"/"Chỉ số") khỏi kết quả nối lại trong trường hợp
+    # này, làm vỡ mọi chỗ đọc 2 cột đó sau đó (đã bắt lỗi này qua kiểm thử thật, không phải suy
+    # đoán). Dùng tail(1) lấy đúng 1 dòng gần nhất có ref mỗi nhóm rồi merge lại là cách an toàn.
+    has_ref = df.dropna(subset=['Ref thấp', 'Ref cao'], how='all')
+    if has_ref.empty:
+        return df
+    latest_ref = has_ref.groupby(['Nhóm', 'Chỉ số']).tail(1)[
+        ['Nhóm', 'Chỉ số', 'Khoảng tham chiếu', 'Ref thấp', 'Ref cao']]
+    merged = df.drop(columns=['Khoảng tham chiếu', 'Ref thấp', 'Ref cao']).merge(
+        latest_ref, on=['Nhóm', 'Chỉ số'], how='left')
+    return merged[df.columns]
+
+
 @st.cache_data
 def load_health_metrics():
     """Đọc bảng health_metrics (chỉ số xét nghiệm máu định kỳ, xem tab "Sức khoẻ") -- dạng long
-    format: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm, không phải 1 cột/chỉ số."""
+    format: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm, không phải 1 cột/chỉ số. Khoảng tham chiếu
+    được chuẩn hoá qua _backfill_ref_range() ngay khi đọc (xem docstring hàm đó) -- mọi nơi đọc từ
+    hàm này (Báo cáo/Lịch sử/Dữ liệu đầu vào) đều thấy khoảng tham chiếu đã đồng bộ."""
     sb = _get_supabase()
     res = sb.table("health_metrics").select(
         "id,test_date,category,indicator,value,value_raw,unit,ref_raw,ref_low,ref_high").execute()
@@ -1018,7 +1044,7 @@ def load_health_metrics():
         "value": "Giá trị", "value_raw": "Giá trị (gốc)", "unit": "Đơn vị",
         "ref_raw": "Khoảng tham chiếu", "ref_low": "Ref thấp", "ref_high": "Ref cao"})
     df["Ngày lấy mẫu"] = pd.to_datetime(df["Ngày lấy mẫu"], format='ISO8601')
-    return df[HEALTH_METRICS_COLS]
+    return _backfill_ref_range(df[HEALTH_METRICS_COLS])
 
 
 def _parse_ref_range(raw):
@@ -2265,8 +2291,11 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     for i, (name, x0, x1, col) in enumerate(BUOI_BANDS):
         lo = -PAD if i == 0 else x0 - 0.5
         hi = 23 + PAD if i == _last else x1 - 0.5
+        # annotation_position="bottom left" (không phải "top left") -- nhãn buổi đặt SÁT ĐÁY dải
+        # màu, tránh đụng độ với legend nằm NGAY TRÊN đỉnh biểu đồ (format_plotly_fig() đặt legend
+        # ở y=1.02, quá gần đỉnh vùng vẽ để còn chỗ cho nhãn "top" không bị đè/chen chúc).
         fig.add_vrect(x0=lo, x1=hi, fillcolor=col, opacity=1, layer="below", line_width=0,
-                      annotation_text=name.strip(), annotation_position="top left",
+                      annotation_text=name.strip(), annotation_position="bottom left",
                       annotation=dict(font_size=11, font_color="#9a9aa0"))
 
     y_max = float(tot.max()) or 1.0
@@ -3425,14 +3454,17 @@ def _render_health_report(df_health):
                 # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
                 # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
                 # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
-                # Đơn vị, Khoảng tham chiếu) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
-                # cùng 1 xét nghiệm) -- chỉ giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn
-                # thông dụng, dễ đọc hơn tên đầy đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt
-                # nhanh) -- Lịch sử Sức khoẻ vẫn giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
+                # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
+                # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
+                # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
+                # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
+                # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
+                # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
+                # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
                 _abn_latest = (
                     _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
                     .sort_values('_namelen')
-                    .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Khoảng tham chiếu'], keep='first')
+                    .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
                     .drop(columns='_namelen'))
             if _abn_latest.empty:
                 st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
@@ -3521,11 +3553,7 @@ def _render_health_report(df_health):
         st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
         if is_abn.any():
             st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
-        _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
-        _tbl['Trạng thái'] = ['⚠️ Bất thường' if a else '' for a in is_abn]
-        _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
-        _tbl['Ngày lấy mẫu'] = _tbl['Ngày lấy mẫu'].dt.strftime('%d/%m/%Y')
-        st.dataframe(_tbl, hide_index=True, width='stretch')
+        render_health_log_table(s_num, is_abn)
 
 
 def _render_health_history(df_health):
@@ -4293,6 +4321,34 @@ def render_detail_table(scope_df):
 """, unsafe_allow_html=True)
 
 
+def render_health_log_table(s_num, is_abn):
+    """Bảng từng lần đo của 1 chỉ số, dưới biểu đồ theo dõi (Sức khoẻ -> Báo cáo, mục "2. Biểu đồ
+    theo dõi") -- dùng cùng khung .dtbl (viền/nền/header dính) với các bảng Báo cáo Thời gian
+    (render_data_table/render_detail_table) thay vì st.dataframe() mặc định, cho đồng bộ giao diện
+    toàn app thay vì lạc phong cách ở riêng trang này."""
+    _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
+    _tbl['Bất thường'] = list(is_abn)
+    _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
+    rows_html = ''
+    for _, r in _tbl.iterrows():
+        _status = "<span style='color:#ff3b30;font-weight:600;'>⚠️ Bất thường</span>" if r['Bất thường'] else ''
+        rows_html += (
+            '<tr class="prow">'
+            f'<td class="lbl">{r["Ngày lấy mẫu"]:%d/%m/%Y}</td>'
+            f'<td>{html_escape(str(r["Giá trị (gốc)"]))}</td>'
+            f'<td class="txt">{html_escape(str(r["Đơn vị"])) if pd.notna(r["Đơn vị"]) else ""}</td>'
+            f'<td class="txt">{html_escape(str(r["Khoảng tham chiếu"])) if pd.notna(r["Khoảng tham chiếu"]) else ""}</td>'
+            f'<td class="txt">{_status}</td>'
+            '</tr>')
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Ngày lấy mẫu</th><th>Giá trị</th><th class="txt">Đơn vị</th>
+<th class="txt">Khoảng tham chiếu</th><th class="txt">Trạng thái</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+
 def render_period_table(df, time_col):
     """Bảng theo kỳ cho MỘT nhóm/dự án: mỗi kỳ (Tuần/Tháng) là một dòng,
     các cột Số giờ (tô heat) / Số cây / Số ngày, kèm dòng Tổng."""
@@ -4359,23 +4415,38 @@ def guide_item(img, title, body_md, tip=None, where=None):
             st.info(tip, icon=":material/lightbulb:")
 
 
-def guide_update(pr_no, title, bullets, latest_pr_lines=None):
+def guide_update(pr_no, title, bullets, latest_pr_lines=None, total_lines_at_pr=None):
     """Một mục trong tab "Cập nhật": không có ảnh (đổi UI qua nhiều bản nhỏ nên chụp ảnh sẽ lỗi
     thời rất nhanh) -- chỉ tiêu đề + số PR + danh sách gạch đầu dòng, dùng chung khung thẻ với
     guide_item() qua tiền tố key "guide_" (CSS [class*="st-key-guide"] áp cho cả 2).
 
     latest_pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục này)
     của PR MỚI NHẤT trong cụm pr_no (vd pr_no="182-184" -> số dòng của #184) -- hiện thành 1 chip
-    nhỏ cạnh nhãn "PR #...", cho thấy quy mô thay đổi mã nguồn qua từng đợt. Không tự tính lại
-    mỗi lần chạy (app không gọi GitHub API lúc runtime, không phải kiến trúc phù hợp cho 1
-    dashboard cá nhân) -- số liệu tĩnh, cần điền tay khi thêm mục Cập nhật mới."""
+    nhỏ cạnh nhãn "PR #...", cho thấy quy mô thay đổi mã nguồn qua từng đợt.
+
+    total_lines_at_pr: tổng số dòng CỦA CẢ app.py (wc -l) tại đúng commit merge PR mới nhất trong
+    cụm (tra qua `git show <commit>:app.py | wc -l`) -- hiện thành 1 chip đứng TRƯỚC chip
+    latest_pr_lines, cho thấy quy mô toàn bộ mã nguồn lớn dần theo thời gian (khác latest_pr_lines
+    -- chỉ đo riêng 1 PR). 2 cụm PR "132,133,136,137" và "125,126,139,140" không còn commit gốc
+    riêng lẻ trong lịch sử git (đã bị squash/rebase gộp cùng các PR lân cận ở thời điểm đó) --
+    dùng tạm số dòng tại commit gần nhất còn truy được (#142) cho cả 2, chỉ mang tính ước lượng.
+
+    Cả 2 số liệu đều KHÔNG tự tính lại mỗi lần chạy (app không gọi GitHub API/git lúc runtime,
+    không phải kiến trúc phù hợp cho 1 dashboard cá nhân) -- số liệu tĩnh, cần điền tay khi thêm
+    mục Cập nhật mới."""
     with st.container(border=True, key=f"guide_update_{pr_no}"):
-        _chip = ""
+        _chips = []
+        if total_lines_at_pr is not None:
+            _chips.append(
+                "<span style='font-size:11px;font-weight:600;color:var(--text-2);"
+                "background:var(--chip);border-radius:999px;padding:2px 9px;'>"
+                f"{total_lines_at_pr} dòng mã nguồn</span>")
         if latest_pr_lines is not None:
-            _chip = (
+            _chips.append(
                 "<span style='font-size:11px;font-weight:600;color:var(--accent);"
                 "background:rgba(var(--accent-rgb),0.12);border-radius:999px;padding:2px 9px;'>"
                 f"{latest_pr_lines} dòng thay đổi</span>")
+        _chip = "".join(_chips)
         st.markdown(
             "<div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>"
             f"<span style='font-size:11px;font-weight:700;color:var(--text-2);"
@@ -5286,6 +5357,18 @@ st.markdown(
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin-bottom: 10px !important;
     }
     [class*="st-key-kqrow_fav_"]:last-child { margin-bottom: 0 !important; }
+    /* Trích dẫn nhiều dòng (thường gặp -- trích dẫn dài hơn 1 dòng ở bề rộng cột chữ ~83%): cột
+       chữ (rc1) là 1 flex item lồng nhiều lớp bên trong hàng cột (rc1/rc2 icon) -- đã xác minh qua
+       DevTools rằng khi chữ tự xuống dòng, Chromium tính sai chiều cao "auto" của các lớp bọc
+       trung gian (kẹt ở chiều cao ứng với 1 dòng dù chữ đã xuống 2+ dòng thật), khiến dòng cuối ăn
+       lẹm gần hết phần đệm dưới lẽ ra phải có (đo qua DevTools: từ ~16px dự kiến tụt còn ~1px thật
+       tế). Không sửa được triệt để bằng cách ép display/height lên các lớp bọc đó (đã thử nhiều
+       cách, kể cả tách cụm nút ra khỏi flex row bằng position:absolute -- đều làm vỡ vị trí cụm
+       nút bên phải) -- tăng riêng padding-bottom (16px -> 30px, bù thêm gần 1 dòng chữ) là cách an
+       toàn nhất, không đụng cấu trúc layout đang hoạt động ổn định ở mọi nơi khác. Không tuyệt đối
+       hoàn hảo cho trích dẫn dài 3+ dòng, nhưng đã kiểm tra: cải thiện rõ rệt cho ca 1-2 dòng phổ
+       biến, không làm ca 1 dòng (không có bug) trông mất cân đối rõ rệt. */
+    [class*="st-key-kqrow_fav_"] { padding-bottom: 30px; }
     /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
        THẬT (không phải .jrows/.jrow HTML tĩnh -- xem _render_reading_kindle_days()), nên không tự
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
@@ -7669,14 +7752,14 @@ elif nav == "Hướng dẫn":
             "giữ lại bản đầy đủ nhất thay vì nhân đôi thành nhiều trích dẫn.",
             "Kèm theo: sửa vài lỗi giao diện (tab Gundam mất kiểu dáng, nút ★ chồng lên chữ), dọn heading dư "
             "thừa ở nhiều bảng số liệu, chữ Thứ trong Nhật ký đổi từ số sang chữ đầy đủ (Thứ Tư thay vì Thứ 4).",
-        ], latest_pr_lines=69)
+        ], latest_pr_lines=69, total_lines_at_pr=7690)
         guide_update("181", "Rà soát & đơn giản hoá theo phản hồi thực tế", [
             "Bớt: Top 3 Danh mục/Dự án ở Hôm nay/Báo cáo→Tuần, biểu đồ Gantt tự vẽ ở Sách/Gundam→Tổng quan, vài "
             "phím tắt ít dùng (Shift+1-5, [ ], f/r/l).",
             "Thêm: nút \"Gộp\" ghi chú nhanh vào ghi chú chính, sửa gán series Gundam tay khi suy luận tự động "
             "đoán sai, view \"Chỉ số bất thường\" ở lần khám Sức khoẻ mới nhất, Tìm kiếm mở rộng sang Ghi chú "
             "nhanh, checkbox xác nhận cho \"Khôi phục\", gộp 2 UI đồng bộ CalDAV thành 1.",
-        ], latest_pr_lines=960)
+        ], latest_pr_lines=960, total_lines_at_pr=7448)
         guide_update("158-165", "Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS", [
             "**Bảng vàng** — Bảng số liệu mỗi trang Báo cáo giờ có thêm \"Ngày nổi bật\" (top ngày nhiều giờ "
             "nhất trong kỳ đang xem), cộng **Kỷ lục** toàn thời gian (chung và riêng theo Nhóm/Dự án) gắn "
@@ -7685,16 +7768,16 @@ elif nav == "Hướng dẫn":
             "duyệt; mỗi dòng sửa/xoá được riêng, tách biệt với Ghi chú chính. Xem mục \"Ghi chú nhanh từ iOS\" "
             "trong tab Hôm nay.",
             "Kèm theo: gọn lại bố cục di động, sửa chip Bảng số liệu tràn khung khi giá trị dài.",
-        ], latest_pr_lines=46)
+        ], latest_pr_lines=46, total_lines_at_pr=6115)
         guide_update("166-167", "Logo mới, đồng bộ phong cách nút gọn toàn app", [
             "Đổi logo sang thiết kế mới, tự đổi màu theo đúng accent đang chọn thay vì 1 màu cố định.",
             "Đồng bộ phong cách nút bấm gọn (ôm sát chữ, không cao quá khổ) cho toàn bộ nút trong tab Tuỳ biến.",
-        ], latest_pr_lines=79)
+        ], latest_pr_lines=79, total_lines_at_pr=6162)
         guide_update("155,157", "Đồng bộ nhanh làm phương án mặc định", [
             "Tab \"1. Dữ liệu đầu vào\" giờ ưu tiên **Đồng bộ nhanh** — 1 nút nạp cả Forest, Reminder và lịch "
             "Work cùng lúc từ file Shortcut đã tải lên, thay vì phải làm 3 bước tay riêng lẻ.",
             "3 cách tải tay cũ vẫn còn, gộp vào 1 khối thu gọn \"Dự phòng\" — dùng khi cần thao tác riêng lẻ.",
-        ], latest_pr_lines=338)
+        ], latest_pr_lines=338, total_lines_at_pr=5654)
         guide_update("132,133,136,137", "Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc", [
             "**Báo cáo → Năm** — bản tổng kết 1 năm cụ thể: hero số liệu, Biểu đồ lịch trọn năm, Đọc sách & "
             "Gundam trong năm, Bảng số liệu.",
@@ -7704,16 +7787,16 @@ elif nav == "Hướng dẫn":
             "tự chọn theo cài đặt hệ thống.",
             "**Nhịp làm việc** — mục mới trong Hướng dẫn, hướng dẫn cách dùng app theo ngày/tuần/tháng thay vì "
             "chỉ mô tả tính năng.",
-        ], latest_pr_lines=79)
+        ], latest_pr_lines=79, total_lines_at_pr=5089)
         guide_update("141-146", "Thêm phím tắt bàn phím cho toàn app", [
             "1-7 nhảy nhanh giữa các trang, N mở nhanh Ghi chú ngày của hôm nay và focus thẳng vào ô soạn, "
             "/ focus vào ô Tìm kiếm, Esc bỏ focus mà không xoá từ khoá đang gõ.",
             "Xem đầy đủ danh sách phím tắt ở mục \"Phím tắt bàn phím\" trong tab Tổng quan.",
-        ], latest_pr_lines=15)
+        ], latest_pr_lines=15, total_lines_at_pr=5139)
         guide_update("125,126,139,140", "Trang Hôm nay, 14 màu accent, logo & wordmark", [
             "**Hôm nay** ra đời — tách từ lát cắt \"Ngày\" trong Báo cáo, thành mục đầu tiên và mặc định trên "
             "thanh điều hướng vì đây là trang mở nhiều nhất mỗi ngày.",
             "Bảng màu accent mở rộng lên **14 màu**, chọn qua bản xem trước tương tác, áp dụng ngay cho nút, "
             "biểu đồ và bảng nhiệt toàn app.",
             "Thêm logo và wordmark \"Forest Dashboard\" thay cho tiêu đề chữ trơn.",
-        ], latest_pr_lines=6)
+        ], latest_pr_lines=6, total_lines_at_pr=5089)
