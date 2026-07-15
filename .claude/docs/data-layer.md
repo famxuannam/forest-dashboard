@@ -14,6 +14,7 @@ cặp hàm:
 | `mapping`          | `load_mapping()`      | `save_mapping()`                   | Người dùng gán tay trong app      |
 | `deleted_sessions` | `load_deleted()`      | `add_deleted()`                    | Nội bộ (khi xoá phiên trong app)  |
 | `notes`            | `load_notes()`        | (lưu trong hàm render ghi chú)     | Người dùng gõ trong app           |
+| `quick_notes`      | `load_quick_notes()`  | (Shortcut iOS tự INSERT qua REST API) · `update_quick_note()`/`delete_quick_note()` (sửa/xoá lẻ trong app) · `save_quick_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Shortcut iOS (không qua app) |
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | (upsert trực tiếp trong nơi dùng)  | Nội bộ (màu accent...)            |
@@ -21,6 +22,7 @@ cặp hàm:
 | `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (insert-nếu-mới theo `dedupe_hash` tự tính lại từ file, ignore_duplicates -- dùng cho import) · `save_kindle_highlights_raw_bulk()` (ghi đè đúng `dedupe_hash`/`parent_hash` có sẵn, chỉ dùng khi Khôi phục) · `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` (sửa/xoá/thêm ghi chú trong app) | File `My Clippings.txt` xuất từ Kindle + người dùng sửa/thêm trong app |
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
 | `deleted_kindle_highlights` | `load_deleted_kindle()` | `add_deleted_kindle()` (cộng dồn) · `save_deleted_kindle()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá trích dẫn Kindle trong app) |
+| `gundam_overrides` | `load_gundam_overrides()` (trả `dict {date: series}`) | `save_gundam_override()`/`delete_gundam_override()` (gán/bỏ gán 1 ngày trong app) · `save_gundam_overrides_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng sửa tay ở trang Gundam → "Sửa gán series tự động" |
 
 Mỗi `load_*` bọc 1 lần đọc bảng Supabase, cache bằng `@st.cache_data`; `save_*`/`sync_*` tương ứng
 ghi xong rồi **bắt buộc** gọi `st.cache_data.clear()` — quên bước này là bug kinh điển (UI hiện dữ
@@ -114,6 +116,27 @@ app.py, cùng khuôn 2 cột + icon nút nhỏ với hàng "Ghi chú nhanh" (`qn
 với người dùng: Reminders chỉ ghi NGÀY hoàn thành chương (không có giờ) nên không thể suy luận
 đáng tin quote thuộc chương nào trong 1 ngày đọc nhiều chương, còn "Vị trí" tăng dần theo trang
 sách lại tự nhiên đúng thứ tự đọc thật (đọc tuần tự).
+
+## `quick_notes`: "hộp thư nháp" trong ngày, gộp tay vào `notes`
+
+Ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG qua app) — quy trình thực tế: ghi chú nhanh suốt
+ngày qua Siri/Shortcut, tối tổng hợp thành Ghi chú chính (`notes`) rồi xoá. `render_note_editor()`
+có nút "Gộp" trên mỗi dòng quick note: chèn nội dung vào cuối ô soạn Quill đang mở (hoặc mở ô soạn
+nếu chưa mở), đánh dấu dòng đó "chờ xoá" trong `session_state`; chỉ THỰC SỰ gọi `delete_quick_note()`
+sau khi người dùng bấm "Cập nhật" lưu ghi chú chính thành công (Huỷ/Xoá ghi chú thì chỉ bỏ đánh
+dấu, không đụng bảng) — tránh mất ghi chú nhanh nếu đổi ý giữa chừng trước khi lưu. 2 bảng vẫn tách
+biệt hoàn toàn, không có quan hệ khoá ngoại nào được lưu.
+
+## `gundam_overrides`: gán tay ngày → series, ghi đè suy luận tự động
+
+Forest chỉ có 1 tag `GUNDAM_TAG` chung cho mọi phiên xem Gundam, không phân biệt được đang xem
+series nào — `_assign_gundam_sessions()` suy luận bằng cách gán mỗi NGÀY có phiên Gundam vào series
+có lần hoàn thành reminder GẦN NHẤT (`pd.merge_asof(direction='nearest')`). Suy luận này có thể sai
+nếu 2 series được xem xen kẽ nhau. `gundam_overrides` (khoá theo `session_date`, KHÔNG theo từng
+phiên — vì bản thân suy luận tự động cũng gán theo ngày) cho phép ghi đè tay; `_assign_gundam_sessions()`
+nhận thêm tham số `overrides` (dict `{date: series}` từ `load_gundam_overrides()`), áp dụng SAU
+`merge_asof` nên override luôn thắng. UI sửa nằm ở trang Gundam → expander "Sửa gán series tự động"
+(chỉ hiện khi có từ 2 series trở lên — 1 series duy nhất thì suy luận không thể sai).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 

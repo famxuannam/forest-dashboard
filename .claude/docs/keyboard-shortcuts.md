@@ -8,13 +8,16 @@ cụ thể (đặc biệt bên trong ô ghi chú).
 Hàm này gọi `components.html(js, height=0)` với 1 chuỗi JS lớn, xử lý:
 
 - Phím số `1`-`7`: nhảy nav chính (index theo `NAV`).
-- `Shift+1`..`Shift+5`: nhảy sub-tab trang Báo cáo, **index theo `BAOCAO_SUBS`** — đổi thứ tự list
-  này ở Python thì phím tắt tự đổi theo, KHÔNG cần sửa gì trong JS. Chỉ cần sửa doc/help-text nếu
-  thứ tự đổi.
-- `n`/`f`/`r`/`l`/`/`/`?`, phím mũi tên, `[`/`]`: các shortcut điều hướng nhanh khác (n = ghi chú
-  mới, f/r = mở tab tải Forest/Reminder VÀ bấm luôn nút chọn file, l = mở tab Đồng bộ lịch).
+- `n`/`/`/`?`, phím mũi tên trái/phải (chỉ ở trang Hôm nay): các shortcut điều hướng nhanh khác
+  (n = mở nhanh ghi chú chính của hôm nay, / = focus ô Tìm kiếm, ? = bật/tắt bảng trợ giúp).
 - Các phím tắt này chủ động **bị bỏ qua khi đang gõ trong 1 ô input** (input/textarea đang focus) —
   giữ nguyên hành vi này khi thêm phím mới, tránh phím tắt "nuốt" mất ký tự người dùng đang gõ.
+- Đã bỏ `Shift+1`..`Shift+5` (nhảy sub-tab Báo cáo), `f`/`r`/`l` (mở nhanh tab trong Tuỳ biến),
+  `[`/`]` (chuyển tab Sách/Gundam) sau khi rà soát thực tế xác nhận ít dùng — cùng lúc xoá luôn các
+  hàm JS chỉ phục vụ riêng chúng (`goUploadTab`, `watchAndFocusButton`, `clickTabByLabel`,
+  `clickSegmentedWithinKey`, `openExpanderByHeader`). Nếu cần thêm lại kiểu shortcut "nhảy tới 1
+  tab/expander cụ thể rồi focus nút" trong tương lai, các hàm này là điểm khởi đầu tốt (đã có sẵn
+  logic chờ Streamlit rerun qua `runChain()`/`pollUntil()`), dù đã bị xoá khỏi code hiện tại.
 
 ## Ô ghi chú (Quill) cần 1 bộ tiêm JS RIÊNG: `_inject_note_editor_shortcuts()`
 
