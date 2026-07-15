@@ -3863,11 +3863,11 @@ def render_calendar_grid(scope_df, full_df):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
-.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
+.dtbl { border-collapse:collapse; width:100%; font-size:13px; font-family:'IBM Plex Mono',monospace; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--bg); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
-.dtbl thead th.lbl { z-index:3; background:var(--bg); }
+.dtbl thead th.lbl { z-index:3; background:var(--chip); }
 /* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
    (Tuần/Tháng) đứng dưới -- cả 2 đều "dính" khi cuộn dọc, xếp chồng đúng vị trí bằng top. */
 .dtbl thead tr.yr th { top:0; font-size:10px; color:var(--text-2); background:var(--chip); border-bottom:1px solid var(--divider); }
@@ -4366,6 +4366,38 @@ _BODY_FONT_FACE = "".join(
     for _name, _ranges in _BODY_FONT_RANGES.items()
 )
 
+# Font số liệu cho .dtbl (Bảng số liệu) -- hệ "Sổ Tay" đổi từ system sans sang IBM Plex Mono thật
+# (tự host, cùng cách 2 font trên), khớp đúng bản mockup gốc (DTBL trong file thiết kế dùng
+# 'IBM Plex Mono' cho toàn bảng). KHÔNG phải variable font (IBM Plex Mono không có bản variable
+# trên Google Fonts, khác Manrope/Source Serif 4) -- phải tự host riêng 4 mức đậm nhạt đang dùng
+# trong DTBL_CSS (400/500/600/700, xem .dtbl thead th/tr.cat/td.tot/tr.proj), mỗi mức 2 subset
+# (latin + vietnamese, bỏ latin-ext/cyrillic/hy lạp -- DTBL chỉ có số + nhãn tiếng Việt ngắn,
+# không cần phủ ký tự mở rộng như Manrope). Payload nhỏ (~56KB/8 file) vì mono chỉ cần tập ký tự
+# hẹp (số + chữ cái, không kern/ligature phức tạp).
+@st.cache_resource
+def _table_font_b64():
+    out = {}
+    for weight_name in ("Regular", "Medium", "SemiBold", "Bold"):
+        for subset in ("latin", "vietnamese"):
+            with open(os.path.join("assets", "fonts", f"IBMPlexMono-{weight_name}-{subset}.woff2"), "rb") as f:
+                out[(weight_name, subset)] = base64.b64encode(f.read()).decode()
+    return out
+
+_TABLE_FONT_WEIGHTS = {"Regular": 400, "Medium": 500, "SemiBold": 600, "Bold": 700}
+_TABLE_FONT_RANGES = {
+    "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+    "vietnamese": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+}
+_table_font_b64_cache = _table_font_b64()
+_TABLE_FONT_FACE = "".join(
+    "@font-face { font-family:'IBM Plex Mono'; font-style:normal; "
+    f"font-weight:{_w_num}; font-display:swap; "
+    f"src:url(data:font/woff2;base64,{_table_font_b64_cache[(_w_name, _subset)]}) format('woff2'); "
+    f"unicode-range:{_ranges}; }}"
+    for _w_name, _w_num in _TABLE_FONT_WEIGHTS.items()
+    for _subset, _ranges in _TABLE_FONT_RANGES.items()
+)
+
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
 # con + f-string HTML rải rác) -- (light, dark). Hệ "Sổ Tay": giấy ấm/ngà thay vì xám hệ thống
 # iOS -- không còn đối xứng với bảng systemGray của Apple như bản cũ, mỗi cặp light/dark ở đây
@@ -4384,7 +4416,7 @@ _TOK = {
 }
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
-    f"<style>{_BODY_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
