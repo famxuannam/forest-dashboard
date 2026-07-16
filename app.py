@@ -2307,7 +2307,10 @@ def _avg_session_min(df):
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
 def render_session_bar(df):
-    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan."""
+    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan. Có nhãn nhỏ
+    "Phân bổ độ dài phiên" riêng (đồng bộ với nhãn "Dòng thời gian trong ngày" của
+    render_day_timeline) -- thiếu nhãn khiến khối này trông trống trải, không rõ đang xem gì nếu
+    tách rời khỏi ngữ cảnh xung quanh (áp dụng chung cho MỌI nơi gọi hàm này, không riêng Hôm nay)."""
     n = len(df)
     if n == 0:
         return
@@ -2329,6 +2332,7 @@ def render_session_bar(df):
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<span class='rl-book'>Phân bổ độ dài phiên</span>"
         f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
@@ -3285,6 +3289,7 @@ def render_day_timeline(day_df):
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 </style>
 <div class="dtl-card">
+<span class="rl-book">Dòng thời gian trong ngày</span>
 <div class="dtl-strip">{label_html}</div>
 <div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
@@ -5537,6 +5542,12 @@ st.markdown(
         .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
+    /* Khối "Ghi chú chính" (note_main) đứng ngay sau danh sách ghi chú nhanh (qnote_row_) trong
+       CÙNG 1 khối cha -- rule gap:5px thu gọn khoảng cách GIỮA CÁC DÒNG ghi chú nhanh (xem CSS
+       :has() qnote_row_ ở trên) vô tình áp luôn cho khoảng cách trước "Ghi chú chính", khiến nó
+       dính sát ghi chú nhanh cuối cùng (lỗi thật đã gặp, xem ảnh chụp). Bù riêng margin-top ở
+       đây -- không đụng gap chung, chỉ tách khối "Ghi chú chính" ra xa hơn đúng 1 chỗ này. */
+    .st-key-note_main { margin-top: 12px; }
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
        cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
        khung (viền chấm) để phân biệt rõ với có nội dung. ===== */
