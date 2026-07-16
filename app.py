@@ -6041,6 +6041,26 @@ st.markdown(
        nội dung cần sát (xsmall), nhưng nội dung↔hàng nút bên dưới cần rộng hơn 1 chút để không
        dính liền -- gộp chung 1 container/1 gap từng làm cả 2 khoảng cách xích lại y hệt, "sửa
        xong" hoá ra ép nhầm khoảng còn lại quá chật (bug vòng trước). */
+
+    /* Nút tròn nổi "về đầu trang" (tạo bằng JS ở _inject_scroll_to_top_button(), không phải
+       st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
+       class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
+       che nhau nếu cùng hiện 1 lúc. */
+    #app-scroll-top-btn {
+        position: fixed; right: 22px; bottom: 22px; z-index: 99980;
+        width: 44px; height: 44px; border-radius: 50%;
+        background: var(--accent); color: #fff; border: none;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
+        cursor: pointer; opacity: 0; transform: translateY(12px) scale(0.9);
+        pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #app-scroll-top-btn.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+    #app-scroll-top-btn:hover { opacity: 0.9; transform: scale(1.05); }
+    #app-scroll-top-btn svg { width: 20px; height: 20px; }
+    @media (max-width: 640px) {
+        #app-scroll-top-btn { right: 14px; bottom: 14px; width: 40px; height: 40px; }
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -6407,6 +6427,55 @@ elif "hsub" in st.query_params:
     del st.query_params["hsub"]
 
 _inject_keyboard_shortcuts()
+
+
+def _inject_scroll_to_top_button():
+    """Nút tròn nổi góc dưới-phải "về đầu trang" -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện,
+    bấm cuộn mượt về đầu. Tạo bằng JS (components.html) y hệt bảng phím tắt ở
+    _inject_keyboard_shortcuts(): gắn thẳng vào window.parent.document để nút không bị Streamlit
+    xoá/tạo lại mỗi lần rerun (iframe của components.html có bị dựng lại cũng không sao, nút đã
+    sống sẵn trong document cha) -- canh cờ w.__scrollTopBtnInstalled để không tạo trùng nút sau
+    mỗi rerun.
+
+    Nghe sự kiện 'scroll' ở PHA CAPTURE (tham số thứ 3 của addEventListener = true) thay vì chỉ
+    trên window: tuỳ layout, phần thật sự cuộn có thể là 1 div con của Streamlit thay vì window,
+    mà sự kiện scroll KHÔNG tự nổi bọt lên -- nghe ở capture bắt được cả 2 trường hợp mà không
+    cần biết trước phần tử nào mới thực sự là vùng cuộn. Khi bấm, cuộn cả window LẪN gọi
+    scrollIntoView() trên .block-container cho chắc, cùng lý do."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  const w = window.parent;\n"
+        "  if (w.__scrollTopBtnInstalled) return;\n"
+        "  w.__scrollTopBtnInstalled = true;\n"
+        "  const btn = w.document.createElement('button');\n"
+        "  btn.id = 'app-scroll-top-btn';\n"
+        "  btn.type = 'button';\n"
+        "  btn.setAttribute('aria-label', 'Về đầu trang');\n"
+        "  btn.title = 'Về đầu trang';\n"
+        "  btn.innerHTML = '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" "
+        "stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
+        "<path d=\"M12 19V5M5 12l7-7 7 7\"/></svg>';\n"
+        "  btn.addEventListener('click', function(){\n"
+        "    w.scrollTo({top: 0, behavior: 'smooth'});\n"
+        "    const bc = w.document.querySelector('.block-container');\n"
+        "    if (bc) bc.scrollIntoView({behavior: 'smooth', block: 'start'});\n"
+        "  });\n"
+        "  w.document.body.appendChild(btn);\n"
+        "  function onScroll(e){\n"
+        "    const t = e.target;\n"
+        "    let y = w.scrollY || 0;\n"
+        "    if (t && typeof t.scrollTop === 'number') y = Math.max(y, t.scrollTop);\n"
+        "    btn.classList.toggle('show', y > 400);\n"
+        "  }\n"
+        "  w.document.addEventListener('scroll', onScroll, true);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
+_inject_scroll_to_top_button()
 
 
 def _kindle_quote_of_day():
