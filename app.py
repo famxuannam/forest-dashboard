@@ -3283,10 +3283,8 @@ def render_day_timeline(day_df):
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
 .dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--text);}}
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
-.dtl-ttl{{font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
 </style>
 <div class="dtl-card">
-<div class="dtl-ttl">Dòng thời gian trong ngày</div>
 <div class="dtl-strip">{label_html}</div>
 <div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
