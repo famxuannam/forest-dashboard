@@ -5398,8 +5398,14 @@ st.markdown(
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
-        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent); }
+    /* Nền gradient phớt accent mờ dần dùng CHUNG cho mọi "billboard/hero" đầu trang (Trợ giúp,
+       Hôm nay, và các trang sẽ chuyển sang bố cục chương sau này) -- gộp 1 rule duy nhất ở đây,
+       thêm selector mới vào danh sách này thay vì lặp lại background riêng từng nơi, để đổi độ
+       mờ 1 lần là áp dụng đồng loạt. */
+    .sec-hero, .st-key-today_billboard {
+        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
+    }
+    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border); }
     .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
         text-transform: uppercase; color: var(--accent-dark); }
     .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
@@ -5652,7 +5658,6 @@ st.markdown(
        của trang Trợ giúp, để billboard nổi bật hơn card số liệu trung tính bên dưới nhưng vẫn nhẹ
        nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
     .st-key-today_billboard {
-        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent) !important;
         border-color: var(--border) !important;
         padding: 28px 30px 22px !important;
         border-radius: 16px !important;
