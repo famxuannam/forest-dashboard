@@ -5648,12 +5648,21 @@ st.markdown(
        [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
        margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
        để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
+    /* Nền gradient phớt accent mờ dần (KHÔNG còn color-mix đặc như bản đầu) -- giống hệt .sec-hero
+       của trang Trợ giúp, để billboard nổi bật hơn card số liệu trung tính bên dưới nhưng vẫn nhẹ
+       nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
     .st-key-today_billboard {
-        background: color-mix(in srgb, var(--accent) 13%, var(--card)) !important;
-        border-color: color-mix(in srgb, var(--accent) 28%, var(--card)) !important;
+        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent) !important;
+        border-color: var(--border) !important;
         padding: 28px 30px 22px !important;
         border-radius: 16px !important;
         margin: 0 0 16px !important;
+    }
+    /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
+       dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
+       selector này. */
+    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
+        border-right: 1px solid var(--divider);
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
