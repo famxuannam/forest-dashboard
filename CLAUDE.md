@@ -84,7 +84,7 @@ xác nhận với người dùng:
 - [`.claude/docs/theming.md`](.claude/docs/theming.md) — CSS custom properties, `IS_DARK`, cách
   màu accent lan sang biểu đồ và iframe ghi chú.
 - [`.claude/docs/ui-components.md`](.claude/docs/ui-components.md) — quy ước `st.expander` đánh
-  số, `render_stat_panel()`, bẫy `st.metric`, `guide_item()`/`guide_update()`.
+  số, `render_stat_panel()`, bẫy `st.metric`, bộ helper `help_*` của trang Trợ giúp.
 - [`.claude/docs/keyboard-shortcuts.md`](.claude/docs/keyboard-shortcuts.md) — blob JS phím tắt
   toàn cục và phím tắt riêng trong iframe ghi chú.
 - [`.claude/docs/testing.md`](.claude/docs/testing.md) — harness giả lập Supabase + Playwright để

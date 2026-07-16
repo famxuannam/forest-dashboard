@@ -25,7 +25,6 @@ không lặp lại nội dung đó, chỉ ghi lại vài điểm kiến trúc ch
   `work_calendar`, `reading_log`, `settings`).
 - `.streamlit/config.toml` — theme sáng/tối; `.streamlit/secrets.toml.example` — mẫu các biến
   cần điền (chỉ `SUPABASE_URL`/`SUPABASE_KEY` là bắt buộc, còn lại đều tuỳ chọn).
-- `assets/help/` — ảnh minh hoạ dùng trong tab Hướng dẫn.
 
 ## Lưu ý
 
