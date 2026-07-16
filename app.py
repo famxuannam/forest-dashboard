@@ -2511,7 +2511,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
     không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương")."""
-    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan")
+    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan", tight_top=True)
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
     num_days = df_period['Ngày'].nunique() or 1
@@ -3067,7 +3067,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name):
              [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Nhật ký đọc"),
               (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")])
 
-    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu")
+    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu", tight_top=True)
     _secs = [{"label": "Mốc thời gian", "chips": [
         {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
         {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
@@ -3581,7 +3581,8 @@ def _render_health_report(df_health):
 
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}")
+    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}",
+                tight_top=True)
     if _latest_num.empty:
         st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
     else:
@@ -4548,7 +4549,7 @@ def sec_table(headers, rows):
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def sec_chapter(anchor, num, kicker, title, lead=None):
+def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
     báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
     dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
@@ -4560,12 +4561,19 @@ def sec_chapter(anchor, num, kicker, title, lead=None):
     kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
     vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
     nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
-    của Trợ giúp)."""
+    của Trợ giúp).
+
+    tight_top=True -> bỏ margin-top 36px mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay
+    sau 1 sec_hero()/billboard: margin-top 36px đó cộng dồn với margin-bottom sẵn có của hero/
+    billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
+    như block thường) tạo khoảng trắng gấp đôi ngay dưới hero, trong khi giữa các chương với nhau
+    (2 trở đi) khoảng cách đó vẫn cần giữ nguyên."""
     _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
     _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
+    _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
-        f"<div class='sec-ch' id='{anchor}'>{_num_html}{_kicker_html}"
+        f"<div class='{_cls}' id='{anchor}'>{_num_html}{_kicker_html}"
         f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
         unsafe_allow_html=True)
 
@@ -5484,6 +5492,15 @@ st.markdown(
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
     .sec-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): margin-top 36px
+       ở trên CỘNG THÊM margin-bottom riêng của hero/billboard (34px hoặc 16px) + gap flex mặc
+       định giữa 2 khối (~14px) cộng dồn (Streamlit render mỗi khối trong 1 flex item riêng, margin
+       KHÔNG collapse giữa flex item như block thường) -> khoảng trắng dưới billboard bị gấp đôi so
+       với khoảng cách giữa các chương với nhau. Class riêng thay vì dò cấu trúc DOM bằng CSS
+       sibling/:has() -- số lượng phần tử chen giữa hero và chương 1 đổi tuỳ trang (vd billboard
+       Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
+       hẳn so với đánh dấu thẳng từ phía gọi Python. */
+    .sec-ch.sec-ch-tight { margin-top: 0; }
     .sec-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
         line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
     .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
@@ -6380,12 +6397,12 @@ def render_day_report(df):
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
 
-        sec_chapter("today-ch1", None, None, "Ghi chú ngày")
+        sec_chapter("today-ch1", None, None, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
         sec_chapter("today-ch2", None, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
-        sec_chapter("today-ch1", 1, None, "Tổng quan ngày")
+        sec_chapter("today-ch1", 1, None, "Tổng quan ngày", tight_top=True)
         d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
         d_sess = len(day_df)
         d_avg = _avg_session_min(day_df)
@@ -6495,7 +6512,7 @@ elif nav == "Báo cáo":
                      [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                       ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
                       ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
-            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan")
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
             # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
             # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
             # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
@@ -6735,7 +6752,7 @@ elif nav == "Báo cáo":
                                   ("bc-duan-ch5", "5 · Bảng số liệu")]
                 sec_hero(None, "Đi sâu vào 1 việc cụ thể", None, _hero_chips_g)
 
-                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan")
+                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
                 curr_trees_g = len(df_g)
                 num_days_g = df_g['Ngày'].nunique() or 1
@@ -7444,7 +7461,8 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
     sec_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử")
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
+        tight_top=True)
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
         f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
