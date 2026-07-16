@@ -6067,7 +6067,7 @@ st.markdown(
 )
 
 st.markdown(
-    f"<div style='margin:0 0 0.6em 0;'>{_wordmark_html('header')}</div>",
+    f"<div style='margin:0 0 1.3em 0;'>{_wordmark_html('header')}</div>",
     unsafe_allow_html=True,
 )
 
