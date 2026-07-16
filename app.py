@@ -6482,13 +6482,38 @@ def _kindle_quote_of_day():
     """Chọn 1 trích dẫn/ghi chú Kindle ngẫu nhiên nhưng CỐ ĐỊNH trong ngày -- seed theo ngày THẬT
     hôm nay (_today_vn(), không phải "sel", ngày đang xem trên trang Hôm nay) nên tải lại trang hay
     lùi/tiến xem ngày khác vẫn ra đúng 1 câu suốt cả ngày hôm nay, đúng cảm giác "quote of the
-    day" thật -- chỉ đổi khi sang ngày mới. Trả None nếu chưa import trích dẫn nào (tính năng tuỳ
-    chọn, không chặn phần còn lại của trang)."""
+    day" thật -- chỉ đổi khi sang ngày mới (hoặc người dùng tự bấm nút xáo -- xem
+    _shuffle_daily_quote()). Trả None nếu chưa import trích dẫn nào (tính năng tuỳ chọn, không
+    chặn phần còn lại của trang).
+
+    Chỉ số đang chọn (kq_daily_idx) lưu trong session_state để nút xáo có chỗ ghi đè -- ngày đổi
+    (kq_daily_date lệch _today_vn()) thì tính lại theo seed như cũ, đè mất lựa chọn xáo tay của
+    ngày hôm trước (đúng ý "quote of the day" -- xáo tay chỉ có tác dụng trong ngày đang xem)."""
     kh = load_kindle_highlights()
     if kh.empty:
         return None
-    idx = random.Random(_today_vn().isoformat()).randrange(len(kh))
+    today_iso = _today_vn().isoformat()
+    if st.session_state.get("kq_daily_date") != today_iso:
+        st.session_state["kq_daily_date"] = today_iso
+        st.session_state["kq_daily_idx"] = random.Random(today_iso).randrange(len(kh))
+    # modulo phòng trường hợp kh co lại (xoá bớt trích dẫn) khiến idx cũ vượt quá độ dài mới.
+    idx = st.session_state["kq_daily_idx"] % len(kh)
     return kh.iloc[idx]
+
+
+def _shuffle_daily_quote():
+    """Đổi trích dẫn hôm nay sang 1 trích dẫn NGẪU NHIÊN KHÁC (không lặp lại đúng câu đang hiện
+    nếu có từ 2 trích dẫn trở lên) -- callback của nút xáo bên cạnh nút ⭐ Yêu thích, xem
+    _render_today_billboard(). Chỉ ghi vào session_state, _kindle_quote_of_day() ở lần rerun kế
+    tiếp sẽ đọc lại đúng chỉ số này."""
+    n = len(load_kindle_highlights())
+    if n <= 1:
+        return
+    cur = st.session_state.get("kq_daily_idx")
+    new_idx = cur
+    while new_idx == cur:
+        new_idx = random.randrange(n)
+    st.session_state["kq_daily_idx"] = new_idx
 
 
 def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
@@ -6532,13 +6557,19 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                     f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
                     unsafe_allow_html=True)
                 with st.container(key="kq_daily_srcrow"):
-                    c_src, c_fav = st.columns([10, 1])
+                    _kh_count = len(load_kindle_highlights())
+                    c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
                     with c_src:
                         _author = kq.get('Tác giả')
                         _src_txt = html_escape(str(kq['Cuốn sách']))
                         if pd.notna(_author) and str(_author).strip():
                             _src_txt += f" · {html_escape(str(_author))}"
                         st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                    with c_shuffle:
+                        if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
+                                                        help="Đổi trích dẫn khác"):
+                            _shuffle_daily_quote()
+                            st.rerun()
                     with c_fav:
                         _fav = bool(kq.get('Yêu thích', False))
                         if st.button("★" if _fav else "☆",
@@ -7749,7 +7780,9 @@ elif nav == "Hướng dẫn":
         "<li><b>Trích dẫn hôm nay</b> — một highlight hoặc ghi chú Kindle được chọn ngẫu nhiên, nằm ngay đầu "
         "trang cho có chút không khí văn chương buổi sáng. Câu này chọn cố định theo <b>ngày thật</b>: có "
         "tải lại trang bao nhiêu lần, hay lùi tới/tiến lui xem ngày khác, câu vẫn y nguyên — chỉ đổi khi "
-        "sang một ngày mới mà thôi, đúng tinh thần “quote of the day”.</li>"
+        "sang một ngày mới mà thôi, đúng tinh thần “quote of the day”. Muốn xem câu khác ngay lúc đó thì "
+        "bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ — chỉ đổi tạm trong phiên xem hôm nay, sang ngày mới "
+        "vẫn quay lại chọn theo ngày như bình thường.</li>"
         "<li>Và một điều nhỏ nhưng quan trọng: “hôm nay” trong toàn bộ app luôn được tính theo <b>giờ Việt "
         "Nam</b>, bất kể server đang chạy ở múi giờ nào trên thế giới — để ngày của bạn không bao giờ tự "
         "dưng nhảy sớm hoặc muộn mất 7 tiếng so với đồng hồ thật.</li>"
@@ -8110,7 +8143,10 @@ elif nav == "Hướng dẫn":
             "nhiêu lần, hay lùi tới/tiến lui xem các ngày khác nhau đi nữa, câu trích dẫn vẫn giữ nguyên y hệt "
             "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
             "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
-            "bạn đã nạp vào app.")
+            "bạn đã nạp vào app.\n\n"
+            "Muốn xem câu khác ngay lập tức thì bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ Yêu thích — chỉ "
+            "đổi tạm trong lúc đang xem, sang ngày mới thì lại quay về chọn theo ngày như bình thường, không "
+            "giữ lại lựa chọn xáo tay của hôm trước.")
         help_faq_item(
             "Vừa nạp trích dẫn từ 1 cuốn sách hoàn toàn mới, chưa từng theo dõi tiến độ đọc — nó có hiện lên "
             "Trích dẫn hôm nay không, hay phải đợi ghép với Dự án trước đã?",
