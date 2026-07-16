@@ -186,6 +186,22 @@ GUNDAM_LABELS = dict(
 VN_DAYS = {"Monday": "Thứ Hai", "Tuesday": "Thứ Ba", "Wednesday": "Thứ Tư", "Thursday": "Thứ Năm",
            "Friday": "Thứ Sáu", "Saturday": "Thứ Bảy", "Sunday": "Chủ Nhật"}
 
+# Tên tháng tiếng Việt -- CHỈ dùng cho JS dịch popup lịch của st.date_input (xem
+# _inject_date_picker_locale()), component BaseWeb nội bộ của Streamlit không có prop locale lộ
+# ra qua API Python nên phải dịch text sau khi mount bằng JS. VN_DAYS ở trên không đủ (chỉ có tên
+# đầy đủ, popup lịch dùng viết tắt) nên cần thêm bảng viết tắt riêng ngay dưới đây.
+VN_MONTHS = {"January": "Tháng 1", "February": "Tháng 2", "March": "Tháng 3", "April": "Tháng 4",
+             "May": "Tháng 5", "June": "Tháng 6", "July": "Tháng 7", "August": "Tháng 8",
+             "September": "Tháng 9", "October": "Tháng 10", "November": "Tháng 11",
+             "December": "Tháng 12"}
+VN_DAYS_ABBR = {"Su": "CN", "Mo": "T2", "Tu": "T3", "We": "T4", "Th": "T5", "Fr": "T6", "Sa": "T7",
+                "Sun": "CN", "Mon": "T2", "Tue": "T3", "Wed": "T4", "Thu": "T5", "Fri": "T6", "Sat": "T7"}
+# Tên tháng viết đầy đủ bằng chữ (khác VN_MONTHS ở trên -- dạng số "Tháng 7", dùng riêng cho JS
+# dịch popup lịch). Dùng cho billboard "Hôm nay" (vd "16 Tháng Bảy 2026"). Index 0 = Tháng Một.
+VN_MONTHS_WORD = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu",
+                  "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một",
+                  "Tháng Mười Hai"]
+
 # Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
 # Nhật ký đọc sách) không thuộc phạm vi đổi hệ màu "Sổ Tay".
@@ -215,10 +231,12 @@ MAC_COLORS = [
 CHART_COLORS = ["#b5502e", "#c98a1f", "#5f7a41", "#1f6f6a", "#3d4f8f", "#7a3b5e", "#d8674a", "#8a9a6b"]
 
 
-# 6 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
+# 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
 # đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
 # git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
-# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới).
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). "Cam đất"/
+# "Ô liu" thêm sau đó lấy đúng 2 màu bổ sung đã có sẵn trong CHART_COLORS (biến thể sáng hơn của
+# Đất nung/Rêu) -- không bịa màu mới, đảm bảo vẫn cùng 1 hệ tông với 6 màu gốc.
 ACCENT_PRESETS = {
     "Đất nung": "#b5502e",
     "Nghệ": "#c98a1f",
@@ -226,6 +244,8 @@ ACCENT_PRESETS = {
     "Chàm biển": "#1f6f6a",      # mặc định
     "Chàm": "#3d4f8f",
     "Mận": "#7a3b5e",
+    "Cam đất": "#d8674a",
+    "Ô liu": "#8a9a6b",
 }
 
 
@@ -1677,6 +1697,7 @@ def day_picker(active_days):
         with c2:
             picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
                                    format="DD/MM/YYYY", label_visibility="collapsed")
+            _inject_date_picker_locale()
         with c3:
             st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
                       disabled=not _next_candidates(sel), use_container_width=True)
@@ -1743,6 +1764,58 @@ def _inject_relative_time_ticker():
         "  }\n"
         "  tick();\n"
         "  setInterval(tick, 30000);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
+def _inject_date_picker_locale():
+    """Dịch tháng/thứ trong popup lịch của MỌI st.date_input trên trang sang tiếng Việt bằng JS
+    phía trình duyệt -- component BaseWeb bên trong Streamlit không có prop locale lộ ra qua API
+    Python (`format=` của st.date_input chỉ đổi định dạng Ô NHẬP TAY, không đụng tới popup lịch),
+    nên phải dịch text SAU KHI mount. Popup mount dạng portal ở <body> của trang cha (ngoài mọi
+    iframe component, xem comment CSS `[data-baseweb="calendar"]`), không phải trong DOM con của
+    component này -- giống hệt cách _inject_relative_time_ticker() ở trên phải quẫy sang
+    window.parent.document để chạm được DOM thật.
+
+    Dùng MutationObserver theo dõi window.parent.document.body: mỗi khi popup lịch mở/đổi tháng
+    (React re-render lại text bên trong), duyệt lại toàn bộ text node trong `[data-baseweb=
+    "calendar"]` rồi thay theo 2 bảng tra VN_MONTHS/VN_DAYS_ABBR (khớp đúng chuỗi, không đoán mò
+    bằng regex tách từ -- an toàn hơn khi BaseWeb đổi định dạng header giữa các bản Streamlit).
+    Chỉ cần gọi 1 lần cho cả trang (không phải 1 lần mỗi date_input) vì observer theo dõi chung
+    toàn bộ <body>."""
+    _months_js = json.dumps(VN_MONTHS, ensure_ascii=False)
+    _days_js = json.dumps(VN_DAYS_ABBR, ensure_ascii=False)
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        f"  const MONTHS = {_months_js};\n"
+        f"  const DAYS = {_days_js};\n"
+        "  const MONTH_RE = new RegExp('\\\\b(' + Object.keys(MONTHS).join('|') + ')\\\\b', 'g');\n"
+        "  function translateNode(node){\n"
+        "    for (const child of node.childNodes){\n"
+        "      if (child.nodeType === 3){\n"
+        "        const t = child.textContent;\n"
+        "        const trimmed = t.trim();\n"
+        "        if (DAYS[trimmed]){\n"
+        "          child.textContent = t.replace(trimmed, DAYS[trimmed]);\n"
+        "        } else if (MONTH_RE.test(trimmed)){\n"
+        "          MONTH_RE.lastIndex = 0;\n"
+        "          child.textContent = t.replace(MONTH_RE, m => MONTHS[m]);\n"
+        "        }\n"
+        "      } else if (child.nodeType === 1){\n"
+        "        translateNode(child);\n"
+        "      }\n"
+        "    }\n"
+        "  }\n"
+        "  function run(){\n"
+        "    const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
+        "    cals.forEach(translateNode);\n"
+        "  }\n"
+        "  run();\n"
+        "  const obs = new MutationObserver(run);\n"
+        "  obs.observe(window.parent.document.body, {childList: true, subtree: true, characterData: true});\n"
         "})();\n"
         "</script>"
     )
@@ -2425,8 +2498,8 @@ def _top_days_section(df_scope, label, n=3):
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  top3_suffix=""):
-    """Nội dung mục "1. Tổng quan" ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
+                                  anchor_prefix, top3_suffix=""):
+    """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
     có -- xác nhận không cần ở quy mô 1 tuần, xem show_top3=False ở nơi gọi cho Tuần).
@@ -2435,8 +2508,10 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     của "Báo cáo", chỉ khác hậu tố biến) -- gộp lại còn 1 bản, tham số hoá đúng phần THỰC SỰ khác
     nhau giữa 3 kỳ (nhãn delta, dòng "kỳ chưa kết thúc" clip_note, có Top3 hay không). period_col
     ('Tuần'/'Tháng'/'Năm') PHẢI khớp đúng cột `_period_comparison()` đã dùng để tính prev/avg --
-    dùng làm period_col cho _smart_digest() luôn, không tính lại. Không đổi giao diện: 3 sub-tab
-    vẫn tách biệt như cũ, đây chỉ là dọn code phía sau."""
+    dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
+    anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
+    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương")."""
+    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan")
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
     num_days = df_period['Ngày'].nunique() or 1
@@ -2478,26 +2553,28 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
         with c_top2: render_top_3(df_period, 'Dự án', f'Top 3 Dự án{top3_suffix}')
 
 
-def _render_period_secondary_expanders(df_period, full_df, selected_key, kind, trend_group_col,
-                                        trend_group_label, cat_order, pie_key, trend_key, hourly_key):
-    """Mục "2. Nhật ký" -> "6. Bảng số liệu" ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu trúc y
-    hệt nhau (khác nhánh Năm, vốn có bộ mục hoàn toàn khác: Biểu đồ lịch + Đọc sách & Gundam thay
-    vì Nhật ký/Phân bổ/Xu hướng/Khung giờ -- không đủ giống để gộp chung, xem nhánh Năm riêng
-    trong dispatch "Báo cáo"). Đã bỏ "Giờ tập trung theo thứ"/"Phân bố độ dài phiên" (ít dùng theo
-    phản hồi thực tế) khỏi cả Tuần lẫn Tháng -- xoá 1 lần ở đây áp dụng cho cả 2 vì dùng chung hàm.
-    Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind ('week'/'month' cho render_notes_journal),
-    trend_group_col/label/cat_order (nhóm theo Thứ ở Tuần, theo Ngày ở Tháng), và các key fragment
-    (giữ NGUYÊN key gốc để không đổi hành vi/state đã có của từng widget)."""
-    with st.expander("2. Nhật ký", expanded=True):
-        render_notes_journal(selected_key, kind, full_df)
-    with st.expander("3. Phân bổ thời gian", expanded=False):
-        frag_pie(df_period, pie_key, "Danh mục")
-    with st.expander("4. Xu hướng theo thời gian", expanded=False):
-        frag_period_trend(df_period, trend_key, "Danh mục", trend_group_col, trend_group_label, cat_order=cat_order)
-    with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
-        frag_hourly(df_period, hourly_key, "Danh mục", with_range=False)
-    with st.expander("6. Bảng số liệu", expanded=False):
-        render_detail_table(df_period)
+def _render_period_secondary_expanders(df_period, full_df, selected_key, kind,
+                                        trend_group_col, trend_group_label, cat_order, pie_key,
+                                        trend_key, hourly_key, anchor_prefix):
+    """Chương "Nhật ký" (2) -> "Bảng số liệu" (6) ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu
+    trúc y hệt nhau (khác nhánh Năm, vốn có bộ mục hoàn toàn khác: Biểu đồ lịch + Đọc sách &
+    Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ -- không đủ giống để gộp chung, xem nhánh
+    Năm riêng trong dispatch "Báo cáo"). Đã bỏ "Giờ tập trung theo thứ"/"Phân bố độ dài phiên" (ít
+    dùng theo phản hồi thực tế) khỏi cả Tuần lẫn Tháng -- xoá 1 lần ở đây áp dụng cho cả 2 vì dùng
+    chung hàm. Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind ('week'/'month' cho
+    render_notes_journal), trend_group_col/label/cat_order (nhóm theo Thứ ở Tuần, theo Ngày ở
+    Tháng), và các key fragment (giữ NGUYÊN key gốc để không đổi hành vi/state đã có của từng
+    widget). Không còn kicker riêng cho mỗi chương (trùng tên trang đang đứng, dư thừa)."""
+    sec_chapter(f"{anchor_prefix}-ch2", 2, None, "Nhật ký")
+    render_notes_journal(selected_key, kind, full_df)
+    sec_chapter(f"{anchor_prefix}-ch3", 3, None, "Phân bổ thời gian")
+    frag_pie(df_period, pie_key, "Danh mục")
+    sec_chapter(f"{anchor_prefix}-ch4", 4, None, "Xu hướng theo thời gian")
+    frag_period_trend(df_period, trend_key, "Danh mục", trend_group_col, trend_group_label, cat_order=cat_order)
+    sec_chapter(f"{anchor_prefix}-ch5", 5, None, "Xu hướng tập trung theo khung giờ")
+    frag_hourly(df_period, hourly_key, "Danh mục", with_range=False)
+    sec_chapter(f"{anchor_prefix}-ch6", 6, None, "Bảng số liệu")
+    render_detail_table(df_period)
 
 
 @st.cache_data
@@ -2824,31 +2901,44 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     # Key riêng theo show_favorites (không dùng chung 1 key cho Sách/Gundam như trước) -- Sách có
     # 3 tab, Gundam chỉ 2, dùng chung key cho 2 bộ tab khác số lượng dễ vỡ trạng thái tab đang chọn
-    # khi chuyển qua lại giữa 2 trang.
-    _tab_labels = [":material/bar_chart: Tổng quan", ":material/search: Chi tiết"]
+    # khi chuyển qua lại giữa 2 trang. Thứ tự Tổng quan -> Yêu thích -> Chi tiết (Yêu thích đứng
+    # trước Chi tiết theo yêu cầu -- tab hay ghé lại (Yêu thích) gần đầu hơn tab tra cứu sâu 1 cuốn
+    # cụ thể (Chi tiết), chỉ Sách mới có Yêu thích nên Gundam không đổi thứ tự 2 tab của mình).
+    _tab_labels = [":material/bar_chart: Tổng quan"]
     if show_favorites:
         _tab_labels.append(":material/star: Yêu thích")
+    _tab_labels.append(":material/search: Chi tiết")
     _tabs = st.tabs(_tab_labels, key="rl_view_tabs" if show_favorites else "rl_view_tabs_gd")
-    _tab_overview, _tab_detail = _tabs[0], _tabs[1]
+    _tab_overview = _tabs[0]
+    if show_favorites:
+        _tab_favorites, _tab_detail = _tabs[1], _tabs[2]
+    else:
+        _tab_detail = _tabs[1]
+
+    # Tên trang cho hero -- chỉ Sách mới có Yêu thích (show_favorites) nên dùng luôn cờ đó để suy
+    # ra thay vì thêm 1 tham số page_name riêng trùng lặp thông tin.
+    _page_name = "Sách" if show_favorites else "Gundam"
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                                  _sec_timeslot, _today, labels)
+                                  _sec_timeslot, _today, labels, _page_name)
         if extra_overview is not None:
             extra_overview()
 
-    with _tab_detail:
-        _render_reading_detail(t, reading_log_df, labels)
-
     if show_favorites:
-        with _tabs[2]:
+        with _tab_favorites:
             _render_kindle_favorites_tab()
+
+    with _tab_detail:
+        _render_reading_detail(t, reading_log_df, labels, _page_name)
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                              _sec_timeslot, _today, labels):
+                              _sec_timeslot, _today, labels, page_name):
     """Sub-tab "Tổng quan" của render_reading_log(): 3 thẻ hero/nhóm chip + thanh phân bổ +
-    bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series."""
+    bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
+    (đã flat sẵn từ trước). KHÔNG có billboard/hero ở đầu -- sub-tab này không có chương/mục
+    đánh số nào để nhảy tới (chỉ 1 khối phẳng), nên hero chỉ còn là khung trống không cần thiết."""
     # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
@@ -2930,17 +3020,23 @@ _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn 
 # trong ô chọn "Chi tiết" -- xem _render_reading_detail().
 
 
-def _render_reading_detail(t, reading_log_df, labels):
-    """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện 4 mục đánh số
+def _render_reading_detail(t, reading_log_df, labels, page_name):
+    """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện 4 chương đánh số
     -- 1. Số liệu (hero chip, tái dùng render_stat_panel), 2. Nhật ký đọc (_reading_rows_html),
     3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
     ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels.
 
+    Hero chỉ render SAU khi đã chọn 1 cuốn/series (không phải ngay khi vào tab) -- tránh chip mục
+    lục trỏ tới chương chưa tồn tại lúc ô chọn còn để trống, đúng quyết định đã chốt khi thiết kế
+    (giống cách "Báo cáo → Dự án" chỉ hiện hero sau khi chọn Nhóm/Dự án).
+
     Ô chọn CŨNG liệt kê thêm các nguồn Kindle KHÔNG gắn Dự án nào (vd tạp chí The Economist --
     project để trống trong kindle_book_map lúc import, xem "Tải trích dẫn Kindle" ở tab Tuỳ biến)
     -- các nguồn này không có tiến độ đọc (không phiên Forest, không phần Reminders) nên chọn vào
-    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 mục đánh số phía trên (vốn đều dựa trên
-    dữ liệu tiến độ mà nguồn độc lập không có)."""
+    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 chương đánh số phía trên (vốn đều dựa
+    trên dữ liệu tiến độ mà nguồn độc lập không có) -- và vì vậy CŨNG không có billboard/hero (chỉ
+    1 mục duy nhất, không có gì để mục lục chip điều hướng tới; tên nguồn đã hiện sẵn trong ô
+    chọn phía trên rồi)."""
     _kh_all = load_kindle_highlights()
     _indep_sources = (sorted(_kh_all[_kh_all['Dự án'].isna()]['Cuốn sách'].dropna().unique())
                        if not _kh_all.empty else [])
@@ -2954,82 +3050,88 @@ def _render_reading_detail(t, reading_log_df, labels):
         st.info(f"Chọn 1 {labels['item_col'].lower()} ở trên để xem chi tiết.")
         return
 
+    _anchor_ns = "rl-ct" if page_name == "Sách" else "gd-ct"
+
     if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
         _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
         _kh_src = _kh_all[_kh_all['Cuốn sách'] == _src]
-        with st.expander("Trích dẫn & Ghi chú", expanded=True):
-            with st.container(border=True, key="jcard_reading_detail_indep"):
-                _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
+        sec_chapter(f"{_anchor_ns}-quote", None, None, "Trích dẫn &amp; Ghi chú")
+        with st.container(border=True, key="jcard_reading_detail_indep"):
+            _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
         return
 
     _row = t[t['Cuốn sách'] == _detail_sel].iloc[0]
     _rl_detail = reading_log_df[reading_log_df['Cuốn sách'] == _detail_sel]
 
-    with st.expander("1. Số liệu", expanded=True):
-        _secs = [{"label": "Mốc thời gian", "chips": [
-            {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
-            {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
-            {"k": "Số ngày", "v": f"{int(_row['Số ngày'])}" if pd.notna(_row['Số ngày']) else "—"},
-        ]}]
-        _nhip = []
-        if pd.notna(_row['Giờ/tuần']):
-            _nhip.append({"k": "Giờ/tuần", "v": f"{_fmt_hours_short(_row['Giờ/tuần'])}"})
-        if pd.notna(_row['Tổng giờ']) and pd.notna(_row['Số ngày']) and _row['Số ngày']:
-            _nhip.append({"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_row['Tổng giờ'] / _row['Số ngày'])}"})
-        if _nhip:
-            _secs.append({"label": "Nhịp độ", "chips": _nhip})
-        _tt = [{"k": "Hiện tại", "v": _row['Trạng thái'], "hl": _row['Trạng thái'] == labels['ongoing']}]
-        if pd.notna(_row['Phần gần nhất']):
-            _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
-        _secs.append({"label": "Trạng thái", "chips": _tt})
+    sec_hero(None, html_escape(str(_detail_sel)), None,
+             [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Nhật ký đọc"),
+              (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")])
 
-        render_stat_panel(
-            hero_items=[
-                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
-                {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
-            ],
-            sections=_secs,
-        )
+    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu")
+    _secs = [{"label": "Mốc thời gian", "chips": [
+        {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
+        {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
+        {"k": "Số ngày", "v": f"{int(_row['Số ngày'])}" if pd.notna(_row['Số ngày']) else "—"},
+    ]}]
+    _nhip = []
+    if pd.notna(_row['Giờ/tuần']):
+        _nhip.append({"k": "Giờ/tuần", "v": f"{_fmt_hours_short(_row['Giờ/tuần'])}"})
+    if pd.notna(_row['Tổng giờ']) and pd.notna(_row['Số ngày']) and _row['Số ngày']:
+        _nhip.append({"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_row['Tổng giờ'] / _row['Số ngày'])}"})
+    if _nhip:
+        _secs.append({"label": "Nhịp độ", "chips": _nhip})
+    _tt = [{"k": "Hiện tại", "v": _row['Trạng thái'], "hl": _row['Trạng thái'] == labels['ongoing']}]
+    if pd.notna(_row['Phần gần nhất']):
+        _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
+    _secs.append({"label": "Trạng thái", "chips": _tt})
 
-    with st.expander("2. Nhật ký đọc", expanded=True):
-        # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
-        # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
-        # là mục riêng -- xem _render_reading_kindle_days(). _kh_all đã tính sẵn ở đầu hàm (dùng
-        # chung để liệt kê nguồn độc lập trong ô chọn phía trên), không gọi lại load lần 2.
-        _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
-        if not _rl_detail.empty or not _kh_book.empty:
-            with st.container(border=True, key="jcard_reading_detail"):
-                _render_reading_kindle_days(_rl_detail, _kh_book)
-        else:
-            st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
+    render_stat_panel(
+        hero_items=[
+            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
+            {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
+        ],
+        sections=_secs,
+    )
 
-    with st.expander("3. Biểu đồ lịch", expanded=False):
-        if not _rl_detail.empty:
-            render_reading_calendar_grid(_rl_detail, labels)
-        else:
-            st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Nhật ký đọc")
+    # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
+    # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
+    # là mục riêng -- xem _render_reading_kindle_days(). _kh_all đã tính sẵn ở đầu hàm (dùng
+    # chung để liệt kê nguồn độc lập trong ô chọn phía trên), không gọi lại load lần 2.
+    _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
+    if not _rl_detail.empty or not _kh_book.empty:
+        with st.container(border=True, key="jcard_reading_detail"):
+            _render_reading_kindle_days(_rl_detail, _kh_book)
+    else:
+        st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
-    with st.expander("4. Bảng số liệu", expanded=False):
-        if not _rl_detail.empty:
-            _day_tbl = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
-                        .groupby('_d').size().reset_index(name='n').sort_values('_d', ascending=False))
-            _vmax = float(_day_tbl['n'].max()) if not _day_tbl.empty else 0.0
-            _rows = ''
-            for _, r in _day_tbl.iterrows():
-                _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
-                _rows += '<tr class="prow">'
-                _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
-                _rows += _heat_cell(float(r['n']), _vmax, as_hours=False)
-                _rows += '</tr>'
-            st.markdown(DTBL_CSS + f"""
+    sec_chapter(f"{_anchor_ns}-ch3", 3, None, "Biểu đồ lịch")
+    if not _rl_detail.empty:
+        render_reading_calendar_grid(_rl_detail, labels)
+    else:
+        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+
+    sec_chapter(f"{_anchor_ns}-ch4", 4, None, "Bảng số liệu")
+    if not _rl_detail.empty:
+        _day_tbl = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
+                    .groupby('_d').size().reset_index(name='n').sort_values('_d', ascending=False))
+        _vmax = float(_day_tbl['n'].max()) if not _day_tbl.empty else 0.0
+        _rows = ''
+        for _, r in _day_tbl.iterrows():
+            _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
+            _rows += '<tr class="prow">'
+            _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
+            _rows += _heat_cell(float(r['n']), _vmax, as_hours=False)
+            _rows += '</tr>'
+        st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap">
 <table class="dtbl">
 <thead><tr><th class="lbl">Ngày</th><th class="txt">Thứ</th><th>{labels['parts_label']}</th></tr></thead>
 <tbody>{_rows}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-        else:
-            st.caption("Chưa có dữ liệu để hiện bảng.")
+    else:
+        st.caption("Chưa có dữ liệu để hiện bảng.")
 
 
 def render_reading_calendar_grid(rl_detail_df, labels):
@@ -3078,25 +3180,11 @@ def render_reading_calendar_grid(rl_detail_df, labels):
     st.altair_chart(chart, width='content')
 
 
-def render_day_timeline(day_df, sel, df_all):
-    """Dòng thời gian trong ngày (0–24h): khối phiên tô màu theo dự án, kèm lớp mờ
-    'khung giờ điển hình của thứ này' để thấy hôm nay lệch nhịp ra sao."""
+def render_day_timeline(day_df):
+    """Dòng thời gian trong ngày (0–24h): khối phiên tô màu theo Dự án, đặt đúng vị trí giờ nó
+    thực sự diễn ra, kèm legend màu theo Dự án bên dưới trục giờ."""
     if day_df.empty:
         return
-
-    # Lớp mờ: khung giờ điển hình của cùng thứ (TB giờ tại mỗi giờ-trong-ngày), trừ ngày đang xem
-    same = df_all[(pd.to_datetime(df_all['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                  & (df_all['Ngày'] != sel)]
-    n_same = same['Ngày'].nunique()
-    typ = {}
-    if n_same:
-        per_hour = _explode_session_hours(same, 'Ngày').groupby('Khung giờ')['giờ'].sum() / n_same
-        mx = float(per_hour.max()) if len(per_hour) else 0.0
-        if mx > 0:
-            typ = {int(h): v / mx for h, v in per_hour.items()}
-    typ_html = ''.join(
-        f'<div class="dtl-typ" style="left:{h/24*100:.3f}%;width:{100/24:.3f}%;'
-        f'background:rgba(120,120,128,{0.04 + typ.get(h, 0) * 0.20:.3f});"></div>' for h in range(24)) if typ else ''
 
     line_html = ''.join(f'<div class="dtl-line" style="left:{b/24*100:.3f}%;"></div>' for b in (5, 11, 17, 22))
     label_html = ''.join(
@@ -3127,10 +3215,9 @@ def render_day_timeline(day_df, sel, df_all):
 .dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
-.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
-.dtl-typ{{position:absolute;top:0;bottom:0;}}
+.dtl-track{{position:relative;height:44px;border-radius:10px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:7px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
@@ -3141,7 +3228,7 @@ def render_day_timeline(day_df, sel, df_all):
 <div class="dtl-card">
 <div class="dtl-ttl">Dòng thời gian trong ngày</div>
 <div class="dtl-strip">{label_html}</div>
-<div class="dtl-track">{typ_html}{line_html}{bars_html}</div>
+<div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
 <div class="dtl-legend">{legend_html}</div>
 </div>
@@ -3185,11 +3272,21 @@ def render_note_editor(day, day_badges=None):
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
+    quill_gen_key = f"note_quill_gen_{day}"
 
     def _enter_edit():
         # Xoá trạng thái cũ của ô soạn để khởi tạo lại đúng nội dung đang lưu
         st.session_state.pop(quill_key, None)
         st.session_state[edit_key] = True
+
+    def _active_quill_key():
+        """Key thật truyền cho st_quill -- đổi theo "generation" mỗi khi cần ép remount widget
+        (bấm Gộp lúc editor ĐÃ mở sẵn). streamlit-quill là component "uncontrolled": value chỉ
+        được áp dụng lúc mount đầu tiên, đổi value cho 1 instance đã mount không có tác dụng gì --
+        key cố định quill_key là đủ khi editor vừa mở lần đầu (component chưa tồn tại ở lần chạy
+        trước nên chắc chắn mount mới), nhưng khi Gộp trong lúc đang mở, component đã tồn tại sẵn
+        -> phải đổi key mới ép Streamlit unmount/mount lại instance mới với value merge đã nối."""
+        return f"{quill_key}_{st.session_state.get(quill_gen_key, 0)}"
 
     with st.container(border=True, key="note_card"):
         with st.container(key="note_row"):
@@ -3259,12 +3356,18 @@ def render_note_editor(day, day_badges=None):
                                         if st.button("", icon=":material/done_all:" if _pending else ":material/merge:",
                                                      key=f"qnote_merge_{_qid}", help="Đã gộp — chờ Lưu" if _pending
                                                      else "Gộp vào ghi chú chính", disabled=_pending):
-                                            _base = (st.session_state.get(quill_key, cur)
-                                                     if st.session_state.get(edit_key, False) else cur) or ""
+                                            _was_open = st.session_state.get(edit_key, False)
+                                            _base = (st.session_state.get(_active_quill_key(), cur)
+                                                     if _was_open else cur) or ""
                                             _piece = f"<p><strong>{r['Thời gian']:%H:%M}</strong> — {html_escape(str(r['Nội dung']))}</p>"
                                             st.session_state[f"note_merge_content_{day}"] = _base + _piece
                                             st.session_state.setdefault(merge_pending_key, [])
                                             st.session_state[merge_pending_key].append(_qid)
+                                            if _was_open:
+                                                # Editor đã mở sẵn -- component Quill đã mount, đổi
+                                                # value không đủ (xem docstring _active_quill_key),
+                                                # phải đổi generation để ép remount widget mới.
+                                                st.session_state[quill_gen_key] = st.session_state.get(quill_gen_key, 0) + 1
                                             _enter_edit()
                                             st.rerun()
                                         if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
@@ -3297,7 +3400,7 @@ def render_note_editor(day, day_badges=None):
                             _merge_content = st.session_state.pop(f"note_merge_content_{day}", None)
                             content = st_quill(value=_merge_content if _merge_content is not None else cur,
                                                html=True, toolbar=NOTE_TOOLBAR,
-                                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
+                                               placeholder="Viết vài dòng về ngày này…", key=_active_quill_key())
                             style_quill()
                             _inject_note_editor_shortcuts()
 
@@ -3318,7 +3421,7 @@ def render_note_editor(day, day_badges=None):
                         with st.container(key="note_actions", horizontal=True, gap="small"):
                             if st.button("Cập nhật", icon=":material/check:", type="primary",
                                          key=f"note_save_{day}"):
-                                save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
+                                save_note(day, content if content is not None else st.session_state.get(_active_quill_key(), ""))
                                 # Ghi chú nhanh đã "Gộp" (xem nút ở trên) chỉ thực sự bị xoá TẠI ĐÂY,
                                 # sau khi ghi chú chính đã lưu thành công -- Huỷ/Xoá ghi chú bên dưới
                                 # chỉ bỏ đánh dấu, không đụng tới bảng quick_notes.
@@ -3408,8 +3511,13 @@ def render_notes_journal(period_key, kind, df_all):
         qnote_html = _quick_note_chips_html(qn[qn['_d'] == d]) if d in quick_note_days else ''
         note_html = ''
         if d in note_days:
-            note_html = (f"<span class='rl-book'>Ghi chú chính</span>"
-                         f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>")
+            _note_body = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
+            # Nhãn "Ghi chú chính" chỉ cần khi CÒN ghi chú nhanh hiện cùng dòng (phân biệt 2 khối) --
+            # không còn ghi chú nhanh nào (đã gộp/xoá hết) thì chỉ 1 khối ghi chú duy nhất, nhãn dư
+            # thừa. Khớp đúng cách renderer Tìm kiếm đã làm (không có nhãn, xem _book_chips_html
+            # neighbor ở render_search()).
+            note_html = (f"<span class='rl-book'>Ghi chú chính</span>{_note_body}" if qnote_html
+                         else _note_body)
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
@@ -3457,38 +3565,52 @@ def _render_health_report(df_health):
     # nếu khám nhiều loại cùng lúc), không phụ thuộc Nhóm/Chỉ số đang chọn bên dưới. Đây là thứ
     # người dùng thực sự cần thấy NGAY sau khi vừa nhập kết quả khám mới -- xem docstring hàm.
     _latest_date = df_health['Ngày lấy mẫu'].max()
+
+    # Dòng "Cập nhật lần cuối ... trước" -- cùng khuôn _upd_line của billboard Hôm nay (epoch UTC
+    # + JS ticker tự nhích mỗi 30s qua _inject_relative_time_ticker(), không cần rerun cả trang).
+    _hm_ts = pd.Timestamp(_latest_date)
+    _hm_abs_str = _hm_ts.strftime('%d/%m/%Y')
+    _hm_epoch_ms = int(_hm_ts.tz_localize(APP_TZ).timestamp() * 1000)
+    _hm_meta = (f"Cập nhật lần cuối <b id='last-update-live' data-epoch='{_hm_epoch_ms}' "
+                f"title='Lần khám {_hm_abs_str}'>{format_relative(_hm_ts)}</b>")
+
+    sec_hero(None, "Chỉ số theo thời gian", None,
+             [("hm-bc-abn", "Chỉ số bất thường"), ("hm-bc-ch1", "1 · Số liệu"),
+              ("hm-bc-ch2", "2 · Biểu đồ theo dõi")], meta=_hm_meta)
+    _inject_relative_time_ticker()
+
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    with st.expander(f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}", expanded=True):
-        if _latest_num.empty:
-            st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
+    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}")
+    if _latest_num.empty:
+        st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
+    else:
+        _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
+        if not _abn_latest.empty:
+            # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
+            # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
+            # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
+            # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
+            # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
+            # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
+            # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
+            # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
+            # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
+            # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
+            _abn_latest = (
+                _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
+                .sort_values('_namelen')
+                .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
+                .drop(columns='_namelen'))
+        if _abn_latest.empty:
+            st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
         else:
-            _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
-            if not _abn_latest.empty:
-                # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
-                # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
-                # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
-                # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
-                # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
-                # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
-                # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
-                # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
-                # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
-                # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
-                _abn_latest = (
-                    _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
-                    .sort_values('_namelen')
-                    .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
-                    .drop(columns='_namelen'))
-            if _abn_latest.empty:
-                st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
-            else:
-                st.warning(f"{len(_abn_latest)}/{len(_latest_num)} chỉ số ngoài khoảng tham chiếu:")
-                render_stat_panel(hero_items=[], sections=[{"label": "Ngoài khoảng tham chiếu", "chips": [
-                    {"k": f"{r['Chỉ số']} ({r['Nhóm']})",
-                     "v": f"{r['Giá trị']:g} {r['Đơn vị'] if pd.notna(r['Đơn vị']) else ''}".strip()
-                          + (f" · TC {r['Khoảng tham chiếu']}" if pd.notna(r['Khoảng tham chiếu']) else ""),
-                     "hl": True} for _, r in _abn_latest.iterrows()]}])
+            st.warning(f"{len(_abn_latest)}/{len(_latest_num)} chỉ số ngoài khoảng tham chiếu:")
+            render_stat_panel(hero_items=[], sections=[{"label": "Ngoài khoảng tham chiếu", "chips": [
+                {"k": f"{r['Chỉ số']} ({r['Nhóm']})",
+                 "v": f"{r['Giá trị']:g} {r['Đơn vị'] if pd.notna(r['Đơn vị']) else ''}".strip()
+                      + (f" · TC {r['Khoảng tham chiếu']}" if pd.notna(r['Khoảng tham chiếu']) else ""),
+                 "hl": True} for _, r in _abn_latest.iterrows()]}])
 
     cc1, cc2 = st.columns(2)
     cats = sorted(df_health['Nhóm'].dropna().unique())
@@ -3500,74 +3622,74 @@ def _render_health_report(df_health):
     s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
 
     if s_num.empty:
-        with st.expander("1. Số liệu", expanded=True):
-            st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
-        with st.expander("2. Biểu đồ theo dõi", expanded=True):
-            st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
+        sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+        st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
+        sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+        st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
         return
 
     _unit_vals = s_num['Đơn vị'].dropna()
     unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
     is_abn = _health_is_abnormal(s_num)
 
-    with st.expander("1. Số liệu", expanded=True):
-        last = s_num.iloc[-1]
-        deltas = []
-        if len(s_num) > 1:
-            d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
-            dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
-            deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
-        hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
-                       "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
-        hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
-        n_abn = int(is_abn.sum())
-        sections = [
-            {"label": "Thống kê", "chips": [
-                {"k": "Số quan sát", "v": str(len(s_num))},
-                {"k": "Khoảng thời gian",
-                 "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
-                {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
-                {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-                {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-            ]},
-            {"label": "Bất thường", "chips": [
-                {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
-            ]},
-        ]
-        render_stat_panel(hero_items, sections=sections)
+    sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+    last = s_num.iloc[-1]
+    deltas = []
+    if len(s_num) > 1:
+        d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
+        dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
+        deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
+    hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
+                   "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
+    hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
+    n_abn = int(is_abn.sum())
+    sections = [
+        {"label": "Thống kê", "chips": [
+            {"k": "Số quan sát", "v": str(len(s_num))},
+            {"k": "Khoảng thời gian",
+             "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
+            {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
+            {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+            {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+        ]},
+        {"label": "Bất thường", "chips": [
+            {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
+        ]},
+    ]
+    render_stat_panel(hero_items, sections=sections)
 
-    with st.expander("2. Biểu đồ theo dõi", expanded=True):
-        _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
-        _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
-        fig = go.Figure()
-        if s_num['Ref cao'].notna().any():
-            fig.add_trace(go.Scatter(
-                x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
-                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
-        if s_num['Ref thấp'].notna().any():
-            fig.add_trace(go.Scatter(
-                x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
-                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                fill='tonexty', fillcolor=_band_fill,
-                name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+    sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+    _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
+    _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
+    fig = go.Figure()
+    if s_num['Ref cao'].notna().any():
         fig.add_trace(go.Scatter(
-            x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
-            line=dict(color=ACCENT, width=2.5),
-            marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
-            name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
-            hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
-        ))
-        fig.update_layout(
-            height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
-            xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
-            yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-        )
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-        if is_abn.any():
-            st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
-        render_health_log_table(s_num, is_abn)
+            x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
+            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+            name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
+    if s_num['Ref thấp'].notna().any():
+        fig.add_trace(go.Scatter(
+            x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
+            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+            fill='tonexty', fillcolor=_band_fill,
+            name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter(
+        x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
+        line=dict(color=ACCENT, width=2.5),
+        marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
+        name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
+        hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
+    ))
+    fig.update_layout(
+        height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
+        xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
+        yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+    )
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    if is_abn.any():
+        st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
+    render_health_log_table(s_num, is_abn)
 
 
 def _render_health_history(df_health):
@@ -4408,41 +4530,80 @@ def render_period_table(df, time_col):
 _HELP_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
-def help_kbd(*keys):
-    """Dãy phím kiểu keycap: help_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
+def sec_kbd(*keys):
+    """Dãy phím kiểu keycap: sec_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
     Trả về string HTML để nhúng vào bảng/đoạn văn khác, không tự render."""
-    return "<span class='help-kplus'>+</span>".join(
-        f"<kbd class='help-kbd'>{k}</kbd>" for k in keys)
+    return "<span class='sec-kplus'>+</span>".join(
+        f"<kbd class='sec-kbd'>{k}</kbd>" for k in keys)
 
 
-def help_table(headers, rows):
+def sec_table(headers, rows):
     """Bảng tra nhanh (cheat-sheet). rows: list[list[str]], cell là HTML thô (nhúng được
-    help_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
+    sec_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
     Trả về string HTML (bọc sẵn khối cuộn ngang cho màn hẹp)."""
     _thead = "".join(f"<th>{h}</th>" for h in headers)
     _tbody = "".join(
         "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
-    return ("<div class='help-tblwrap'><table class='help-tbl'>"
+    return ("<div class='sec-tblwrap'><table class='sec-tbl'>"
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def help_chapter(anchor, num, kicker, title, lead=None):
-    """Header 1 chương của trang Trợ giúp: số thứ tự lớn mờ màu accent + dòng kicker in hoa +
-    tiêu đề + đoạn dẫn. anchor là id cho chip mục lục nhảy tới (href='#help-chN' -- CSS
-    scroll-margin-top của .help-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề)."""
-    _lead = f"<p class='help-ch-lead'>{lead}</p>" if lead else ""
+def sec_chapter(anchor, num, kicker, title, lead=None):
+    """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
+    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
+    dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
+    tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
+
+    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, vd panel tham khảo khi chưa có dữ
+    liệu, hay "Chỉ số bất thường" ở Sức khoẻ -- những mục này không nằm trong 1 chuỗi đếm).
+
+    kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
+    vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
+    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
+    của Trợ giúp)."""
+    _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
+    _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
+    _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     st.markdown(
-        f"<div class='help-ch' id='{anchor}'>"
-        f"<div class='help-ch-num'>{num:02d}</div>"
-        f"<div class='help-ch-kicker'>{kicker}</div>"
-        f"<h2 class='help-ch-title'>{title}</h2>{_lead}</div>",
+        f"<div class='sec-ch' id='{anchor}'>{_num_html}{_kicker_html}"
+        f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
         unsafe_allow_html=True)
 
 
-def help_block(html):
-    """Bọc 1 khối HTML vào thẻ .help-card (thay cho st.container(border=True) của trang
+def sec_block(html):
+    """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) của trang
     Hướng dẫn bản cũ -- không cần key container nên không đụng rule CSS glass-card chung)."""
-    st.markdown(f"<div class='help-card'>{html}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
+
+
+def sec_hero(kicker, title, sub, chips, meta=None):
+    """Khối mở đầu 1 trang cuộn dọc kiểu "chương": kicker + tiêu đề lớn + đoạn tóm tắt ngắn +
+    hàng chip nhảy nhanh tới từng chương (chips: list[(anchor, nhãn)]). Factor lại từ khối hero
+    viết tay ban đầu của trang Trợ giúp -- dùng chung cho mọi trang chuyển sang bố cục này để
+    không lặp lại cùng 1 khối HTML nhiều lần.
+
+    kicker=None/"" -> bỏ hẳn dòng kicker; sub=None/"" -> bỏ hẳn đoạn tóm tắt. Dùng cho các trang
+    chỉ cần tiêu đề + chip mục lục, không cần nhãn ngữ cảnh hay câu mô tả thêm (mọi hero ngoài
+    Trợ giúp hiện đều gọi kiểu này -- Trợ giúp là ngoại lệ duy nhất còn giữ đủ cả 2, vì đó là nội
+    dung hướng dẫn thật cần câu mở đầu giải thích app, không phải phần "dư thừa" như các trang
+    khác). chips=[] -> bỏ hẳn hàng chip (không render div rỗng để lại khoảng trắng thừa) -- dùng
+    khi sub-tab không có chương/mục nào khác để nhảy tới (vd Sách/Gundam → Tổng quan).
+
+    meta=None/"" -> bỏ hẳn dòng nhỏ dưới tiêu đề. KHÁC bản chất với sub (đoạn mô tả tĩnh đã bị bỏ
+    khỏi mọi hero ngoài Trợ giúp) -- meta dành cho 1 dòng dữ liệu SỐNG (vd "Cập nhật lần cuối ...
+    trước", đúng khuôn .tbill-meta của billboard Hôm nay), chỉ trang nào thực sự có mốc cập nhật
+    đáng theo dõi mới truyền (hiện chỉ Sức khoẻ)."""
+    _kicker_html = f"<div class='hh-kicker'>{kicker}</div>" if kicker else ""
+    _sub_html = f"<div class='hh-sub'>{sub}</div>" if sub else ""
+    _meta_html = f"<div class='hh-meta'>{meta}</div>" if meta else ""
+    _toc_html = ""
+    if chips:
+        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+        _toc_html = f"<div class='sec-toc'>{_chips_html}</div>"
+    st.markdown(
+        f"<div class='sec-hero'>{_kicker_html}"
+        f"<div class='hh-title'>{title}</div>{_sub_html}{_meta_html}{_toc_html}</div>",
+        unsafe_allow_html=True)
 
 
 def help_faq_item(question, answer_md):
@@ -4453,7 +4614,7 @@ def help_faq_item(question, answer_md):
 
 
 def render_help_changelog(entries):
-    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .help-card gắn chấm tròn accent nối
+    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .sec-card gắn chấm tròn accent nối
     đường dọc bên trái (xem CSS .help-tl*), header gồm nhãn PR + 3 chip, rồi tiêu đề đậm + bullets
     (hỗ trợ **đậm** kiểu markdown).
 
@@ -5139,6 +5300,11 @@ st.markdown(
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
     [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* Nút ◀/▶ ở day_stepper cao 40px (min-height mặc định Streamlit) trong khi ô st.date_input
+       chỉ cao ~36px -- vertical_alignment="center" của st.columns canh giữa theo TÂM mỗi item,
+       không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
+       đã "canh giữa". Ép cùng 36px cho cả 3 phần tử trên 1 hàng thẳng hàng thật sự. */
+    [class*="st-key-day_stepper"] button { height: 36px !important; min-height: 0 !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -5281,86 +5447,94 @@ st.markdown(
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    .help-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
-        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent); }
-    .help-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    /* Nền gradient phớt accent mờ dần dùng CHUNG cho mọi "billboard/hero" đầu trang (Trợ giúp,
+       Hôm nay, và các trang sẽ chuyển sang bố cục chương sau này) -- gộp 1 rule duy nhất ở đây,
+       thêm selector mới vào danh sách này thay vì lặp lại background riêng từng nơi, để đổi độ
+       mờ 1 lần là áp dụng đồng loạt. */
+    .sec-hero, .st-key-today_billboard {
+        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
+    }
+    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
+        margin-bottom: 34px; }
+    .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
         text-transform: uppercase; color: var(--accent-dark); }
-    .help-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
+    .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
         margin: 6px 0 8px; line-height: 1.15; }
-    .help-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
-    .help-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-    .help-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
+    .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
+    .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
+    .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
         border-radius: 999px; padding: 5px 12px; }
-    .help-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
+    .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
-    .help-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
-    .help-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
+    .sec-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    .sec-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
         line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
-    .help-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
-    .help-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
-    .help-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
-    .help-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
+    .sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
         font-size: 14px; color: var(--text); line-height: 1.6; }
-    .help-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
-    .help-card ul, .help-card ol { margin: 6px 0 2px; padding-left: 20px; }
-    .help-card li { margin: 4px 0; }
-    .help-cap { font-size: 12px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
-    .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    .sec-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
+    .sec-card ul, .sec-card ol { margin: 6px 0 2px; padding-left: 20px; }
+    .sec-card li { margin: 4px 0; }
+    .sec-cap { font-size: 12px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+    .sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 12px; margin: 10px 0; }
-    .help-grid .help-card { margin: 0; }
-    .help-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    .sec-grid .sec-card { margin: 0; }
+    .sec-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 12px; font-weight: 600; color: var(--text); background: var(--card);
         border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 6px;
         padding: 1px 7px; line-height: 1.5; }
-    .help-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
-    .help-tblwrap { overflow-x: auto; }
-    .help-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .help-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+    .sec-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
+    .sec-tblwrap { overflow-x: auto; }
+    .sec-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .sec-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
         color: var(--text-2); text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--border); }
-    .help-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
+    .sec-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
         vertical-align: top; line-height: 1.5; }
-    .help-tbl tr:last-child td { border-bottom: none; }
-    .help-tbl td:first-child { white-space: nowrap; }
+    .sec-tbl tr:last-child td { border-bottom: none; }
+    .sec-tbl td:first-child { white-space: nowrap; }
     .help-chip { display: inline-block; font-size: 11px; font-weight: 600; color: var(--text-2);
         background: var(--chip); border-radius: 999px; padding: 2px 9px; }
     .help-chip-acc { color: var(--accent); background: rgba(var(--accent-rgb),0.12); }
     /* Sơ đồ luồng dữ liệu (chương Nạp dữ liệu & đồng bộ) */
-    .help-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
-    .help-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
+    .sec-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+    .sec-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
         border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
-    .help-flow-hub { border-color: var(--accent); color: var(--accent-dark);
+    .sec-flow-hub { border-color: var(--accent); color: var(--accent-dark);
         background: rgba(var(--accent-rgb),0.10); }
-    .help-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
-    .help-flow-col { display: flex; flex-direction: column; gap: 6px; }
+    .sec-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
+    .sec-flow-col { display: flex; flex-direction: column; gap: 6px; }
     /* Minh hoạ heatmap thu nhỏ: 8 bậc alpha theo accent, nhại thang màu Biểu đồ lịch thật */
-    .help-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
-    .help-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
-    .help-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
-    .help-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
-    .help-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
-    .help-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
-    .help-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
-    .help-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
-    .help-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
+    .sec-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
+    .sec-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
+    .sec-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
+    .sec-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
+    .sec-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
+    .sec-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
+    .sec-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
+    .sec-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
+    .sec-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
     /* Minh hoạ dòng thời gian trong ngày */
-    .help-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
+    .sec-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
         margin: 12px 0 4px; overflow: hidden; }
-    .help-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
+    .sec-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
         background: rgba(var(--accent-rgb),0.55); }
-    .help-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
-    .help-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
+    .sec-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
+    .sec-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
         margin-top: 3px; }
     /* Minh hoạ xu hướng + đường trung bình động */
-    .help-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
+    .sec-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
         margin: 12px 0 4px; }
-    .help-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
-    .help-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
+    .sec-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
+    .sec-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
         border-top: 2px dashed var(--accent); }
-    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .help-card thật (cùng nền/
-       viền/bo góc/shadow với help-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
+    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .sec-card thật (cùng nền/
+       viền/bo góc/shadow với sec-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
        chạy dọc theo lề trái của toàn khối .help-tl để vẫn giữ cảm giác timeline. */
     .help-tl { margin: 8px 0; padding-left: 24px; border-left: 2px solid var(--divider); }
     .help-tl-item { position: relative; background: var(--card); border: 1px solid var(--border);
@@ -5378,7 +5552,7 @@ st.markdown(
     .help-tl-ul li { margin: 3px 0; }
     /* FAQ (chương Câu hỏi thường gặp) -- expander native đã có style "tiêu đề gạch chân" dùng
        chung cho expander báo cáo (rule [data-testid="stExpander"] phía trên), nhưng ở đây cố ý
-       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 help-card thu
+       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 sec-card thu
        gọn/mở ra được -- đồng bộ với mọi khối nội dung khác trên trang Trợ giúp, thay vì lạc tông
        kiểu "heading gạch chân" của các trang báo cáo. */
     [class*="st-key-help_faq"] [data-testid="stExpander"] { margin: 0 0 10px !important; }
@@ -5394,12 +5568,12 @@ st.markdown(
     [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
         padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
     @media (max-width: 640px) {
-        .help-hero { padding: 22px 18px; }
-        .help-hero .hh-title { font-size: 26px; }
-        .help-ch-num { font-size: 40px; }
-        .help-flow { flex-direction: column; align-items: flex-start; }
-        .help-flow-arr::after { content: "↓"; padding: 0; }
-        .help-heat { grid-template-columns: repeat(10, 13px); }
+        .sec-hero { padding: 22px 18px; }
+        .sec-hero .hh-title { font-size: 26px; }
+        .sec-ch-num { font-size: 40px; }
+        .sec-flow { flex-direction: column; align-items: flex-start; }
+        .sec-flow-arr::after { content: "↓"; padding: 0; }
+        .sec-heat { grid-template-columns: repeat(10, 13px); }
     }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
@@ -5531,30 +5705,40 @@ st.markdown(
        [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
        margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
        để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
-    .st-key-kq_daily_card {
-        background: color-mix(in srgb, var(--accent) 13%, var(--card)) !important;
-        border-color: color-mix(in srgb, var(--accent) 28%, var(--card)) !important;
-        padding: 26px 26px 22px !important;
-        /* margin ngang KHÔNG tự co width lại được -- Streamlit tự set width:100% (theo content-box
-           của khối cha) trên container này, percentage đó phớt lờ margin của chính nó (đúng chuẩn
-           CSS), nên chỉ margin suông sẽ đẩy lệch phải mà KHÔNG co bề rộng, đo bằng Playwright bounding
-           box xác nhận (x dịch +16 nhưng width giữ nguyên, đè hẳn ra ngoài card số liệu bên dưới).
-           Phải ép width bằng calc() để trừ đúng 32px (2 bên) thay vì trông chờ margin tự co. */
-        width: calc(100% - 32px) !important;
-        margin: 0 16px 16px !important;
+    /* Nền gradient phớt accent mờ dần (KHÔNG còn color-mix đặc như bản đầu) -- giống hệt .sec-hero
+       của trang Trợ giúp, để billboard nổi bật hơn card số liệu trung tính bên dưới nhưng vẫn nhẹ
+       nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
+    .st-key-today_billboard {
+        border-color: var(--border) !important;
+        padding: 28px 30px 22px !important;
+        border-radius: 16px !important;
+        margin: 0 0 16px !important;
     }
-    /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_daily_quote_card()) -- nền chip
+    /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
+       dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
+       selector này. */
+    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
+        border-right: 1px solid var(--divider);
+    }
+    /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
+       cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
+       khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
+    .tbill-date { text-align: center; }
+    .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 6px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 12px; line-height: 1.7; }
+    /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
-       "★"/"☆" thật (xem docstring _render_daily_quote_card() -- không phải icon Material nữa) nên
-       CSS nhắm vào <p> chứa chữ (div[data-testid="stMarkdownContainer"] p bên trong button), KHÔNG
-       phải span[data-testid="stIconMaterial"] như trước. */
-    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] {
+       "★"/"☆" thật (xem docstring -- không phải icon Material nữa) nên CSS nhắm vào <p> chứa chữ
+       (div[data-testid="stMarkdownContainer"] p bên trong button), KHÔNG phải
+       span[data-testid="stIconMaterial"] như trước. */
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] {
         background: rgba(var(--accent-rgb),0.12) !important; border: none !important; box-shadow: none !important;
         width: 30px !important; height: 30px !important;
         min-height: 0 !important; border-radius: 999px !important; padding: 0 !important;
     }
-    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] p {
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] p {
         font-size: 18px !important; line-height: 1 !important; color: var(--text-3) !important;
     }
     /* Đã Yêu thích -> chữ "★" màu accent (hình dạng đặc/rỗng đã đủ phân biệt, màu chỉ để nhấn
@@ -5634,7 +5818,10 @@ st.markdown(
        vẫn hiện to hơn khung chứa (overflow:visible) -> nhìn như đè chồng lên cột giữa. */
     [class*="st-key-qnote_row_"] [data-testid="stColumn"] { min-width: 0 !important; }
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child { flex: 0 0 52px !important; }
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 64px !important; }
+    /* 108px (không phải 64px cũ) -- đủ chỗ cho CẢ 3 nút (Gộp/Sửa/Xoá) cùng 1 hàng ở chế độ xem;
+       64px chỉ đủ ~2 nút nên nút thứ 3 bị đẩy xuống dòng, đội chiều cao mỗi hàng ghi chú nhanh
+       lên trông như cách nhau xa dù margin-bottom (dòng dưới) đã rất sát. */
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 108px !important; }
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child *,
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child * {
         width: 100% !important; min-width: 0 !important;
@@ -6062,60 +6249,69 @@ def _kindle_quote_of_day():
     return kh.iloc[idx]
 
 
-def _render_daily_quote_card(kq):
-    """Thẻ "Trích dẫn hôm nay" (kq từ _kindle_quote_of_day()) -- đứng NGAY DƯỚI card "Ngày đang
-    xem", TRƯỚC mọi nội dung khác của trang Hôm nay (kể cả khi ngày đang xem trống phiên), thay vì
-    chôn ở cuối "1. Tổng quan ngày"/dưới "Tham khảo cho lên kế hoạch" như bản cũ -- phản hồi thực
-    tế là quá dễ bị lướt qua ở vị trí cũ. KHÔNG còn nhãn chữ "Trích dẫn hôm nay" phía trên (bản
-    trước) -- dấu " lớn ở góc đã đủ báo hiệu đây là 1 trích dẫn; nền phớt accent ĐẶC (không còn
-    rgba trong suốt lộ chấm nền, xem CSS .st-key-kq_daily_card dùng color-mix()) để tách hẳn khỏi
-    các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh như
-    bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các câu
-    đã đánh dấu. Margin ngang 16px (thay vì full-width như card "Ngày đang xem" phía trên) để khớp
-    đúng bề rộng các card số liệu bên dưới (nằm trong expander có padding riêng).
+def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
+    """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
+    (trước đây là 3 khối rời -- header glass-card, kq_daily_card, sec_hero) vào 1 khối duy nhất,
+    đập vào mắt ngay khi vừa mở trang thay vì rải rác. Cột trái là "tờ lịch xé hằng ngày": số ngày
+    to + Thứ/ngày/tháng chữ đầy đủ + 2 dòng meta (ngày hoạt động, cập nhật gần nhất), canh giữa cả
+    ngang (CSS text-align) lẫn dọc (vertical_alignment="center" của st.columns, canh theo tâm so
+    với cột phải cao hơn). Cột phải là trích dẫn Kindle hôm nay -- vắng mặt hẳn (chưa import trích
+    dẫn nào) thì cột ngày chiếm trọn bề rộng, không chia cột.
 
-    Dấu "/chữ trích dẫn gộp CHUNG 1 lệnh st.markdown (không tách dấu " ra cột riêng như bản đầu)
-    -- 2 block Streamlit liền kề luôn cộng dồn thêm khoảng cách (gap 0.9rem của stVerticalBlock +
-    margin riêng từng block), tách dấu " to (52px) ra 1 block riêng phía trên làm khoảng trống
-    phía trên chữ trích dẫn bị đẩy rộng ra rõ rệt so với cỡ chữ, đúng phản hồi thực tế "khung to
-    chữ nhỏ, mất cân đối". Gộp lại 1 block + margin-top âm trên .kq-daily-mark kéo chữ lên sát
-    ngay dưới dấu " để cân đối hẳn.
+    Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
+    do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
+    cũ (đã gộp vào đây)."""
+    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        # epoch UTC thật (không lệch theo múi giờ máy chủ/máy khách) cho JS ticker tự cập nhật
+        # "X trước" mỗi 30s -- xem _inject_relative_time_ticker().
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
 
-    Nút ⭐ ĐẶT CẠNH tên sách (hàng cuối, st.columns riêng) thay vì góc trên phải như bản đầu --
-    phản hồi thực tế là nút trôi nổi 1 mình ở góc trên, không "gắn" vào đâu cả. Ghép cạnh tên sách
-    (đã canh phải sẵn) cho nút có 1 điểm neo rõ ràng, đọc tự nhiên như "— Rừng Na Uy ⭐".
+    _date_html = (
+        "<div class='tbill-date'>"
+        f"<div class='tbill-num'>{sel.day}</div>"
+        f"<div class='tbill-dow'>{vn_dow}, {VN_MONTHS_WORD[sel.month - 1]} {sel.year}</div>"
+        f"<div class='tbill-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
 
-    Nút dùng ký tự "★"/"☆" (BLACK STAR/WHITE STAR, chữ thường -- KHÔNG phải icon Material) làm
-    label thay vì icon=":material/star:"/"star_outline:" -- đã xác nhận font Material Symbols
-    Streamlit tự host không hỗ trợ trục biến FILL, 2 icon "star"/"star_outline" hiển thị GIỐNG HỆT
-    nhau (chỉ khác màu qua CSS), phản hồi thực tế là trạng thái đã chọn/chưa chọn không rõ. 2 ký tự
-    Unicode này có HÌNH DẠNG khác hẳn nhau (đặc/rỗng) theo mọi font hệ thống, không phụ thuộc biến
-    thể font nào -- phân biệt được ngay cả khi không nhìn màu.
+    with st.container(key="today_billboard", border=True):
+        if kq is not None:
+            c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
+            with c_date:
+                st.markdown(_date_html, unsafe_allow_html=True)
+            with c_quote:
+                st.markdown(
+                    "<div class='kq-daily-mark'>“</div>"
+                    f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
+                    unsafe_allow_html=True)
+                with st.container(key="kq_daily_srcrow"):
+                    c_src, c_fav = st.columns([10, 1])
+                    with c_src:
+                        _author = kq.get('Tác giả')
+                        _src_txt = html_escape(str(kq['Cuốn sách']))
+                        if pd.notna(_author) and str(_author).strip():
+                            _src_txt += f" · {html_escape(str(_author))}"
+                        st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                    with c_fav:
+                        _fav = bool(kq.get('Yêu thích', False))
+                        if st.button("★" if _fav else "☆",
+                                     key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
+                                     help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                            set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
+                            st.rerun()
+        else:
+            st.markdown(_date_html, unsafe_allow_html=True)
 
-    Tên sách kèm TÁC GIẢ (cột "Tác giả" đọc thẳng từ kindle_highlights.author, do
-    parse_kindle_clippings() tách ra từ dòng "Tên sách (Tác giả)" trong My Clippings.txt lúc
-    import) -- chỉ nối thêm nếu có (một số nguồn không phải Kindle gốc, vd nhập tay, có thể thiếu
-    tác giả)."""
-    with st.container(key="kq_daily_card", border=True):
-        st.markdown(
-            "<div class='kq-daily-mark'>“</div>"
-            f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
-            unsafe_allow_html=True)
-        with st.container(key="kq_daily_srcrow"):
-            c_src, c_fav = st.columns([10, 1])
-            with c_src:
-                _author = kq.get('Tác giả')
-                _src_txt = html_escape(str(kq['Cuốn sách']))
-                if pd.notna(_author) and str(_author).strip():
-                    _src_txt += f" · {html_escape(str(_author))}"
-                st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
-            with c_fav:
-                _fav = bool(kq.get('Yêu thích', False))
-                if st.button("★" if _fav else "☆",
-                             key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
-                             help="Bỏ Yêu thích" if _fav else "Yêu thích"):
-                    set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
-                    st.rerun()
+        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
+        st.markdown(f"<div class='sec-toc' style='margin-top:20px;'>{_chips_html}</div>", unsafe_allow_html=True)
+
+    if _upd_line:
+        _inject_relative_time_ticker()
 
 
 def render_day_report(df):
@@ -6135,70 +6331,15 @@ def render_day_report(df):
     # của fragment.
     sel_day_badges = _compute_alltime_records(df)["day_badges"].get(sel)
 
-    _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
-            "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
-            "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
-    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
-    _dot = "<span style='color:var(--border);flex:0 0 auto;'>·</span>"
-    # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
-    # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
-    # tiên, Tổng quan giờ không còn là sub-tab mặc định.
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_tail = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        # epoch UTC thật (không phải lệch theo múi giờ máy chủ/máy khách) -- localize đúng ts
-        # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
-        # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        # Giờ phút giây tuyệt đối (_abs_str) dời vào title= (tooltip hover) thay vì hiện luôn
-        # trong chữ -- giữ đúng 1 dòng gọn, phần lớn chỉ cần biết "khoảng bao lâu trước", số giờ
-        # chính xác là chi tiết tra cứu thêm chứ không phải thông tin ai cũng cần thấy ngay.
-        # Cả cụm (dấu chấm + chữ) bọc chung 1 span "dcx-upd" flex riêng -- vừa là 1 flex item
-        # DUY NHẤT của hàng ngoài (co dãn/ẩn được nguyên cụm qua class, không lệ thuộc thứ tự
-        # nhiều item rời rạc), vừa tự có overflow:hidden riêng để chữ bên trong elipsis đúng chỗ.
-        _upd_tail = (
-            "<span class='dcx-upd' style='display:flex;align-items:center;gap:9px;min-width:0;"
-            "overflow:hidden;flex:1 1 auto;'>"
-            f"{_dot}"
-            f"<span style='font-size:14.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;"
-            f"white-space:nowrap;min-width:0;' title='Cập nhật lúc {_abs_str}'>Cập nhật gần nhất "
-            f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
-            f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b></span></span>"
-        )
-    # 1 hàng gọn: nhãn thu lại thành thẻ nhỏ bo góc (khác kiểu chữ hoa rời trước đây) + 1 vạch
-    # dọc mảnh phân tách, rồi tới nội dung cùng 1 cỡ chữ (14.5px, chỉ khác màu/độ đậm để vẫn
-    # phân cấp) -- không còn đủ 3 cỡ chữ chen nhau trên 1 dòng như bản trước. Cụm "Cập nhật gần
-    # nhất" (ít quan trọng nhất, dài nhất) được phép co lại + hiện "…" khi màn hẹp vừa phải
-    # (flex:1 1 auto), và ẩn hẳn cùng chữ nhãn "Ngày đang xem" (chỉ còn icon) ở mobile thật hẹp
-    # (xem rule .dcx-upd/.dcx-lbltxt trong khối @media (max-width: 640px)) -- nếu không, tổng độ
-    # rộng các phần "không co" (nhãn đủ chữ + ngày + trạng thái) đã vượt quá màn hình điện thoại,
-    # bị cắt cụt giữa chữ thay vì gọn gàng.
-    st.markdown(
-        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
-        "<div style='display:flex;align-items:center;gap:10px;'>"
-        "<span style='display:flex;align-items:center;flex:0 0 auto;font-size:11.5px;font-weight:600;"
-        "color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:7px;"
-        "padding:4px 9px;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;'>"
-        f"{_evt}<span class='dcx-lbltxt'>Ngày đang xem</span></span>"
-        "<span style='width:1px;align-self:stretch;background:var(--divider);flex:0 0 auto;'></span>"
-        "<div style='display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;'>"
-        f"<span style='font-size:14.5px;color:var(--text);font-weight:600;white-space:nowrap;flex:0 0 auto;'>"
-        f"{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"{_dot}"
-        f"<span style='font-size:14.5px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;'>{_sub}</span>"
-        f"{_upd_tail}"
-        "</div></div></div>",
-        unsafe_allow_html=True)
-    if _upd_tail:
-        _inject_relative_time_ticker()
-
-    # Trích dẫn hôm nay đứng NGAY ĐÂY (đầu trang, trước cả nhánh rỗng/có phiên bên dưới) -- xem
-    # _render_daily_quote_card().
-    _kq = _kindle_quote_of_day()
-    if _kq is not None:
-        _render_daily_quote_card(_kq)
+    # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
+    # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
+    # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
+    _hero_chips = ([("today-ch1", "Ghi chú ngày"), ("today-ch2", "Ngày này năm trước")]
+                   if day_df.empty else
+                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
+                    ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
+                    ("today-ch5", "5 · Danh sách phiên")])
+    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
@@ -6224,89 +6365,89 @@ def render_day_report(df):
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
 
-        with st.expander("Ghi chú ngày", expanded=True):
-            render_note_editor(sel, sel_day_badges)
-        with st.expander("Ngày này năm trước", expanded=False):
-            render_on_this_day(sel, df)
+        sec_chapter("today-ch1", None, None, "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
+        sec_chapter("today-ch2", None, None, "Ngày này năm trước")
+        render_on_this_day(sel, df)
     else:
-        with st.expander("1. Tổng quan ngày", expanded=True):
-            d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
-            d_sess = len(day_df)
-            d_avg = _avg_session_min(day_df)
+        sec_chapter("today-ch1", 1, None, "Tổng quan ngày")
+        d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
+        d_sess = len(day_df)
+        d_avg = _avg_session_min(day_df)
 
-            cmp_chips = []
-            pw = df[df['Ngày'] == (sel - timedelta(days=7))]
-            if not pw.empty:
-                pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
-                _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
-                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
-                                  "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
-            else:
-                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
-            same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                      & (df['Ngày'] != sel)]
-            if same['Ngày'].nunique():
-                avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-                _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
-                cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
-                                  "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
+        cmp_chips = []
+        pw = df[df['Ngày'] == (sel - timedelta(days=7))]
+        if not pw.empty:
+            pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
+            _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
+            cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
+                              "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
+        else:
+            cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
+        same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
+                  & (df['Ngày'] != sel)]
+        if same['Ngày'].nunique():
+            avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
+            _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
+            cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
+                              "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
 
-            t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
-            t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
-            _sp = t1 - t0
-            span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
+        t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
+        t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
+        _sp = t1 - t0
+        span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
 
-            bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
-                        .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
-            buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
+        bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
+                    .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
+        buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
 
-            _secs = [{"label": "So sánh", "chips": cmp_chips},
-                     {"label": "Mốc trong ngày", "chips": [
-                         {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
-                         {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
-                         {"k": "Trải dài", "v": span_str}]}]
-            if buoi_chips:
-                _secs.append({"label": "Theo buổi", "chips": buoi_chips})
-            render_stat_panel(hero_items=[
-                {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
-                {"label": "Số phiên", "value": f"{d_sess}"},
-                {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
-            ], sections=_secs)
+        _secs = [{"label": "So sánh", "chips": cmp_chips},
+                 {"label": "Mốc trong ngày", "chips": [
+                     {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
+                     {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
+                     {"k": "Trải dài", "v": span_str}]}]
+        if buoi_chips:
+            _secs.append({"label": "Theo buổi", "chips": buoi_chips})
+        render_stat_panel(hero_items=[
+            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
+            {"label": "Số phiên", "value": f"{d_sess}"},
+            {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
+        ], sections=_secs)
 
-            # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
-            # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Giữ nguyên phần chi tiết
-            # (trục giờ/dải mờ khung giờ điển hình/nhãn dự án) -- chỉ đổi VỊ TRÍ, không rút gọn nội
-            # dung. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
-            # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
-            # lại thông tin.
-            render_day_timeline(day_df, sel, df)
+        # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
+        # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
+        # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
+        # án. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
+        # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
+        # lại thông tin.
+        render_day_timeline(day_df)
 
-            render_session_bar(day_df)
+        render_session_bar(day_df)
 
-        with st.expander("2. Ghi chú ngày", expanded=True):
-            render_note_editor(sel, sel_day_badges)
+        sec_chapter("today-ch2", 2, None, "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
 
-        with st.expander("3. Ngày này năm trước", expanded=False):
-            render_on_this_day(sel, df)
+        sec_chapter("today-ch3", 3, None, "Ngày này năm trước")
+        render_on_this_day(sel, df)
 
-        with st.expander("4. Phân bổ thời gian", expanded=False):
-            frag_pie(day_df, "rad_day", "Dự án")
+        sec_chapter("today-ch4", 4, None, "Phân bổ thời gian")
+        frag_pie(day_df, "rad_day", "Dự án")
 
-        with st.expander("5. Danh sách phiên", expanded=False):
-            rows_html = ''
-            for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
-                s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
-                cat = r.get('Danh mục')
-                cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
-                rows_html += ('<tr class="prow">'
-                              f'<td class="lbl">{i}</td>'
-                              f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
-                              f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
-                              f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
-                              f'<td class="txt">{html_escape(cat)}</td></tr>')
-            rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
-                          f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
-            st.markdown(DTBL_CSS + f"""
+        sec_chapter("today-ch5", 5, None, "Danh sách phiên")
+        rows_html = ''
+        for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
+            s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
+            cat = r.get('Danh mục')
+            cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
+            rows_html += ('<tr class="prow">'
+                          f'<td class="lbl">{i}</td>'
+                          f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
+                          f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
+                          f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
+                          f'<td class="txt">{html_escape(cat)}</td></tr>')
+        rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
+                      f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
+        st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
 <tbody>{rows_html}</tbody>
@@ -6335,63 +6476,68 @@ elif nav == "Báo cáo":
 
     if bc_sub == "Tổng quan":
         if not df.empty:
-            with st.expander("1. Tổng quan", expanded=True):
-                # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
-                # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
-                # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
-                total_hrs = df['Thời lượng (Phút)'].sum() / 60
-                total_trees = len(df)
-                num_days = df['Ngày'].nunique() or 1
-                base_avg = total_hrs / num_days
+            sec_hero(None, "Toàn cảnh từ ngày đầu tiên", None,
+                     [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
+                      ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
+                      ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan")
+            # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
+            # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
+            # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
+            total_hrs = df['Thời lượng (Phút)'].sum() / 60
+            total_trees = len(df)
+            num_days = df['Ngày'].nunique() or 1
+            base_avg = total_hrs / num_days
 
-                s_stat = _streak_stats(df)
-                by_wd = _weekday_avg(df)
-                overall_top3 = _top_days(df, 3)
-                _sections = [
-                    {"label": "Trung bình (toàn thời gian)", "chips": [
-                        {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(base_avg)}"},
-                        {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
-                        {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
-                    ]},
-                    {"label": "Chuỗi ngày", "chips": [
-                        {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
-                        {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
-                        {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
-                    ]},
-                ]
-                if len(by_wd) and by_wd.max() > 0:
-                    _sections.append({"label": "Theo thứ", "chips": [
-                        {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
-                        {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
-                    ]})
-                if overall_top3:
-                    _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
-                _nud = _streak_nudge(s_stat)
-                _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
+            s_stat = _streak_stats(df)
+            by_wd = _weekday_avg(df)
+            overall_top3 = _top_days(df, 3)
+            _sections = [
+                {"label": "Trung bình (toàn thời gian)", "chips": [
+                    {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(base_avg)}"},
+                    {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                    {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
+                ]},
+                {"label": "Chuỗi ngày", "chips": [
+                    {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
+                    {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
+                ]},
+            ]
+            if len(by_wd) and by_wd.max() > 0:
+                _sections.append({"label": "Theo thứ", "chips": [
+                    {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
+                    {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
+                ]})
+            if overall_top3:
+                _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
+            _nud = _streak_nudge(s_stat)
+            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
-                render_stat_panel(
-                    hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
-                        {"label": "Số cây đã trồng", "value": f"{total_trees}"},
-                    ],
-                    sections=_sections,
-                    footer=_footer,
-                )
-                render_session_bar(df)
+            render_stat_panel(
+                hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
+                    {"label": "Số cây đã trồng", "value": f"{total_trees}"},
+                ],
+                sections=_sections,
+                footer=_footer,
+            )
+            render_session_bar(df)
 
-                st.write("")
-                c_top1, c_top2 = st.columns(2)
-                _wk_now = _today_vn().strftime('%G-W%V')
-                with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
-                with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
-            with st.expander("2. Biểu đồ lịch", expanded=False):
-                frag_calendar(df, "range_cal")
-            with st.expander("3. Xu hướng theo thời gian", expanded=False):
-                frag_trend(df, "trend_main", "Danh mục")
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
-                frag_hourly(df, "hour_main", "Danh mục")
-            with st.expander("5. Bảng số liệu", expanded=False):
-                frag_data_table(df, "tbl_main")
+            st.write("")
+            c_top1, c_top2 = st.columns(2)
+            _wk_now = _today_vn().strftime('%G-W%V')
+            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
+            with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
+
+            sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
+            frag_calendar(df, "range_cal")
+            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng theo thời gian")
+            frag_trend(df, "trend_main", "Danh mục")
+            sec_chapter("bc-tq-ch4", 4, None, "Xu hướng tập trung theo khung giờ")
+            frag_hourly(df, "hour_main", "Danh mục")
+            sec_chapter("bc-tq-ch5", 5, None, "Bảng số liệu")
+            frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
 
@@ -6413,16 +6559,23 @@ elif nav == "Báo cáo":
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
-                    # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở Phân bổ/Bảng số
-                    # liệu bên dưới.
-                    _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
-                                                  lbl_prev_w, lbl_avg_w, _clip_note_w,
-                                                  "Ngày nổi bật trong tuần", show_top3=False)
+                sec_hero(None, "Một tuần vừa qua", None,
+                         [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
+                          ("bc-tuan-ch3", "3 · Phân bổ thời gian"),
+                          ("bc-tuan-ch4", "4 · Xu hướng theo thời gian"),
+                          ("bc-tuan-ch5", "5 · Xu hướng theo khung giờ"),
+                          ("bc-tuan-ch6", "6 · Bảng số liệu")])
+                # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
+                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở Phân bổ/Bảng số
+                # liệu bên dưới.
+                _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
+                                              lbl_prev_w, lbl_avg_w, _clip_note_w,
+                                              "Ngày nổi bật trong tuần", show_top3=False,
+                                              anchor_prefix="bc-tuan")
                 _render_period_secondary_expanders(
                     df_w, df, selected_week, 'week', 'Thứ', "Thứ trong tuần", DAYS_ORDER,
-                    pie_key="rad_tab4", trend_key="trend_w_color", hourly_key="hour_w")
+                    pie_key="rad_tab4", trend_key="trend_w_color", hourly_key="hour_w",
+                    anchor_prefix="bc-tuan")
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
@@ -6445,14 +6598,20 @@ elif nav == "Báo cáo":
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
 
             if not df_m.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
-                                                  lbl_prev_m, lbl_avg_m, _clip_note_m,
-                                                  "Ngày nổi bật trong tháng", show_top3=True,
-                                                  top3_suffix=" Tháng")
+                sec_hero(None, "Một tháng vừa qua", None,
+                         [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Nhật ký"),
+                          ("bc-thang-ch3", "3 · Phân bổ thời gian"),
+                          ("bc-thang-ch4", "4 · Xu hướng theo thời gian"),
+                          ("bc-thang-ch5", "5 · Xu hướng theo khung giờ"),
+                          ("bc-thang-ch6", "6 · Bảng số liệu")])
+                _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
+                                              lbl_prev_m, lbl_avg_m, _clip_note_m,
+                                              "Ngày nổi bật trong tháng", show_top3=True,
+                                              anchor_prefix="bc-thang", top3_suffix=" Tháng")
                 _render_period_secondary_expanders(
                     df_m, df, selected_month, 'month', 'Ngày', "Ngày trong tháng", None,
-                    pie_key="rad_tab3", trend_key="trend_m_color", hourly_key="hour_m")
+                    pie_key="rad_tab3", trend_key="trend_m_color", hourly_key="hour_m",
+                    anchor_prefix="bc-thang")
     elif bc_sub == "Năm":
         if not df.empty:
             years = sorted(df['Năm'].unique())
@@ -6470,38 +6629,40 @@ elif nav == "Báo cáo":
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
-                                                  lbl_prev_y, lbl_avg_y, _clip_note_y,
-                                                  "Ngày nổi bật trong năm", show_top3=True,
-                                                  top3_suffix=" Năm")
+                sec_hero(None, "Một năm nhìn lại", None,
+                         [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
+                          ("bc-nam-ch3", "3 · Sách &amp; Gundam"), ("bc-nam-ch4", "4 · Bảng số liệu")])
+                _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
+                                              lbl_prev_y, lbl_avg_y, _clip_note_y,
+                                              "Ngày nổi bật trong năm", show_top3=True,
+                                              anchor_prefix="bc-nam", top3_suffix=" Năm")
 
                 # Nhánh Năm có bộ mục 2-4 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch + Đọc sách &
                 # Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ
                 # giống để gộp chung với _render_period_secondary_expanders(), giữ riêng ở đây.
-                with st.expander("2. Biểu đồ lịch", expanded=False):
-                    # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
-                    # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
-                    # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
-                    # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
-                    render_calendar_grid(df_y, df_y)
+                sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
+                # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
+                # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
+                # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
+                # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
+                render_calendar_grid(df_y, df_y)
 
-                with st.expander("3. Đọc sách & Gundam trong năm", expanded=False):
-                    # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
-                    # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
-                    # phức tạp để tách ra cho 1 mục tổng kết năm.
-                    rl_y = load_reading_log()
-                    rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
-                    if rl_y.empty:
-                        st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
-                    else:
-                        render_stat_panel(hero_items=[
-                            {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
-                            {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
-                        ])
+                sec_chapter("bc-nam-ch3", 3, None, "Đọc sách & Gundam trong năm")
+                # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
+                # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
+                # phức tạp để tách ra cho 1 mục tổng kết năm.
+                rl_y = load_reading_log()
+                rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
+                if rl_y.empty:
+                    st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
+                else:
+                    render_stat_panel(hero_items=[
+                        {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
+                        {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
+                    ])
 
-                with st.expander("4. Bảng số liệu", expanded=False):
-                    render_detail_table(df_y)
+                sec_chapter("bc-nam-ch4", 4, None, "Bảng số liệu")
+                render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
@@ -6537,98 +6698,111 @@ elif nav == "Báo cáo":
             else:
                 _kind, sel_grp = sel
                 df_g = df[df['Danh mục'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
-        
-                with st.expander("1. Tổng quan", expanded=True):
-                    curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
-                    curr_trees_g = len(df_g)
-                    num_days_g = df_g['Ngày'].nunique() or 1
-                    num_weeks_g = df_g['Tuần'].nunique() or 1
 
-                    first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
-                    last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
-
-                    s_g = _streak_stats(df_g)
-                    wd_g = _weekday_avg(df_g)
-
-                    _grp_sections = [
-                        {"label": "Trung bình", "chips": [
-                            {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(curr_hrs_g/num_days_g)}"},
-                            {"k": "Thời gian / tuần", "v": f"{_fmt_hours_short(curr_hrs_g/num_weeks_g)}"},
-                            {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
-                            {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
-                            {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
-                        ]},
-                    ]
-
-                    df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
-                    if not df_g_thisweek.empty:
-                        _grp_sections.append({"label": "Tuần này", "chips": [
-                            {"k": "Thời gian", "v": f"{_fmt_hours_short(df_g_thisweek['Thời lượng (Phút)'].sum()/60)}", "hl": True},
-                            {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
-                        ]})
-
-                    # "Tổng cộng" của chuỗi chính là số ngày hoạt động -> bỏ trùng ở Mốc thời gian
-                    _grp_sections.append({"label": "Chuỗi ngày", "chips": [
-                        {"k": "Tổng cộng", "v": f"{s_g['total']} ngày"},
-                        {"k": "Dài nhất", "v": f"{s_g['longest']} ngày"},
-                        {"k": "Hiện tại", "v": f"{s_g['current']} ngày", "hl": True},
-                    ]})
-                    if len(wd_g) and wd_g.max() > 0:
-                        _grp_sections.append({"label": "Theo thứ", "chips": [
-                            {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({_fmt_hours_short(wd_g.max())})"},
-                            {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({_fmt_hours_short(wd_g.min())})"},
-                        ]})
-                    _grp_sections.append({"label": "Mốc thời gian", "chips": [
-                        {"k": "Ngày đầu tiên", "v": first_day},
-                        {"k": "Ngày gần nhất", "v": last_day},
-                    ]})
-
-                    records_g = _compute_alltime_records(df)
-                    _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
-                    if _rec_g:
-                        # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
-                        # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
-                        # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
-                        # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
-                        _grp_sections.append({"label": "Ngày nổi bật", "chips": [
-                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
-                        ]})
-
-                    _nud_g = _streak_nudge(s_g)
-                    _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
-
-                    render_stat_panel(
-                        hero_items=[
-                            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
-                            {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
-                        ],
-                        sections=_grp_sections,
-                        footer=_footer_g,
-                    )
-                    render_session_bar(df_g)
-
+                # Mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1 cuốn sách theo dõi qua
+                # Reminders (so _book_title() của List với tên Dự án) -- KHÔNG đánh số (giữ nguyên
+                # số các mục 1-5 cố định) vì đây là mục điều kiện, đúng tiền lệ "Ghi chú ngày"
+                # không số ở nhánh rỗng-phiên của Hôm nay. Hiện trọn lịch sử phần đã đọc của đúng
+                # cuốn đó, không giới hạn theo kỳ (khác Nhật ký đọc sách ở Báo cáo tuần/tháng). Tính
+                # TRƯỚC hero để biết có cần thêm chip mục lục cho mục này hay không -- load_reading_
+                # log() có @st.cache_data nên gọi ở đây không tốn thêm truy vấn thật.
+                _rl_book = pd.DataFrame()
                 if _kind == "proj":
-                    # Mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1 cuốn sách theo dõi qua
-                    # Reminders (so _book_title() của List với tên Dự án) -- KHÔNG đánh số (giữ nguyên
-                    # số các mục 1-5 cố định) vì đây là mục điều kiện, đúng tiền lệ "Ghi chú ngày"
-                    # không số ở nhánh rỗng-phiên của Báo cáo ngày. Hiện trọn lịch sử phần đã đọc của
-                    # đúng cuốn đó, không giới hạn theo kỳ (khác Nhật ký đọc sách ở Báo cáo tuần/tháng).
-                    rl_all = load_reading_log()
-                    rl_book = rl_all[rl_all['Cuốn sách'] == sel_grp] if not rl_all.empty else rl_all
-                    if not rl_book.empty:
-                        with st.expander("Nhật ký đọc", expanded=True):
-                            with st.container(border=True, key="jcard_reading_proj"):
-                                st.markdown(f"<div class='jrows'>{_reading_rows_html(rl_book, label_book=False)}</div>",
-                                            unsafe_allow_html=True)
+                    _rl_all = load_reading_log()
+                    _rl_book = _rl_all[_rl_all['Cuốn sách'] == sel_grp] if not _rl_all.empty else _rl_all
 
-                with st.expander("2. Biểu đồ lịch", expanded=False):
-                    frag_calendar(df_g, "range_grp_cal")
-                with st.expander("3. Xu hướng theo thời gian", expanded=False):
-                    frag_trend(df_g, "trend_grp", "Dự án")
-                with st.expander("4. Phân bố độ dài phiên", expanded=False):
-                    render_session_histogram(df_g)
-                with st.expander("5. Bảng số liệu", expanded=False):
-                    frag_period_table(df_g, "view_grp")
+                _hero_chips_g = [("bc-duan-ch1", "1 · Tổng quan")]
+                if not _rl_book.empty:
+                    _hero_chips_g.append(("bc-duan-chrl", "Nhật ký đọc"))
+                _hero_chips_g += [("bc-duan-ch2", "2 · Biểu đồ lịch"),
+                                  ("bc-duan-ch3", "3 · Xu hướng theo thời gian"),
+                                  ("bc-duan-ch4", "4 · Phân bố độ dài phiên"),
+                                  ("bc-duan-ch5", "5 · Bảng số liệu")]
+                sec_hero(None, "Đi sâu vào 1 việc cụ thể", None, _hero_chips_g)
+
+                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan")
+                curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
+                curr_trees_g = len(df_g)
+                num_days_g = df_g['Ngày'].nunique() or 1
+                num_weeks_g = df_g['Tuần'].nunique() or 1
+
+                first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
+                last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
+
+                s_g = _streak_stats(df_g)
+                wd_g = _weekday_avg(df_g)
+
+                _grp_sections = [
+                    {"label": "Trung bình", "chips": [
+                        {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(curr_hrs_g/num_days_g)}"},
+                        {"k": "Thời gian / tuần", "v": f"{_fmt_hours_short(curr_hrs_g/num_weeks_g)}"},
+                        {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
+                        {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
+                        {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
+                    ]},
+                ]
+
+                df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
+                if not df_g_thisweek.empty:
+                    _grp_sections.append({"label": "Tuần này", "chips": [
+                        {"k": "Thời gian", "v": f"{_fmt_hours_short(df_g_thisweek['Thời lượng (Phút)'].sum()/60)}", "hl": True},
+                        {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
+                    ]})
+
+                # "Tổng cộng" của chuỗi chính là số ngày hoạt động -> bỏ trùng ở Mốc thời gian
+                _grp_sections.append({"label": "Chuỗi ngày", "chips": [
+                    {"k": "Tổng cộng", "v": f"{s_g['total']} ngày"},
+                    {"k": "Dài nhất", "v": f"{s_g['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_g['current']} ngày", "hl": True},
+                ]})
+                if len(wd_g) and wd_g.max() > 0:
+                    _grp_sections.append({"label": "Theo thứ", "chips": [
+                        {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({_fmt_hours_short(wd_g.max())})"},
+                        {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({_fmt_hours_short(wd_g.min())})"},
+                    ]})
+                _grp_sections.append({"label": "Mốc thời gian", "chips": [
+                    {"k": "Ngày đầu tiên", "v": first_day},
+                    {"k": "Ngày gần nhất", "v": last_day},
+                ]})
+
+                records_g = _compute_alltime_records(df)
+                _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
+                if _rec_g:
+                    # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
+                    # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
+                    # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
+                    # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
+                    _grp_sections.append({"label": "Ngày nổi bật", "chips": [
+                        {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
+                    ]})
+
+                _nud_g = _streak_nudge(s_g)
+                _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
+
+                render_stat_panel(
+                    hero_items=[
+                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
+                    ],
+                    sections=_grp_sections,
+                    footer=_footer_g,
+                )
+                render_session_bar(df_g)
+
+                if not _rl_book.empty:
+                    sec_chapter("bc-duan-chrl", None, None, "Nhật ký đọc")
+                    with st.container(border=True, key="jcard_reading_proj"):
+                        st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
+                                    unsafe_allow_html=True)
+
+                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
+                frag_calendar(df_g, "range_grp_cal")
+                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng theo thời gian")
+                frag_trend(df_g, "trend_grp", "Dự án")
+                sec_chapter("bc-duan-ch4", 4, None, "Phân bố độ dài phiên")
+                render_session_histogram(df_g)
+                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
+                frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
     # nếu người dùng chỉ có dữ liệu đọc sách từ Reminders, chưa từng tải CSV Forest (an toàn
@@ -7020,7 +7194,7 @@ elif nav == "Tuỳ biến":
                     unsafe_allow_html=True)
     with st.expander("4. Giao diện", expanded=False):
         _preset_items = list(ACCENT_PRESETS.items())
-        _per_row = 5
+        _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
         _swatch_css = "<style>"
         for _row_start in range(0, len(_preset_items), _per_row):
             _row_items = _preset_items[_row_start:_row_start + _per_row]
@@ -7235,51 +7409,40 @@ elif nav == "Hướng dẫn":
     # (ngữ nghĩa đồng bộ, timezone, cách đọc số) — phần mô tả hiển nhiên nhìn UI là hiểu thì bỏ.
 
     # --- Hero + mục lục ---
-    st.markdown(
-        "<div class='help-hero'>"
-        "<div class='hh-kicker'>Trợ giúp</div>"
-        "<div class='hh-title'>Chào bạn, đây là một vòng Forest Dashboard</div>"
-        "<div class='hh-sub'>Nói trước cho yên tâm: app này là cái gương để soi lại, không phải "
+    sec_hero(
+        "Trợ giúp", "Chào bạn, đây là một vòng Forest Dashboard",
+        "Nói trước cho yên tâm: app này là cái gương để soi lại, không phải "
         "ông sếp đứng sau lưng nhắc việc — không đặt mục tiêu, không hối thúc, không có thanh "
         "tiến độ nào réo gọi bạn cả. Nó chỉ lặng lẽ ghi lại những gì Forest đã ghi, rồi chờ bạn "
         "quay lại nhìn khi nào rảnh. Vì vậy hướng dẫn này cũng không bắt bạn học thuộc từng trang "
         "một cách khô khan, mà kể theo đúng nhịp một ngày bình thường của bạn: sáng liếc qua để "
         "lên kế hoạch, cả ngày kệ app đó mà làm việc, tối dành 5 phút đóng lại ngày hôm đó — rồi "
         "cứ thế phóng to dần ra thành tuần, tháng, năm. Đọc từ đầu tới cuối chắc mất khoảng một "
-        "tách trà; đọc lướt qua mục lục bên dưới rồi nhảy thẳng vào chỗ đang cần cũng tốt không kém.</div>"
-        "<div class='help-toc'>"
-        "<a class='help-toc-chip' href='#help-ch1'>1 · Buổi sáng</a>"
-        "<a class='help-toc-chip' href='#help-ch2'>2 · Trong ngày</a>"
-        "<a class='help-toc-chip' href='#help-ch3'>3 · Cuối ngày</a>"
-        "<a class='help-toc-chip' href='#help-ch4'>4 · Tuần &amp; tháng</a>"
-        "<a class='help-toc-chip' href='#help-ch5'>5 · Sách · Gundam · Sức khoẻ</a>"
-        "<a class='help-toc-chip' href='#help-ch6'>6 · Dữ liệu &amp; đồng bộ</a>"
-        "<a class='help-toc-chip' href='#help-ch7'>7 · Tuỳ biến</a>"
-        "<a class='help-toc-chip' href='#help-ch8'>8 · Câu hỏi thường gặp</a>"
-        "<a class='help-toc-chip' href='#help-ch9'>9 · Nhật ký phát triển</a>"
-        "</div></div>",
-        unsafe_allow_html=True)
+        "tách trà; đọc lướt qua mục lục bên dưới rồi nhảy thẳng vào chỗ đang cần cũng tốt không kém.",
+        [("help-ch1", "1 · Buổi sáng"), ("help-ch2", "2 · Trong ngày"),
+         ("help-ch3", "3 · Cuối ngày"), ("help-ch4", "4 · Tuần &amp; tháng"),
+         ("help-ch5", "5 · Sách · Gundam · Sức khoẻ"), ("help-ch6", "6 · Dữ liệu &amp; đồng bộ"),
+         ("help-ch7", "7 · Tuỳ biến"), ("help-ch8", "8 · Câu hỏi thường gặp"),
+         ("help-ch9", "9 · Nhật ký phát triển")])
 
     # ==========================================
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
-    help_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
-        "Mở app lúc chưa trồng cây nào trong ngày cũng chẳng sao — trang Hôm nay không dỗi mà bỏ "
-        "trống, nó tự chuyển sang chế độ “tham khảo cho lên kế hoạch” để vẫn có gì đó cho bạn xem.")
+    sec_chapter(
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử")
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
         f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
         for l, w, c in [(9, 7, ""), (17, 5, "d2"), (24, 3, ""), (38, 8, "d2"),
                         (48, 4, ""), (60, 6, ""), (68, 3, "d2"), (83, 7, "")])
-    help_block(
+    sec_block(
         "<h4>Dòng thời gian trong ngày</h4>"
-        f"<div class='help-daybar'>{_daybar}</div>"
-        "<div class='help-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
-        "<div class='help-cap'>Mỗi khối màu là 1 phiên tập trung, được đặt đúng vào vị trí giờ nó "
+        f"<div class='sec-daybar'>{_daybar}</div>"
+        "<div class='sec-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
+        "<div class='sec-cap'>Mỗi khối màu là 1 phiên tập trung, được đặt đúng vào vị trí giờ nó "
         "thực sự diễn ra và tô màu theo Nhóm — nhìn một cái là biết ngay buổi sáng/chiều/tối hôm đó "
         "dồn hết vào việc gì, và có bị ngắt quãng lung tung không. Đỡ phải dò từng dòng trong bảng.</div>")
-    help_block(
+    sec_block(
         "<h4>Ngày chưa có phiên nào thì xem gì cho đỡ trống trải</h4>"
         "<ul>"
         "<li><b>Tham khảo cho lên kế hoạch</b> — panel nhỏ nhảy ra thay cho dòng thời gian khi ngày còn "
@@ -7302,13 +7465,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
-    help_chapter(
-        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra",
-        "Thành thật mà nói: mở dashboard liên tục giữa giờ làm thường không phải vì cần dữ liệu gì "
-        "gấp, mà là một kiểu trốn việc rất tinh vi — trông có vẻ chăm chỉ nhưng thực ra đang xem "
-        "biểu đồ cho vui. Hai công cụ dưới đây sinh ra để bạn KHÔNG cần mở app giữa chừng mà vẫn "
-        "không bỏ lỡ gì.")
-    help_block(
+    sec_chapter(
+        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra")
+    sec_block(
         "<h4>Ghi chú nhanh — cái hộp thư nháp sống trong túi quần</h4>"
         "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay icon ngoài Màn hình chính, tuỳ bạn "
         "thích kiểu nào) sẽ hỏi bạn gõ đúng 1 dòng ý tưởng, rồi lặng lẽ gửi <b>thẳng lên Supabase</b> — "
@@ -7319,32 +7478,29 @@ elif nav == "Hướng dẫn":
         "về gom lại thành một đoạn hoàn chỉnh (xem chương 3 để biết cách gộp). Yên tâm là Tìm kiếm cũng "
         "quét được cả nội dung ghi chú nhanh, phòng khi vài hôm bạn lười chưa kịp gộp vào ghi chú chính.")
     _sc_rows = [
-        [help_kbd("1") + " … " + help_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải như trên màn hình", "Toàn app"],
-        [help_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn con trỏ cho bạn gõ luôn", "Toàn app"],
-        [help_kbd("/"), "Nhảy sang trang Tìm kiếm (nếu đang ở trang khác) và focus luôn vào ô nhập từ khoá", "Toàn app"],
-        [help_kbd("←") + " / " + help_kbd("→"), "Lùi về hôm qua / tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
-        [help_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột đi tìm nút Cập nhật", "Trong ô ghi chú"],
-        [help_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá mất từ khoá đang gõ", "Theo ngữ cảnh"],
-        [help_kbd("?"), "Bật/tắt ngay bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng này nằm ở đâu", "Toàn app"],
+        [sec_kbd("1") + " … " + sec_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải như trên màn hình", "Toàn app"],
+        [sec_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn con trỏ cho bạn gõ luôn", "Toàn app"],
+        [sec_kbd("/"), "Nhảy sang trang Tìm kiếm (nếu đang ở trang khác) và focus luôn vào ô nhập từ khoá", "Toàn app"],
+        [sec_kbd("←") + " / " + sec_kbd("→"), "Lùi về hôm qua / tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
+        [sec_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột đi tìm nút Cập nhật", "Trong ô ghi chú"],
+        [sec_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá mất từ khoá đang gõ", "Theo ngữ cảnh"],
+        [sec_kbd("?"), "Bật/tắt ngay bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng này nằm ở đâu", "Toàn app"],
     ]
-    help_block(
+    sec_block(
         "<h4>Bảng phím tắt bàn phím — dán mắt nhớ luôn cho tiện</h4>"
-        + help_table(["Phím", "Bấm vào thì sao", "Dùng ở đâu"], _sc_rows)
-        + "<div class='help-cap'>Một lưu ý nhỏ tránh hoang mang: mọi phím tắt tự động im lặng khi con trỏ "
+        + sec_table(["Phím", "Bấm vào thì sao", "Dùng ở đâu"], _sc_rows)
+        + "<div class='sec-cap'>Một lưu ý nhỏ tránh hoang mang: mọi phím tắt tự động im lặng khi con trỏ "
         "đang nằm trong một ô nhập liệu bất kỳ (ngoại trừ "
-        + help_kbd("Ctrl/Cmd", "Enter") + " và " + help_kbd("Esc")
+        + sec_kbd("Ctrl/Cmd", "Enter") + " và " + sec_kbd("Esc")
         + " ngay trong ô ghi chú, hai phím này vẫn hoạt động bình thường), và cũng không nhận khi bạn "
         "đang giữ Ctrl/Cmd/Alt — để khỏi vô tình nhảy trang lúc chỉ đang gõ chữ.</div>")
 
     # ==========================================
     # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
-    help_chapter(
-        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app",
-        "Chọn cho mình một mốc cố định trong ngày — có thể là ngay sau bữa tối, hoặc đúng lúc chuẩn "
-        "bị tắt máy đi ngủ — rồi cứ lặp lại đúng mốc đó mỗi ngày. Thói quen sống được là nhờ có mốc "
-        "neo rõ ràng để bám vào, chứ không phải nhờ ý chí sắt đá gì cả (ý chí thường hết pin lúc 9 giờ tối).")
-    help_block(
+    sec_chapter(
+        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app")
+    sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
         "<li><b>Đồng bộ ngay</b> (ở Tuỳ biến → 1. Dữ liệu đầu vào) — chỉ một nút bấm mà nạp cả dữ liệu "
@@ -7358,7 +7514,7 @@ elif nav == "Hướng dẫn":
         "<i>bao nhiêu</i> giờ, còn ghi chú mới kể được bạn làm <i>gì và vì sao</i> — một năm sau nhìn lại, "
         "cái thứ hai mới là thứ đáng đọc, chứ không ai ngồi gặm nhấm con số cũ cả.</li>"
         "</ol>")
-    help_block(
+    sec_block(
         "<h4>Nút Gộp của ghi chú nhanh — bấm rồi mà vẫn hồi hộp không biết đã xoá chưa?</h4>"
         "Bấm <b>Gộp</b> trên một dòng ghi chú nhanh sẽ chèn nguyên nội dung dòng đó vào cuối ô soạn Ghi chú "
         "chính (tự mở ô soạn luôn nếu bạn chưa mở) rồi gạch mờ dòng đó đi cho biết là “đã xử lý” — nhưng yên "
@@ -7366,7 +7522,7 @@ elif nav == "Hướng dẫn":
         "tay bấm Gộp rồi đổi ý, cứ bấm Huỷ (hoặc Xoá ghi chú chính) là bỏ đánh dấu, ghi chú nhanh vẫn còn "
         "nguyên xi không mất gì cả. Còn nếu bạn sửa một dòng thành trống trơn rồi bấm Cập nhật, dòng đó cũng "
         "bị xoá luôn — giống y hệt cách Ghi chú chính hoạt động, không có gì bất ngờ ở đây.")
-    help_block(
+    sec_block(
         "<h4>Vì sao ghi chú lại quan trọng hơn mọi biểu đồ đẹp đẽ khác</h4>"
         "Ghi chú là loại dữ liệu <b>duy nhất trong cả app không thể nạp lại được</b> nếu lỡ để trống: phiên "
         "Forest, tiến độ Reminders, hay trích dẫn Kindle — tất cả đều có thể khôi phục lại từ file gốc nếu "
@@ -7378,16 +7534,8 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
-    help_chapter(
-        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi",
-        "Tuần là đơn vị thời gian dễ chịu để review: đủ ngắn để còn kịp sửa sai, mà cũng đủ dài để "
-        "tín hiệu thật sự xuất hiện thay vì chỉ là nhiễu của một ngày xui xẻo (chừng 15 phút, làm "
-        "vào sáng Thứ Hai hoặc tối Chủ Nhật là hợp). Lên tới tầm tháng thì câu hỏi đổi hẳn tính "
-        "chất: không còn là “đủ giờ chưa” nữa mà là “tỉ trọng thời gian có đang đúng ưu "
-        "tiên mình đặt ra không” (chừng 30 phút, đáng để pha thêm một tách trà). Có một quy tắc bất "
-        "di bất dịch ở đây: mở app mà trong đầu không có sẵn câu hỏi nào thì đó chỉ là đang lướt số "
-        "liệu giải trí, chứ không phải đang nhìn lại có chủ đích — hai việc nghe giống nhau nhưng "
-        "khác nhau một trời một vực.")
+    sec_chapter(
+        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi")
     _q_rows = [
         ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (biểu đồ tròn)", "Báo cáo → Tháng / Tuần"],
         ["Mình hay tập trung sung sức nhất lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tuần / Tháng"],
@@ -7397,9 +7545,9 @@ elif nav == "Hướng dẫn":
         ["Ngày nào đỉnh nhất từ trước tới giờ?", "Bảng vàng: Ngày nổi bật &amp; Kỷ lục", "Bảng số liệu của từng trang"],
         ["Một việc cụ thể đang tiến triển ra sao?", "Báo cáo → Dự án (lọc riêng đúng 1 Nhóm/Dự án)", "Báo cáo → Dự án"],
     ]
-    help_block(
+    sec_block(
         "<h4>Đang thắc mắc điều gì — thì nên nhìn vào biểu đồ nào</h4>"
-        + help_table(["Câu hỏi trong đầu bạn", "Mở biểu đồ này lên", "Tìm ở đâu"], _q_rows))
+        + sec_table(["Câu hỏi trong đầu bạn", "Mở biểu đồ này lên", "Tìm ở đâu"], _q_rows))
     _heat_lv = [0, 1, 3, 2, 0, 4, 6, 2, 1, 0, 5, 7, 3, 1,
                 2, 0, 1, 4, 5, 2, 0, 3, 6, 1, 2, 4, 0, 2,
                 1, 3, 0, 2, 6, 1, 4, 0, 2, 5, 1, 3, 7, 0,
@@ -7408,20 +7556,20 @@ elif nav == "Hướng dẫn":
     _bar_h = [35, 55, 20, 70, 45, 4, 12, 60, 80, 50, 30, 65, 40, 92, 55, 25, 70, 45, 60, 35]
     _bars = "".join(f"<i style='height:{h}%'></i>" for h in _bar_h)
     st.markdown(
-        "<div class='help-grid'>"
-        "<div class='help-card'><h4>Biểu đồ lịch — thang màu tuyệt đối, không nói dối</h4>"
-        f"<div class='help-heat'>{_heat}</div>"
-        "<div class='help-cap'>8 bậc màu được neo cứng theo mốc giờ cố định, không hề co giãn theo đúng dữ "
+        "<div class='sec-grid'>"
+        "<div class='sec-card'><h4>Biểu đồ lịch — thang màu tuyệt đối, không nói dối</h4>"
+        f"<div class='sec-heat'>{_heat}</div>"
+        "<div class='sec-cap'>8 bậc màu được neo cứng theo mốc giờ cố định, không hề co giãn theo đúng dữ "
         "liệu đang xem trên màn hình — nên “đậm bằng nhau” luôn có nghĩa là “số giờ bằng "
         "nhau” thật, so sánh được thoải mái giữa tháng này với tháng khác mà không sợ một ngày "
         "bất thường làm lệch cả thang đo, kiểu như hồi bạn cày liền 10 tiếng vì deadline dí.</div></div>"
-        "<div class='help-card'><h4>Xu hướng — đường trung bình thẳng thắn, không tô hồng</h4>"
-        f"<div class='help-bars'>{_bars}<span class='avg'></span></div>"
-        "<div class='help-cap'>Đường trung bình động 7 ngày này tính luôn cả những ngày 0 giờ tuyệt đối, "
+        "<div class='sec-card'><h4>Xu hướng — đường trung bình thẳng thắn, không tô hồng</h4>"
+        f"<div class='sec-bars'>{_bars}<span class='avg'></span></div>"
+        "<div class='sec-cap'>Đường trung bình động 7 ngày này tính luôn cả những ngày 0 giờ tuyệt đối, "
         "chứ không chỉ đếm ngày có hoạt động rồi lờ đi phần còn lại — nên nghỉ liền vài hôm sẽ thấy đường "
         "đi xuống rõ ràng ngay, không có chuyện bị làm mượt cho đẹp mắt.</div></div>"
         "</div>", unsafe_allow_html=True)
-    help_block(
+    sec_block(
         "<h4>Đọc số cho đúng cách — bốn luật ngầm nên biết trước khi hoảng</h4>"
         "<ul>"
         "<li><b>Kỳ dở dang luôn được cắt gọn để so sánh công bằng</b> — nếu kỳ đang xem chưa đi hết (ví dụ "
@@ -7442,7 +7590,7 @@ elif nav == "Hướng dẫn":
         "được vinh dự gắn chip huy chương lên Timeline — vì nếu gắn cả Ngày nổi bật (thứ gần như tuần nào "
         "cũng có) thì cảm giác hiếm có sẽ mất sạch, huy chương phát tràn lan thì còn gì là huy chương nữa.</li>"
         "</ul>")
-    help_block(
+    sec_block(
         "<h4>Ba cái bẫy dễ sa vào nhất — cẩn thận kẻo dính</h4>"
         "<ol>"
         "<li><b>Tối ưu con số thay vì tối ưu công việc thật</b> — bấm trồng cây cho một phiên đọc tin vặt lan "
@@ -7462,12 +7610,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 5: SÁCH, GUNDAM & SỨC KHOẺ
     # ==========================================
-    help_chapter(
-        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ",
-        "Sách và Gundam thực ra dùng chung một bảng dữ liệu và một hàm hiển thị — hai trang trông "
-        "tách biệt trên thanh điều hướng nhưng bên trong chỉ khác nhau ở vài chữ nhãn (đọc/xem, "
-        "phần/tập). Sức khoẻ thì đặc biệt hơn hẳn: đây là trang duy nhất trong cả app có nhập liệu tay.")
-    help_block(
+    sec_chapter(
+        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ")
+    sec_block(
         "<h4>Quy ước đặt tên trong Apple Reminders — nhớ đặt đúng kẻo app đoán sai</h4>"
         "Mỗi <b>Reminder List</b> trên điện thoại tương ứng với 1 cuốn sách hoặc 1 series, đặt tên theo "
         "khuôn “Tác giả - Tên sách”; còn mỗi reminder đã được tick hoàn thành là 1 "
@@ -7476,7 +7621,7 @@ elif nav == "Hướng dẫn":
         "ăn): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ đi. Còn nếu tên list "
         "bắt đầu bằng chữ “gundam” (viết hoa hay thường đều được, app không khó tính), nó sẽ tự "
         "động được xếp sang trang Gundam thay vì trang Sách.")
-    help_block(
+    sec_block(
         "<h4>“Số ngày” được tính kiểu gì khi có tận 2 nguồn dữ liệu cùng lúc</h4>"
         "Mỗi cuốn sách hay series được ghép lại từ tối đa 2 nguồn: phiên Forest (khi tên Dự án trùng khớp "
         "với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” sẽ lấy <b>hợp</b> "
@@ -7484,7 +7629,7 @@ elif nav == "Hướng dẫn":
         "— nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang chỉ tick Reminders "
         "cho tiện) thì khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn một nguồn sẽ "
         "hiện dấu gạch ngang “—” cho biết là thiếu dữ liệu, thay vì để trống trơn khiến bạn tưởng lỗi.")
-    help_block(
+    sec_block(
         "<h4>Gundam: vì sao app phải “đoán mò” xem bạn đang xem series nào</h4>"
         "Vì Forest chỉ có đúng 1 tag chung chung là “Gundam” cho mọi series, chứ không tách "
         "riêng từng bộ như Sách. Cho nên với mỗi ngày có phiên gắn tag đó, app sẽ đi tìm lần tick Reminder "
@@ -7497,7 +7642,7 @@ elif nav == "Hướng dẫn":
         "trang Gundam mà sửa lại tay — ngày nào đã sửa tay sẽ mang dấu “Gán tay” cho dễ phân "
         "biệt, còn nếu sau này bạn sửa lại trùng đúng với kết quả suy luận tự động thì dấu đó tự động biến "
         "mất, coi như huề cả làng.")
-    help_block(
+    sec_block(
         "<h4>Trích dẫn Kindle — sửa một lần là ăn chắc, không sợ mất lại</h4>"
         "Mọi thao tác bạn làm trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú "
         "riêng của mình) đều được lưu hẳn vào Supabase một cách nghiêm túc: có nạp lại file "
@@ -7509,7 +7654,7 @@ elif nav == "Hướng dẫn":
         "và gộp lại, chỉ giữ đúng bản đầy đủ nhất, không làm phiền bạn bằng cả đống bản nháp. Trong Nhật ký "
         "đọc, các trích dẫn tự sắp xếp theo <b>Vị trí</b> trong sách — đúng thứ tự bạn đọc thật, không cần "
         "tự tay gán từng câu vào đúng chương nào cả.")
-    help_block(
+    sec_block(
         "<h4>Sức khoẻ — nhập liệu bằng ảnh chụp phiếu, nhờ Claude làm hộ phần khó</h4>"
         "Quy trình gợi ý cho đỡ mất công gõ tay: chụp lại 2 phiếu xét nghiệm (Huyết học và Sinh hóa) mỗi lần "
         "đi khám, đưa ảnh vào Claude và nhờ đọc rồi xuất đúng khuôn JSON như bên dưới, sau đó dán thẳng vào "
@@ -7530,27 +7675,23 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 6: NẠP DỮ LIỆU & ĐỒNG BỘ
     # ==========================================
-    help_chapter(
-        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn",
-        "Việc hằng ngày chỉ gói gọn trong đúng 1 nút Đồng bộ ngay, nhưng đằng sau cái nút bấm gọn "
-        "gàng đó là cả một mớ luật lệ khác nhau tuỳ theo từng nguồn dữ liệu. Bảng bên dưới là toàn "
-        "bộ luật chơi đó — đáng bỏ ra vài phút đọc một lần cho kỹ, để về sau không bao giờ phải "
-        "phập phồng lo nạp trùng dữ liệu hay tự dưng mất mát gì.")
-    help_block(
+    sec_chapter(
+        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn")
+    sec_block(
         "<h4>Đường đi của dữ liệu — từ điện thoại tới màn hình bạn đang xem</h4>"
-        "<div class='help-flow'>"
-        "<span class='help-flow-col'><span class='help-flow-node'>Forest CSV</span>"
-        "<span class='help-flow-node'>Reminders</span></span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Shortcut iOS</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Bucket Storage</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node help-flow-hub'>Đồng bộ ngay</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Dashboard</span>"
+        "<div class='sec-flow'>"
+        "<span class='sec-flow-col'><span class='sec-flow-node'>Forest CSV</span>"
+        "<span class='sec-flow-node'>Reminders</span></span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Shortcut iOS</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Bucket Storage</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node sec-flow-hub'>Đồng bộ ngay</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Dashboard</span>"
         "</div>"
-        "<div class='help-cap'>Cái Shortcut này chạy ngay từ share sheet mỗi khi bạn Export CSV từ app "
+        "<div class='sec-cap'>Cái Shortcut này chạy ngay từ share sheet mỗi khi bạn Export CSV từ app "
         "Forest: nó tiện tay lấy luôn file backup Reminder rồi tải cả 2 file lên chung một bucket Supabase "
         "Storage (tên file luôn bắt đầu bằng <code>forest</code> hoặc <code>reminder</code>, "
         "kiểu như <code>forest_2026-07-06.csv</code>). Về phía app, nút Đồng bộ ngay sẽ tự tìm file mới "
@@ -7571,10 +7712,10 @@ elif nav == "Hướng dẫn":
          "cho tiện, hoặc tự chọn 2 mốc ngày riêng — dùng khoảng rộng hơn khi cần lấp đầy dữ liệu lịch cũ "
          "cho tính năng Ngày này năm trước"],
     ]
-    help_block(
+    sec_block(
         "<h4>Cộng thêm hay thay thế hoàn toàn — mỗi nguồn một kiểu, đừng nhầm lẫn</h4>"
-        + help_table(["Nguồn dữ liệu", "Kiểu nạp", "Cách chống trùng &amp; lưu ý cần nhớ"], _sync_rows))
-    help_block(
+        + sec_table(["Nguồn dữ liệu", "Kiểu nạp", "Cách chống trùng &amp; lưu ý cần nhớ"], _sync_rows))
+    sec_block(
         "<h4>Xoá phiên là một kiểu xoá có trí nhớ dai, không phải xoá xong là quên luôn</h4>"
         "Khi bạn xoá phiên ở mục <b>3. Dữ liệu làm việc hiện tại</b> (nút màu đỏ, bấm là xoá ngay không hỏi "
         "lại lần nào), phiên đó được app âm thầm ghi nhớ riêng vào một bảng tên là "
@@ -7588,13 +7729,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
     # ==========================================
-    help_chapter(
-        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện",
-        "Mọi thứ điều khiển chuyện “app trông ra sao” và “dữ liệu đến từ "
-        "đâu” đều được gom hết về một trang duy nhất, đánh số gọn gàng từ 1 đến 5 theo đúng thứ tự "
-        "bạn sẽ thao tác khi mới bắt đầu dùng app: nạp dữ liệu → phân loại → kiểm tra lại → (giao "
-        "diện, tuỳ thích) → sao lưu cho chắc.")
-    help_block(
+    sec_chapter(
+        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện")
+    sec_block(
         "<h4>Một màu accent duy nhất, lan ra ba nơi khác nhau, bằng ba cơ chế khác nhau</h4>"
         "<ul>"
         "<li><b>Nút bấm / khung viền / chip</b> — đi qua biến CSS <code>--accent</code>, toàn bộ stylesheet "
@@ -7611,7 +7748,7 @@ elif nav == "Hướng dẫn":
         "vào bảng <code>settings</code> trên Supabase. Nếu chẳng may bảng đó chưa được tạo, hoặc giá trị "
         "lưu trong đó bị hỏng vì lý do gì đó, app sẽ lặng lẽ rơi về màu “Chàm biển” mặc định "
         "thay vì báo lỗi đỏ lòm hay sập luôn — một cách xử lý khá lịch sự.")
-    help_block(
+    sec_block(
         "<h4>Dark mode — vì sao lại không có mỗi cái nút bật/tắt cho tiện</h4>"
         "App tự động đổi giữa tối và sáng theo đúng cài đặt hệ thống của thiết bị bạn đang dùng (hoặc theo "
         "lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu bạn muốn tự chọn khác với "
@@ -7619,7 +7756,7 @@ elif nav == "Hướng dẫn":
         "đổi theme ngay lúc đang chạy, app chỉ đọc được theme hiện tại là gì rồi tô đúng bộ màu tương ứng "
         "theo đó thôi — kể cả biểu đồ, bảng nhiệt lẫn ô ghi chú đều được lo liệu đầy đủ, không sợ bị "
         "lệch tông giữa các phần.")
-    help_block(
+    sec_block(
         "<h4>Sao lưu — lớp an toàn thứ hai, phòng khi lớp thứ nhất cũng có ngày trở chứng</h4>"
         "Dữ liệu vốn đã khá bền vững trên Supabase rồi (không hề mất khi app khởi động lại hay redeploy), "
         "nhưng nút <b>Sao lưu</b> vẫn đóng gói toàn bộ mọi bảng dữ liệu thành 1 file .zip để bạn tải về máy, "
@@ -7635,11 +7772,8 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
     # ==========================================
-    help_chapter(
-        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp",
-        "Đây là những câu mọi người (và cả chính người viết app này) hay tự hỏi nhất mỗi khi ngồi "
-        "nhìn số liệu mà thấy hơi bối rối. Mỗi câu trả lời gói gọn trong khoảng nửa phút đọc, không "
-        "vòng vo — cứ tìm đúng câu đang thắc mắc rồi bấm mở ra là xong.")
+    sec_chapter(
+        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp")
     with st.container(key="help_faq"):
         help_faq_item(
             "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
@@ -7720,16 +7854,8 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
     # ==========================================
-    help_chapter(
-        "help-ch9", 9, "Changelog", "Nhật ký phát triển",
-        "Đây là nơi ghi lại toàn bộ những đợt thay đổi lớn nhỏ mà app đã trải qua, mỗi mục tương ứng "
-        "với 1 đợt Pull Request đã được merge vào code, xếp theo thứ tự mới nhất nằm trên cùng cho "
-        "dễ theo dõi. Ba chiếc chip nhỏ cạnh mỗi mục đều được tra tay cẩn thận vào đúng thời điểm "
-        "viết (app hoàn toàn không tự gọi GitHub hay git lúc đang chạy, số liệu này là tĩnh): chip "
-        "ngày tháng là ngày merge của PR mới nhất trong nhóm, chip màu xám là tổng số dòng của toàn "
-        "bộ app.py tại đúng thời điểm đó, còn chip màu accent là số dòng thực sự thay đổi (thêm + "
-        "xoá cộng lại) của riêng đợt PR đó — để bạn hình dung được cả mốc thời gian, quy mô toàn bộ "
-        "mã nguồn, lẫn độ lớn của từng đợt cập nhật.")
+    sec_chapter(
+        "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
         dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
              title="Dọn dẹp bloat, sửa lỗi vặt, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
