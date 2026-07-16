@@ -248,11 +248,13 @@ ACCENT_PRESETS = {
     "Ô liu": "#8a9a6b",
 }
 
-# Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)) -- "image"/
-# "size" là giá trị CSS thô ghép thẳng vào background-image/background-size qua biến CSS, dùng
-# var(--divider) để tự đổi theo IS_DARK như mọi hoạ tiết khác trong app. "Trơn" dùng image:none
-# (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi lựa chọn, không
-# cần nhánh riêng trong CSS chính.
+# Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)/var(--bg-position))
+# -- "image"/"size"/"position" là giá trị CSS thô ghép thẳng vào background-image/size/position
+# qua biến CSS, dùng var(--divider) để tự đổi theo IS_DARK như mọi hoạ tiết khác trong app. "Trơn"
+# dùng image:none (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi
+# lựa chọn, không cần nhánh riêng trong CSS chính. "position" mặc định "0 0" nếu không khai báo
+# (không đổi gì so với 5 preset gốc, chỉ 2 preset mới cần lệch layer để so le). Đúng 8 kiểu, khớp
+# số lượng 8 màu accent (ACCENT_PRESETS) cho cân trong lưới chọn ở Tuỳ biến.
 BG_PRESETS = {
     "Chấm bi": {
         "image": "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)",
@@ -274,6 +276,25 @@ BG_PRESETS = {
     "Chấm bi to": {
         "image": "radial-gradient(circle, var(--divider) 1.6px, transparent 1.6px)",
         "size": "28px 28px",
+    },
+    "Kẻ chấm": {
+        # Chấm nhỏ lặp dày theo chiều ngang (6px) nhưng thưa theo chiều dọc (24px) -> tự xếp thành
+        # các hàng chấm ngang trông như dòng kẻ chấm chấm, không cần vẽ path riêng.
+        "image": "radial-gradient(circle, var(--divider) 1px, transparent 1px)",
+        "size": "6px 24px",
+    },
+    "Ô vuông nhỏ": {
+        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px), "
+                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px)"),
+        "size": "auto",
+    },
+    "Chấm bi so le": {
+        # 2 lớp radial-gradient CÙNG kích thước ô nhưng lệch nhau nửa ô (position layer 2 = 10px
+        # 10px) -> chấm xếp so le kiểu viên gạch, khác hẳn lưới thẳng hàng của "Chấm bi" gốc.
+        "image": ("radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px), "
+                   "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)"),
+        "size": "20px 20px, 20px 20px",
+        "position": "0 0, 10px 10px",
     },
 }
 
@@ -389,6 +410,7 @@ if _bg_style_name not in BG_PRESETS:
 BG_STYLE = _bg_style_name
 BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
 BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
+BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
@@ -5068,7 +5090,7 @@ _TOK = {
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
-    f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};"
+    f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
@@ -5094,6 +5116,7 @@ st.markdown(
         background-color: var(--bg);
         background-image: var(--bg-image);
         background-size: var(--bg-size);
+        background-position: var(--bg-position);
     }
 
     /* padding-top PHẢI đủ lớn để nội dung nằm HẲN dưới [data-testid="stHeader"] của Streamlit --
@@ -5563,8 +5586,11 @@ st.markdown(
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
         border-radius: 999px; padding: 5px 12px; }
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
-    /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
-    .sec-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa.
+       margin-top 18px (đã giảm từ 36px, phương án C trong mock up "khoảng cách giữa các mục
+       trang" -- gọn hơn nhưng vẫn đủ tách bạch giữa card kết quả của chương trước và tiêu đề
+       chương sau, không dính sát). */
+    .sec-ch { position: relative; margin: 18px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
     /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): margin-top 36px
        ở trên CỘNG THÊM margin-bottom riêng của hero/billboard (34px hoặc 16px) + gap flex mặc
        định giữa 2 khối (~14px) cộng dồn (Streamlit render mỗi khối trong 1 flex item riêng, margin
@@ -7307,6 +7333,8 @@ elif nav == "Tuỳ biến":
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
     with st.expander("4. Giao diện", expanded=False):
+        st.markdown("<div style='font-size:13px;font-weight:600;color:var(--text-2);'>"
+                    "Màu accent</div>", unsafe_allow_html=True)
         _preset_items = list(ACCENT_PRESETS.items())
         _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
         _swatch_css = "<style>"
@@ -7344,28 +7372,34 @@ elif nav == "Tuỳ biến":
         st.markdown("<div style='margin-top:18px;font-size:13px;font-weight:600;color:var(--text-2);'>"
                     "Kiểu nền trang</div>", unsafe_allow_html=True)
         _bg_items = list(BG_PRESETS.items())
-        _bg_cols = st.columns(len(_bg_items))
+        _bg_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
         _bg_css = "<style>"
-        for _i, (_bg_name, _bg_cfg) in enumerate(_bg_items):
-            _bg_key = f"bg_sw_{_i}"
-            _bg_selected = _bg_name == BG_STYLE
-            _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
-            _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
-            # Nút xem trước dùng ĐÚNG background-image/size của preset (không phải màu đặc như
-            # accent) -- người dùng thấy được hoạ tiết thật trước khi chọn, không chỉ đọc tên.
-            _bg_css += (
-                f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                f"background-color: var(--card-tl) !important; "
-                f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
-                f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
-                f"border-radius:10px !important; width:100% !important; height:auto !important; "
-                f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
-                f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
-            with _bg_cols[_i]:
-                if st.button(_bg_label, key=_bg_key, use_container_width=True):
-                    if _bg_name != BG_STYLE:
-                        save_setting("bg_style", _bg_name)
-                        st.rerun()
+        for _bg_row_start in range(0, len(_bg_items), _bg_per_row):
+            _bg_row_items = _bg_items[_bg_row_start:_bg_row_start + _bg_per_row]
+            _bg_cols = st.columns(_bg_per_row)
+            for _bg_i, (_bg_name, _bg_cfg) in enumerate(_bg_row_items):
+                _idx = _bg_row_start + _bg_i
+                _bg_key = f"bg_sw_{_idx}"
+                _bg_selected = _bg_name == BG_STYLE
+                _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
+                _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
+                _bg_position = _bg_cfg.get("position", "0 0")
+                # Nút xem trước dùng ĐÚNG background-image/size/position của preset (không phải
+                # màu đặc như accent) -- người dùng thấy được hoạ tiết thật trước khi chọn.
+                _bg_css += (
+                    f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background-color: var(--card-tl) !important; "
+                    f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
+                    f"background-position: {_bg_position} !important; "
+                    f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
+                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
+                    f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
+                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
+                with _bg_cols[_bg_i]:
+                    if st.button(_bg_label, key=_bg_key, use_container_width=True):
+                        if _bg_name != BG_STYLE:
+                            save_setting("bg_style", _bg_name)
+                            st.rerun()
         _bg_css += "</style>"
         st.markdown(_bg_css, unsafe_allow_html=True)
 
