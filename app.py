@@ -248,6 +248,56 @@ ACCENT_PRESETS = {
     "Ô liu": "#8a9a6b",
 }
 
+# Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)/var(--bg-position))
+# -- "image"/"size"/"position" là giá trị CSS thô ghép thẳng vào background-image/size/position
+# qua biến CSS, dùng var(--divider) để tự đổi theo IS_DARK như mọi hoạ tiết khác trong app. "Trơn"
+# dùng image:none (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi
+# lựa chọn, không cần nhánh riêng trong CSS chính. "position" mặc định "0 0" nếu không khai báo
+# (không đổi gì so với 5 preset gốc, chỉ 2 preset mới cần lệch layer để so le). Đúng 8 kiểu, khớp
+# số lượng 8 màu accent (ACCENT_PRESETS) cho cân trong lưới chọn ở Tuỳ biến.
+BG_PRESETS = {
+    "Chấm bi": {
+        "image": "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)",
+        "size": "20px 20px",
+    },
+    "Trơn": {
+        "image": "none",
+        "size": "auto",
+    },
+    "Kẻ ngang": {
+        "image": "repeating-linear-gradient(transparent 0px, transparent 23px, var(--divider) 24px)",
+        "size": "auto",
+    },
+    "Kẻ ô vuông": {
+        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px), "
+                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px)"),
+        "size": "auto",
+    },
+    "Chấm bi to": {
+        "image": "radial-gradient(circle, var(--divider) 1.6px, transparent 1.6px)",
+        "size": "28px 28px",
+    },
+    "Kẻ chấm": {
+        # Chấm nhỏ lặp dày theo chiều ngang (6px) nhưng thưa theo chiều dọc (24px) -> tự xếp thành
+        # các hàng chấm ngang trông như dòng kẻ chấm chấm, không cần vẽ path riêng.
+        "image": "radial-gradient(circle, var(--divider) 1px, transparent 1px)",
+        "size": "6px 24px",
+    },
+    "Ô vuông nhỏ": {
+        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px), "
+                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px)"),
+        "size": "auto",
+    },
+    "Chấm bi so le": {
+        # 2 lớp radial-gradient CÙNG kích thước ô nhưng lệch nhau nửa ô (position layer 2 = 10px
+        # 10px) -> chấm xếp so le kiểu viên gạch, khác hẳn lưới thẳng hàng của "Chấm bi" gốc.
+        "image": ("radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px), "
+                   "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)"),
+        "size": "20px 20px, 20px 20px",
+        "position": "0 0, 10px 10px",
+    },
+}
+
 
 def _hsl_hex(h, s, l):
     """(hue, saturation, lightness) trong [0,1] -> mã màu hex."""
@@ -351,6 +401,16 @@ ACCENT_RGB = _hex_rgb_str(ACCENT)
 # nguyên -- mọi nơi đang dùng (chip.tw, guide alert, NUDGE_TONES "good") tự đúng cả 2 chế độ.
 ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
+
+# Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT ở trên (giá trị lạ/preset cũ
+# đã bỏ -> rơi về "Chấm bi" mặc định, không crash).
+_bg_style_name = _cached_settings().get("bg_style", "Chấm bi")
+if _bg_style_name not in BG_PRESETS:
+    _bg_style_name = "Chấm bi"
+BG_STYLE = _bg_style_name
+BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
+BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
+BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
@@ -2511,7 +2571,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
     không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương")."""
-    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan")
+    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan", tight_top=True)
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
     num_days = df_period['Ngày'].nunique() or 1
@@ -3067,7 +3127,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name):
              [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Nhật ký đọc"),
               (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")])
 
-    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu")
+    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu", tight_top=True)
     _secs = [{"label": "Mốc thời gian", "chips": [
         {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
         {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
@@ -3174,7 +3234,7 @@ def render_reading_calendar_grid(rl_detail_df, labels):
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
-        padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
+        padding={"left": 52, "right": 12, "top": 5, "bottom": 5},
         background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
@@ -3212,21 +3272,19 @@ def render_day_timeline(day_df):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
-.dtl-track{{position:relative;height:44px;border-radius:10px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
+.dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:7px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
 .dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--text);}}
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
-.dtl-ttl{{font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}}
 </style>
 <div class="dtl-card">
-<div class="dtl-ttl">Dòng thời gian trong ngày</div>
 <div class="dtl-strip">{label_html}</div>
 <div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
@@ -3581,7 +3639,8 @@ def _render_health_report(df_health):
 
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}")
+    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}",
+                tight_top=True)
     if _latest_num.empty:
         st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
     else:
@@ -4303,8 +4362,11 @@ def render_calendar_grid(scope_df, full_df):
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
-        # padding phải bù cho vùng nhãn thứ bên trái -> lưới căn giữa trong thẻ
-        padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
+        # left=52 chừa đủ chỗ cho nhãn "Thứ" dạng chữ đầy đủ (vd "Chủ Nhật", 8 ký tự) -- để left=0
+        # như bản cũ (thời nhãn còn ngắn dạng số/viết tắt) khiến Vega tính thiếu bề rộng trục dọc,
+        # nhãn tràn ra ngoài biên trái của SVG và bị cắt chữ (lỗi thật đã gặp, xem ảnh chụp). right
+        # nhỏ hơn trái để bù lại, giữ lưới không bị lệch hẳn sang phải trong thẻ.
+        padding={"left": 52, "right": 12, "top": 5, "bottom": 5},
         # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng) -> để
         # trong suốt cho nền thẻ bọc ngoài (--card, đổi theo IS_DARK) lộ ra, tránh viền lệch tông.
         background='transparent',
@@ -4548,7 +4610,7 @@ def sec_table(headers, rows):
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def sec_chapter(anchor, num, kicker, title, lead=None):
+def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
     báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
     dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
@@ -4560,12 +4622,19 @@ def sec_chapter(anchor, num, kicker, title, lead=None):
     kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
     vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
     nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
-    của Trợ giúp)."""
+    của Trợ giúp).
+
+    tight_top=True -> bỏ margin-top 36px mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay
+    sau 1 sec_hero()/billboard: margin-top 36px đó cộng dồn với margin-bottom sẵn có của hero/
+    billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
+    như block thường) tạo khoảng trắng gấp đôi ngay dưới hero, trong khi giữa các chương với nhau
+    (2 trở đi) khoảng cách đó vẫn cần giữ nguyên."""
     _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
     _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
+    _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
-        f"<div class='sec-ch' id='{anchor}'>{_num_html}{_kicker_html}"
+        f"<div class='{_cls}' id='{anchor}'>{_num_html}{_kicker_html}"
         f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
         unsafe_allow_html=True)
 
@@ -5019,6 +5088,7 @@ _TOK = {
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
@@ -5033,16 +5103,18 @@ st.markdown(
     html, body, .stApp {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    /* Nền "giấy dot-grid" hệ "Sổ Tay": lưới chấm tròn nhỏ cách đều 20px (radial-gradient lặp lại
-       qua background-size). Bỏ vạch lề dọc màu accent trước đây (mô phỏng lề đỏ vở học sinh) theo
-       yêu cầu -- chỉ còn lưới chấm, không còn gạch. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
+    /* Nền trang hệ "Sổ Tay": kiểu hoạ tiết (chấm bi/trơn/kẻ ngang/kẻ ô vuông/chấm bi to) do người
+       dùng chọn ở Tuỳ biến -> "4. Giao diện" (xem BG_PRESETS, lưu setting "bg_style"), truyền
+       vào qua 2 biến CSS --bg-image/--bg-size (khối :root phía trên) thay vì literal cố định như
+       trước, để đổi qua lại không cần sửa code. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
        vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó phải giữ mặt phẳng
        var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm ở phần lề trang
        xung quanh. */
     .stApp {
         background-color: var(--bg);
-        background-image: radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px);
-        background-size: 20px 20px;
+        background-image: var(--bg-image);
+        background-size: var(--bg-size);
+        background-position: var(--bg-position);
     }
 
     /* padding-top PHẢI đủ lớn để nội dung nằm HẲN dưới [data-testid="stHeader"] của Streamlit --
@@ -5305,6 +5377,24 @@ st.markdown(
        không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
        đã "canh giữa". Ép cùng 36px cho cả 3 phần tử trên 1 hàng thẳng hàng thật sự. */
     [class*="st-key-day_stepper"] button { height: 36px !important; min-height: 0 !important; }
+    /* Cột giữa (chứa st.date_input) cao hơn hẳn 2 cột nút (~50px vs 36px) dù widget bên trong chỉ
+       cao 36px -- Streamlit tự dành sẵn 1 khoảng "block" tối thiểu cho mỗi widget (từng chứa
+       nhãn) bất kể label_visibility="collapsed" đã ẩn nhãn đi, CỘNG THÊM 1 stElementContainer ẩn
+       thứ 2 (thông báo cho screen reader) khiến scrollHeight thật > offsetHeight -- xác nhận qua
+       DevTools thật, ảnh chụp người dùng gửi. Vì cột này CAO HƠN nên vertical_alignment="center"
+       của st.columns coi nó là chuẩn để so - 2 nút bị đẩy xuống canh giữa theo chiều cao NÀY.
+       Thử canh giữa nội dung trong cột (justify-content) KHÔNG ăn -- phần tử ẩn thứ 2 khiến tổng
+       nội dung "tràn" ra ngoài khối 50px, trình duyệt rơi về "safe center" (= flex-start) thay vì
+       centering thật khi nội dung tổng vượt quá kích thước khối chứa. Ép thẳng khối bọc (và ép
+       tràn bị cắt bởi overflow:hidden) về đúng 36px như 2 cột nút -- cả 3 cột bằng nhau thì
+       vertical_alignment="center" không còn gì để lệch nữa, không phụ thuộc justify-content. */
+    [class*="st-key-day_stepper"] [data-testid="stColumn"] [data-testid="stVerticalBlock"] {
+        height: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        overflow: hidden !important;
+        flex-grow: 0 !important;
+    }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -5314,7 +5404,24 @@ st.markdown(
        (data-baseweb="calendar") được BaseWeb mount ra ngoài container widget (portal ở cấp
        body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
        áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
+    /* BaseWeb lồng 3 lớp cho input này: [data-baseweb="input"] (khung ngoài) bọc
+       [data-baseweb="base-input"] (khung sát input, THỰC SỰ mang nền/viền theo CSS mặc định của
+       BaseWeb) bọc <input> thật -- xác nhận qua DevTools thật trên bản deploy (ảnh chụp người
+       dùng gửi), khác với giả định ban đầu chỉ có 1 lớp bọc. Bản sửa trước chỉ ép chiều cao cho
+       khung ngoài -- không đủ, vì khung base-input bên trong vẫn theo chiều cao mặc định (to hơn
+       hẳn 36px của 2 nút ◀▶ cạnh nó), không bị outer's height:36 ràng buộc (overflow mặc định là
+       visible). Ép ĐỒNG NHẤT cả 3 lớp về 36px + overflow:hidden ở khung ngoài để chắc chắn cắt
+       đúng 36px dù còn sót lớp nào chưa lường hết. */
     div[data-testid="stDateInput"] [data-baseweb="input"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stDateInput"] [data-baseweb="base-input"] {
         background: var(--card-tl) !important;
         border: 1px solid var(--border) !important;
         border-radius: 7px !important;
@@ -5323,11 +5430,6 @@ st.markdown(
         min-height: 36px !important;
         box-sizing: border-box !important;
     }
-    /* Safari/iOS vẽ <input> gốc theo chrome mặc định riêng (đệm/chiều cao khác Chromium desktop
-       dùng lúc test) khiến ô "Ngày" ở day_stepper cao hơn hẳn 2 nút ◀▶ đã ép 36px cạnh nó dù
-       khung ngoài (data-baseweb="input") đã set height -- lỗi thật đã gặp trên điện thoại, không
-       tái hiện được bằng Chromium giả lập mobile viewport lúc kiểm thử. Ép luôn cả <input> con
-       (không chỉ khung ngoài bọc nó) về đúng 36px + tắt appearance mặc định của hệ điều hành. */
     div[data-testid="stDateInput"] [data-baseweb="input"] input {
         height: 36px !important;
         line-height: 36px !important;
@@ -5335,7 +5437,7 @@ st.markdown(
         -webkit-appearance: none !important;
         appearance: none !important;
     }
-    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
+    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within [data-baseweb="base-input"] {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
@@ -5482,9 +5584,26 @@ st.markdown(
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
         border-radius: 999px; padding: 5px 12px; }
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
-    /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
-    .sec-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
-    .sec-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
+    /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa.
+       margin-top 18px (đã giảm từ 36px, phương án C trong mock up "khoảng cách giữa các mục
+       trang" -- gọn hơn nhưng vẫn đủ tách bạch giữa card kết quả của chương trước và tiêu đề
+       chương sau, không dính sát). */
+    .sec-ch { position: relative; margin: 18px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): margin-top 36px
+       ở trên CỘNG THÊM margin-bottom riêng của hero/billboard (34px hoặc 16px) + gap flex mặc
+       định giữa 2 khối (~14px) cộng dồn (Streamlit render mỗi khối trong 1 flex item riêng, margin
+       KHÔNG collapse giữa flex item như block thường) -> khoảng trắng dưới billboard bị gấp đôi so
+       với khoảng cách giữa các chương với nhau. Class riêng thay vì dò cấu trúc DOM bằng CSS
+       sibling/:has() -- số lượng phần tử chen giữa hero và chương 1 đổi tuỳ trang (vd billboard
+       Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
+       hẳn so với đánh dấu thẳng từ phía gọi Python. */
+    .sec-ch.sec-ch-tight { margin-top: 0; }
+    /* top:-21px (thay vì -8px) + cỡ chữ to hơn (60px thay vì 54px) -- phương án B trong mock up
+       "số 01 đứng thẳng, ngang hàng tiêu đề nhưng nhích lên nửa dòng" đã chọn. Số vẫn đứng
+       thẳng (không xoay -- lần mock up trước bị hiểu nhầm nghiêng là do nét chữ viết tay, không
+       phải yêu cầu xoay chữ), chỉ đẩy lên gần mép trên tiêu đề thay vì nằm hẳn 1 dòng riêng phía
+       trên như trước. */
+    .sec-ch-num { position: absolute; top: -21px; right: 0; font-size: 60px; font-weight: 800;
         line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
     .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
@@ -5814,7 +5933,16 @@ st.markdown(
        cùng lúc (id đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền)
        giống cách làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới
        thắng được rule đó. */
-    [class*="st-key-qnote_row_"] { margin-bottom: 2px; }
+    [class*="st-key-qnote_row_"] { margin-bottom: 0 !important; }
+    /* Khoảng cách dọc thật giữa các dòng ghi chú nhanh không tới từ margin-bottom trên (chỉ 2px)
+       mà chủ yếu từ gap flex mặc định (0.9rem = 14.4px) giữa các item của khối cha (mỗi dòng là 1
+       flex item riêng, margin không cộng dồn/thu hẹp được gap đó) -- tổng ~16px, người dùng thấy
+       quá rộng so với 1 danh sách ghi chú ngắn. Ép thẳng gap của khối cha (nhận diện qua :has()
+       tìm đúng khối chứa các dòng qnote_row_) xuống 5px (phương án B trong 5 mock up đã chọn),
+       gọn hẳn so với cỡ mặc định của Streamlit. */
+    [data-testid="stVerticalBlock"]:has(> [data-testid="stLayoutWrapper"] > [class*="st-key-qnote_row_"]) {
+        gap: 5px !important;
+    }
     [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
     /* 3 cột (giờ / nội dung / nút) LUÔN giữ 1 hàng ngang, kể cả màn hẹp -- Streamlit tự đặt
        min-width: calc(100% - 24px) cho MỌI cột dưới 1 ngưỡng rộng màn hình (ép mỗi cột chiếm
@@ -6349,7 +6477,7 @@ def render_day_report(df):
     # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
     # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
     # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
-    _hero_chips = ([("today-ch1", "Ghi chú ngày"), ("today-ch2", "Ngày này năm trước")]
+    _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
                    if day_df.empty else
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
                     ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
@@ -6357,35 +6485,12 @@ def render_day_report(df):
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
-        # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
-        # có phiên nào) -- số liệu của CÁC NGÀY KHÁC (cùng thứ tuần trước / trung bình cùng thứ),
-        # không phụ thuộc dữ liệu của chính ngày đang xem nên hiện được ngay cả khi ngày này
-        # (kể cả hôm nay, chưa trồng cây nào) trống trơn. Không kèm delta so với ngày đang xem
-        # (khác nhánh có phiên bên dưới) vì ngày chưa diễn ra thì "0h so với TB 3h" chỉ gây hiểu
-        # lầm là đang tụt lại, không phải thông tin tham khảo hữu ích.
-        pw = df[df['Ngày'] == (sel - timedelta(days=7))]
-        same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                  & (df['Ngày'] != sel)]
-        ref_chips = []
-        if not pw.empty:
-            ref_chips.append({"k": f"{vn_dow} tuần trước",
-                               "v": f"{_fmt_hours_short(pw['Thời lượng (Phút)'].sum() / 60)} · {len(pw)} phiên"})
-        if same['Ngày'].nunique():
-            avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-            ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}"})
-        if ref_chips:
-            # margin ngang 16px khớp đúng padding trong của st.expander (16px mỗi bên) để card này
-            # rộng bằng đúng note_card bên dưới (vốn co hẹp lại vì nằm trong expander); margin-bottom
-            # 20px (thay vì mặc định 0) tạo khoảng cách rõ ràng hơn trước khi vào "Ghi chú ngày".
-            render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
-                               card_style="padding:20px; margin:0 16px 20px;")
-
-        sec_chapter("today-ch1", None, None, "Ghi chú ngày")
+        sec_chapter("today-ch1", 1, None, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
-        sec_chapter("today-ch2", None, None, "Ngày này năm trước")
+        sec_chapter("today-ch2", 2, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
-        sec_chapter("today-ch1", 1, None, "Tổng quan ngày")
+        sec_chapter("today-ch1", 1, None, "Tổng quan ngày", tight_top=True)
         d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
         d_sess = len(day_df)
         d_avg = _avg_session_min(day_df)
@@ -6495,7 +6600,7 @@ elif nav == "Báo cáo":
                      [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                       ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
                       ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
-            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan")
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
             # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
             # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
             # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
@@ -6735,7 +6840,7 @@ elif nav == "Báo cáo":
                                   ("bc-duan-ch5", "5 · Bảng số liệu")]
                 sec_hero(None, "Đi sâu vào 1 việc cụ thể", None, _hero_chips_g)
 
-                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan")
+                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
                 curr_trees_g = len(df_g)
                 num_days_g = df_g['Ngày'].nunique() or 1
@@ -7208,6 +7313,8 @@ elif nav == "Tuỳ biến":
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
     with st.expander("4. Giao diện", expanded=False):
+        st.markdown("<div style='font-size:13px;font-weight:600;color:var(--text-2);'>"
+                    "Màu accent</div>", unsafe_allow_html=True)
         _preset_items = list(ACCENT_PRESETS.items())
         _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
         _swatch_css = "<style>"
@@ -7241,6 +7348,40 @@ elif nav == "Tuỳ biến":
                             st.rerun()
         _swatch_css += "</style>"
         st.markdown(_swatch_css, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top:18px;font-size:13px;font-weight:600;color:var(--text-2);'>"
+                    "Kiểu nền trang</div>", unsafe_allow_html=True)
+        _bg_items = list(BG_PRESETS.items())
+        _bg_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
+        _bg_css = "<style>"
+        for _bg_row_start in range(0, len(_bg_items), _bg_per_row):
+            _bg_row_items = _bg_items[_bg_row_start:_bg_row_start + _bg_per_row]
+            _bg_cols = st.columns(_bg_per_row)
+            for _bg_i, (_bg_name, _bg_cfg) in enumerate(_bg_row_items):
+                _idx = _bg_row_start + _bg_i
+                _bg_key = f"bg_sw_{_idx}"
+                _bg_selected = _bg_name == BG_STYLE
+                _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
+                _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
+                _bg_position = _bg_cfg.get("position", "0 0")
+                # Nút xem trước dùng ĐÚNG background-image/size/position của preset (không phải
+                # màu đặc như accent) -- người dùng thấy được hoạ tiết thật trước khi chọn.
+                _bg_css += (
+                    f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background-color: var(--card-tl) !important; "
+                    f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
+                    f"background-position: {_bg_position} !important; "
+                    f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
+                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
+                    f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
+                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
+                with _bg_cols[_bg_i]:
+                    if st.button(_bg_label, key=_bg_key, use_container_width=True):
+                        if _bg_name != BG_STYLE:
+                            save_setting("bg_style", _bg_name)
+                            st.rerun()
+        _bg_css += "</style>"
+        st.markdown(_bg_css, unsafe_allow_html=True)
 
     with st.expander("5. Quản lý hệ thống", expanded=False):
         # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
@@ -7444,7 +7585,8 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
     sec_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử")
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
+        tight_top=True)
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
         f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
@@ -7460,12 +7602,6 @@ elif nav == "Hướng dẫn":
     sec_block(
         "<h4>Ngày chưa có phiên nào thì xem gì cho đỡ trống trải</h4>"
         "<ul>"
-        "<li><b>Tham khảo cho lên kế hoạch</b> — panel nhỏ nhảy ra thay cho dòng thời gian khi ngày còn "
-        "trắng tinh, cho bạn 2 con số mượn từ <b>ngày khác</b> để đỡ mù mờ: tổng giờ và số phiên của đúng "
-        "thứ này tuần trước, cộng thêm trung bình của đúng thứ này tính trên toàn bộ lịch sử đã có. Để ý "
-        "chữ “đúng thứ” — app so Thứ Bảy với Thứ Bảy, chứ không phải cứ lùi đại 7 ngày trước, vì nhịp làm "
-        "việc của hầu hết mọi người thường lặp theo thứ trong tuần (đi làm/đi học) hơn là theo khoảng cách "
-        "ngày thuần tuý.</li>"
         "<li><b>Lịch hẹn Work</b> của ngày hôm đó vẫn hiện đầy đủ trong Ghi chú ngày dù chưa có phiên nào — "
         "nhờ vậy bạn biết ngay còn bao nhiêu khung giờ trống để nhét việc vào trước khi bắt tay làm.</li>"
         "<li><b>Trích dẫn hôm nay</b> — một highlight hoặc ghi chú Kindle được chọn ngẫu nhiên, nằm ngay đầu "
