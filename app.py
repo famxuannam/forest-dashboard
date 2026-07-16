@@ -3366,7 +3366,7 @@ def render_note_editor(day, day_badges=None):
                             f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
                             for _, r in day_events.iterrows()
                         )
-                        st.markdown(f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>",
+                        st.markdown(f"<div style='margin-bottom:14px;'><span class='rl-book'>Lịch</span>{chips}</div>",
                                     unsafe_allow_html=True)
 
                 rl = load_reading_log()
@@ -3378,7 +3378,8 @@ def render_note_editor(day, day_badges=None):
                 qn_day = _quick_notes_on(load_quick_notes(), day)
                 merge_pending_key = f"note_merge_pending_{day}"
                 if not qn_day.empty:
-                    st.markdown("<span class='rl-book'>Ghi chú nhanh</span>", unsafe_allow_html=True)
+                    st.markdown("<span class='rl-book' style='margin-top:8px;'>Ghi chú nhanh</span>",
+                                unsafe_allow_html=True)
                     for _, r in qn_day.iterrows():
                         _qid = int(r['id'])
                         qedit_key = f"qnote_edit_{_qid}"
@@ -3633,14 +3634,14 @@ def _render_health_report(df_health):
                 f"title='Lần khám {_hm_abs_str}'>{format_relative(_hm_ts)}</b>")
 
     sec_hero(None, "Chỉ số theo thời gian", None,
-             [("hm-bc-abn", "Chỉ số bất thường"), ("hm-bc-ch1", "1 · Số liệu"),
-              ("hm-bc-ch2", "2 · Biểu đồ theo dõi")], meta=_hm_meta)
+             [("hm-bc-abn", "1 · Chỉ số bất thường"), ("hm-bc-ch1", "2 · Số liệu"),
+              ("hm-bc-ch2", "3 · Biểu đồ theo dõi")], meta=_hm_meta)
     _inject_relative_time_ticker()
 
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}",
-                tight_top=True)
+    sec_chapter("hm-bc-abn", 1, None, "Chỉ số bất thường",
+                badge=f"Lần khám {_latest_date:%d/%m/%Y}", tight_top=True)
     if _latest_num.empty:
         st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
     else:
@@ -3681,9 +3682,9 @@ def _render_health_report(df_health):
     s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
 
     if s_num.empty:
-        sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+        sec_chapter("hm-bc-ch1", 2, None, "Số liệu")
         st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
-        sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+        sec_chapter("hm-bc-ch2", 3, None, "Biểu đồ theo dõi")
         st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
         return
 
@@ -3691,7 +3692,7 @@ def _render_health_report(df_health):
     unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
     is_abn = _health_is_abnormal(s_num)
 
-    sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+    sec_chapter("hm-bc-ch1", 2, None, "Số liệu")
     last = s_num.iloc[-1]
     deltas = []
     if len(s_num) > 1:
@@ -3717,7 +3718,7 @@ def _render_health_report(df_health):
     ]
     render_stat_panel(hero_items, sections=sections)
 
-    sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+    sec_chapter("hm-bc-ch2", 3, None, "Biểu đồ theo dõi")
     _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
     _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
     fig = go.Figure()
@@ -4610,14 +4611,14 @@ def sec_table(headers, rows):
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False):
+def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=None):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
     báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
     dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
     tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
 
-    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, vd panel tham khảo khi chưa có dữ
-    liệu, hay "Chỉ số bất thường" ở Sức khoẻ -- những mục này không nằm trong 1 chuỗi đếm).
+    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, dùng cho panel tham khảo không
+    nằm trong 1 chuỗi đếm thật sự).
 
     kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
     vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
@@ -4632,14 +4633,21 @@ def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False):
 
     Số thứ tự (nếu có) nằm CÙNG 1 hàng ngang với tiêu đề (.sec-ch-row, flex space-between, canh
     baseline) -- tiêu đề bên trái, số bên phải, thay cho kiểu số tuyệt đối chồng lên góc trên bên
-    phải trước đây (dễ đọc nhầm thành 2 dòng tách biệt không liên quan tới nhau)."""
+    phải trước đây (dễ đọc nhầm thành 2 dòng tách biệt không liên quan tới nhau).
+
+    badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026" ở "Chỉ số bất thường"
+    của Sức khoẻ) -- tách phần thông tin động (ngày/giá trị cụ thể) ra khỏi CHÍNH văn bản tiêu đề,
+    để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ liệu hiện dưới dạng chip cạnh bên
+    thay vì nối chuỗi vào title."""
     _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
     _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
+    _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
         f"<div class='{_cls}' id='{anchor}'>{_kicker_html}"
-        f"<div class='sec-ch-row'><h2 class='sec-ch-title'>{title}</h2>{_num_html}</div>{_lead}</div>",
+        f"<div class='sec-ch-row'><div class='sec-ch-titlewrap'><h2 class='sec-ch-title'>{title}</h2>"
+        f"{_badge_html}</div>{_num_html}</div>{_lead}</div>",
         unsafe_allow_html=True)
 
 
@@ -5609,11 +5617,16 @@ st.markdown(
        canh baseline: tiêu đề bên trái, số bên phải. Cỡ 64px (phương án C trong mock up "cùng 1
        hàng, tiêu đề trái/số phải" đã chọn). */
     .sec-ch-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .sec-ch-titlewrap { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .sec-ch-num { font-size: 64px; font-weight: 800; line-height: 1; flex-shrink: 0;
         color: rgba(var(--accent-rgb),0.24); user-select: none; }
     .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
     .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    /* Chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026") -- tách thông tin ĐỘNG theo dữ liệu ra
+       khỏi văn bản tiêu đề cố định, xem docstring sec_chapter() tham số badge. */
+    .sec-ch-badge { font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--chip);
+        border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
     .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
     .sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
