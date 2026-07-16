@@ -7857,6 +7857,31 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
+        dict(pr="192", date="16/07/2026", pr_lines=1784, total_lines=8004,
+             title="Billboard đầu trang cho Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ + một loạt sửa lỗi vặt",
+             bullets=[
+                 "**Trang Hôm nay có một tấm billboard mới** — gộp thẻ “Ngày đang xem”, thẻ trích dẫn "
+                 "hôm nay và hàng chip mục lục thành một khối duy nhất, kiểu tờ lịch xé hằng ngày: số "
+                 "ngày to bên trái, trích dẫn Kindle bên phải, có gạch dọc ngăn ở giữa và dòng “Cập nhật "
+                 "gần nhất” tự nhích theo thời gian thực.",
+                 "**Bố cục “chương cuộn dọc” của trang Trợ giúp giờ lan sang cả app** — Báo cáo (Tổng "
+                 "quan/Tuần/Tháng/Năm/Dự án), Sách/Gundam (Chi tiết) và Sức khoẻ (Báo cáo) đều đổi từ "
+                 "các mục gập (expander) đánh số sang billboard + chip mục lục nhảy nhanh, chương nào "
+                 "cũng hiện sẵn khi cuộn thay vì phải bấm mở từng mục.",
+                 "**Tinh chỉnh lại billboard sau vài vòng xem thử** — bỏ dòng kicker in hoa và câu mô "
+                 "tả thừa ở mọi billboard (trừ đúng trang Trợ giúp), nới khoảng cách xuống nội dung bên "
+                 "dưới, và bỏ hẳn billboard ở những sub-tab chỉ có một khối nội dung, không có gì để "
+                 "mục lục chip trỏ tới (Sách/Gundam → Tổng quan). Sức khoẻ có thêm dòng “Cập nhật lần "
+                 "cuối X trước”.",
+                 "**Sửa một bug mất nội dung khá khó chịu** — bấm “Gộp” một ghi chú nhanh vào ô soạn "
+                 "đang mở sẵn trước đó không đưa được nội dung thật vào ô soạn (component soạn thảo "
+                 "không tự vẽ lại), giờ đã remount đúng lúc để nội dung gộp hiện ra thật sự.",
+                 "**Một loạt tinh chỉnh nhỏ khác** — nút Gộp/Sửa/Xoá ở ghi chú nhanh không còn vỡ xuống "
+                 "dòng, popup chọn ngày dịch hẳn sang tiếng Việt, dòng thời gian trong ngày đổi sang "
+                 "style minh hoạ có chú giải theo Nhóm, Báo cáo Tuần/Tháng ẩn heading “Ghi chú chính” "
+                 "khi không còn ghi chú nhanh đi kèm, tab Sách đổi thứ tự Tổng quan/Yêu thích/Chi tiết, "
+                 "và thêm 2 màu accent mới (Cam đất, Ô liu).",
+             ]),
         dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
              title="Dọn dẹp bloat, sửa lỗi vặt, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
              bullets=[
