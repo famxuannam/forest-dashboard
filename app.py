@@ -443,6 +443,36 @@ PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': Tru
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU (đọc/ghi qua Supabase) ---
 # save_* dùng ngữ nghĩa "ghi đè toàn bộ" (xoá hết rồi insert lại) để khớp hành vi các nơi gọi.
+_SB_PAGE_SIZE = 1000  # PostgREST (nền tảng Supabase) mặc định chỉ trả tối đa 1000 dòng/request
+# nếu không tự phân trang -- bảng nào vượt ngưỡng này, gọi thẳng .execute() sẽ ÂM THẦM cắt mất
+# phần dư (không lỗi, không warning nào cảnh báo). Đã xác nhận bug thật trên work_calendar (1003
+# dòng -- thiếu đúng 3 dòng dư ngưỡng, hiện sai lịch ngày hôm đó dù dữ liệu trong Supabase vẫn
+# còn nguyên). Mọi bảng có thể phát triển không giới hạn theo thời gian sử dụng (sessions,
+# work_calendar, reading_log, deleted_sessions, notes, kindle_highlights, health_metrics,
+# mapping, kindle_book_map, deleted_kindle_highlights...) PHẢI đọc qua _sb_select_all() thay vì
+# gọi .execute() trực tiếp -- các bảng nhỏ có trần rõ ràng (settings: vài chục key cấu hình cố
+# định; children theo đúng 1 parent_hash) không cần vì không bao giờ chạm ngưỡng.
+
+
+def _sb_select_all(build_query):
+    """Chạy 1 PostgREST query, tự phân trang qua .range() cho tới khi hết dữ liệu thay vì gọi
+    thẳng .execute() (xem _SB_PAGE_SIZE). build_query là callable KHÔNG tham số, mỗi lần gọi trả
+    về 1 query builder MỚI (vd lambda: sb.table("work_calendar").select("start_time,title")) --
+    dùng callable (không phải truyền thẳng 1 builder có sẵn) vì cần builder "sạch" cho mỗi trang,
+    không có tài liệu nào của supabase-py đảm bảo gọi lại .range() trên 1 builder đã .execute()
+    rồi là an toàn. Trả về list dict nối từ mọi trang -- giống hệt res.data nếu bảng vốn dưới
+    ngưỡng (vòng lặp dừng ngay sau trang đầu)."""
+    all_data = []
+    offset = 0
+    while True:
+        page = build_query().range(offset, offset + _SB_PAGE_SIZE - 1).execute().data or []
+        all_data.extend(page)
+        if len(page) < _SB_PAGE_SIZE:
+            break
+        offset += _SB_PAGE_SIZE
+    return all_data
+
+
 def _fmt_ts(v):
     """Chuẩn hoá 1 giá trị giờ (chuỗi hoặc Timestamp, có/không giây lẻ) về đúng 1 định dạng
     cố định "YYYY-MM-DD HH:MM:SS" (bỏ giây lẻ) trước khi ghi vào Supabase -- các nguồn ghi
@@ -453,11 +483,14 @@ def _fmt_ts(v):
 @st.cache_data
 def load_db():
     sb = _get_supabase()
-    res = sb.table("sessions").select("start_time,end_time,project,duration_min").execute()
+    # order("id") -- .range() phân trang cần 1 thứ tự ỔN ĐỊNH giữa các trang (Postgres không đảm
+    # bảo thứ tự trả về nếu không có ORDER BY), "id" là cột duy nhất chắc chắn không trùng.
+    data = _sb_select_all(lambda: sb.table("sessions")
+                           .select("id,start_time,end_time,project,duration_min").order("id"))
     cols = ["Thời gian bắt đầu", "Thời gian kết thúc", "Dự án", "Thời lượng (Phút)"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(res.data).rename(columns={
+    df = pd.DataFrame(data).rename(columns={
         "start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc",
         "project": "Dự án", "duration_min": "Thời lượng (Phút)"})
     # Chuẩn hoá chuỗi giờ Supabase trả về (ISO 8601) về đúng dạng "YYYY-MM-DD HH:MM:SS"
@@ -478,11 +511,17 @@ def _load_simple_table(table, select, rename, cols):
     """Khuôn đọc chung cho các bảng phẳng KHÔNG có bước chuẩn hoá kiểu dữ liệu riêng sau rename
     (không datetime, không astype) -- chỉ select -> đổi tên cột EN->VN -> DataFrame rỗng đúng
     cols nếu bảng trống. KHÔNG dùng chung được cho load_db/load_deleted/load_notes/... (có thêm
-    bước chuẩn hoá chuỗi giờ ISO8601 hoặc parse datetime ngay sau rename, xem từng hàm đó)."""
-    res = _get_supabase().table(table).select(select).execute()
-    if not res.data:
+    bước chuẩn hoá chuỗi giờ ISO8601 hoặc parse datetime ngay sau rename, xem từng hàm đó).
+
+    order() theo cột ĐẦU TIÊN trong select -- cả 3 nơi gọi hàm này (mapping/kindle_book_map/
+    deleted_kindle_highlights) đều cố ý liệt kê khoá chính làm cột đầu, nên .range() phân trang
+    (xem _sb_select_all()) có thứ tự ổn định giữa các trang mà không cần thêm tham số riêng."""
+    sb = _get_supabase()
+    order_col = select.split(',')[0].strip()
+    data = _sb_select_all(lambda: sb.table(table).select(select).order(order_col))
+    if not data:
         return pd.DataFrame(columns=cols)
-    return pd.DataFrame(res.data).rename(columns=rename)[cols]
+    return pd.DataFrame(data).rename(columns=rename)[cols]
 
 def save_db(df):
     sb = _get_supabase()
@@ -513,11 +552,12 @@ def save_mapping(df):
 def load_deleted():
     """Danh sách phiên đã xoá (theo khoá thời gian bắt đầu + kết thúc, dạng chuỗi)."""
     sb = _get_supabase()
-    res = sb.table("deleted_sessions").select("start_time,end_time").execute()
+    data = _sb_select_all(lambda: sb.table("deleted_sessions")
+                           .select("start_time,end_time").order("start_time").order("end_time"))
     cols = ["Thời gian bắt đầu", "Thời gian kết thúc"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(res.data).rename(columns={"start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc"})
+    df = pd.DataFrame(data).rename(columns={"start_time": "Thời gian bắt đầu", "end_time": "Thời gian kết thúc"})
     for c in cols:
         df[c] = pd.to_datetime(df[c], format='ISO8601').dt.strftime("%Y-%m-%d %H:%M:%S")
     return df[cols].astype(str)
@@ -547,11 +587,11 @@ def save_deleted(df):
 def load_notes():
     """Ghi chú/nhật ký theo ngày: cột Ngày (YYYY-MM-DD) + Ghi chú (text)."""
     sb = _get_supabase()
-    res = sb.table("notes").select("note_date,note").execute()
+    data = _sb_select_all(lambda: sb.table("notes").select("note_date,note").order("note_date"))
     cols = ["Ngày", "Ghi chú"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    return pd.DataFrame(res.data).rename(columns={"note_date": "Ngày", "note": "Ghi chú"})[cols].astype(str)
+    return pd.DataFrame(data).rename(columns={"note_date": "Ngày", "note": "Ghi chú"})[cols].astype(str)
 
 def get_note(day):
     nd = load_notes()
@@ -592,11 +632,11 @@ def load_quick_notes():
     phải tự hết hạn theo thời gian để quick note mới hiện ra mà không cần chờ 1 thao tác lưu khác
     trong app."""
     sb = _get_supabase()
-    res = sb.table("quick_notes").select("id,ts,note_text").order("ts").execute()
+    data = _sb_select_all(lambda: sb.table("quick_notes").select("id,ts,note_text").order("ts").order("id"))
     cols = ["id", "Thời gian", "Nội dung"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(res.data).rename(columns={"ts": "Thời gian", "note_text": "Nội dung"})[cols]
+    df = pd.DataFrame(data).rename(columns={"ts": "Thời gian", "note_text": "Nội dung"})[cols]
     df["Thời gian"] = pd.to_datetime(df["Thời gian"])
     return df
 
@@ -730,11 +770,16 @@ def sync_work_calendar(start_date, end_date):
 @st.cache_data
 def load_work_calendar():
     sb = _get_supabase()
-    res = sb.table("work_calendar").select("start_time,title").execute()
+    # order theo cả 2 cột khoá chính (uid, start_time) -- chỉ start_time không đủ (2 sự kiện khác
+    # nhau vẫn có thể trùng giờ bắt đầu), .range() phân trang cần thứ tự ổn định tuyệt đối để
+    # không lặp/sót dòng giữa các trang (đã xác nhận bug thật thiếu dòng khi bảng qua 1000 dòng,
+    # xem _sb_select_all()).
+    data = _sb_select_all(lambda: sb.table("work_calendar")
+                           .select("start_time,title,uid").order("start_time").order("uid"))
     cols = ["Thời gian bắt đầu", "Tiêu đề"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(res.data).rename(columns={"start_time": "Thời gian bắt đầu", "title": "Tiêu đề"})
+    df = pd.DataFrame(data).rename(columns={"start_time": "Thời gian bắt đầu", "title": "Tiêu đề"})
     df["Thời gian bắt đầu"] = pd.to_datetime(df["Thời gian bắt đầu"], format='ISO8601')
     return df[cols]
 
@@ -783,11 +828,12 @@ def _is_gundam_list(list_name):
 @st.cache_data
 def load_reading_log():
     sb = _get_supabase()
-    res = sb.table("reading_log").select("uid,completed_date,book,title").execute()
+    data = _sb_select_all(lambda: sb.table("reading_log")
+                           .select("uid,completed_date,book,title").order("completed_date").order("uid"))
     cols = ["Ngày hoàn thành", "Sách (gốc)", "Tiêu đề phần"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols + ["Cuốn sách"])
-    df = pd.DataFrame(res.data).rename(columns={
+    df = pd.DataFrame(data).rename(columns={
         "completed_date": "Ngày hoàn thành", "book": "Sách (gốc)", "title": "Tiêu đề phần"})
     df["Ngày hoàn thành"] = pd.to_datetime(df["Ngày hoàn thành"], format='ISO8601')
     df["Cuốn sách"] = df["Sách (gốc)"].map(_book_title)
@@ -854,10 +900,10 @@ def load_gundam_overrides():
     ở trang Gundam. Khoá theo NGÀY (không phải từng phiên riêng) vì bản thân suy luận tự động
     cũng gán theo ngày, không theo từng phiên. Trả về dict {date: series} để tra cứu O(1)."""
     sb = _get_supabase()
-    res = sb.table("gundam_overrides").select("session_date,series").execute()
-    if not res.data:
+    data = _sb_select_all(lambda: sb.table("gundam_overrides").select("session_date,series").order("session_date"))
+    if not data:
         return {}
-    return {pd.Timestamp(r["session_date"]).date(): r["series"] for r in res.data}
+    return {pd.Timestamp(r["session_date"]).date(): r["series"] for r in data}
 
 
 def save_gundam_override(day, series):
@@ -900,13 +946,14 @@ def load_kindle_highlights():
     sửa/xoá/gắn ghi chú PHẢI dùng đúng cột dedupe_hash đọc từ đây, không được gọi lại
     _kindle_dedupe_hash() để suy ngược khoá."""
     sb = _get_supabase()
-    res = sb.table("kindle_highlights").select(
-        "dedupe_hash,kindle_title,author,kind,content,location,added_at,parent_hash,is_favorite").execute()
+    data = _sb_select_all(lambda: sb.table("kindle_highlights").select(
+        "dedupe_hash,kindle_title,author,kind,content,location,added_at,parent_hash,is_favorite"
+    ).order("dedupe_hash"))
     cols = ["Tên Kindle", "Tác giả", "Loại", "Nội dung", "Vị trí", "Ngày thêm", "Cuốn sách", "Dự án",
             "dedupe_hash", "parent_hash", "Yêu thích"]
-    if not res.data:
+    if not data:
         return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(res.data).rename(columns={
+    df = pd.DataFrame(data).rename(columns={
         "kindle_title": "Tên Kindle", "author": "Tác giả", "kind": "Loại",
         "content": "Nội dung", "location": "Vị trí", "added_at": "Ngày thêm", "is_favorite": "Yêu thích"})
     df["Ngày thêm"] = pd.to_datetime(df["Ngày thêm"], format='ISO8601', errors='coerce')
@@ -1114,11 +1161,12 @@ def load_health_metrics():
     được chuẩn hoá qua _backfill_ref_range() ngay khi đọc (xem docstring hàm đó) -- mọi nơi đọc từ
     hàm này (Báo cáo/Lịch sử/Dữ liệu đầu vào) đều thấy khoảng tham chiếu đã đồng bộ."""
     sb = _get_supabase()
-    res = sb.table("health_metrics").select(
-        "id,test_date,category,indicator,value,value_raw,unit,ref_raw,ref_low,ref_high").execute()
-    if not res.data:
+    data = _sb_select_all(lambda: sb.table("health_metrics").select(
+        "id,test_date,category,indicator,value,value_raw,unit,ref_raw,ref_low,ref_high"
+    ).order("id"))
+    if not data:
         return pd.DataFrame(columns=HEALTH_METRICS_COLS)
-    df = pd.DataFrame(res.data).rename(columns={
+    df = pd.DataFrame(data).rename(columns={
         "test_date": "Ngày lấy mẫu", "category": "Nhóm", "indicator": "Chỉ số",
         "value": "Giá trị", "value_raw": "Giá trị (gốc)", "unit": "Đơn vị",
         "ref_raw": "Khoảng tham chiếu", "ref_low": "Ref thấp", "ref_high": "Ref cao"})
@@ -6041,13 +6089,33 @@ st.markdown(
        nội dung cần sát (xsmall), nhưng nội dung↔hàng nút bên dưới cần rộng hơn 1 chút để không
        dính liền -- gộp chung 1 container/1 gap từng làm cả 2 khoảng cách xích lại y hệt, "sửa
        xong" hoá ra ép nhầm khoảng còn lại quá chật (bug vòng trước). */
+
+    /* Nút tròn nổi "về đầu trang" (tạo bằng JS ở _inject_scroll_to_top_button(), không phải
+       st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
+       class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
+       che nhau nếu cùng hiện 1 lúc. */
+    #app-scroll-top-btn {
+        position: fixed; right: 22px; bottom: 22px; z-index: 99980;
+        width: 44px; height: 44px; border-radius: 50%;
+        background: var(--accent); color: #fff; border: none;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
+        cursor: pointer; opacity: 0; transform: translateY(12px) scale(0.9);
+        pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #app-scroll-top-btn.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+    #app-scroll-top-btn:hover { opacity: 0.9; transform: scale(1.05); }
+    #app-scroll-top-btn svg { width: 20px; height: 20px; }
+    @media (max-width: 640px) {
+        #app-scroll-top-btn { right: 14px; bottom: 14px; width: 40px; height: 40px; }
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 st.markdown(
-    f"<div style='margin:0 0 0.6em 0;'>{_wordmark_html('header')}</div>",
+    f"<div style='margin:0 0 1.3em 0;'>{_wordmark_html('header')}</div>",
     unsafe_allow_html=True,
 )
 
@@ -6409,17 +6477,91 @@ elif "hsub" in st.query_params:
 _inject_keyboard_shortcuts()
 
 
+def _inject_scroll_to_top_button():
+    """Nút tròn nổi góc dưới-phải "về đầu trang" -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện,
+    bấm cuộn mượt về đầu. Tạo bằng JS (components.html) y hệt bảng phím tắt ở
+    _inject_keyboard_shortcuts(): gắn thẳng vào window.parent.document để nút không bị Streamlit
+    xoá/tạo lại mỗi lần rerun (iframe của components.html có bị dựng lại cũng không sao, nút đã
+    sống sẵn trong document cha) -- canh cờ w.__scrollTopBtnInstalled để không tạo trùng nút sau
+    mỗi rerun.
+
+    Nghe sự kiện 'scroll' ở PHA CAPTURE (tham số thứ 3 của addEventListener = true) thay vì chỉ
+    trên window: tuỳ layout, phần thật sự cuộn có thể là 1 div con của Streamlit thay vì window,
+    mà sự kiện scroll KHÔNG tự nổi bọt lên -- nghe ở capture bắt được cả 2 trường hợp mà không
+    cần biết trước phần tử nào mới thực sự là vùng cuộn. Khi bấm, cuộn cả window LẪN gọi
+    scrollIntoView() trên .block-container cho chắc, cùng lý do."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  const w = window.parent;\n"
+        "  if (w.__scrollTopBtnInstalled) return;\n"
+        "  w.__scrollTopBtnInstalled = true;\n"
+        "  const btn = w.document.createElement('button');\n"
+        "  btn.id = 'app-scroll-top-btn';\n"
+        "  btn.type = 'button';\n"
+        "  btn.setAttribute('aria-label', 'Về đầu trang');\n"
+        "  btn.title = 'Về đầu trang';\n"
+        "  btn.innerHTML = '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" "
+        "stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
+        "<path d=\"M12 19V5M5 12l7-7 7 7\"/></svg>';\n"
+        "  btn.addEventListener('click', function(){\n"
+        "    w.scrollTo({top: 0, behavior: 'smooth'});\n"
+        "    const bc = w.document.querySelector('.block-container');\n"
+        "    if (bc) bc.scrollIntoView({behavior: 'smooth', block: 'start'});\n"
+        "  });\n"
+        "  w.document.body.appendChild(btn);\n"
+        "  function onScroll(e){\n"
+        "    const t = e.target;\n"
+        "    let y = w.scrollY || 0;\n"
+        "    if (t && typeof t.scrollTop === 'number') y = Math.max(y, t.scrollTop);\n"
+        "    btn.classList.toggle('show', y > 400);\n"
+        "  }\n"
+        "  w.document.addEventListener('scroll', onScroll, true);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
+_inject_scroll_to_top_button()
+
+
 def _kindle_quote_of_day():
     """Chọn 1 trích dẫn/ghi chú Kindle ngẫu nhiên nhưng CỐ ĐỊNH trong ngày -- seed theo ngày THẬT
     hôm nay (_today_vn(), không phải "sel", ngày đang xem trên trang Hôm nay) nên tải lại trang hay
     lùi/tiến xem ngày khác vẫn ra đúng 1 câu suốt cả ngày hôm nay, đúng cảm giác "quote of the
-    day" thật -- chỉ đổi khi sang ngày mới. Trả None nếu chưa import trích dẫn nào (tính năng tuỳ
-    chọn, không chặn phần còn lại của trang)."""
+    day" thật -- chỉ đổi khi sang ngày mới (hoặc người dùng tự bấm nút xáo -- xem
+    _shuffle_daily_quote()). Trả None nếu chưa import trích dẫn nào (tính năng tuỳ chọn, không
+    chặn phần còn lại của trang).
+
+    Chỉ số đang chọn (kq_daily_idx) lưu trong session_state để nút xáo có chỗ ghi đè -- ngày đổi
+    (kq_daily_date lệch _today_vn()) thì tính lại theo seed như cũ, đè mất lựa chọn xáo tay của
+    ngày hôm trước (đúng ý "quote of the day" -- xáo tay chỉ có tác dụng trong ngày đang xem)."""
     kh = load_kindle_highlights()
     if kh.empty:
         return None
-    idx = random.Random(_today_vn().isoformat()).randrange(len(kh))
+    today_iso = _today_vn().isoformat()
+    if st.session_state.get("kq_daily_date") != today_iso:
+        st.session_state["kq_daily_date"] = today_iso
+        st.session_state["kq_daily_idx"] = random.Random(today_iso).randrange(len(kh))
+    # modulo phòng trường hợp kh co lại (xoá bớt trích dẫn) khiến idx cũ vượt quá độ dài mới.
+    idx = st.session_state["kq_daily_idx"] % len(kh)
     return kh.iloc[idx]
+
+
+def _shuffle_daily_quote():
+    """Đổi trích dẫn hôm nay sang 1 trích dẫn NGẪU NHIÊN KHÁC (không lặp lại đúng câu đang hiện
+    nếu có từ 2 trích dẫn trở lên) -- callback của nút xáo bên cạnh nút ⭐ Yêu thích, xem
+    _render_today_billboard(). Chỉ ghi vào session_state, _kindle_quote_of_day() ở lần rerun kế
+    tiếp sẽ đọc lại đúng chỉ số này."""
+    n = len(load_kindle_highlights())
+    if n <= 1:
+        return
+    cur = st.session_state.get("kq_daily_idx")
+    new_idx = cur
+    while new_idx == cur:
+        new_idx = random.randrange(n)
+    st.session_state["kq_daily_idx"] = new_idx
 
 
 def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
@@ -6463,13 +6605,19 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                     f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
                     unsafe_allow_html=True)
                 with st.container(key="kq_daily_srcrow"):
-                    c_src, c_fav = st.columns([10, 1])
+                    _kh_count = len(load_kindle_highlights())
+                    c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
                     with c_src:
                         _author = kq.get('Tác giả')
                         _src_txt = html_escape(str(kq['Cuốn sách']))
                         if pd.notna(_author) and str(_author).strip():
                             _src_txt += f" · {html_escape(str(_author))}"
                         st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                    with c_shuffle:
+                        if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
+                                                        help="Đổi trích dẫn khác"):
+                            _shuffle_daily_quote()
+                            st.rerun()
                     with c_fav:
                         _fav = bool(kq.get('Yêu thích', False))
                         if st.button("★" if _fav else "☆",
@@ -7680,7 +7828,9 @@ elif nav == "Hướng dẫn":
         "<li><b>Trích dẫn hôm nay</b> — một highlight hoặc ghi chú Kindle được chọn ngẫu nhiên, nằm ngay đầu "
         "trang cho có chút không khí văn chương buổi sáng. Câu này chọn cố định theo <b>ngày thật</b>: có "
         "tải lại trang bao nhiêu lần, hay lùi tới/tiến lui xem ngày khác, câu vẫn y nguyên — chỉ đổi khi "
-        "sang một ngày mới mà thôi, đúng tinh thần “quote of the day”.</li>"
+        "sang một ngày mới mà thôi, đúng tinh thần “quote of the day”. Muốn xem câu khác ngay lúc đó thì "
+        "bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ — chỉ đổi tạm trong phiên xem hôm nay, sang ngày mới "
+        "vẫn quay lại chọn theo ngày như bình thường.</li>"
         "<li>Và một điều nhỏ nhưng quan trọng: “hôm nay” trong toàn bộ app luôn được tính theo <b>giờ Việt "
         "Nam</b>, bất kể server đang chạy ở múi giờ nào trên thế giới — để ngày của bạn không bao giờ tự "
         "dưng nhảy sớm hoặc muộn mất 7 tiếng so với đồng hồ thật.</li>"
@@ -8041,7 +8191,10 @@ elif nav == "Hướng dẫn":
             "nhiêu lần, hay lùi tới/tiến lui xem các ngày khác nhau đi nữa, câu trích dẫn vẫn giữ nguyên y hệt "
             "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
             "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
-            "bạn đã nạp vào app.")
+            "bạn đã nạp vào app.\n\n"
+            "Muốn xem câu khác ngay lập tức thì bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ Yêu thích — chỉ "
+            "đổi tạm trong lúc đang xem, sang ngày mới thì lại quay về chọn theo ngày như bình thường, không "
+            "giữ lại lựa chọn xáo tay của hôm trước.")
         help_faq_item(
             "Vừa nạp trích dẫn từ 1 cuốn sách hoàn toàn mới, chưa từng theo dõi tiến độ đọc — nó có hiện lên "
             "Trích dẫn hôm nay không, hay phải đợi ghép với Dự án trước đã?",
