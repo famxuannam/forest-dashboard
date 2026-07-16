@@ -4453,22 +4453,29 @@ def help_faq_item(question, answer_md):
 
 
 def render_help_changelog(entries):
-    """Timeline "Nhật ký phát triển": mỗi entry là 1 chấm tròn accent nối đường dọc, header gồm
-    nhãn PR + 2 chip số liệu, rồi tiêu đề đậm + bullets (hỗ trợ **đậm** kiểu markdown).
+    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .help-card gắn chấm tròn accent nối
+    đường dọc bên trái (xem CSS .help-tl*), header gồm nhãn PR + 3 chip, rồi tiêu đề đậm + bullets
+    (hỗ trợ **đậm** kiểu markdown).
 
-    entries: list[dict] khai báo tay, mỗi dict gồm pr / title / bullets / pr_lines / total_lines.
-    Giữ nguyên ngữ nghĩa 2 chip của guide_update() bản cũ:
+    entries: list[dict] khai báo tay, mỗi dict gồm pr / title / bullets / date / pr_lines /
+    total_lines. Giữ nguyên ngữ nghĩa 2 chip số liệu của guide_update() bản cũ, cộng thêm 1 chip
+    ngày mới:
+    - date: ngày merge (dd/mm/yyyy) của PR MỚI NHẤT trong cụm pr, tra qua `pull_request_read` --
+      chip nền xám, đứng đầu tiên.
     - total_lines: tổng số dòng CỦA CẢ app.py (wc -l) tại commit merge PR mới nhất trong cụm
-      (tra qua `git show <commit>:app.py | wc -l`) -- chip nền xám, đứng trước.
+      (tra qua `git show <commit>:app.py | wc -l`) -- chip nền xám, đứng giữa.
     - pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục) của PR
-      MỚI NHẤT trong cụm pr (vd pr="182-184" -> số dòng của #184) -- chip nền accent.
+      MỚI NHẤT trong cụm pr (vd pr="182-184" -> số dòng của #184) -- chip nền accent, đứng cuối.
     2 cụm PR "132,133,136,137" và "125,126,139,140" không còn commit gốc riêng trong lịch sử git
-    (đã bị squash/rebase gộp) -- dùng tạm số dòng tại commit gần nhất còn truy được (#142).
-    Cả 2 số liệu đều KHÔNG tự tính lại lúc runtime (app không gọi GitHub API/git khi chạy) --
+    (đã bị squash/rebase gộp) -- dùng tạm số dòng tại commit gần nhất còn truy được (#142); ngày
+    merge của cả 2 cụm này tra theo đúng PR mới nhất trong cụm (#137 và #140).
+    Cả 3 trường đều KHÔNG tự tính lại lúc runtime (app không gọi GitHub API/git khi chạy) --
     số tĩnh, điền tay khi thêm mục mới."""
     _parts = ["<div class='help-tl'>"]
     for e in entries:
         _chips = ""
+        if e.get("date"):
+            _chips += f"<span class='help-chip'>{e['date']}</span>"
         if e.get("total_lines") is not None:
             _chips += f"<span class='help-chip'>{e['total_lines']} dòng mã nguồn</span>"
         if e.get("pr_lines") is not None:
@@ -5352,20 +5359,40 @@ st.markdown(
     .help-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
     .help-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
         border-top: 2px dashed var(--accent); }
-    /* Timeline changelog (chương Nhật ký phát triển) */
-    .help-tl { margin: 8px 0; }
-    .help-tl-item { position: relative; padding: 0 0 22px 26px; border-left: 2px solid var(--divider);
-        margin-left: 5px; }
-    .help-tl-item:last-child { padding-bottom: 4px; border-left-color: transparent; }
-    .help-tl-dot { position: absolute; left: -6px; top: 3px; width: 10px; height: 10px;
+    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .help-card thật (cùng nền/
+       viền/bo góc/shadow với help-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
+       chạy dọc theo lề trái của toàn khối .help-tl để vẫn giữ cảm giác timeline. */
+    .help-tl { margin: 8px 0; padding-left: 24px; border-left: 2px solid var(--divider); }
+    .help-tl-item { position: relative; background: var(--card); border: 1px solid var(--border);
+        border-radius: 10px; box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 14px 16px 16px;
+        margin: 0 0 14px; font-size: 14px; color: var(--text); line-height: 1.6; }
+    .help-tl-item:last-child { margin-bottom: 0; }
+    .help-tl-dot { position: absolute; left: -31px; top: 19px; width: 10px; height: 10px;
         border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
     .help-tl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .help-tl-pr { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
         color: var(--text-2); }
-    .help-tl-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 4px 0 2px; }
+    .help-tl-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 6px 0 2px; }
     .help-tl-ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--text);
         line-height: 1.55; }
     .help-tl-ul li { margin: 3px 0; }
+    /* FAQ (chương Câu hỏi thường gặp) -- expander native đã có style "tiêu đề gạch chân" dùng
+       chung cho expander báo cáo (rule [data-testid="stExpander"] phía trên), nhưng ở đây cố ý
+       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 help-card thu
+       gọn/mở ra được -- đồng bộ với mọi khối nội dung khác trên trang Trợ giúp, thay vì lạc tông
+       kiểu "heading gạch chân" của các trang báo cáo. */
+    [class*="st-key-help_faq"] [data-testid="stExpander"] { margin: 0 0 10px !important; }
+    [class*="st-key-help_faq"] [data-testid="stExpander"] details {
+        background: var(--card) !important; border: 1px solid var(--border) !important;
+        border-radius: 10px !important; box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important; }
+    [class*="st-key-help_faq"] [data-testid="stExpander"] summary {
+        padding: 12px 16px !important; border-bottom: none !important; }
+    [class*="st-key-help_faq"] [data-testid="stExpander"] summary p {
+        font-size: 14.5px !important; font-weight: 600 !important; }
+    [class*="st-key-help_faq"] [data-testid="stExpander"] details[open] > summary {
+        border-bottom: 1px solid var(--divider) !important; }
+    [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+        padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
     @media (max-width: 640px) {
         .help-hero { padding: 22px 18px; }
         .help-hero .hh-title { font-size: 26px; }
@@ -7613,81 +7640,82 @@ elif nav == "Hướng dẫn":
         "Đây là những câu mọi người (và cả chính người viết app này) hay tự hỏi nhất mỗi khi ngồi "
         "nhìn số liệu mà thấy hơi bối rối. Mỗi câu trả lời gói gọn trong khoảng nửa phút đọc, không "
         "vòng vo — cứ tìm đúng câu đang thắc mắc rồi bấm mở ra là xong.")
-    help_faq_item(
-        "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
-        "Không đâu, cứ yên tâm nạp lại thoải mái. Forest CSV được nạp theo kiểu **cộng thêm có chống trùng "
-        "sẵn**: phiên nào trùng khớp giờ bắt đầu và giờ kết thúc với phiên đã có rồi thì app tự động bỏ qua, "
-        "không thêm lần thứ hai. Có nạp cùng 1 file này mười lần đi nữa, kết quả cuối cùng vẫn y nguyên như "
-        "chỉ nạp đúng 1 lần.")
-    help_faq_item(
-        "Tôi đã lỡ xoá 1 phiên rồi — giờ nạp lại CSV thì nó có \"sống lại\" làm phiền tôi không?",
-        "Không, nó sẽ không hồi sinh đâu. Mỗi phiên bị xoá đều được app ghi nhớ cẩn thận trong một bảng "
-        "riêng tên là `deleted_sessions` — có thể gọi đây là kiểu \"xoá có trí nhớ dai\". Vậy nên mọi lần "
-        "nạp CSV về sau, kể cả khi file gốc vẫn còn chứa đúng phiên đó, app cũng sẽ tự động bỏ qua nó, "
-        "không để nó lén quay lại làm số liệu của bạn sai lệch.")
-    help_faq_item(
-        "Vì sao tháng này nhìn vào thấy sụt giảm mạnh so với tháng trước, có phải tôi đang lười đi không?",
-        "Trước khi hoảng, hãy kiểm tra một điều đơn giản: tháng này **đã đi hết chưa**, hay mới chỉ vừa bắt "
-        "đầu được vài ngày? Với một kỳ chưa kết thúc, app sẽ tự động cắt bớt cả hai mốc so sánh (baseline) "
-        "xuống cho khớp đúng số ngày đã trôi qua, và ghi rõ điều này bằng một dòng caption nhỏ ngay phía "
-        "trên Bảng số liệu — nếu thấy dòng caption đó xuất hiện, nghĩa là con số so sánh bạn đang xem đã "
-        "được làm công bằng rồi, không phải bạn đang tệ đi đâu. Còn nếu kỳ đã trọn vẹn hoàn toàn mà vẫn "
-        "thấy lệch, thì nhớ là chênh lệch trong khoảng ±20% vẫn được xem là dao động rất bình thường của "
-        "cuộc sống — chỉ thực sự đáng bận tâm khi độ lệch lớn hẳn và bạn đã biết rõ lý do vì sao.")
-    help_faq_item(
-        "Hai ngày có cùng tổng số giờ y hệt nhau, vì sao \"cảm giác\" về chúng lại khác nhau một trời một vực?",
-        "Câu trả lời nằm ở **Thanh phân bố độ dài phiên**: cùng là 6 tiếng đồng hồ, nhưng một ngày có thể là "
-        "4 phiên tập trung sâu, mỗi phiên kéo dài 90 phút liền mạch; còn ngày kia lại là 20 phiên vụn vặt "
-        "chỉ 15 phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau tuyệt đối, nhưng chất lượng tập "
-        "trung thì khác xa nhau — đây chính là lý do vì sao chỉ nhìn mỗi con số tổng thôi là chưa đủ. Muốn "
-        "đào sâu hơn nữa thì có thêm biểu đồ **Phân bố độ dài phiên** (ở Báo cáo → Dự án), chia nhỏ theo "
-        "từng khoảng 5 phút một cho chi tiết.")
-    help_faq_item(
-        "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của app là ngày nào?",
-        "Luôn luôn là giờ Việt Nam, không có ngoại lệ nào cả — mọi phép tính liên quan tới ngày tháng trong "
-        "toàn bộ app đều đi qua đúng một hàm lấy giờ Việt Nam duy nhất. Nên dù server chạy ở múi giờ UTC "
-        "hay bất kỳ múi giờ nào khác trên thế giới, ngày của bạn cũng sẽ không bao giờ tự dưng bị lệch sớm "
-        "hoặc muộn mất 7 tiếng đồng hồ so với đồng hồ thật bạn đang đeo trên tay.")
-    help_faq_item(
-        "Trích dẫn hôm nay đổi câu mới vào lúc nào vậy, sao thấy nó cứ y nguyên hoài?",
-        "Đúng 1 lần mỗi ngày thôi, và đổi theo **ngày thật** hôm nay chứ không phải theo ngày bạn đang xem "
-        "trên trang (hai cái này có thể khác nhau nếu bạn đang lùi về xem ngày cũ). Có tải lại trang bao "
-        "nhiêu lần, hay lùi tới/tiến lui xem các ngày khác nhau đi nữa, câu trích dẫn vẫn giữ nguyên y hệt "
-        "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
-        "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
-        "bạn đã nạp vào app.")
-    help_faq_item(
-        "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu cho đúng?",
-        "Cứ tìm tới expander **\"Sửa gán series tự động\"** nằm ở tít cuối trang Gundam (mục này chỉ xuất "
-        "hiện khi bạn có từ 2 series trở lên, vì có 1 series thì chẳng cần đoán làm gì): chọn lại đúng "
-        "series cho từng ngày bị gán sai rồi bấm nút Lưu gán series là xong. Ngày nào bạn đã sửa tay sẽ "
-        "được đánh dấu bằng nhãn \"Gán tay\" cho dễ phân biệt với phần app tự đoán — còn nếu "
-        "sau này bạn sửa lại đúng trùng khớp với kết quả suy luận tự động ban đầu, cái nhãn đó sẽ tự động "
-        "biến mất, coi như quay về trạng thái tự động như chưa từng có chuyện gì xảy ra.")
-    help_faq_item(
-        "Đổi màu accent xong, mấy cái biểu đồ có tự đổi màu theo không hay phải làm gì thêm?",
-        "Có chứ, và đổi ngay lập tức không cần bạn làm gì thêm cả — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu "
-        "chữ trong ô ghi chú cũng đổi theo luôn một lượt. Lý do là vì màu accent bạn chọn được quy đổi ngay "
-        "thành một giá trị hue duy nhất, rồi mọi dải màu đơn sắc trong toàn bộ app đều tự động xoay theo "
-        "đúng hue đó — nên sẽ không có chuyện một biểu đồ nào đó bị \"bỏ sót\" vẫn giữ màu cũ trong khi chỗ "
-        "khác đã đổi hết rồi.")
-    help_faq_item(
-        "Sao bấm phím tắt hoài mà không thấy chạy gì cả, app có bị lỗi không?",
-        "Nhiều khả năng không phải lỗi đâu, mà gần như chắc chắn là con trỏ chuột của bạn đang nằm sẵn "
-        "trong một ô nhập liệu nào đó (như ô ghi chú, ô tìm kiếm...) — mọi phím tắt sẽ tự động im lặng khi "
-        "rơi vào tình huống này, để tránh việc bạn gõ chữ bình thường mà app lại tưởng nhầm là đang bấm "
-        "phím tắt rồi nhảy lung tung trang. Ngoại lệ duy nhất là Ctrl/Cmd+Enter và Esc ngay trong ô ghi "
-        "chú, hai phím này vẫn hoạt động dù đang gõ. Cứ bấm `Esc` hoặc click chuột ra khoảng trống bên "
-        "ngoài rồi thử lại là được; còn nếu đang giữ sẵn phím Ctrl/Cmd/Alt thì phím tắt cũng sẽ không nhận, "
-        "vì lúc đó app nghĩ bạn đang định làm một tổ hợp phím khác của trình duyệt.")
-    help_faq_item(
-        "Ghi chú của tôi có bị mất khi app khởi động lại hoặc được redeploy lên phiên bản mới không?",
-        "Không mất đâu, cứ an tâm — toàn bộ dữ liệu đều nằm trên Supabase chứ không nằm trong bộ nhớ tạm "
-        "của app, nên nó hoàn toàn không phụ thuộc vào vòng đời sống chết của app cả. Tuy vậy, cần nhớ rằng "
-        "ghi chú là loại dữ liệu **duy nhất trong cả app không thể nạp lại được từ bất kỳ nguồn ngoài nào** "
-        "nếu chẳng may có sự cố gì đó thực sự nghiêm trọng xảy ra với Supabase — nên vẫn nên duy trì thói "
-        "quen bấm Sao lưu định kỳ (app sẽ tự nhắc bạn sau mỗi 30 ngày nếu quên) để có thêm một lớp an toàn "
-        "thứ hai, phòng xa cho chắc.")
+    with st.container(key="help_faq"):
+        help_faq_item(
+            "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
+            "Không đâu, cứ yên tâm nạp lại thoải mái. Forest CSV được nạp theo kiểu **cộng thêm có chống trùng "
+            "sẵn**: phiên nào trùng khớp giờ bắt đầu và giờ kết thúc với phiên đã có rồi thì app tự động bỏ qua, "
+            "không thêm lần thứ hai. Có nạp cùng 1 file này mười lần đi nữa, kết quả cuối cùng vẫn y nguyên như "
+            "chỉ nạp đúng 1 lần.")
+        help_faq_item(
+            "Tôi đã lỡ xoá 1 phiên rồi — giờ nạp lại CSV thì nó có \"sống lại\" làm phiền tôi không?",
+            "Không, nó sẽ không hồi sinh đâu. Mỗi phiên bị xoá đều được app ghi nhớ cẩn thận trong một bảng "
+            "riêng tên là `deleted_sessions` — có thể gọi đây là kiểu \"xoá có trí nhớ dai\". Vậy nên mọi lần "
+            "nạp CSV về sau, kể cả khi file gốc vẫn còn chứa đúng phiên đó, app cũng sẽ tự động bỏ qua nó, "
+            "không để nó lén quay lại làm số liệu của bạn sai lệch.")
+        help_faq_item(
+            "Vì sao tháng này nhìn vào thấy sụt giảm mạnh so với tháng trước, có phải tôi đang lười đi không?",
+            "Trước khi hoảng, hãy kiểm tra một điều đơn giản: tháng này **đã đi hết chưa**, hay mới chỉ vừa bắt "
+            "đầu được vài ngày? Với một kỳ chưa kết thúc, app sẽ tự động cắt bớt cả hai mốc so sánh (baseline) "
+            "xuống cho khớp đúng số ngày đã trôi qua, và ghi rõ điều này bằng một dòng caption nhỏ ngay phía "
+            "trên Bảng số liệu — nếu thấy dòng caption đó xuất hiện, nghĩa là con số so sánh bạn đang xem đã "
+            "được làm công bằng rồi, không phải bạn đang tệ đi đâu. Còn nếu kỳ đã trọn vẹn hoàn toàn mà vẫn "
+            "thấy lệch, thì nhớ là chênh lệch trong khoảng ±20% vẫn được xem là dao động rất bình thường của "
+            "cuộc sống — chỉ thực sự đáng bận tâm khi độ lệch lớn hẳn và bạn đã biết rõ lý do vì sao.")
+        help_faq_item(
+            "Hai ngày có cùng tổng số giờ y hệt nhau, vì sao \"cảm giác\" về chúng lại khác nhau một trời một vực?",
+            "Câu trả lời nằm ở **Thanh phân bố độ dài phiên**: cùng là 6 tiếng đồng hồ, nhưng một ngày có thể là "
+            "4 phiên tập trung sâu, mỗi phiên kéo dài 90 phút liền mạch; còn ngày kia lại là 20 phiên vụn vặt "
+            "chỉ 15 phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau tuyệt đối, nhưng chất lượng tập "
+            "trung thì khác xa nhau — đây chính là lý do vì sao chỉ nhìn mỗi con số tổng thôi là chưa đủ. Muốn "
+            "đào sâu hơn nữa thì có thêm biểu đồ **Phân bố độ dài phiên** (ở Báo cáo → Dự án), chia nhỏ theo "
+            "từng khoảng 5 phút một cho chi tiết.")
+        help_faq_item(
+            "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của app là ngày nào?",
+            "Luôn luôn là giờ Việt Nam, không có ngoại lệ nào cả — mọi phép tính liên quan tới ngày tháng trong "
+            "toàn bộ app đều đi qua đúng một hàm lấy giờ Việt Nam duy nhất. Nên dù server chạy ở múi giờ UTC "
+            "hay bất kỳ múi giờ nào khác trên thế giới, ngày của bạn cũng sẽ không bao giờ tự dưng bị lệch sớm "
+            "hoặc muộn mất 7 tiếng đồng hồ so với đồng hồ thật bạn đang đeo trên tay.")
+        help_faq_item(
+            "Trích dẫn hôm nay đổi câu mới vào lúc nào vậy, sao thấy nó cứ y nguyên hoài?",
+            "Đúng 1 lần mỗi ngày thôi, và đổi theo **ngày thật** hôm nay chứ không phải theo ngày bạn đang xem "
+            "trên trang (hai cái này có thể khác nhau nếu bạn đang lùi về xem ngày cũ). Có tải lại trang bao "
+            "nhiêu lần, hay lùi tới/tiến lui xem các ngày khác nhau đi nữa, câu trích dẫn vẫn giữ nguyên y hệt "
+            "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
+            "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
+            "bạn đã nạp vào app.")
+        help_faq_item(
+            "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu cho đúng?",
+            "Cứ tìm tới expander **\"Sửa gán series tự động\"** nằm ở tít cuối trang Gundam (mục này chỉ xuất "
+            "hiện khi bạn có từ 2 series trở lên, vì có 1 series thì chẳng cần đoán làm gì): chọn lại đúng "
+            "series cho từng ngày bị gán sai rồi bấm nút Lưu gán series là xong. Ngày nào bạn đã sửa tay sẽ "
+            "được đánh dấu bằng nhãn \"Gán tay\" cho dễ phân biệt với phần app tự đoán — còn nếu "
+            "sau này bạn sửa lại đúng trùng khớp với kết quả suy luận tự động ban đầu, cái nhãn đó sẽ tự động "
+            "biến mất, coi như quay về trạng thái tự động như chưa từng có chuyện gì xảy ra.")
+        help_faq_item(
+            "Đổi màu accent xong, mấy cái biểu đồ có tự đổi màu theo không hay phải làm gì thêm?",
+            "Có chứ, và đổi ngay lập tức không cần bạn làm gì thêm cả — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu "
+            "chữ trong ô ghi chú cũng đổi theo luôn một lượt. Lý do là vì màu accent bạn chọn được quy đổi ngay "
+            "thành một giá trị hue duy nhất, rồi mọi dải màu đơn sắc trong toàn bộ app đều tự động xoay theo "
+            "đúng hue đó — nên sẽ không có chuyện một biểu đồ nào đó bị \"bỏ sót\" vẫn giữ màu cũ trong khi chỗ "
+            "khác đã đổi hết rồi.")
+        help_faq_item(
+            "Sao bấm phím tắt hoài mà không thấy chạy gì cả, app có bị lỗi không?",
+            "Nhiều khả năng không phải lỗi đâu, mà gần như chắc chắn là con trỏ chuột của bạn đang nằm sẵn "
+            "trong một ô nhập liệu nào đó (như ô ghi chú, ô tìm kiếm...) — mọi phím tắt sẽ tự động im lặng khi "
+            "rơi vào tình huống này, để tránh việc bạn gõ chữ bình thường mà app lại tưởng nhầm là đang bấm "
+            "phím tắt rồi nhảy lung tung trang. Ngoại lệ duy nhất là Ctrl/Cmd+Enter và Esc ngay trong ô ghi "
+            "chú, hai phím này vẫn hoạt động dù đang gõ. Cứ bấm `Esc` hoặc click chuột ra khoảng trống bên "
+            "ngoài rồi thử lại là được; còn nếu đang giữ sẵn phím Ctrl/Cmd/Alt thì phím tắt cũng sẽ không nhận, "
+            "vì lúc đó app nghĩ bạn đang định làm một tổ hợp phím khác của trình duyệt.")
+        help_faq_item(
+            "Ghi chú của tôi có bị mất khi app khởi động lại hoặc được redeploy lên phiên bản mới không?",
+            "Không mất đâu, cứ an tâm — toàn bộ dữ liệu đều nằm trên Supabase chứ không nằm trong bộ nhớ tạm "
+            "của app, nên nó hoàn toàn không phụ thuộc vào vòng đời sống chết của app cả. Tuy vậy, cần nhớ rằng "
+            "ghi chú là loại dữ liệu **duy nhất trong cả app không thể nạp lại được từ bất kỳ nguồn ngoài nào** "
+            "nếu chẳng may có sự cố gì đó thực sự nghiêm trọng xảy ra với Supabase — nên vẫn nên duy trì thói "
+            "quen bấm Sao lưu định kỳ (app sẽ tự nhắc bạn sau mỗi 30 ngày nếu quên) để có thêm một lớp an toàn "
+            "thứ hai, phòng xa cho chắc.")
 
     # ==========================================
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
@@ -7696,14 +7724,44 @@ elif nav == "Hướng dẫn":
         "help-ch9", 9, "Changelog", "Nhật ký phát triển",
         "Đây là nơi ghi lại toàn bộ những đợt thay đổi lớn nhỏ mà app đã trải qua, mỗi mục tương ứng "
         "với 1 đợt Pull Request đã được merge vào code, xếp theo thứ tự mới nhất nằm trên cùng cho "
-        "dễ theo dõi. Hai chiếc chip số dòng nhỏ cạnh mỗi mục được tra tay cẩn thận vào đúng thời "
-        "điểm viết (app hoàn toàn không tự gọi GitHub hay git lúc đang chạy, số liệu này là tĩnh): "
-        "chip màu xám là tổng số dòng của toàn bộ app.py tại đúng thời điểm PR đó được merge, còn "
-        "chip màu accent là số dòng thực sự thay đổi (thêm + xoá cộng lại) của riêng đợt PR mới nhất "
-        "trong nhóm đó — để bạn hình dung được cả quy mô toàn bộ mã nguồn lẫn độ lớn của từng đợt "
-        "cập nhật theo thời gian.")
+        "dễ theo dõi. Ba chiếc chip nhỏ cạnh mỗi mục đều được tra tay cẩn thận vào đúng thời điểm "
+        "viết (app hoàn toàn không tự gọi GitHub hay git lúc đang chạy, số liệu này là tĩnh): chip "
+        "ngày tháng là ngày merge của PR mới nhất trong nhóm, chip màu xám là tổng số dòng của toàn "
+        "bộ app.py tại đúng thời điểm đó, còn chip màu accent là số dòng thực sự thay đổi (thêm + "
+        "xoá cộng lại) của riêng đợt PR đó — để bạn hình dung được cả mốc thời gian, quy mô toàn bộ "
+        "mã nguồn, lẫn độ lớn của từng đợt cập nhật.")
     HELP_CHANGELOG = [
-        dict(pr="182-184", pr_lines=69, total_lines=7690,
+        dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
+             title="Dọn dẹp bloat, sửa lỗi vặt, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
+             bullets=[
+                 "**Sửa một lỗi khá xấu hổ** — tab “Cập nhật” của trang Trợ giúp (phiên bản cũ) "
+                 "từng bị trống trơn mỗi khi mở lên, vì nội dung lỡ bị đặt nhầm vào đúng chỉ số của tab "
+                 "“Tuỳ biến” phía trên thay vì tab “Cập nhật” thật sự — coi như suốt một "
+                 "thời gian, những dòng nhật ký này đã âm thầm nằm sai chỗ mà không ai nhận ra. Nhân tiện "
+                 "sửa luôn, cũng đổi font cho thẻ Trích dẫn hôm nay sang Cormorant Garamond tự host, đọc có "
+                 "không khí sách vở hơn hẳn.",
+                 "**Một đợt dọn dẹp diện rộng** — dời mục “Ngày này năm trước” lên ngay sau Ghi "
+                 "chú ngày cho hợp lý luồng đọc, bớt vài số liệu và biểu đồ ít ai thực sự dùng tới ở trang "
+                 "Báo cáo, lọc bớt tên sách ra khỏi danh sách chọn Dự án (vì nó đã có chỗ riêng ở trang "
+                 "Sách rồi), sửa lỗi trùng lặp chỉ số trong thẻ “Ngoài khoảng tham chiếu” của "
+                 "Sức khoẻ, và để trang Tuỳ biến mặc định chỉ mở đúng mục 1 thay vì mở tung hết cả 5 mục "
+                 "gây rối mắt.",
+                 "**Vài lượt sửa lỗi giao diện nhỏ khác** — nhãn buổi trong biểu đồ khung giờ tập trung "
+                 "không còn đè lên chú giải, khử trùng lặp chỉ số Bilirubin ở Sức khoẻ, khoảng tham chiếu "
+                 "tự điền sẵn cho đỡ gõ tay, và thẻ trích dẫn ở tab Yêu thích không còn bị chữ dòng cuối ăn "
+                 "lẹm vào lề dưới.",
+                 "**Dọn mã nguồn phía sau hậu trường** — gộp hai khối logic gần như giống hệt nhau (cách "
+                 "tính phần trăm thời gian đã trôi qua trong kỳ, và cách nạp vài bảng dữ liệu dạng phẳng) "
+                 "thành 2 hàm dùng chung, giúp mã nguồn gọn hơn một chút mà không đổi bất kỳ tính năng nào "
+                 "người dùng nhìn thấy. Kèm theo là một đợt rà soát để sửa vài chỗ tài liệu nội bộ đã lỡ "
+                 "ghi sai lệch so với code thật.",
+                 "**Và đây, chính là trang Trợ giúp bạn đang đọc** — được làm lại hoàn toàn từ đầu, bỏ hẳn "
+                 "58 tấm screenshot cồng kềnh, đổi từ 8 tab ngang sang một trang cuộn dọc kể chuyện theo "
+                 "đúng nhịp một ngày sử dụng thật, thêm mấy hình minh hoạ vẽ tay thuần CSS, một mục cheat-"
+                 "sheet tra nhanh, và cả phần Câu hỏi thường gặp này nữa — hy vọng đọc vào thấy dễ chịu hơn "
+                 "hẳn bản cũ.",
+             ]),
+        dict(pr="182-184", date="15/07/2026", pr_lines=69, total_lines=7690,
              title="Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng",
              bullets=[
                  "**Trích dẫn hôm nay được lên đời** — thẻ trích dẫn này được chuyển hẳn lên đầu trang Hôm "
@@ -7726,7 +7784,7 @@ elif nav == "Hướng dẫn":
                  "ở nhiều bảng số liệu cho gọn gàng hơn, và đổi cách hiển thị Thứ trong Nhật ký từ dạng số "
                  "sang chữ đầy đủ (ghi “Thứ Tư” thay vì chỉ “Thứ 4” cộc lốc, đọc tự nhiên hơn hẳn).",
              ]),
-        dict(pr="181", pr_lines=960, total_lines=7448,
+        dict(pr="181", date="15/07/2026", pr_lines=960, total_lines=7448,
              title="Rà soát & đơn giản hoá theo phản hồi thực tế",
              bullets=[
                  "Sau một thời gian dùng thật, một số tính năng hoá ra không đáng công sức bằng ban đầu "
@@ -7742,7 +7800,7 @@ elif nav == "Hướng dẫn":
                  "hơn, và gộp hai giao diện đồng bộ CalDAV vốn tách rời nhau thành một chỗ duy nhất cho đỡ "
                  "rối.",
              ]),
-        dict(pr="158-165", pr_lines=46, total_lines=6115,
+        dict(pr="158-165", date="06/07/2026", pr_lines=46, total_lines=6115,
              title="Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS",
              bullets=[
                  "**Bảng vàng ra đời** — Bảng số liệu ở mỗi trang Báo cáo giờ có thêm mục “Ngày nổi "
@@ -7757,7 +7815,7 @@ elif nav == "Hướng dẫn":
                  "Kèm theo đó là một số việc nhỏ: gọn lại bố cục hiển thị trên điện thoại di động, và sửa "
                  "lỗi chip trong Bảng số liệu bị tràn ra ngoài khung khi giá trị hiển thị quá dài.",
              ]),
-        dict(pr="166-167", pr_lines=79, total_lines=6162,
+        dict(pr="166-167", date="06/07/2026", pr_lines=79, total_lines=6162,
              title="Logo mới, đồng bộ phong cách nút gọn toàn app",
              bullets=[
                  "Đổi sang một bộ logo thiết kế hoàn toàn mới, và điểm hay ho là nó tự động đổi màu theo "
@@ -7766,7 +7824,7 @@ elif nav == "Hướng dẫn":
                  "lêu nghêu quá khổ như trước) cho toàn bộ các nút nằm trong tab Tuỳ biến, nhìn nhất quán "
                  "hơn hẳn.",
              ]),
-        dict(pr="155,157", pr_lines=338, total_lines=5654,
+        dict(pr="155,157", date="06/07/2026", pr_lines=338, total_lines=5654,
              title="Đồng bộ nhanh làm phương án mặc định",
              bullets=[
                  "Tab “1. Dữ liệu đầu vào” giờ ưu tiên đưa **Đồng bộ nhanh** lên hàng đầu — chỉ "
@@ -7777,7 +7835,7 @@ elif nav == "Hướng dẫn":
                  "trong một khối có thể thu lại tên là “Dự phòng” — dùng tới khi nào thực sự cần "
                  "thao tác riêng lẻ từng nguồn một thôi.",
              ]),
-        dict(pr="132,133,136,137", pr_lines=79, total_lines=5089,
+        dict(pr="132,133,136,137", date="04/07/2026", pr_lines=79, total_lines=5089,
              title="Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc",
              bullets=[
                  "**Báo cáo → Năm ra mắt** — một bản tổng kết trọn vẹn cho 1 năm cụ thể, gồm khối hero số "
@@ -7793,7 +7851,7 @@ elif nav == "Hướng dẫn":
                  "theo đúng nhịp ngày/tuần/tháng thực tế, thay vì chỉ đơn thuần liệt kê mô tả từng tính năng "
                  "một cách rời rạc như trước.",
              ]),
-        dict(pr="141-146", pr_lines=15, total_lines=5139,
+        dict(pr="141-146", date="04/07/2026", pr_lines=15, total_lines=5139,
              title="Thêm phím tắt bàn phím cho toàn app",
              bullets=[
                  "Bộ phím tắt đầu tiên của app chính thức ra mắt: các phím số 1 tới 7 để nhảy nhanh giữa "
@@ -7803,7 +7861,7 @@ elif nav == "Hướng dẫn":
                  "Muốn xem đầy đủ toàn bộ danh sách phím tắt hiện có, cứ ghé qua chương “Trong "
                  "ngày” ngay phía trên trong trang Trợ giúp này.",
              ]),
-        dict(pr="125,126,139,140", pr_lines=6, total_lines=5089,
+        dict(pr="125,126,139,140", date="04/07/2026", pr_lines=6, total_lines=5089,
              title="Trang Hôm nay, 14 màu accent, logo & wordmark",
              bullets=[
                  "**Trang Hôm nay chính thức ra đời** — được tách riêng ra từ lát cắt “Ngày” vốn "
