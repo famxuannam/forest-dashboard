@@ -196,6 +196,11 @@ VN_MONTHS = {"January": "Tháng 1", "February": "Tháng 2", "March": "Tháng 3",
              "December": "Tháng 12"}
 VN_DAYS_ABBR = {"Su": "CN", "Mo": "T2", "Tu": "T3", "We": "T4", "Th": "T5", "Fr": "T6", "Sa": "T7",
                 "Sun": "CN", "Mon": "T2", "Tue": "T3", "Wed": "T4", "Thu": "T5", "Fri": "T6", "Sat": "T7"}
+# Tên tháng viết đầy đủ bằng chữ (khác VN_MONTHS ở trên -- dạng số "Tháng 7", dùng riêng cho JS
+# dịch popup lịch). Dùng cho billboard "Hôm nay" (vd "16 Tháng Bảy 2026"). Index 0 = Tháng Một.
+VN_MONTHS_WORD = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu",
+                  "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một",
+                  "Tháng Mười Hai"]
 
 # Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
@@ -5643,30 +5648,32 @@ st.markdown(
        [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
        margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
        để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
-    .st-key-kq_daily_card {
+    .st-key-today_billboard {
         background: color-mix(in srgb, var(--accent) 13%, var(--card)) !important;
         border-color: color-mix(in srgb, var(--accent) 28%, var(--card)) !important;
-        padding: 26px 26px 22px !important;
-        /* margin ngang KHÔNG tự co width lại được -- Streamlit tự set width:100% (theo content-box
-           của khối cha) trên container này, percentage đó phớt lờ margin của chính nó (đúng chuẩn
-           CSS), nên chỉ margin suông sẽ đẩy lệch phải mà KHÔNG co bề rộng, đo bằng Playwright bounding
-           box xác nhận (x dịch +16 nhưng width giữ nguyên, đè hẳn ra ngoài card số liệu bên dưới).
-           Phải ép width bằng calc() để trừ đúng 32px (2 bên) thay vì trông chờ margin tự co. */
-        width: calc(100% - 32px) !important;
-        margin: 0 16px 16px !important;
+        padding: 28px 30px 22px !important;
+        border-radius: 16px !important;
+        margin: 0 0 16px !important;
     }
-    /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_daily_quote_card()) -- nền chip
+    /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
+       cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
+       khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
+    .tbill-date { text-align: center; }
+    .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 6px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 12px; line-height: 1.7; }
+    /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
-       "★"/"☆" thật (xem docstring _render_daily_quote_card() -- không phải icon Material nữa) nên
-       CSS nhắm vào <p> chứa chữ (div[data-testid="stMarkdownContainer"] p bên trong button), KHÔNG
-       phải span[data-testid="stIconMaterial"] như trước. */
-    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] {
+       "★"/"☆" thật (xem docstring -- không phải icon Material nữa) nên CSS nhắm vào <p> chứa chữ
+       (div[data-testid="stMarkdownContainer"] p bên trong button), KHÔNG phải
+       span[data-testid="stIconMaterial"] như trước. */
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] {
         background: rgba(var(--accent-rgb),0.12) !important; border: none !important; box-shadow: none !important;
         width: 30px !important; height: 30px !important;
         min-height: 0 !important; border-radius: 999px !important; padding: 0 !important;
     }
-    .st-key-kq_daily_card div[data-testid="stButton"] button[kind="secondary"] p {
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] p {
         font-size: 18px !important; line-height: 1 !important; color: var(--text-3) !important;
     }
     /* Đã Yêu thích -> chữ "★" màu accent (hình dạng đặc/rỗng đã đủ phân biệt, màu chỉ để nhấn
@@ -6177,60 +6184,69 @@ def _kindle_quote_of_day():
     return kh.iloc[idx]
 
 
-def _render_daily_quote_card(kq):
-    """Thẻ "Trích dẫn hôm nay" (kq từ _kindle_quote_of_day()) -- đứng NGAY DƯỚI card "Ngày đang
-    xem", TRƯỚC mọi nội dung khác của trang Hôm nay (kể cả khi ngày đang xem trống phiên), thay vì
-    chôn ở cuối "1. Tổng quan ngày"/dưới "Tham khảo cho lên kế hoạch" như bản cũ -- phản hồi thực
-    tế là quá dễ bị lướt qua ở vị trí cũ. KHÔNG còn nhãn chữ "Trích dẫn hôm nay" phía trên (bản
-    trước) -- dấu " lớn ở góc đã đủ báo hiệu đây là 1 trích dẫn; nền phớt accent ĐẶC (không còn
-    rgba trong suốt lộ chấm nền, xem CSS .st-key-kq_daily_card dùng color-mix()) để tách hẳn khỏi
-    các thẻ số liệu trung tính khác trên trang, và nút ⭐ Yêu thích thật (không chỉ HTML tĩnh như
-    bản cũ) để đánh dấu ngay tại đây -- xem sub-tab "Yêu thích" (trang Sách) để duyệt lại các câu
-    đã đánh dấu. Margin ngang 16px (thay vì full-width như card "Ngày đang xem" phía trên) để khớp
-    đúng bề rộng các card số liệu bên dưới (nằm trong expander có padding riêng).
+def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
+    """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
+    (trước đây là 3 khối rời -- header glass-card, kq_daily_card, sec_hero) vào 1 khối duy nhất,
+    đập vào mắt ngay khi vừa mở trang thay vì rải rác. Cột trái là "tờ lịch xé hằng ngày": số ngày
+    to + Thứ/ngày/tháng chữ đầy đủ + 2 dòng meta (ngày hoạt động, cập nhật gần nhất), canh giữa cả
+    ngang (CSS text-align) lẫn dọc (vertical_alignment="center" của st.columns, canh theo tâm so
+    với cột phải cao hơn). Cột phải là trích dẫn Kindle hôm nay -- vắng mặt hẳn (chưa import trích
+    dẫn nào) thì cột ngày chiếm trọn bề rộng, không chia cột.
 
-    Dấu "/chữ trích dẫn gộp CHUNG 1 lệnh st.markdown (không tách dấu " ra cột riêng như bản đầu)
-    -- 2 block Streamlit liền kề luôn cộng dồn thêm khoảng cách (gap 0.9rem của stVerticalBlock +
-    margin riêng từng block), tách dấu " to (52px) ra 1 block riêng phía trên làm khoảng trống
-    phía trên chữ trích dẫn bị đẩy rộng ra rõ rệt so với cỡ chữ, đúng phản hồi thực tế "khung to
-    chữ nhỏ, mất cân đối". Gộp lại 1 block + margin-top âm trên .kq-daily-mark kéo chữ lên sát
-    ngay dưới dấu " để cân đối hẳn.
+    Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
+    do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
+    cũ (đã gộp vào đây)."""
+    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        # epoch UTC thật (không lệch theo múi giờ máy chủ/máy khách) cho JS ticker tự cập nhật
+        # "X trước" mỗi 30s -- xem _inject_relative_time_ticker().
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
 
-    Nút ⭐ ĐẶT CẠNH tên sách (hàng cuối, st.columns riêng) thay vì góc trên phải như bản đầu --
-    phản hồi thực tế là nút trôi nổi 1 mình ở góc trên, không "gắn" vào đâu cả. Ghép cạnh tên sách
-    (đã canh phải sẵn) cho nút có 1 điểm neo rõ ràng, đọc tự nhiên như "— Rừng Na Uy ⭐".
+    _date_html = (
+        "<div class='tbill-date'>"
+        f"<div class='tbill-num'>{sel.day}</div>"
+        f"<div class='tbill-dow'>{vn_dow}, {VN_MONTHS_WORD[sel.month - 1]} {sel.year}</div>"
+        f"<div class='tbill-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
 
-    Nút dùng ký tự "★"/"☆" (BLACK STAR/WHITE STAR, chữ thường -- KHÔNG phải icon Material) làm
-    label thay vì icon=":material/star:"/"star_outline:" -- đã xác nhận font Material Symbols
-    Streamlit tự host không hỗ trợ trục biến FILL, 2 icon "star"/"star_outline" hiển thị GIỐNG HỆT
-    nhau (chỉ khác màu qua CSS), phản hồi thực tế là trạng thái đã chọn/chưa chọn không rõ. 2 ký tự
-    Unicode này có HÌNH DẠNG khác hẳn nhau (đặc/rỗng) theo mọi font hệ thống, không phụ thuộc biến
-    thể font nào -- phân biệt được ngay cả khi không nhìn màu.
+    with st.container(key="today_billboard", border=True):
+        if kq is not None:
+            c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
+            with c_date:
+                st.markdown(_date_html, unsafe_allow_html=True)
+            with c_quote:
+                st.markdown(
+                    "<div class='kq-daily-mark'>“</div>"
+                    f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
+                    unsafe_allow_html=True)
+                with st.container(key="kq_daily_srcrow"):
+                    c_src, c_fav = st.columns([10, 1])
+                    with c_src:
+                        _author = kq.get('Tác giả')
+                        _src_txt = html_escape(str(kq['Cuốn sách']))
+                        if pd.notna(_author) and str(_author).strip():
+                            _src_txt += f" · {html_escape(str(_author))}"
+                        st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                    with c_fav:
+                        _fav = bool(kq.get('Yêu thích', False))
+                        if st.button("★" if _fav else "☆",
+                                     key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
+                                     help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                            set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
+                            st.rerun()
+        else:
+            st.markdown(_date_html, unsafe_allow_html=True)
 
-    Tên sách kèm TÁC GIẢ (cột "Tác giả" đọc thẳng từ kindle_highlights.author, do
-    parse_kindle_clippings() tách ra từ dòng "Tên sách (Tác giả)" trong My Clippings.txt lúc
-    import) -- chỉ nối thêm nếu có (một số nguồn không phải Kindle gốc, vd nhập tay, có thể thiếu
-    tác giả)."""
-    with st.container(key="kq_daily_card", border=True):
-        st.markdown(
-            "<div class='kq-daily-mark'>“</div>"
-            f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
-            unsafe_allow_html=True)
-        with st.container(key="kq_daily_srcrow"):
-            c_src, c_fav = st.columns([10, 1])
-            with c_src:
-                _author = kq.get('Tác giả')
-                _src_txt = html_escape(str(kq['Cuốn sách']))
-                if pd.notna(_author) and str(_author).strip():
-                    _src_txt += f" · {html_escape(str(_author))}"
-                st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
-            with c_fav:
-                _fav = bool(kq.get('Yêu thích', False))
-                if st.button("★" if _fav else "☆",
-                             key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
-                             help="Bỏ Yêu thích" if _fav else "Yêu thích"):
-                    set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
-                    st.rerun()
+        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
+        st.markdown(f"<div class='sec-toc' style='margin-top:20px;'>{_chips_html}</div>", unsafe_allow_html=True)
+
+    if _upd_line:
+        _inject_relative_time_ticker()
 
 
 def render_day_report(df):
@@ -6250,81 +6266,15 @@ def render_day_report(df):
     # của fragment.
     sel_day_badges = _compute_alltime_records(df)["day_badges"].get(sel)
 
-    _evt = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='var(--text-2)' "
-            "style='vertical-align:-2px;margin-right:6px;'><path d='M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2"
-            "L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z'/></svg>")
-    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
-    _dot = "<span style='color:var(--border);flex:0 0 auto;'>·</span>"
-    # "Cập nhật gần nhất" (toàn thời gian, không phụ thuộc ngày đang xem) từng là 1 thẻ riêng ở
-    # Báo cáo -> Tổng quan -- dời về đây làm "đuôi" của card này vì Hôm nay mới là trang mở đầu
-    # tiên, Tổng quan giờ không còn là sub-tab mặc định.
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_tail = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        # epoch UTC thật (không phải lệch theo múi giờ máy chủ/máy khách) -- localize đúng ts
-        # naive (wall-clock giờ Việt Nam) vào APP_TZ rồi lấy timestamp(), dùng cho JS ticker bên
-        # dưới tự cập nhật "X trước" mỗi 30s mà không cần rerun Streamlit.
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        # Giờ phút giây tuyệt đối (_abs_str) dời vào title= (tooltip hover) thay vì hiện luôn
-        # trong chữ -- giữ đúng 1 dòng gọn, phần lớn chỉ cần biết "khoảng bao lâu trước", số giờ
-        # chính xác là chi tiết tra cứu thêm chứ không phải thông tin ai cũng cần thấy ngay.
-        # Cả cụm (dấu chấm + chữ) bọc chung 1 span "dcx-upd" flex riêng -- vừa là 1 flex item
-        # DUY NHẤT của hàng ngoài (co dãn/ẩn được nguyên cụm qua class, không lệ thuộc thứ tự
-        # nhiều item rời rạc), vừa tự có overflow:hidden riêng để chữ bên trong elipsis đúng chỗ.
-        _upd_tail = (
-            "<span class='dcx-upd' style='display:flex;align-items:center;gap:9px;min-width:0;"
-            "overflow:hidden;flex:1 1 auto;'>"
-            f"{_dot}"
-            f"<span style='font-size:14.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;"
-            f"white-space:nowrap;min-width:0;' title='Cập nhật lúc {_abs_str}'>Cập nhật gần nhất "
-            f"<b id='last-update-live' data-epoch='{_epoch_ms}' "
-            f"style='color:var(--text);font-weight:600;'>{format_relative(_last_dt)}</b></span></span>"
-        )
-    # 1 hàng gọn: nhãn thu lại thành thẻ nhỏ bo góc (khác kiểu chữ hoa rời trước đây) + 1 vạch
-    # dọc mảnh phân tách, rồi tới nội dung cùng 1 cỡ chữ (14.5px, chỉ khác màu/độ đậm để vẫn
-    # phân cấp) -- không còn đủ 3 cỡ chữ chen nhau trên 1 dòng như bản trước. Cụm "Cập nhật gần
-    # nhất" (ít quan trọng nhất, dài nhất) được phép co lại + hiện "…" khi màn hẹp vừa phải
-    # (flex:1 1 auto), và ẩn hẳn cùng chữ nhãn "Ngày đang xem" (chỉ còn icon) ở mobile thật hẹp
-    # (xem rule .dcx-upd/.dcx-lbltxt trong khối @media (max-width: 640px)) -- nếu không, tổng độ
-    # rộng các phần "không co" (nhãn đủ chữ + ngày + trạng thái) đã vượt quá màn hình điện thoại,
-    # bị cắt cụt giữa chữ thay vì gọn gàng.
-    st.markdown(
-        "<div class='glass-card' style='padding:12px 18px;margin-bottom:16px;'>"
-        "<div style='display:flex;align-items:center;gap:10px;'>"
-        "<span style='display:flex;align-items:center;flex:0 0 auto;font-size:11.5px;font-weight:600;"
-        "color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:7px;"
-        "padding:4px 9px;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;'>"
-        f"{_evt}<span class='dcx-lbltxt'>Ngày đang xem</span></span>"
-        "<span style='width:1px;align-self:stretch;background:var(--divider);flex:0 0 auto;'></span>"
-        "<div style='display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;'>"
-        f"<span style='font-size:14.5px;color:var(--text);font-weight:600;white-space:nowrap;flex:0 0 auto;'>"
-        f"{vn_dow}, {sel:%d/%m/%Y}</span>"
-        f"{_dot}"
-        f"<span style='font-size:14.5px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;'>{_sub}</span>"
-        f"{_upd_tail}"
-        "</div></div></div>",
-        unsafe_allow_html=True)
-    if _upd_tail:
-        _inject_relative_time_ticker()
-
-    # Trích dẫn hôm nay đứng NGAY ĐÂY (đầu trang, trước cả nhánh rỗng/có phiên bên dưới) -- xem
-    # _render_daily_quote_card().
-    _kq = _kindle_quote_of_day()
-    if _kq is not None:
-        _render_daily_quote_card(_kq)
-
-    # Hero + chip mục lục -- bộ chip khác nhau tuỳ ngày trống hay có phiên (2 mục không đánh số vs
-    # 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
+    # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
+    # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
+    # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
     _hero_chips = ([("today-ch1", "Ghi chú ngày"), ("today-ch2", "Ngày này năm trước")]
                    if day_df.empty else
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
                     ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
                     ("today-ch5", "5 · Danh sách phiên")])
-    sec_hero("Hôm nay", "Một ngày, nhìn lại",
-             "Xem lại đúng những gì bạn đã làm hôm nay — không nhắc việc, không mục tiêu, chỉ là "
-             "bản ghi.", _hero_chips)
+    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
