@@ -3188,9 +3188,9 @@ def render_day_timeline(day_df):
 .dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
-.dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
+.dtl-track{{position:relative;height:44px;border-radius:10px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:7px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
