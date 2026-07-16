@@ -248,6 +248,35 @@ ACCENT_PRESETS = {
     "Ô liu": "#8a9a6b",
 }
 
+# Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)) -- "image"/
+# "size" là giá trị CSS thô ghép thẳng vào background-image/background-size qua biến CSS, dùng
+# var(--divider) để tự đổi theo IS_DARK như mọi hoạ tiết khác trong app. "Trơn" dùng image:none
+# (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi lựa chọn, không
+# cần nhánh riêng trong CSS chính.
+BG_PRESETS = {
+    "Chấm bi": {
+        "image": "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)",
+        "size": "20px 20px",
+    },
+    "Trơn": {
+        "image": "none",
+        "size": "auto",
+    },
+    "Kẻ ngang": {
+        "image": "repeating-linear-gradient(transparent 0px, transparent 23px, var(--divider) 24px)",
+        "size": "auto",
+    },
+    "Kẻ ô vuông": {
+        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px), "
+                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px)"),
+        "size": "auto",
+    },
+    "Chấm bi to": {
+        "image": "radial-gradient(circle, var(--divider) 1.6px, transparent 1.6px)",
+        "size": "28px 28px",
+    },
+}
+
 
 def _hsl_hex(h, s, l):
     """(hue, saturation, lightness) trong [0,1] -> mã màu hex."""
@@ -351,6 +380,15 @@ ACCENT_RGB = _hex_rgb_str(ACCENT)
 # nguyên -- mọi nơi đang dùng (chip.tw, guide alert, NUDGE_TONES "good") tự đúng cả 2 chế độ.
 ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
+
+# Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT ở trên (giá trị lạ/preset cũ
+# đã bỏ -> rơi về "Chấm bi" mặc định, không crash).
+_bg_style_name = _cached_settings().get("bg_style", "Chấm bi")
+if _bg_style_name not in BG_PRESETS:
+    _bg_style_name = "Chấm bi"
+BG_STYLE = _bg_style_name
+BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
+BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
@@ -5030,6 +5068,7 @@ _TOK = {
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
 )
@@ -5044,16 +5083,17 @@ st.markdown(
     html, body, .stApp {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    /* Nền "giấy dot-grid" hệ "Sổ Tay": lưới chấm tròn nhỏ cách đều 20px (radial-gradient lặp lại
-       qua background-size). Bỏ vạch lề dọc màu accent trước đây (mô phỏng lề đỏ vở học sinh) theo
-       yêu cầu -- chỉ còn lưới chấm, không còn gạch. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
+    /* Nền trang hệ "Sổ Tay": kiểu hoạ tiết (chấm bi/trơn/kẻ ngang/kẻ ô vuông/chấm bi to) do người
+       dùng chọn ở Tuỳ biến -> "4. Giao diện" (xem BG_PRESETS, lưu setting "bg_style"), truyền
+       vào qua 2 biến CSS --bg-image/--bg-size (khối :root phía trên) thay vì literal cố định như
+       trước, để đổi qua lại không cần sửa code. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
        vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó phải giữ mặt phẳng
        var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm ở phần lề trang
        xung quanh. */
     .stApp {
         background-color: var(--bg);
-        background-image: radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px);
-        background-size: 20px 20px;
+        background-image: var(--bg-image);
+        background-size: var(--bg-size);
     }
 
     /* padding-top PHẢI đủ lớn để nội dung nằm HẲN dưới [data-testid="stHeader"] của Streamlit --
@@ -5864,7 +5904,16 @@ st.markdown(
        cùng lúc (id đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền)
        giống cách làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới
        thắng được rule đó. */
-    [class*="st-key-qnote_row_"] { margin-bottom: 2px; }
+    [class*="st-key-qnote_row_"] { margin-bottom: 0 !important; }
+    /* Khoảng cách dọc thật giữa các dòng ghi chú nhanh không tới từ margin-bottom trên (chỉ 2px)
+       mà chủ yếu từ gap flex mặc định (0.9rem = 14.4px) giữa các item của khối cha (mỗi dòng là 1
+       flex item riêng, margin không cộng dồn/thu hẹp được gap đó) -- tổng ~16px, người dùng thấy
+       quá rộng so với 1 danh sách ghi chú ngắn. Ép thẳng gap của khối cha (nhận diện qua :has()
+       tìm đúng khối chứa các dòng qnote_row_) xuống 5px (phương án B trong 5 mock up đã chọn),
+       gọn hẳn so với cỡ mặc định của Streamlit. */
+    [data-testid="stVerticalBlock"]:has(> [data-testid="stLayoutWrapper"] > [class*="st-key-qnote_row_"]) {
+        gap: 5px !important;
+    }
     [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
     /* 3 cột (giờ / nội dung / nút) LUÔN giữ 1 hàng ngang, kể cả màn hẹp -- Streamlit tự đặt
        min-width: calc(100% - 24px) cho MỌI cột dưới 1 ngưỡng rộng màn hình (ép mỗi cột chiếm
@@ -7291,6 +7340,34 @@ elif nav == "Tuỳ biến":
                             st.rerun()
         _swatch_css += "</style>"
         st.markdown(_swatch_css, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top:18px;font-size:13px;font-weight:600;color:var(--text-2);'>"
+                    "Kiểu nền trang</div>", unsafe_allow_html=True)
+        _bg_items = list(BG_PRESETS.items())
+        _bg_cols = st.columns(len(_bg_items))
+        _bg_css = "<style>"
+        for _i, (_bg_name, _bg_cfg) in enumerate(_bg_items):
+            _bg_key = f"bg_sw_{_i}"
+            _bg_selected = _bg_name == BG_STYLE
+            _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
+            _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
+            # Nút xem trước dùng ĐÚNG background-image/size của preset (không phải màu đặc như
+            # accent) -- người dùng thấy được hoạ tiết thật trước khi chọn, không chỉ đọc tên.
+            _bg_css += (
+                f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                f"background-color: var(--card-tl) !important; "
+                f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
+                f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
+                f"border-radius:10px !important; width:100% !important; height:auto !important; "
+                f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
+                f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
+            with _bg_cols[_i]:
+                if st.button(_bg_label, key=_bg_key, use_container_width=True):
+                    if _bg_name != BG_STYLE:
+                        save_setting("bg_style", _bg_name)
+                        st.rerun()
+        _bg_css += "</style>"
+        st.markdown(_bg_css, unsafe_allow_html=True)
 
     with st.expander("5. Quản lý hệ thống", expanded=False):
         # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
