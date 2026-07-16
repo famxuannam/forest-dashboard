@@ -4628,14 +4628,18 @@ def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False):
     sau 1 sec_hero()/billboard: margin-top 36px đó cộng dồn với margin-bottom sẵn có của hero/
     billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
     như block thường) tạo khoảng trắng gấp đôi ngay dưới hero, trong khi giữa các chương với nhau
-    (2 trở đi) khoảng cách đó vẫn cần giữ nguyên."""
+    (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
+
+    Số thứ tự (nếu có) nằm CÙNG 1 hàng ngang với tiêu đề (.sec-ch-row, flex space-between, canh
+    baseline) -- tiêu đề bên trái, số bên phải, thay cho kiểu số tuyệt đối chồng lên góc trên bên
+    phải trước đây (dễ đọc nhầm thành 2 dòng tách biệt không liên quan tới nhau)."""
     _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
     _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
-        f"<div class='{_cls}' id='{anchor}'>{_num_html}{_kicker_html}"
-        f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
+        f"<div class='{_cls}' id='{anchor}'>{_kicker_html}"
+        f"<div class='sec-ch-row'><h2 class='sec-ch-title'>{title}</h2>{_num_html}</div>{_lead}</div>",
         unsafe_allow_html=True)
 
 
@@ -4921,8 +4925,10 @@ def _wordmark_html(layout="header"):
         f"<span style=\"font-family:'Source Serif 4',serif;font-weight:500;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1.5;-webkit-font-smoothing:antialiased;"
         "transform:translateZ(0);display:inline-block;\">Forest</span>"
+        # margin-top:-10px (phương án D trong mock up) nhích "DASHBOARD" lên gần "Forest" hơn,
+        # cân đối hơn so với khoảng trắng đệm ở trên do line-height:1.5 của "Forest" để lại.
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
-        "letter-spacing:0.08em;line-height:1;'>Dashboard</span></div></div>"
+        "letter-spacing:0.08em;line-height:1;margin-top:-10px;'>Dashboard</span></div></div>"
     )
 
 
@@ -5598,13 +5604,13 @@ st.markdown(
        Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
        hẳn so với đánh dấu thẳng từ phía gọi Python. */
     .sec-ch.sec-ch-tight { margin-top: 0; }
-    /* top:-21px (thay vì -8px) + cỡ chữ to hơn (60px thay vì 54px) -- phương án B trong mock up
-       "số 01 đứng thẳng, ngang hàng tiêu đề nhưng nhích lên nửa dòng" đã chọn. Số vẫn đứng
-       thẳng (không xoay -- lần mock up trước bị hiểu nhầm nghiêng là do nét chữ viết tay, không
-       phải yêu cầu xoay chữ), chỉ đẩy lên gần mép trên tiêu đề thay vì nằm hẳn 1 dòng riêng phía
-       trên như trước. */
-    .sec-ch-num { position: absolute; top: -21px; right: 0; font-size: 60px; font-weight: 800;
-        line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
+    /* Số thứ tự CÙNG 1 hàng với tiêu đề (thay vì tuyệt đối chồng góc trên bên phải, từng bị đọc
+       nhầm thành 2 dòng tách biệt không liên quan) -- .sec-ch-row là hàng flex space-between,
+       canh baseline: tiêu đề bên trái, số bên phải. Cỡ 64px (phương án C trong mock up "cùng 1
+       hàng, tiêu đề trái/số phải" đã chọn). */
+    .sec-ch-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .sec-ch-num { font-size: 64px; font-weight: 800; line-height: 1; flex-shrink: 0;
+        color: rgba(var(--accent-rgb),0.24); user-select: none; }
     .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
     .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
