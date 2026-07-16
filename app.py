@@ -2937,9 +2937,8 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                               _sec_timeslot, _today, labels, page_name):
     """Sub-tab "Tổng quan" của render_reading_log(): 3 thẻ hero/nhóm chip + thanh phân bổ +
     bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
-    (đã flat sẵn từ trước) -- chỉ thêm hero cho đồng bộ với các trang khác, không có chip mục lục
-    (không có chương/mục nào để nhảy tới trong đúng 1 sub-tab ngắn này)."""
-    sec_hero(None, f"Những cuốn/series đã và đang {labels['verb']}", None, [])
+    (đã flat sẵn từ trước). KHÔNG có billboard/hero ở đầu -- sub-tab này không có chương/mục
+    đánh số nào để nhảy tới (chỉ 1 khối phẳng), nên hero chỉ còn là khung trống không cần thiết."""
     # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
@@ -3035,7 +3034,9 @@ def _render_reading_detail(t, reading_log_df, labels, page_name):
     project để trống trong kindle_book_map lúc import, xem "Tải trích dẫn Kindle" ở tab Tuỳ biến)
     -- các nguồn này không có tiến độ đọc (không phiên Forest, không phần Reminders) nên chọn vào
     chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 chương đánh số phía trên (vốn đều dựa
-    trên dữ liệu tiến độ mà nguồn độc lập không có)."""
+    trên dữ liệu tiến độ mà nguồn độc lập không có) -- và vì vậy CŨNG không có billboard/hero (chỉ
+    1 mục duy nhất, không có gì để mục lục chip điều hướng tới; tên nguồn đã hiện sẵn trong ô
+    chọn phía trên rồi)."""
     _kh_all = load_kindle_highlights()
     _indep_sources = (sorted(_kh_all[_kh_all['Dự án'].isna()]['Cuốn sách'].dropna().unique())
                        if not _kh_all.empty else [])
@@ -3054,8 +3055,6 @@ def _render_reading_detail(t, reading_log_df, labels, page_name):
     if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
         _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
         _kh_src = _kh_all[_kh_all['Cuốn sách'] == _src]
-        sec_hero(None, html_escape(str(_src)), None,
-                 [(f"{_anchor_ns}-quote", "Trích dẫn &amp; Ghi chú")])
         sec_chapter(f"{_anchor_ns}-quote", None, None, "Trích dẫn &amp; Ghi chú")
         with st.container(border=True, key="jcard_reading_detail_indep"):
             _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
