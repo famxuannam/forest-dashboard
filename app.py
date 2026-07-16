@@ -5322,7 +5322,24 @@ st.markdown(
        (data-baseweb="calendar") được BaseWeb mount ra ngoài container widget (portal ở cấp
        body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
        áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
+    /* BaseWeb lồng 3 lớp cho input này: [data-baseweb="input"] (khung ngoài) bọc
+       [data-baseweb="base-input"] (khung sát input, THỰC SỰ mang nền/viền theo CSS mặc định của
+       BaseWeb) bọc <input> thật -- xác nhận qua DevTools thật trên bản deploy (ảnh chụp người
+       dùng gửi), khác với giả định ban đầu chỉ có 1 lớp bọc. Bản sửa trước chỉ ép chiều cao cho
+       khung ngoài -- không đủ, vì khung base-input bên trong vẫn theo chiều cao mặc định (to hơn
+       hẳn 36px của 2 nút ◀▶ cạnh nó), không bị outer's height:36 ràng buộc (overflow mặc định là
+       visible). Ép ĐỒNG NHẤT cả 3 lớp về 36px + overflow:hidden ở khung ngoài để chắc chắn cắt
+       đúng 36px dù còn sót lớp nào chưa lường hết. */
     div[data-testid="stDateInput"] [data-baseweb="input"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stDateInput"] [data-baseweb="base-input"] {
         background: var(--card-tl) !important;
         border: 1px solid var(--border) !important;
         border-radius: 7px !important;
@@ -5331,11 +5348,6 @@ st.markdown(
         min-height: 36px !important;
         box-sizing: border-box !important;
     }
-    /* Safari/iOS vẽ <input> gốc theo chrome mặc định riêng (đệm/chiều cao khác Chromium desktop
-       dùng lúc test) khiến ô "Ngày" ở day_stepper cao hơn hẳn 2 nút ◀▶ đã ép 36px cạnh nó dù
-       khung ngoài (data-baseweb="input") đã set height -- lỗi thật đã gặp trên điện thoại, không
-       tái hiện được bằng Chromium giả lập mobile viewport lúc kiểm thử. Ép luôn cả <input> con
-       (không chỉ khung ngoài bọc nó) về đúng 36px + tắt appearance mặc định của hệ điều hành. */
     div[data-testid="stDateInput"] [data-baseweb="input"] input {
         height: 36px !important;
         line-height: 36px !important;
@@ -5343,7 +5355,7 @@ st.markdown(
         -webkit-appearance: none !important;
         appearance: none !important;
     }
-    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
+    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within [data-baseweb="base-input"] {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
