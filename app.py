@@ -5319,6 +5319,21 @@ st.markdown(
         border: 1px solid var(--border) !important;
         border-radius: 7px !important;
         box-shadow: none !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        box-sizing: border-box !important;
+    }
+    /* Safari/iOS vẽ <input> gốc theo chrome mặc định riêng (đệm/chiều cao khác Chromium desktop
+       dùng lúc test) khiến ô "Ngày" ở day_stepper cao hơn hẳn 2 nút ◀▶ đã ép 36px cạnh nó dù
+       khung ngoài (data-baseweb="input") đã set height -- lỗi thật đã gặp trên điện thoại, không
+       tái hiện được bằng Chromium giả lập mobile viewport lúc kiểm thử. Ép luôn cả <input> con
+       (không chỉ khung ngoài bọc nó) về đúng 36px + tắt appearance mặc định của hệ điều hành. */
+    div[data-testid="stDateInput"] [data-baseweb="input"] input {
+        height: 36px !important;
+        line-height: 36px !important;
+        box-sizing: border-box !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
     }
     div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
         border-color: var(--accent) !important;
