@@ -3174,7 +3174,7 @@ def render_reading_calendar_grid(rl_detail_df, labels):
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
-        padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
+        padding={"left": 52, "right": 12, "top": 5, "bottom": 5},
         background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
@@ -4304,8 +4304,11 @@ def render_calendar_grid(scope_df, full_df):
     )
     chart = (rect + text).properties(
         width=alt.Step(34), height=alt.Step(34),
-        # padding phải bù cho vùng nhãn thứ bên trái -> lưới căn giữa trong thẻ
-        padding={"left": 0, "right": 64, "top": 5, "bottom": 5},
+        # left=52 chừa đủ chỗ cho nhãn "Thứ" dạng chữ đầy đủ (vd "Chủ Nhật", 8 ký tự) -- để left=0
+        # như bản cũ (thời nhãn còn ngắn dạng số/viết tắt) khiến Vega tính thiếu bề rộng trục dọc,
+        # nhãn tràn ra ngoài biên trái của SVG và bị cắt chữ (lỗi thật đã gặp, xem ảnh chụp). right
+        # nhỏ hơn trái để bù lại, giữ lưới không bị lệch hẳn sang phải trong thẻ.
+        padding={"left": 52, "right": 12, "top": 5, "bottom": 5},
         # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng) -> để
         # trong suốt cho nền thẻ bọc ngoài (--card, đổi theo IS_DARK) lộ ra, tránh viền lệch tông.
         background='transparent',
@@ -6396,7 +6399,7 @@ def render_day_report(df):
     # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
     # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
     # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
-    _hero_chips = ([("today-ch1", "Ghi chú ngày"), ("today-ch2", "Ngày này năm trước")]
+    _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
                    if day_df.empty else
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
                     ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
@@ -6427,9 +6430,9 @@ def render_day_report(df):
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
 
-        sec_chapter("today-ch1", None, None, "Ghi chú ngày", tight_top=True)
+        sec_chapter("today-ch1", 1, None, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
-        sec_chapter("today-ch2", None, None, "Ngày này năm trước")
+        sec_chapter("today-ch2", 2, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
         sec_chapter("today-ch1", 1, None, "Tổng quan ngày", tight_top=True)
