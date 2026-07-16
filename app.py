@@ -4925,8 +4925,10 @@ def _wordmark_html(layout="header"):
         f"<span style=\"font-family:'Source Serif 4',serif;font-weight:500;font-size:{forest_sz}px;"
         f"color:{_text};letter-spacing:0.01em;line-height:1.5;-webkit-font-smoothing:antialiased;"
         "transform:translateZ(0);display:inline-block;\">Forest</span>"
+        # margin-top:-10px (phương án D trong mock up) nhích "DASHBOARD" lên gần "Forest" hơn,
+        # cân đối hơn so với khoảng trắng đệm ở trên do line-height:1.5 của "Forest" để lại.
         f"<span style='font-size:{dash_sz}px;color:{_text2};text-transform:uppercase;"
-        "letter-spacing:0.08em;line-height:1;'>Dashboard</span></div></div>"
+        "letter-spacing:0.08em;line-height:1;margin-top:-10px;'>Dashboard</span></div></div>"
     )
 
 
