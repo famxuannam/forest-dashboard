@@ -5598,7 +5598,12 @@ st.markdown(
        Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
        hẳn so với đánh dấu thẳng từ phía gọi Python. */
     .sec-ch.sec-ch-tight { margin-top: 0; }
-    .sec-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
+    /* top:-21px (thay vì -8px) + cỡ chữ to hơn (60px thay vì 54px) -- phương án B trong mock up
+       "số 01 đứng thẳng, ngang hàng tiêu đề nhưng nhích lên nửa dòng" đã chọn. Số vẫn đứng
+       thẳng (không xoay -- lần mock up trước bị hiểu nhầm nghiêng là do nét chữ viết tay, không
+       phải yêu cầu xoay chữ), chỉ đẩy lên gần mép trên tiêu đề thay vì nằm hẳn 1 dòng riêng phía
+       trên như trước. */
+    .sec-ch-num { position: absolute; top: -21px; right: 0; font-size: 60px; font-weight: 800;
         line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
     .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
@@ -6480,29 +6485,6 @@ def render_day_report(df):
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
-        # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
-        # có phiên nào) -- số liệu của CÁC NGÀY KHÁC (cùng thứ tuần trước / trung bình cùng thứ),
-        # không phụ thuộc dữ liệu của chính ngày đang xem nên hiện được ngay cả khi ngày này
-        # (kể cả hôm nay, chưa trồng cây nào) trống trơn. Không kèm delta so với ngày đang xem
-        # (khác nhánh có phiên bên dưới) vì ngày chưa diễn ra thì "0h so với TB 3h" chỉ gây hiểu
-        # lầm là đang tụt lại, không phải thông tin tham khảo hữu ích.
-        pw = df[df['Ngày'] == (sel - timedelta(days=7))]
-        same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                  & (df['Ngày'] != sel)]
-        ref_chips = []
-        if not pw.empty:
-            ref_chips.append({"k": f"{vn_dow} tuần trước",
-                               "v": f"{_fmt_hours_short(pw['Thời lượng (Phút)'].sum() / 60)} · {len(pw)} phiên"})
-        if same['Ngày'].nunique():
-            avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-            ref_chips.append({"k": f"TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}"})
-        if ref_chips:
-            # margin ngang 16px khớp đúng padding trong của st.expander (16px mỗi bên) để card này
-            # rộng bằng đúng note_card bên dưới (vốn co hẹp lại vì nằm trong expander); margin-bottom
-            # 20px (thay vì mặc định 0) tạo khoảng cách rõ ràng hơn trước khi vào "Ghi chú ngày".
-            render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
-                               card_style="padding:20px; margin:0 16px 20px;")
-
         sec_chapter("today-ch1", 1, None, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
         sec_chapter("today-ch2", 2, None, "Ngày này năm trước")
@@ -7620,12 +7602,6 @@ elif nav == "Hướng dẫn":
     sec_block(
         "<h4>Ngày chưa có phiên nào thì xem gì cho đỡ trống trải</h4>"
         "<ul>"
-        "<li><b>Tham khảo cho lên kế hoạch</b> — panel nhỏ nhảy ra thay cho dòng thời gian khi ngày còn "
-        "trắng tinh, cho bạn 2 con số mượn từ <b>ngày khác</b> để đỡ mù mờ: tổng giờ và số phiên của đúng "
-        "thứ này tuần trước, cộng thêm trung bình của đúng thứ này tính trên toàn bộ lịch sử đã có. Để ý "
-        "chữ “đúng thứ” — app so Thứ Bảy với Thứ Bảy, chứ không phải cứ lùi đại 7 ngày trước, vì nhịp làm "
-        "việc của hầu hết mọi người thường lặp theo thứ trong tuần (đi làm/đi học) hơn là theo khoảng cách "
-        "ngày thuần tuý.</li>"
         "<li><b>Lịch hẹn Work</b> của ngày hôm đó vẫn hiện đầy đủ trong Ghi chú ngày dù chưa có phiên nào — "
         "nhờ vậy bạn biết ngay còn bao nhiêu khung giờ trống để nhét việc vào trước khi bắt tay làm.</li>"
         "<li><b>Trích dẫn hôm nay</b> — một highlight hoặc ghi chú Kindle được chọn ngẫu nhiên, nằm ngay đầu "
