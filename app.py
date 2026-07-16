@@ -2493,8 +2493,8 @@ def _top_days_section(df_scope, label, n=3):
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  top3_suffix=""):
-    """Nội dung mục "1. Tổng quan" ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
+                                  anchor_prefix, top3_suffix=""):
+    """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
     có -- xác nhận không cần ở quy mô 1 tuần, xem show_top3=False ở nơi gọi cho Tuần).
@@ -2503,8 +2503,10 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     của "Báo cáo", chỉ khác hậu tố biến) -- gộp lại còn 1 bản, tham số hoá đúng phần THỰC SỰ khác
     nhau giữa 3 kỳ (nhãn delta, dòng "kỳ chưa kết thúc" clip_note, có Top3 hay không). period_col
     ('Tuần'/'Tháng'/'Năm') PHẢI khớp đúng cột `_period_comparison()` đã dùng để tính prev/avg --
-    dùng làm period_col cho _smart_digest() luôn, không tính lại. Không đổi giao diện: 3 sub-tab
-    vẫn tách biệt như cũ, đây chỉ là dọn code phía sau."""
+    dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
+    anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
+    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương")."""
+    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan")
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
     num_days = df_period['Ngày'].nunique() or 1
@@ -2546,26 +2548,28 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
         with c_top2: render_top_3(df_period, 'Dự án', f'Top 3 Dự án{top3_suffix}')
 
 
-def _render_period_secondary_expanders(df_period, full_df, selected_key, kind, trend_group_col,
-                                        trend_group_label, cat_order, pie_key, trend_key, hourly_key):
-    """Mục "2. Nhật ký" -> "6. Bảng số liệu" ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu trúc y
-    hệt nhau (khác nhánh Năm, vốn có bộ mục hoàn toàn khác: Biểu đồ lịch + Đọc sách & Gundam thay
-    vì Nhật ký/Phân bổ/Xu hướng/Khung giờ -- không đủ giống để gộp chung, xem nhánh Năm riêng
-    trong dispatch "Báo cáo"). Đã bỏ "Giờ tập trung theo thứ"/"Phân bố độ dài phiên" (ít dùng theo
-    phản hồi thực tế) khỏi cả Tuần lẫn Tháng -- xoá 1 lần ở đây áp dụng cho cả 2 vì dùng chung hàm.
-    Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind ('week'/'month' cho render_notes_journal),
-    trend_group_col/label/cat_order (nhóm theo Thứ ở Tuần, theo Ngày ở Tháng), và các key fragment
-    (giữ NGUYÊN key gốc để không đổi hành vi/state đã có của từng widget)."""
-    with st.expander("2. Nhật ký", expanded=True):
-        render_notes_journal(selected_key, kind, full_df)
-    with st.expander("3. Phân bổ thời gian", expanded=False):
-        frag_pie(df_period, pie_key, "Danh mục")
-    with st.expander("4. Xu hướng theo thời gian", expanded=False):
-        frag_period_trend(df_period, trend_key, "Danh mục", trend_group_col, trend_group_label, cat_order=cat_order)
-    with st.expander("5. Xu hướng tập trung theo khung giờ", expanded=False):
-        frag_hourly(df_period, hourly_key, "Danh mục", with_range=False)
-    with st.expander("6. Bảng số liệu", expanded=False):
-        render_detail_table(df_period)
+def _render_period_secondary_expanders(df_period, full_df, selected_key, kind,
+                                        trend_group_col, trend_group_label, cat_order, pie_key,
+                                        trend_key, hourly_key, anchor_prefix):
+    """Chương "Nhật ký" (2) -> "Bảng số liệu" (6) ở Báo cáo -> Tuần/Tháng -- 2 kỳ này CÙNG cấu
+    trúc y hệt nhau (khác nhánh Năm, vốn có bộ mục hoàn toàn khác: Biểu đồ lịch + Đọc sách &
+    Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ -- không đủ giống để gộp chung, xem nhánh
+    Năm riêng trong dispatch "Báo cáo"). Đã bỏ "Giờ tập trung theo thứ"/"Phân bố độ dài phiên" (ít
+    dùng theo phản hồi thực tế) khỏi cả Tuần lẫn Tháng -- xoá 1 lần ở đây áp dụng cho cả 2 vì dùng
+    chung hàm. Tham số hoá đúng phần khác nhau giữa Tuần/Tháng: kind ('week'/'month' cho
+    render_notes_journal), trend_group_col/label/cat_order (nhóm theo Thứ ở Tuần, theo Ngày ở
+    Tháng), và các key fragment (giữ NGUYÊN key gốc để không đổi hành vi/state đã có của từng
+    widget). Không còn kicker riêng cho mỗi chương (trùng tên trang đang đứng, dư thừa)."""
+    sec_chapter(f"{anchor_prefix}-ch2", 2, None, "Nhật ký")
+    render_notes_journal(selected_key, kind, full_df)
+    sec_chapter(f"{anchor_prefix}-ch3", 3, None, "Phân bổ thời gian")
+    frag_pie(df_period, pie_key, "Danh mục")
+    sec_chapter(f"{anchor_prefix}-ch4", 4, None, "Xu hướng theo thời gian")
+    frag_period_trend(df_period, trend_key, "Danh mục", trend_group_col, trend_group_label, cat_order=cat_order)
+    sec_chapter(f"{anchor_prefix}-ch5", 5, None, "Xu hướng tập trung theo khung giờ")
+    frag_hourly(df_period, hourly_key, "Danh mục", with_range=False)
+    sec_chapter(f"{anchor_prefix}-ch6", 6, None, "Bảng số liệu")
+    render_detail_table(df_period)
 
 
 @st.cache_data
@@ -4510,16 +4514,21 @@ def sec_table(headers, rows):
 def sec_chapter(anchor, num, kicker, title, lead=None):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
     báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
-    dòng kicker in hoa + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy tới (CSS
-    scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
+    dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
+    tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
 
     num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, vd panel tham khảo khi chưa có dữ
-    liệu, hay "Chỉ số bất thường" ở Sức khoẻ -- những mục này không nằm trong 1 chuỗi đếm)."""
+    liệu, hay "Chỉ số bất thường" ở Sức khoẻ -- những mục này không nằm trong 1 chuỗi đếm).
+
+    kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
+    vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
+    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
+    của Trợ giúp)."""
     _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
+    _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     st.markdown(
-        f"<div class='sec-ch' id='{anchor}'>{_num_html}"
-        f"<div class='sec-ch-kicker'>{kicker}</div>"
+        f"<div class='sec-ch' id='{anchor}'>{_num_html}{_kicker_html}"
         f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
         unsafe_allow_html=True)
 
@@ -5237,6 +5246,11 @@ st.markdown(
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
     [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* Nút ◀/▶ ở day_stepper cao 40px (min-height mặc định Streamlit) trong khi ô st.date_input
+       chỉ cao ~36px -- vertical_alignment="center" của st.columns canh giữa theo TÂM mỗi item,
+       không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
+       đã "canh giữa". Ép cùng 36px cho cả 3 phần tử trên 1 hàng thẳng hàng thật sự. */
+    [class*="st-key-day_stepper"] button { height: 36px !important; min-height: 0 !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -6336,12 +6350,12 @@ def render_day_report(df):
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
 
-        sec_chapter("today-ch1", None, "Hôm nay", "Ghi chú ngày")
+        sec_chapter("today-ch1", None, None, "Ghi chú ngày")
         render_note_editor(sel, sel_day_badges)
-        sec_chapter("today-ch2", None, "Hôm nay", "Ngày này năm trước")
+        sec_chapter("today-ch2", None, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
-        sec_chapter("today-ch1", 1, "Hôm nay", "Tổng quan ngày")
+        sec_chapter("today-ch1", 1, None, "Tổng quan ngày")
         d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
         d_sess = len(day_df)
         d_avg = _avg_session_min(day_df)
@@ -6395,16 +6409,16 @@ def render_day_report(df):
 
         render_session_bar(day_df)
 
-        sec_chapter("today-ch2", 2, "Hôm nay", "Ghi chú ngày")
+        sec_chapter("today-ch2", 2, None, "Ghi chú ngày")
         render_note_editor(sel, sel_day_badges)
 
-        sec_chapter("today-ch3", 3, "Hôm nay", "Ngày này năm trước")
+        sec_chapter("today-ch3", 3, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
 
-        sec_chapter("today-ch4", 4, "Hôm nay", "Phân bổ thời gian")
+        sec_chapter("today-ch4", 4, None, "Phân bổ thời gian")
         frag_pie(day_df, "rad_day", "Dự án")
 
-        sec_chapter("today-ch5", 5, "Hôm nay", "Danh sách phiên")
+        sec_chapter("today-ch5", 5, None, "Danh sách phiên")
         rows_html = ''
         for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
             s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
@@ -6525,16 +6539,25 @@ elif nav == "Báo cáo":
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
-                    # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở Phân bổ/Bảng số
-                    # liệu bên dưới.
-                    _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
-                                                  lbl_prev_w, lbl_avg_w, _clip_note_w,
-                                                  "Ngày nổi bật trong tuần", show_top3=False)
+                sec_hero("Báo cáo · Tuần", "Một tuần vừa qua",
+                         "So sánh tuần đang xem với tuần trước và trung bình các tuần, kèm nhật "
+                         "ký và bảng số liệu theo ngày.",
+                         [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
+                          ("bc-tuan-ch3", "3 · Phân bổ thời gian"),
+                          ("bc-tuan-ch4", "4 · Xu hướng theo thời gian"),
+                          ("bc-tuan-ch5", "5 · Xu hướng theo khung giờ"),
+                          ("bc-tuan-ch6", "6 · Bảng số liệu")])
+                # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
+                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở Phân bổ/Bảng số
+                # liệu bên dưới.
+                _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
+                                              lbl_prev_w, lbl_avg_w, _clip_note_w,
+                                              "Ngày nổi bật trong tuần", show_top3=False,
+                                              anchor_prefix="bc-tuan")
                 _render_period_secondary_expanders(
                     df_w, df, selected_week, 'week', 'Thứ', "Thứ trong tuần", DAYS_ORDER,
-                    pie_key="rad_tab4", trend_key="trend_w_color", hourly_key="hour_w")
+                    pie_key="rad_tab4", trend_key="trend_w_color", hourly_key="hour_w",
+                    anchor_prefix="bc-tuan")
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
@@ -6557,14 +6580,22 @@ elif nav == "Báo cáo":
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
 
             if not df_m.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
-                                                  lbl_prev_m, lbl_avg_m, _clip_note_m,
-                                                  "Ngày nổi bật trong tháng", show_top3=True,
-                                                  top3_suffix=" Tháng")
+                sec_hero("Báo cáo · Tháng", "Một tháng vừa qua",
+                         "So sánh tháng đang xem với tháng trước và trung bình các tháng, kèm "
+                         "nhật ký và bảng số liệu theo ngày.",
+                         [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Nhật ký"),
+                          ("bc-thang-ch3", "3 · Phân bổ thời gian"),
+                          ("bc-thang-ch4", "4 · Xu hướng theo thời gian"),
+                          ("bc-thang-ch5", "5 · Xu hướng theo khung giờ"),
+                          ("bc-thang-ch6", "6 · Bảng số liệu")])
+                _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
+                                              lbl_prev_m, lbl_avg_m, _clip_note_m,
+                                              "Ngày nổi bật trong tháng", show_top3=True,
+                                              anchor_prefix="bc-thang", top3_suffix=" Tháng")
                 _render_period_secondary_expanders(
                     df_m, df, selected_month, 'month', 'Ngày', "Ngày trong tháng", None,
-                    pie_key="rad_tab3", trend_key="trend_m_color", hourly_key="hour_m")
+                    pie_key="rad_tab3", trend_key="trend_m_color", hourly_key="hour_m",
+                    anchor_prefix="bc-thang")
     elif bc_sub == "Năm":
         if not df.empty:
             years = sorted(df['Năm'].unique())
@@ -6582,38 +6613,41 @@ elif nav == "Báo cáo":
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
-                with st.expander("1. Tổng quan", expanded=True):
-                    _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
-                                                  lbl_prev_y, lbl_avg_y, _clip_note_y,
-                                                  "Ngày nổi bật trong năm", show_top3=True,
-                                                  top3_suffix=" Năm")
+                sec_hero("Báo cáo · Năm", "Một năm nhìn lại",
+                         "Toàn bộ số liệu, biểu đồ lịch và tiến độ sách/Gundam gộp theo năm.",
+                         [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
+                          ("bc-nam-ch3", "3 · Sách &amp; Gundam"), ("bc-nam-ch4", "4 · Bảng số liệu")])
+                _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
+                                              lbl_prev_y, lbl_avg_y, _clip_note_y,
+                                              "Ngày nổi bật trong năm", show_top3=True,
+                                              anchor_prefix="bc-nam", top3_suffix=" Năm")
 
                 # Nhánh Năm có bộ mục 2-4 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch + Đọc sách &
                 # Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ
                 # giống để gộp chung với _render_period_secondary_expanders(), giữ riêng ở đây.
-                with st.expander("2. Biểu đồ lịch", expanded=False):
-                    # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
-                    # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
-                    # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
-                    # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
-                    render_calendar_grid(df_y, df_y)
+                sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
+                # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- đúng
+                # pattern duy nhất đã có trong app (render_calendar_grid(df_cal, df_cal),
+                # app.py frag_calendar) để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
+                # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
+                render_calendar_grid(df_y, df_y)
 
-                with st.expander("3. Đọc sách & Gundam trong năm", expanded=False):
-                    # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
-                    # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
-                    # phức tạp để tách ra cho 1 mục tổng kết năm.
-                    rl_y = load_reading_log()
-                    rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
-                    if rl_y.empty:
-                        st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
-                    else:
-                        render_stat_panel(hero_items=[
-                            {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
-                            {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
-                        ])
+                sec_chapter("bc-nam-ch3", 3, None, "Đọc sách & Gundam trong năm")
+                # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
+                # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
+                # phức tạp để tách ra cho 1 mục tổng kết năm.
+                rl_y = load_reading_log()
+                rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
+                if rl_y.empty:
+                    st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
+                else:
+                    render_stat_panel(hero_items=[
+                        {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
+                        {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
+                    ])
 
-                with st.expander("4. Bảng số liệu", expanded=False):
-                    render_detail_table(df_y)
+                sec_chapter("bc-nam-ch4", 4, None, "Bảng số liệu")
+                render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
