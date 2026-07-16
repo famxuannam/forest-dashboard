@@ -2307,7 +2307,10 @@ def _avg_session_min(df):
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
 def render_session_bar(df):
-    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan."""
+    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan. Có nhãn nhỏ
+    "Phân bổ độ dài phiên" riêng (đồng bộ với nhãn "Dòng thời gian trong ngày" của
+    render_day_timeline) -- thiếu nhãn khiến khối này trông trống trải, không rõ đang xem gì nếu
+    tách rời khỏi ngữ cảnh xung quanh (áp dụng chung cho MỌI nơi gọi hàm này, không riêng Hôm nay)."""
     n = len(df)
     if n == 0:
         return
@@ -2329,6 +2332,7 @@ def render_session_bar(df):
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
         "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<span class='rl-book'>Phân bổ độ dài phiên</span>"
         f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
@@ -3285,6 +3289,7 @@ def render_day_timeline(day_df):
 .dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
 </style>
 <div class="dtl-card">
+<span class="rl-book">Dòng thời gian trong ngày</span>
 <div class="dtl-strip">{label_html}</div>
 <div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
@@ -5537,6 +5542,12 @@ st.markdown(
         .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
+    /* Khối "Ghi chú chính" (note_main) đứng ngay sau danh sách ghi chú nhanh (qnote_row_) trong
+       CÙNG 1 khối cha -- rule gap:5px thu gọn khoảng cách GIỮA CÁC DÒNG ghi chú nhanh (xem CSS
+       :has() qnote_row_ ở trên) vô tình áp luôn cho khoảng cách trước "Ghi chú chính", khiến nó
+       dính sát ghi chú nhanh cuối cùng (lỗi thật đã gặp, xem ảnh chụp). Bù riêng margin-top ở
+       đây -- không đụng gap chung, chỉ tách khối "Ghi chú chính" ra xa hơn đúng 1 chỗ này. */
+    .st-key-note_main { margin-top: 12px; }
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
        cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
        khung (viền chấm) để phân biệt rõ với có nội dung. ===== */
@@ -7242,6 +7253,49 @@ elif nav == "Tuỳ biến":
                             st.session_state['kindle_import_msg'] = _msg + ")."
                             st.rerun()
 
+                # Sửa lại ánh xạ ĐÃ xác nhận trước đây -- lần xác nhận lúc import chỉ hỏi 1 LẦN
+                # DUY NHẤT cho mỗi tên sách mới gặp (xem "known_titles" ở trên), không có đường
+                # quay lại sửa nếu lỡ ghép nhầm Dự án, hoặc nếu 1 nguồn từng để "Nguồn độc lập"
+                # nay mới thực sự bắt đầu theo dõi tiến độ đọc qua Reminders. Luôn hiện (không phụ
+                # thuộc có vừa tải file mới hay không) để sửa được bất cứ lúc nào.
+                _kmap_all = load_kindle_book_map()
+                if not _kmap_all.empty:
+                    st.markdown("---")
+                    _kmap_msg = st.session_state.pop('kindle_map_save_msg', None)
+                    if _kmap_msg:
+                        st.success(_kmap_msg)
+                    st.markdown(f"**Ánh xạ đã lưu ({len(_kmap_all)} cuốn/nguồn)** — sửa lại nếu lỡ ghép nhầm "
+                                "Dự án lúc xác nhận, hoặc 1 nguồn từng để độc lập nay đã bắt đầu theo dõi tiến "
+                                "độ đọc thật qua Reminders.")
+                    _db_kmap = load_db()
+                    _projs_kmap = sorted(_db_kmap['Dự án'].dropna().astype(str).unique()) if not _db_kmap.empty else []
+                    _INDEP_KMAP = "— Nguồn độc lập (không phải Dự án) —"
+                    _kmap_tbl = _kmap_all.copy()
+                    _kmap_tbl["Dự án"] = _kmap_tbl["Dự án"].fillna(_INDEP_KMAP)
+                    _kmap_edited = st.data_editor(
+                        _kmap_tbl, hide_index=True, width='stretch', key="kindle_map_edit_existing",
+                        column_config={
+                            "Tên Kindle": st.column_config.TextColumn("Tên Kindle", disabled=True),
+                            "Dự án": st.column_config.SelectboxColumn(
+                                "Dự án", options=[_INDEP_KMAP] + _projs_kmap,
+                                help="Chọn đúng Dự án nếu đây là 1 cuốn sách bạn đang theo dõi; để nguyên "
+                                     f"\"{_INDEP_KMAP}\" nếu không (vd tạp chí)."),
+                            "Nhãn": st.column_config.TextColumn(
+                                "Nhãn hiển thị (nếu độc lập)",
+                                help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong app."),
+                        },
+                    )
+                    if st.button("Lưu thay đổi ánh xạ", key="tbtn_kindle_map_save"):
+                        _is_indep_kmap = _kmap_edited["Dự án"] == _INDEP_KMAP
+                        _kmap_save = pd.DataFrame({
+                            "Tên Kindle": _kmap_edited["Tên Kindle"],
+                            "Dự án": _kmap_edited["Dự án"].where(~_is_indep_kmap, None),
+                            "Nhãn": _kmap_edited["Nhãn"].where(_is_indep_kmap, _kmap_edited["Dự án"]),
+                        })
+                        save_kindle_book_map_upsert(_kmap_save)
+                        st.session_state['kindle_map_save_msg'] = "Đã lưu ánh xạ mới."
+                        st.rerun()
+
     with st.expander("2. Phân loại", expanded=False):
         db_current = load_db()
         mapping_df = load_mapping()
@@ -7988,6 +8042,21 @@ elif nav == "Hướng dẫn":
             "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
             "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
             "bạn đã nạp vào app.")
+        help_faq_item(
+            "Vừa nạp trích dẫn từ 1 cuốn sách hoàn toàn mới, chưa từng theo dõi tiến độ đọc — nó có hiện lên "
+            "Trích dẫn hôm nay không, hay phải đợi ghép với Dự án trước đã?",
+            "Hiện được ngay, không cần đợi gì cả. Lúc nạp *My Clippings.txt* ở Tuỳ biến → \"Tải trích dẫn "
+            "Kindle\", nếu app gặp 1 cuốn/nguồn hoàn toàn mới, nó sẽ bắt bạn xác nhận ghép với 1 Dự án đang "
+            "theo dõi, hoặc để nguyên \"Nguồn độc lập\" kèm 1 cái tên tự đặt (hợp cho tạp chí, hay sách bạn "
+            "chưa track qua Reminders) — nhưng bước xác nhận này và bước lưu trích dẫn thật sự diễn ra CÙNG "
+            "một lúc, chỉ sau đúng 1 lần bấm nút. Trích dẫn hôm nay chọn ngẫu nhiên trên toàn bộ kho, không "
+            "quan tâm cuốn đó đã ghép Dự án hay còn để độc lập — nên ngay từ lần import đầu tiên, trích dẫn "
+            "của cuốn sách mới đã có cơ hội xuất hiện y hệt mọi trích dẫn khác.\n\n"
+            "Có 1 điều cần nhớ: bước xác nhận ghép Dự án/đặt tên đó **chỉ hỏi đúng 1 lần** cho mỗi tên sách — "
+            "nếu lỡ chọn nhầm, hoặc sau này mới thật sự bắt đầu theo dõi tiến độ đọc cuốn từng để \"độc lập\" "
+            "qua Reminders, vào lại đúng tab \"Tải trích dẫn Kindle\" đó — ngay dưới ô tải file luôn có sẵn "
+            "1 bảng **\"Ánh xạ đã lưu\"** liệt kê mọi cuốn/nguồn đã từng ghép, sửa lại Dự án hoặc tên hiển thị "
+            "ngay tại đó rồi bấm Lưu, không cần nạp lại file gốc.")
         help_faq_item(
             "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu cho đúng?",
             "Cứ tìm tới expander **\"Sửa gán series tự động\"** nằm ở tít cuối trang Gundam (mục này chỉ xuất "
