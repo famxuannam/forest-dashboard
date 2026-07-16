@@ -5455,7 +5455,8 @@ st.markdown(
     .sec-hero, .st-key-today_billboard {
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
     }
-    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border); }
+    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
+        margin-bottom: 34px; }
     .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
         text-transform: uppercase; color: var(--accent-dark); }
     .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
