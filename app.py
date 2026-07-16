@@ -186,6 +186,17 @@ GUNDAM_LABELS = dict(
 VN_DAYS = {"Monday": "Thứ Hai", "Tuesday": "Thứ Ba", "Wednesday": "Thứ Tư", "Thursday": "Thứ Năm",
            "Friday": "Thứ Sáu", "Saturday": "Thứ Bảy", "Sunday": "Chủ Nhật"}
 
+# Tên tháng tiếng Việt -- CHỈ dùng cho JS dịch popup lịch của st.date_input (xem
+# _inject_date_picker_locale()), component BaseWeb nội bộ của Streamlit không có prop locale lộ
+# ra qua API Python nên phải dịch text sau khi mount bằng JS. VN_DAYS ở trên không đủ (chỉ có tên
+# đầy đủ, popup lịch dùng viết tắt) nên cần thêm bảng viết tắt riêng ngay dưới đây.
+VN_MONTHS = {"January": "Tháng 1", "February": "Tháng 2", "March": "Tháng 3", "April": "Tháng 4",
+             "May": "Tháng 5", "June": "Tháng 6", "July": "Tháng 7", "August": "Tháng 8",
+             "September": "Tháng 9", "October": "Tháng 10", "November": "Tháng 11",
+             "December": "Tháng 12"}
+VN_DAYS_ABBR = {"Su": "CN", "Mo": "T2", "Tu": "T3", "We": "T4", "Th": "T5", "Fr": "T6", "Sa": "T7",
+                "Sun": "CN", "Mon": "T2", "Tue": "T3", "Wed": "T4", "Thu": "T5", "Fri": "T6", "Sat": "T7"}
+
 # Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
 # Nhật ký đọc sách) không thuộc phạm vi đổi hệ màu "Sổ Tay".
@@ -215,10 +226,12 @@ MAC_COLORS = [
 CHART_COLORS = ["#b5502e", "#c98a1f", "#5f7a41", "#1f6f6a", "#3d4f8f", "#7a3b5e", "#d8674a", "#8a9a6b"]
 
 
-# 6 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
+# 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
 # đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
 # git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
-# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới).
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). "Cam đất"/
+# "Ô liu" thêm sau đó lấy đúng 2 màu bổ sung đã có sẵn trong CHART_COLORS (biến thể sáng hơn của
+# Đất nung/Rêu) -- không bịa màu mới, đảm bảo vẫn cùng 1 hệ tông với 6 màu gốc.
 ACCENT_PRESETS = {
     "Đất nung": "#b5502e",
     "Nghệ": "#c98a1f",
@@ -226,6 +239,8 @@ ACCENT_PRESETS = {
     "Chàm biển": "#1f6f6a",      # mặc định
     "Chàm": "#3d4f8f",
     "Mận": "#7a3b5e",
+    "Cam đất": "#d8674a",
+    "Ô liu": "#8a9a6b",
 }
 
 
@@ -1677,6 +1692,7 @@ def day_picker(active_days):
         with c2:
             picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
                                    format="DD/MM/YYYY", label_visibility="collapsed")
+            _inject_date_picker_locale()
         with c3:
             st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
                       disabled=not _next_candidates(sel), use_container_width=True)
@@ -1743,6 +1759,58 @@ def _inject_relative_time_ticker():
         "  }\n"
         "  tick();\n"
         "  setInterval(tick, 30000);\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
+def _inject_date_picker_locale():
+    """Dịch tháng/thứ trong popup lịch của MỌI st.date_input trên trang sang tiếng Việt bằng JS
+    phía trình duyệt -- component BaseWeb bên trong Streamlit không có prop locale lộ ra qua API
+    Python (`format=` của st.date_input chỉ đổi định dạng Ô NHẬP TAY, không đụng tới popup lịch),
+    nên phải dịch text SAU KHI mount. Popup mount dạng portal ở <body> của trang cha (ngoài mọi
+    iframe component, xem comment CSS `[data-baseweb="calendar"]`), không phải trong DOM con của
+    component này -- giống hệt cách _inject_relative_time_ticker() ở trên phải quẫy sang
+    window.parent.document để chạm được DOM thật.
+
+    Dùng MutationObserver theo dõi window.parent.document.body: mỗi khi popup lịch mở/đổi tháng
+    (React re-render lại text bên trong), duyệt lại toàn bộ text node trong `[data-baseweb=
+    "calendar"]` rồi thay theo 2 bảng tra VN_MONTHS/VN_DAYS_ABBR (khớp đúng chuỗi, không đoán mò
+    bằng regex tách từ -- an toàn hơn khi BaseWeb đổi định dạng header giữa các bản Streamlit).
+    Chỉ cần gọi 1 lần cho cả trang (không phải 1 lần mỗi date_input) vì observer theo dõi chung
+    toàn bộ <body>."""
+    _months_js = json.dumps(VN_MONTHS, ensure_ascii=False)
+    _days_js = json.dumps(VN_DAYS_ABBR, ensure_ascii=False)
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        f"  const MONTHS = {_months_js};\n"
+        f"  const DAYS = {_days_js};\n"
+        "  const MONTH_RE = new RegExp('\\\\b(' + Object.keys(MONTHS).join('|') + ')\\\\b', 'g');\n"
+        "  function translateNode(node){\n"
+        "    for (const child of node.childNodes){\n"
+        "      if (child.nodeType === 3){\n"
+        "        const t = child.textContent;\n"
+        "        const trimmed = t.trim();\n"
+        "        if (DAYS[trimmed]){\n"
+        "          child.textContent = t.replace(trimmed, DAYS[trimmed]);\n"
+        "        } else if (MONTH_RE.test(trimmed)){\n"
+        "          MONTH_RE.lastIndex = 0;\n"
+        "          child.textContent = t.replace(MONTH_RE, m => MONTHS[m]);\n"
+        "        }\n"
+        "      } else if (child.nodeType === 1){\n"
+        "        translateNode(child);\n"
+        "      }\n"
+        "    }\n"
+        "  }\n"
+        "  function run(){\n"
+        "    const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
+        "    cals.forEach(translateNode);\n"
+        "  }\n"
+        "  run();\n"
+        "  const obs = new MutationObserver(run);\n"
+        "  obs.observe(window.parent.document.body, {childList: true, subtree: true, characterData: true});\n"
         "})();\n"
         "</script>"
     )
@@ -2824,12 +2892,19 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     # Key riêng theo show_favorites (không dùng chung 1 key cho Sách/Gundam như trước) -- Sách có
     # 3 tab, Gundam chỉ 2, dùng chung key cho 2 bộ tab khác số lượng dễ vỡ trạng thái tab đang chọn
-    # khi chuyển qua lại giữa 2 trang.
-    _tab_labels = [":material/bar_chart: Tổng quan", ":material/search: Chi tiết"]
+    # khi chuyển qua lại giữa 2 trang. Thứ tự Tổng quan -> Yêu thích -> Chi tiết (Yêu thích đứng
+    # trước Chi tiết theo yêu cầu -- tab hay ghé lại (Yêu thích) gần đầu hơn tab tra cứu sâu 1 cuốn
+    # cụ thể (Chi tiết), chỉ Sách mới có Yêu thích nên Gundam không đổi thứ tự 2 tab của mình).
+    _tab_labels = [":material/bar_chart: Tổng quan"]
     if show_favorites:
         _tab_labels.append(":material/star: Yêu thích")
+    _tab_labels.append(":material/search: Chi tiết")
     _tabs = st.tabs(_tab_labels, key="rl_view_tabs" if show_favorites else "rl_view_tabs_gd")
-    _tab_overview, _tab_detail = _tabs[0], _tabs[1]
+    _tab_overview = _tabs[0]
+    if show_favorites:
+        _tab_favorites, _tab_detail = _tabs[1], _tabs[2]
+    else:
+        _tab_detail = _tabs[1]
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -2837,12 +2912,12 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         if extra_overview is not None:
             extra_overview()
 
+    if show_favorites:
+        with _tab_favorites:
+            _render_kindle_favorites_tab()
+
     with _tab_detail:
         _render_reading_detail(t, reading_log_df, labels)
-
-    if show_favorites:
-        with _tabs[2]:
-            _render_kindle_favorites_tab()
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
@@ -3078,25 +3153,11 @@ def render_reading_calendar_grid(rl_detail_df, labels):
     st.altair_chart(chart, width='content')
 
 
-def render_day_timeline(day_df, sel, df_all):
-    """Dòng thời gian trong ngày (0–24h): khối phiên tô màu theo dự án, kèm lớp mờ
-    'khung giờ điển hình của thứ này' để thấy hôm nay lệch nhịp ra sao."""
+def render_day_timeline(day_df):
+    """Dòng thời gian trong ngày (0–24h): khối phiên tô màu theo Dự án, đặt đúng vị trí giờ nó
+    thực sự diễn ra, kèm legend màu theo Dự án bên dưới trục giờ."""
     if day_df.empty:
         return
-
-    # Lớp mờ: khung giờ điển hình của cùng thứ (TB giờ tại mỗi giờ-trong-ngày), trừ ngày đang xem
-    same = df_all[(pd.to_datetime(df_all['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                  & (df_all['Ngày'] != sel)]
-    n_same = same['Ngày'].nunique()
-    typ = {}
-    if n_same:
-        per_hour = _explode_session_hours(same, 'Ngày').groupby('Khung giờ')['giờ'].sum() / n_same
-        mx = float(per_hour.max()) if len(per_hour) else 0.0
-        if mx > 0:
-            typ = {int(h): v / mx for h, v in per_hour.items()}
-    typ_html = ''.join(
-        f'<div class="dtl-typ" style="left:{h/24*100:.3f}%;width:{100/24:.3f}%;'
-        f'background:rgba(120,120,128,{0.04 + typ.get(h, 0) * 0.20:.3f});"></div>' for h in range(24)) if typ else ''
 
     line_html = ''.join(f'<div class="dtl-line" style="left:{b/24*100:.3f}%;"></div>' for b in (5, 11, 17, 22))
     label_html = ''.join(
@@ -3128,7 +3189,6 @@ def render_day_timeline(day_df, sel, df_all):
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--divider);background:var(--card);}}
-.dtl-typ{{position:absolute;top:0;bottom:0;}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
 .dtl-bar{{position:absolute;top:14px;height:48px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
@@ -3141,7 +3201,7 @@ def render_day_timeline(day_df, sel, df_all):
 <div class="dtl-card">
 <div class="dtl-ttl">Dòng thời gian trong ngày</div>
 <div class="dtl-strip">{label_html}</div>
-<div class="dtl-track">{typ_html}{line_html}{bars_html}</div>
+<div class="dtl-track">{line_html}{bars_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
 <div class="dtl-legend">{legend_html}</div>
 </div>
@@ -3185,11 +3245,21 @@ def render_note_editor(day, day_badges=None):
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
+    quill_gen_key = f"note_quill_gen_{day}"
 
     def _enter_edit():
         # Xoá trạng thái cũ của ô soạn để khởi tạo lại đúng nội dung đang lưu
         st.session_state.pop(quill_key, None)
         st.session_state[edit_key] = True
+
+    def _active_quill_key():
+        """Key thật truyền cho st_quill -- đổi theo "generation" mỗi khi cần ép remount widget
+        (bấm Gộp lúc editor ĐÃ mở sẵn). streamlit-quill là component "uncontrolled": value chỉ
+        được áp dụng lúc mount đầu tiên, đổi value cho 1 instance đã mount không có tác dụng gì --
+        key cố định quill_key là đủ khi editor vừa mở lần đầu (component chưa tồn tại ở lần chạy
+        trước nên chắc chắn mount mới), nhưng khi Gộp trong lúc đang mở, component đã tồn tại sẵn
+        -> phải đổi key mới ép Streamlit unmount/mount lại instance mới với value merge đã nối."""
+        return f"{quill_key}_{st.session_state.get(quill_gen_key, 0)}"
 
     with st.container(border=True, key="note_card"):
         with st.container(key="note_row"):
@@ -3259,12 +3329,18 @@ def render_note_editor(day, day_badges=None):
                                         if st.button("", icon=":material/done_all:" if _pending else ":material/merge:",
                                                      key=f"qnote_merge_{_qid}", help="Đã gộp — chờ Lưu" if _pending
                                                      else "Gộp vào ghi chú chính", disabled=_pending):
-                                            _base = (st.session_state.get(quill_key, cur)
-                                                     if st.session_state.get(edit_key, False) else cur) or ""
+                                            _was_open = st.session_state.get(edit_key, False)
+                                            _base = (st.session_state.get(_active_quill_key(), cur)
+                                                     if _was_open else cur) or ""
                                             _piece = f"<p><strong>{r['Thời gian']:%H:%M}</strong> — {html_escape(str(r['Nội dung']))}</p>"
                                             st.session_state[f"note_merge_content_{day}"] = _base + _piece
                                             st.session_state.setdefault(merge_pending_key, [])
                                             st.session_state[merge_pending_key].append(_qid)
+                                            if _was_open:
+                                                # Editor đã mở sẵn -- component Quill đã mount, đổi
+                                                # value không đủ (xem docstring _active_quill_key),
+                                                # phải đổi generation để ép remount widget mới.
+                                                st.session_state[quill_gen_key] = st.session_state.get(quill_gen_key, 0) + 1
                                             _enter_edit()
                                             st.rerun()
                                         if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
@@ -3297,7 +3373,7 @@ def render_note_editor(day, day_badges=None):
                             _merge_content = st.session_state.pop(f"note_merge_content_{day}", None)
                             content = st_quill(value=_merge_content if _merge_content is not None else cur,
                                                html=True, toolbar=NOTE_TOOLBAR,
-                                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
+                                               placeholder="Viết vài dòng về ngày này…", key=_active_quill_key())
                             style_quill()
                             _inject_note_editor_shortcuts()
 
@@ -3318,7 +3394,7 @@ def render_note_editor(day, day_badges=None):
                         with st.container(key="note_actions", horizontal=True, gap="small"):
                             if st.button("Cập nhật", icon=":material/check:", type="primary",
                                          key=f"note_save_{day}"):
-                                save_note(day, content if content is not None else st.session_state.get(quill_key, ""))
+                                save_note(day, content if content is not None else st.session_state.get(_active_quill_key(), ""))
                                 # Ghi chú nhanh đã "Gộp" (xem nút ở trên) chỉ thực sự bị xoá TẠI ĐÂY,
                                 # sau khi ghi chú chính đã lưu thành công -- Huỷ/Xoá ghi chú bên dưới
                                 # chỉ bỏ đánh dấu, không đụng tới bảng quick_notes.
@@ -3408,8 +3484,13 @@ def render_notes_journal(period_key, kind, df_all):
         qnote_html = _quick_note_chips_html(qn[qn['_d'] == d]) if d in quick_note_days else ''
         note_html = ''
         if d in note_days:
-            note_html = (f"<span class='rl-book'>Ghi chú chính</span>"
-                         f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>")
+            _note_body = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
+            # Nhãn "Ghi chú chính" chỉ cần khi CÒN ghi chú nhanh hiện cùng dòng (phân biệt 2 khối) --
+            # không còn ghi chú nhanh nào (đã gộp/xoá hết) thì chỉ 1 khối ghi chú duy nhất, nhãn dư
+            # thừa. Khớp đúng cách renderer Tìm kiếm đã làm (không có nhãn, xem _book_chips_html
+            # neighbor ở render_search()).
+            note_html = (f"<span class='rl-book'>Ghi chú chính</span>{_note_body}" if qnote_html
+                         else _note_body)
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
@@ -5634,7 +5715,10 @@ st.markdown(
        vẫn hiện to hơn khung chứa (overflow:visible) -> nhìn như đè chồng lên cột giữa. */
     [class*="st-key-qnote_row_"] [data-testid="stColumn"] { min-width: 0 !important; }
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child { flex: 0 0 52px !important; }
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 64px !important; }
+    /* 108px (không phải 64px cũ) -- đủ chỗ cho CẢ 3 nút (Gộp/Sửa/Xoá) cùng 1 hàng ở chế độ xem;
+       64px chỉ đủ ~2 nút nên nút thứ 3 bị đẩy xuống dòng, đội chiều cao mỗi hàng ghi chú nhanh
+       lên trông như cách nhau xa dù margin-bottom (dòng dưới) đã rất sát. */
+    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 108px !important; }
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child *,
     [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child * {
         width: 100% !important; min-width: 0 !important;
@@ -6274,12 +6358,12 @@ def render_day_report(df):
             ], sections=_secs)
 
             # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
-            # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Giữ nguyên phần chi tiết
-            # (trục giờ/dải mờ khung giờ điển hình/nhãn dự án) -- chỉ đổi VỊ TRÍ, không rút gọn nội
-            # dung. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
+            # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
+            # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
+            # án. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
             # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
             # lại thông tin.
-            render_day_timeline(day_df, sel, df)
+            render_day_timeline(day_df)
 
             render_session_bar(day_df)
 
@@ -7020,7 +7104,7 @@ elif nav == "Tuỳ biến":
                     unsafe_allow_html=True)
     with st.expander("4. Giao diện", expanded=False):
         _preset_items = list(ACCENT_PRESETS.items())
-        _per_row = 5
+        _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
         _swatch_css = "<style>"
         for _row_start in range(0, len(_preset_items), _per_row):
             _row_items = _preset_items[_row_start:_row_start + _per_row]
@@ -7264,9 +7348,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
     help_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
-        "Mở app lúc chưa trồng cây nào trong ngày cũng chẳng sao — trang Hôm nay không dỗi mà bỏ "
-        "trống, nó tự chuyển sang chế độ “tham khảo cho lên kế hoạch” để vẫn có gì đó cho bạn xem.")
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử")
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
         f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
@@ -7303,11 +7385,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
     help_chapter(
-        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra",
-        "Thành thật mà nói: mở dashboard liên tục giữa giờ làm thường không phải vì cần dữ liệu gì "
-        "gấp, mà là một kiểu trốn việc rất tinh vi — trông có vẻ chăm chỉ nhưng thực ra đang xem "
-        "biểu đồ cho vui. Hai công cụ dưới đây sinh ra để bạn KHÔNG cần mở app giữa chừng mà vẫn "
-        "không bỏ lỡ gì.")
+        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra")
     help_block(
         "<h4>Ghi chú nhanh — cái hộp thư nháp sống trong túi quần</h4>"
         "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay icon ngoài Màn hình chính, tuỳ bạn "
@@ -7340,10 +7418,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
     help_chapter(
-        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app",
-        "Chọn cho mình một mốc cố định trong ngày — có thể là ngay sau bữa tối, hoặc đúng lúc chuẩn "
-        "bị tắt máy đi ngủ — rồi cứ lặp lại đúng mốc đó mỗi ngày. Thói quen sống được là nhờ có mốc "
-        "neo rõ ràng để bám vào, chứ không phải nhờ ý chí sắt đá gì cả (ý chí thường hết pin lúc 9 giờ tối).")
+        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app")
     help_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
@@ -7379,15 +7454,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
     help_chapter(
-        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi",
-        "Tuần là đơn vị thời gian dễ chịu để review: đủ ngắn để còn kịp sửa sai, mà cũng đủ dài để "
-        "tín hiệu thật sự xuất hiện thay vì chỉ là nhiễu của một ngày xui xẻo (chừng 15 phút, làm "
-        "vào sáng Thứ Hai hoặc tối Chủ Nhật là hợp). Lên tới tầm tháng thì câu hỏi đổi hẳn tính "
-        "chất: không còn là “đủ giờ chưa” nữa mà là “tỉ trọng thời gian có đang đúng ưu "
-        "tiên mình đặt ra không” (chừng 30 phút, đáng để pha thêm một tách trà). Có một quy tắc bất "
-        "di bất dịch ở đây: mở app mà trong đầu không có sẵn câu hỏi nào thì đó chỉ là đang lướt số "
-        "liệu giải trí, chứ không phải đang nhìn lại có chủ đích — hai việc nghe giống nhau nhưng "
-        "khác nhau một trời một vực.")
+        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi")
     _q_rows = [
         ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (biểu đồ tròn)", "Báo cáo → Tháng / Tuần"],
         ["Mình hay tập trung sung sức nhất lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tuần / Tháng"],
@@ -7463,10 +7530,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 5: SÁCH, GUNDAM & SỨC KHOẺ
     # ==========================================
     help_chapter(
-        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ",
-        "Sách và Gundam thực ra dùng chung một bảng dữ liệu và một hàm hiển thị — hai trang trông "
-        "tách biệt trên thanh điều hướng nhưng bên trong chỉ khác nhau ở vài chữ nhãn (đọc/xem, "
-        "phần/tập). Sức khoẻ thì đặc biệt hơn hẳn: đây là trang duy nhất trong cả app có nhập liệu tay.")
+        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ")
     help_block(
         "<h4>Quy ước đặt tên trong Apple Reminders — nhớ đặt đúng kẻo app đoán sai</h4>"
         "Mỗi <b>Reminder List</b> trên điện thoại tương ứng với 1 cuốn sách hoặc 1 series, đặt tên theo "
@@ -7531,11 +7595,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 6: NẠP DỮ LIỆU & ĐỒNG BỘ
     # ==========================================
     help_chapter(
-        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn",
-        "Việc hằng ngày chỉ gói gọn trong đúng 1 nút Đồng bộ ngay, nhưng đằng sau cái nút bấm gọn "
-        "gàng đó là cả một mớ luật lệ khác nhau tuỳ theo từng nguồn dữ liệu. Bảng bên dưới là toàn "
-        "bộ luật chơi đó — đáng bỏ ra vài phút đọc một lần cho kỹ, để về sau không bao giờ phải "
-        "phập phồng lo nạp trùng dữ liệu hay tự dưng mất mát gì.")
+        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn")
     help_block(
         "<h4>Đường đi của dữ liệu — từ điện thoại tới màn hình bạn đang xem</h4>"
         "<div class='help-flow'>"
@@ -7589,11 +7649,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
     # ==========================================
     help_chapter(
-        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện",
-        "Mọi thứ điều khiển chuyện “app trông ra sao” và “dữ liệu đến từ "
-        "đâu” đều được gom hết về một trang duy nhất, đánh số gọn gàng từ 1 đến 5 theo đúng thứ tự "
-        "bạn sẽ thao tác khi mới bắt đầu dùng app: nạp dữ liệu → phân loại → kiểm tra lại → (giao "
-        "diện, tuỳ thích) → sao lưu cho chắc.")
+        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện")
     help_block(
         "<h4>Một màu accent duy nhất, lan ra ba nơi khác nhau, bằng ba cơ chế khác nhau</h4>"
         "<ul>"
@@ -7636,10 +7692,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
     # ==========================================
     help_chapter(
-        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp",
-        "Đây là những câu mọi người (và cả chính người viết app này) hay tự hỏi nhất mỗi khi ngồi "
-        "nhìn số liệu mà thấy hơi bối rối. Mỗi câu trả lời gói gọn trong khoảng nửa phút đọc, không "
-        "vòng vo — cứ tìm đúng câu đang thắc mắc rồi bấm mở ra là xong.")
+        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp")
     with st.container(key="help_faq"):
         help_faq_item(
             "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
@@ -7721,15 +7774,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
     # ==========================================
     help_chapter(
-        "help-ch9", 9, "Changelog", "Nhật ký phát triển",
-        "Đây là nơi ghi lại toàn bộ những đợt thay đổi lớn nhỏ mà app đã trải qua, mỗi mục tương ứng "
-        "với 1 đợt Pull Request đã được merge vào code, xếp theo thứ tự mới nhất nằm trên cùng cho "
-        "dễ theo dõi. Ba chiếc chip nhỏ cạnh mỗi mục đều được tra tay cẩn thận vào đúng thời điểm "
-        "viết (app hoàn toàn không tự gọi GitHub hay git lúc đang chạy, số liệu này là tĩnh): chip "
-        "ngày tháng là ngày merge của PR mới nhất trong nhóm, chip màu xám là tổng số dòng của toàn "
-        "bộ app.py tại đúng thời điểm đó, còn chip màu accent là số dòng thực sự thay đổi (thêm + "
-        "xoá cộng lại) của riêng đợt PR đó — để bạn hình dung được cả mốc thời gian, quy mô toàn bộ "
-        "mã nguồn, lẫn độ lớn của từng đợt cập nhật.")
+        "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
         dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
              title="Dọn dẹp bloat, sửa lỗi vặt, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
