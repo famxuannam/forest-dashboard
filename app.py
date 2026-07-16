@@ -3562,14 +3562,24 @@ def _render_health_report(df_health):
         st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
         return
 
-    sec_hero(None, "Chỉ số theo thời gian", None,
-             [("hm-bc-abn", "Chỉ số bất thường"), ("hm-bc-ch1", "1 · Số liệu"),
-              ("hm-bc-ch2", "2 · Biểu đồ theo dõi")])
-
     # "Chỉ số bất thường" -- lấy NGUYÊN lần khám gần nhất (cùng test_date, có thể gộp nhiều Nhóm
     # nếu khám nhiều loại cùng lúc), không phụ thuộc Nhóm/Chỉ số đang chọn bên dưới. Đây là thứ
     # người dùng thực sự cần thấy NGAY sau khi vừa nhập kết quả khám mới -- xem docstring hàm.
     _latest_date = df_health['Ngày lấy mẫu'].max()
+
+    # Dòng "Cập nhật lần cuối ... trước" -- cùng khuôn _upd_line của billboard Hôm nay (epoch UTC
+    # + JS ticker tự nhích mỗi 30s qua _inject_relative_time_ticker(), không cần rerun cả trang).
+    _hm_ts = pd.Timestamp(_latest_date)
+    _hm_abs_str = _hm_ts.strftime('%d/%m/%Y')
+    _hm_epoch_ms = int(_hm_ts.tz_localize(APP_TZ).timestamp() * 1000)
+    _hm_meta = (f"Cập nhật lần cuối <b id='last-update-live' data-epoch='{_hm_epoch_ms}' "
+                f"title='Lần khám {_hm_abs_str}'>{format_relative(_hm_ts)}</b>")
+
+    sec_hero(None, "Chỉ số theo thời gian", None,
+             [("hm-bc-abn", "Chỉ số bất thường"), ("hm-bc-ch1", "1 · Số liệu"),
+              ("hm-bc-ch2", "2 · Biểu đồ theo dõi")], meta=_hm_meta)
+    _inject_relative_time_ticker()
+
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
     sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}")
@@ -4567,7 +4577,7 @@ def sec_block(html):
     st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
 
 
-def sec_hero(kicker, title, sub, chips):
+def sec_hero(kicker, title, sub, chips, meta=None):
     """Khối mở đầu 1 trang cuộn dọc kiểu "chương": kicker + tiêu đề lớn + đoạn tóm tắt ngắn +
     hàng chip nhảy nhanh tới từng chương (chips: list[(anchor, nhãn)]). Factor lại từ khối hero
     viết tay ban đầu của trang Trợ giúp -- dùng chung cho mọi trang chuyển sang bố cục này để
@@ -4578,16 +4588,22 @@ def sec_hero(kicker, title, sub, chips):
     Trợ giúp hiện đều gọi kiểu này -- Trợ giúp là ngoại lệ duy nhất còn giữ đủ cả 2, vì đó là nội
     dung hướng dẫn thật cần câu mở đầu giải thích app, không phải phần "dư thừa" như các trang
     khác). chips=[] -> bỏ hẳn hàng chip (không render div rỗng để lại khoảng trắng thừa) -- dùng
-    khi sub-tab không có chương/mục nào khác để nhảy tới (vd Sách/Gundam → Tổng quan)."""
+    khi sub-tab không có chương/mục nào khác để nhảy tới (vd Sách/Gundam → Tổng quan).
+
+    meta=None/"" -> bỏ hẳn dòng nhỏ dưới tiêu đề. KHÁC bản chất với sub (đoạn mô tả tĩnh đã bị bỏ
+    khỏi mọi hero ngoài Trợ giúp) -- meta dành cho 1 dòng dữ liệu SỐNG (vd "Cập nhật lần cuối ...
+    trước", đúng khuôn .tbill-meta của billboard Hôm nay), chỉ trang nào thực sự có mốc cập nhật
+    đáng theo dõi mới truyền (hiện chỉ Sức khoẻ)."""
     _kicker_html = f"<div class='hh-kicker'>{kicker}</div>" if kicker else ""
     _sub_html = f"<div class='hh-sub'>{sub}</div>" if sub else ""
+    _meta_html = f"<div class='hh-meta'>{meta}</div>" if meta else ""
     _toc_html = ""
     if chips:
         _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
         _toc_html = f"<div class='sec-toc'>{_chips_html}</div>"
     st.markdown(
         f"<div class='sec-hero'>{_kicker_html}"
-        f"<div class='hh-title'>{title}</div>{_sub_html}{_toc_html}</div>",
+        f"<div class='hh-title'>{title}</div>{_sub_html}{_meta_html}{_toc_html}</div>",
         unsafe_allow_html=True)
 
 
@@ -5445,6 +5461,7 @@ st.markdown(
     .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
         margin: 6px 0 8px; line-height: 1.15; }
     .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
+    .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
     .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
