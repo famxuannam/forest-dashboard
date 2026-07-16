@@ -4489,41 +4489,58 @@ def render_period_table(df, time_col):
 _HELP_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
-def help_kbd(*keys):
-    """Dãy phím kiểu keycap: help_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
+def sec_kbd(*keys):
+    """Dãy phím kiểu keycap: sec_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
     Trả về string HTML để nhúng vào bảng/đoạn văn khác, không tự render."""
-    return "<span class='help-kplus'>+</span>".join(
-        f"<kbd class='help-kbd'>{k}</kbd>" for k in keys)
+    return "<span class='sec-kplus'>+</span>".join(
+        f"<kbd class='sec-kbd'>{k}</kbd>" for k in keys)
 
 
-def help_table(headers, rows):
+def sec_table(headers, rows):
     """Bảng tra nhanh (cheat-sheet). rows: list[list[str]], cell là HTML thô (nhúng được
-    help_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
+    sec_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
     Trả về string HTML (bọc sẵn khối cuộn ngang cho màn hẹp)."""
     _thead = "".join(f"<th>{h}</th>" for h in headers)
     _tbody = "".join(
         "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
-    return ("<div class='help-tblwrap'><table class='help-tbl'>"
+    return ("<div class='sec-tblwrap'><table class='sec-tbl'>"
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def help_chapter(anchor, num, kicker, title, lead=None):
-    """Header 1 chương của trang Trợ giúp: số thứ tự lớn mờ màu accent + dòng kicker in hoa +
-    tiêu đề + đoạn dẫn. anchor là id cho chip mục lục nhảy tới (href='#help-chN' -- CSS
-    scroll-margin-top của .help-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề)."""
-    _lead = f"<p class='help-ch-lead'>{lead}</p>" if lead else ""
+def sec_chapter(anchor, num, kicker, title, lead=None):
+    """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
+    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
+    dòng kicker in hoa + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy tới (CSS
+    scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
+
+    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, vd panel tham khảo khi chưa có dữ
+    liệu, hay "Chỉ số bất thường" ở Sức khoẻ -- những mục này không nằm trong 1 chuỗi đếm)."""
+    _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
+    _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     st.markdown(
-        f"<div class='help-ch' id='{anchor}'>"
-        f"<div class='help-ch-num'>{num:02d}</div>"
-        f"<div class='help-ch-kicker'>{kicker}</div>"
-        f"<h2 class='help-ch-title'>{title}</h2>{_lead}</div>",
+        f"<div class='sec-ch' id='{anchor}'>{_num_html}"
+        f"<div class='sec-ch-kicker'>{kicker}</div>"
+        f"<h2 class='sec-ch-title'>{title}</h2>{_lead}</div>",
         unsafe_allow_html=True)
 
 
-def help_block(html):
-    """Bọc 1 khối HTML vào thẻ .help-card (thay cho st.container(border=True) của trang
+def sec_block(html):
+    """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) của trang
     Hướng dẫn bản cũ -- không cần key container nên không đụng rule CSS glass-card chung)."""
-    st.markdown(f"<div class='help-card'>{html}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
+
+
+def sec_hero(kicker, title, sub, chips):
+    """Khối mở đầu 1 trang cuộn dọc kiểu "chương": kicker + tiêu đề lớn + đoạn tóm tắt ngắn +
+    hàng chip nhảy nhanh tới từng chương (chips: list[(anchor, nhãn)]). Factor lại từ khối hero
+    viết tay ban đầu của trang Trợ giúp -- dùng chung cho mọi trang chuyển sang bố cục này để
+    không lặp lại cùng 1 khối HTML nhiều lần."""
+    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+    st.markdown(
+        f"<div class='sec-hero'><div class='hh-kicker'>{kicker}</div>"
+        f"<div class='hh-title'>{title}</div><div class='hh-sub'>{sub}</div>"
+        f"<div class='sec-toc'>{_chips_html}</div></div>",
+        unsafe_allow_html=True)
 
 
 def help_faq_item(question, answer_md):
@@ -4534,7 +4551,7 @@ def help_faq_item(question, answer_md):
 
 
 def render_help_changelog(entries):
-    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .help-card gắn chấm tròn accent nối
+    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .sec-card gắn chấm tròn accent nối
     đường dọc bên trái (xem CSS .help-tl*), header gồm nhãn PR + 3 chip, rồi tiêu đề đậm + bullets
     (hỗ trợ **đậm** kiểu markdown).
 
@@ -5362,86 +5379,86 @@ st.markdown(
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    .help-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
+    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.10), rgba(var(--accent-rgb),0.02) 55%, transparent); }
-    .help-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
         text-transform: uppercase; color: var(--accent-dark); }
-    .help-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
+    .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
         margin: 6px 0 8px; line-height: 1.15; }
-    .help-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
-    .help-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-    .help-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
+    .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
+    .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
         border-radius: 999px; padding: 5px 12px; }
-    .help-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
+    .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa */
-    .help-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
-    .help-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
+    .sec-ch { position: relative; margin: 36px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
+    .sec-ch-num { position: absolute; top: -8px; right: 0; font-size: 54px; font-weight: 800;
         line-height: 1; color: rgba(var(--accent-rgb),0.22); user-select: none; }
-    .help-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--text-2); }
-    .help-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
-    .help-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
-    .help-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
+    .sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
         font-size: 14px; color: var(--text); line-height: 1.6; }
-    .help-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
-    .help-card ul, .help-card ol { margin: 6px 0 2px; padding-left: 20px; }
-    .help-card li { margin: 4px 0; }
-    .help-cap { font-size: 12px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
-    .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    .sec-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
+    .sec-card ul, .sec-card ol { margin: 6px 0 2px; padding-left: 20px; }
+    .sec-card li { margin: 4px 0; }
+    .sec-cap { font-size: 12px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+    .sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 12px; margin: 10px 0; }
-    .help-grid .help-card { margin: 0; }
-    .help-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    .sec-grid .sec-card { margin: 0; }
+    .sec-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 12px; font-weight: 600; color: var(--text); background: var(--card);
         border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 6px;
         padding: 1px 7px; line-height: 1.5; }
-    .help-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
-    .help-tblwrap { overflow-x: auto; }
-    .help-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .help-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+    .sec-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
+    .sec-tblwrap { overflow-x: auto; }
+    .sec-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .sec-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
         color: var(--text-2); text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--border); }
-    .help-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
+    .sec-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
         vertical-align: top; line-height: 1.5; }
-    .help-tbl tr:last-child td { border-bottom: none; }
-    .help-tbl td:first-child { white-space: nowrap; }
+    .sec-tbl tr:last-child td { border-bottom: none; }
+    .sec-tbl td:first-child { white-space: nowrap; }
     .help-chip { display: inline-block; font-size: 11px; font-weight: 600; color: var(--text-2);
         background: var(--chip); border-radius: 999px; padding: 2px 9px; }
     .help-chip-acc { color: var(--accent); background: rgba(var(--accent-rgb),0.12); }
     /* Sơ đồ luồng dữ liệu (chương Nạp dữ liệu & đồng bộ) */
-    .help-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
-    .help-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
+    .sec-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+    .sec-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
         border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
-    .help-flow-hub { border-color: var(--accent); color: var(--accent-dark);
+    .sec-flow-hub { border-color: var(--accent); color: var(--accent-dark);
         background: rgba(var(--accent-rgb),0.10); }
-    .help-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
-    .help-flow-col { display: flex; flex-direction: column; gap: 6px; }
+    .sec-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
+    .sec-flow-col { display: flex; flex-direction: column; gap: 6px; }
     /* Minh hoạ heatmap thu nhỏ: 8 bậc alpha theo accent, nhại thang màu Biểu đồ lịch thật */
-    .help-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
-    .help-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
-    .help-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
-    .help-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
-    .help-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
-    .help-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
-    .help-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
-    .help-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
-    .help-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
+    .sec-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
+    .sec-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
+    .sec-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
+    .sec-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
+    .sec-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
+    .sec-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
+    .sec-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
+    .sec-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
+    .sec-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
     /* Minh hoạ dòng thời gian trong ngày */
-    .help-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
+    .sec-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
         margin: 12px 0 4px; overflow: hidden; }
-    .help-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
+    .sec-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
         background: rgba(var(--accent-rgb),0.55); }
-    .help-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
-    .help-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
+    .sec-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
+    .sec-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
         margin-top: 3px; }
     /* Minh hoạ xu hướng + đường trung bình động */
-    .help-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
+    .sec-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
         margin: 12px 0 4px; }
-    .help-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
-    .help-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
+    .sec-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
+    .sec-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
         border-top: 2px dashed var(--accent); }
-    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .help-card thật (cùng nền/
-       viền/bo góc/shadow với help-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
+    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .sec-card thật (cùng nền/
+       viền/bo góc/shadow với sec-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
        chạy dọc theo lề trái của toàn khối .help-tl để vẫn giữ cảm giác timeline. */
     .help-tl { margin: 8px 0; padding-left: 24px; border-left: 2px solid var(--divider); }
     .help-tl-item { position: relative; background: var(--card); border: 1px solid var(--border);
@@ -5459,7 +5476,7 @@ st.markdown(
     .help-tl-ul li { margin: 3px 0; }
     /* FAQ (chương Câu hỏi thường gặp) -- expander native đã có style "tiêu đề gạch chân" dùng
        chung cho expander báo cáo (rule [data-testid="stExpander"] phía trên), nhưng ở đây cố ý
-       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 help-card thu
+       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 sec-card thu
        gọn/mở ra được -- đồng bộ với mọi khối nội dung khác trên trang Trợ giúp, thay vì lạc tông
        kiểu "heading gạch chân" của các trang báo cáo. */
     [class*="st-key-help_faq"] [data-testid="stExpander"] { margin: 0 0 10px !important; }
@@ -5475,12 +5492,12 @@ st.markdown(
     [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
         padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
     @media (max-width: 640px) {
-        .help-hero { padding: 22px 18px; }
-        .help-hero .hh-title { font-size: 26px; }
-        .help-ch-num { font-size: 40px; }
-        .help-flow { flex-direction: column; align-items: flex-start; }
-        .help-flow-arr::after { content: "↓"; padding: 0; }
-        .help-heat { grid-template-columns: repeat(10, 13px); }
+        .sec-hero { padding: 22px 18px; }
+        .sec-hero .hh-title { font-size: 26px; }
+        .sec-ch-num { font-size: 40px; }
+        .sec-flow { flex-direction: column; align-items: flex-start; }
+        .sec-flow-arr::after { content: "↓"; padding: 0; }
+        .sec-heat { grid-template-columns: repeat(10, 13px); }
     }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
@@ -6284,6 +6301,17 @@ def render_day_report(df):
     if _kq is not None:
         _render_daily_quote_card(_kq)
 
+    # Hero + chip mục lục -- bộ chip khác nhau tuỳ ngày trống hay có phiên (2 mục không đánh số vs
+    # 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
+    _hero_chips = ([("today-ch1", "Ghi chú ngày"), ("today-ch2", "Ngày này năm trước")]
+                   if day_df.empty else
+                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
+                    ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
+                    ("today-ch5", "5 · Danh sách phiên")])
+    sec_hero("Hôm nay", "Một ngày, nhìn lại",
+             "Xem lại đúng những gì bạn đã làm hôm nay — không nhắc việc, không mục tiêu, chỉ là "
+             "bản ghi.", _hero_chips)
+
     if day_df.empty:
         # Tham khảo nhanh cho việc lên kế hoạch đầu ngày (vd Pomodoro Planning đầu ngày trước khi
         # có phiên nào) -- số liệu của CÁC NGÀY KHÁC (cùng thứ tuần trước / trung bình cùng thứ),
@@ -6308,89 +6336,89 @@ def render_day_report(df):
             render_stat_panel(hero_items=[], sections=[{"label": "Tham khảo cho lên kế hoạch", "chips": ref_chips}],
                                card_style="padding:20px; margin:0 16px 20px;")
 
-        with st.expander("Ghi chú ngày", expanded=True):
-            render_note_editor(sel, sel_day_badges)
-        with st.expander("Ngày này năm trước", expanded=False):
-            render_on_this_day(sel, df)
+        sec_chapter("today-ch1", None, "Hôm nay", "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
+        sec_chapter("today-ch2", None, "Hôm nay", "Ngày này năm trước")
+        render_on_this_day(sel, df)
     else:
-        with st.expander("1. Tổng quan ngày", expanded=True):
-            d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
-            d_sess = len(day_df)
-            d_avg = _avg_session_min(day_df)
+        sec_chapter("today-ch1", 1, "Hôm nay", "Tổng quan ngày")
+        d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
+        d_sess = len(day_df)
+        d_avg = _avg_session_min(day_df)
 
-            cmp_chips = []
-            pw = df[df['Ngày'] == (sel - timedelta(days=7))]
-            if not pw.empty:
-                pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
-                _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
-                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
-                                  "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
-            else:
-                cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
-            same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
-                      & (df['Ngày'] != sel)]
-            if same['Ngày'].nunique():
-                avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-                _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
-                cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
-                                  "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
+        cmp_chips = []
+        pw = df[df['Ngày'] == (sel - timedelta(days=7))]
+        if not pw.empty:
+            pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
+            _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
+            cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
+                              "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
+        else:
+            cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": "không có"})
+        same = df[(pd.to_datetime(df['Ngày']).dt.day_name() == pd.Timestamp(sel).day_name())
+                  & (df['Ngày'] != sel)]
+        if same['Ngày'].nunique():
+            avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
+            _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
+            cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
+                              "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
 
-            t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
-            t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
-            _sp = t1 - t0
-            span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
+        t0 = pd.to_datetime(day_df['Thời gian bắt đầu']).min()
+        t1 = pd.to_datetime(day_df['Thời gian kết thúc']).max()
+        _sp = t1 - t0
+        span_str = f"{int(_sp.total_seconds() // 3600)}h{int((_sp.total_seconds() % 3600) // 60):02d}"
 
-            bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
-                        .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
-            buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
+        bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
+                    .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
+        buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
 
-            _secs = [{"label": "So sánh", "chips": cmp_chips},
-                     {"label": "Mốc trong ngày", "chips": [
-                         {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
-                         {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
-                         {"k": "Trải dài", "v": span_str}]}]
-            if buoi_chips:
-                _secs.append({"label": "Theo buổi", "chips": buoi_chips})
-            render_stat_panel(hero_items=[
-                {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
-                {"label": "Số phiên", "value": f"{d_sess}"},
-                {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
-            ], sections=_secs)
+        _secs = [{"label": "So sánh", "chips": cmp_chips},
+                 {"label": "Mốc trong ngày", "chips": [
+                     {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
+                     {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
+                     {"k": "Trải dài", "v": span_str}]}]
+        if buoi_chips:
+            _secs.append({"label": "Theo buổi", "chips": buoi_chips})
+        render_stat_panel(hero_items=[
+            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
+            {"label": "Số phiên", "value": f"{d_sess}"},
+            {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
+        ], sections=_secs)
 
-            # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
-            # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
-            # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
-            # án. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
-            # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
-            # lại thông tin.
-            render_day_timeline(day_df)
+        # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
+        # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
+        # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
+        # án. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
+        # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
+        # lại thông tin.
+        render_day_timeline(day_df)
 
-            render_session_bar(day_df)
+        render_session_bar(day_df)
 
-        with st.expander("2. Ghi chú ngày", expanded=True):
-            render_note_editor(sel, sel_day_badges)
+        sec_chapter("today-ch2", 2, "Hôm nay", "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
 
-        with st.expander("3. Ngày này năm trước", expanded=False):
-            render_on_this_day(sel, df)
+        sec_chapter("today-ch3", 3, "Hôm nay", "Ngày này năm trước")
+        render_on_this_day(sel, df)
 
-        with st.expander("4. Phân bổ thời gian", expanded=False):
-            frag_pie(day_df, "rad_day", "Dự án")
+        sec_chapter("today-ch4", 4, "Hôm nay", "Phân bổ thời gian")
+        frag_pie(day_df, "rad_day", "Dự án")
 
-        with st.expander("5. Danh sách phiên", expanded=False):
-            rows_html = ''
-            for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
-                s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
-                cat = r.get('Danh mục')
-                cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
-                rows_html += ('<tr class="prow">'
-                              f'<td class="lbl">{i}</td>'
-                              f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
-                              f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
-                              f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
-                              f'<td class="txt">{html_escape(cat)}</td></tr>')
-            rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
-                          f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
-            st.markdown(DTBL_CSS + f"""
+        sec_chapter("today-ch5", 5, "Hôm nay", "Danh sách phiên")
+        rows_html = ''
+        for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
+            s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
+            cat = r.get('Danh mục')
+            cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
+            rows_html += ('<tr class="prow">'
+                          f'<td class="lbl">{i}</td>'
+                          f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
+                          f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
+                          f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
+                          f'<td class="txt">{html_escape(cat)}</td></tr>')
+        rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
+                      f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
+        st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
 <tbody>{rows_html}</tbody>
@@ -7319,49 +7347,40 @@ elif nav == "Hướng dẫn":
     # (ngữ nghĩa đồng bộ, timezone, cách đọc số) — phần mô tả hiển nhiên nhìn UI là hiểu thì bỏ.
 
     # --- Hero + mục lục ---
-    st.markdown(
-        "<div class='help-hero'>"
-        "<div class='hh-kicker'>Trợ giúp</div>"
-        "<div class='hh-title'>Chào bạn, đây là một vòng Forest Dashboard</div>"
-        "<div class='hh-sub'>Nói trước cho yên tâm: app này là cái gương để soi lại, không phải "
+    sec_hero(
+        "Trợ giúp", "Chào bạn, đây là một vòng Forest Dashboard",
+        "Nói trước cho yên tâm: app này là cái gương để soi lại, không phải "
         "ông sếp đứng sau lưng nhắc việc — không đặt mục tiêu, không hối thúc, không có thanh "
         "tiến độ nào réo gọi bạn cả. Nó chỉ lặng lẽ ghi lại những gì Forest đã ghi, rồi chờ bạn "
         "quay lại nhìn khi nào rảnh. Vì vậy hướng dẫn này cũng không bắt bạn học thuộc từng trang "
         "một cách khô khan, mà kể theo đúng nhịp một ngày bình thường của bạn: sáng liếc qua để "
         "lên kế hoạch, cả ngày kệ app đó mà làm việc, tối dành 5 phút đóng lại ngày hôm đó — rồi "
         "cứ thế phóng to dần ra thành tuần, tháng, năm. Đọc từ đầu tới cuối chắc mất khoảng một "
-        "tách trà; đọc lướt qua mục lục bên dưới rồi nhảy thẳng vào chỗ đang cần cũng tốt không kém.</div>"
-        "<div class='help-toc'>"
-        "<a class='help-toc-chip' href='#help-ch1'>1 · Buổi sáng</a>"
-        "<a class='help-toc-chip' href='#help-ch2'>2 · Trong ngày</a>"
-        "<a class='help-toc-chip' href='#help-ch3'>3 · Cuối ngày</a>"
-        "<a class='help-toc-chip' href='#help-ch4'>4 · Tuần &amp; tháng</a>"
-        "<a class='help-toc-chip' href='#help-ch5'>5 · Sách · Gundam · Sức khoẻ</a>"
-        "<a class='help-toc-chip' href='#help-ch6'>6 · Dữ liệu &amp; đồng bộ</a>"
-        "<a class='help-toc-chip' href='#help-ch7'>7 · Tuỳ biến</a>"
-        "<a class='help-toc-chip' href='#help-ch8'>8 · Câu hỏi thường gặp</a>"
-        "<a class='help-toc-chip' href='#help-ch9'>9 · Nhật ký phát triển</a>"
-        "</div></div>",
-        unsafe_allow_html=True)
+        "tách trà; đọc lướt qua mục lục bên dưới rồi nhảy thẳng vào chỗ đang cần cũng tốt không kém.",
+        [("help-ch1", "1 · Buổi sáng"), ("help-ch2", "2 · Trong ngày"),
+         ("help-ch3", "3 · Cuối ngày"), ("help-ch4", "4 · Tuần &amp; tháng"),
+         ("help-ch5", "5 · Sách · Gundam · Sức khoẻ"), ("help-ch6", "6 · Dữ liệu &amp; đồng bộ"),
+         ("help-ch7", "7 · Tuỳ biến"), ("help-ch8", "8 · Câu hỏi thường gặp"),
+         ("help-ch9", "9 · Nhật ký phát triển")])
 
     # ==========================================
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử")
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
         f"<b style='left:{l}%;width:{w}%' class='{c}'></b>"
         for l, w, c in [(9, 7, ""), (17, 5, "d2"), (24, 3, ""), (38, 8, "d2"),
                         (48, 4, ""), (60, 6, ""), (68, 3, "d2"), (83, 7, "")])
-    help_block(
+    sec_block(
         "<h4>Dòng thời gian trong ngày</h4>"
-        f"<div class='help-daybar'>{_daybar}</div>"
-        "<div class='help-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
-        "<div class='help-cap'>Mỗi khối màu là 1 phiên tập trung, được đặt đúng vào vị trí giờ nó "
+        f"<div class='sec-daybar'>{_daybar}</div>"
+        "<div class='sec-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
+        "<div class='sec-cap'>Mỗi khối màu là 1 phiên tập trung, được đặt đúng vào vị trí giờ nó "
         "thực sự diễn ra và tô màu theo Nhóm — nhìn một cái là biết ngay buổi sáng/chiều/tối hôm đó "
         "dồn hết vào việc gì, và có bị ngắt quãng lung tung không. Đỡ phải dò từng dòng trong bảng.</div>")
-    help_block(
+    sec_block(
         "<h4>Ngày chưa có phiên nào thì xem gì cho đỡ trống trải</h4>"
         "<ul>"
         "<li><b>Tham khảo cho lên kế hoạch</b> — panel nhỏ nhảy ra thay cho dòng thời gian khi ngày còn "
@@ -7384,9 +7403,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra")
-    help_block(
+    sec_block(
         "<h4>Ghi chú nhanh — cái hộp thư nháp sống trong túi quần</h4>"
         "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay icon ngoài Màn hình chính, tuỳ bạn "
         "thích kiểu nào) sẽ hỏi bạn gõ đúng 1 dòng ý tưởng, rồi lặng lẽ gửi <b>thẳng lên Supabase</b> — "
@@ -7397,29 +7416,29 @@ elif nav == "Hướng dẫn":
         "về gom lại thành một đoạn hoàn chỉnh (xem chương 3 để biết cách gộp). Yên tâm là Tìm kiếm cũng "
         "quét được cả nội dung ghi chú nhanh, phòng khi vài hôm bạn lười chưa kịp gộp vào ghi chú chính.")
     _sc_rows = [
-        [help_kbd("1") + " … " + help_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải như trên màn hình", "Toàn app"],
-        [help_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn con trỏ cho bạn gõ luôn", "Toàn app"],
-        [help_kbd("/"), "Nhảy sang trang Tìm kiếm (nếu đang ở trang khác) và focus luôn vào ô nhập từ khoá", "Toàn app"],
-        [help_kbd("←") + " / " + help_kbd("→"), "Lùi về hôm qua / tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
-        [help_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột đi tìm nút Cập nhật", "Trong ô ghi chú"],
-        [help_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá mất từ khoá đang gõ", "Theo ngữ cảnh"],
-        [help_kbd("?"), "Bật/tắt ngay bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng này nằm ở đâu", "Toàn app"],
+        [sec_kbd("1") + " … " + sec_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải như trên màn hình", "Toàn app"],
+        [sec_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn con trỏ cho bạn gõ luôn", "Toàn app"],
+        [sec_kbd("/"), "Nhảy sang trang Tìm kiếm (nếu đang ở trang khác) và focus luôn vào ô nhập từ khoá", "Toàn app"],
+        [sec_kbd("←") + " / " + sec_kbd("→"), "Lùi về hôm qua / tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
+        [sec_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột đi tìm nút Cập nhật", "Trong ô ghi chú"],
+        [sec_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá mất từ khoá đang gõ", "Theo ngữ cảnh"],
+        [sec_kbd("?"), "Bật/tắt ngay bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng này nằm ở đâu", "Toàn app"],
     ]
-    help_block(
+    sec_block(
         "<h4>Bảng phím tắt bàn phím — dán mắt nhớ luôn cho tiện</h4>"
-        + help_table(["Phím", "Bấm vào thì sao", "Dùng ở đâu"], _sc_rows)
-        + "<div class='help-cap'>Một lưu ý nhỏ tránh hoang mang: mọi phím tắt tự động im lặng khi con trỏ "
+        + sec_table(["Phím", "Bấm vào thì sao", "Dùng ở đâu"], _sc_rows)
+        + "<div class='sec-cap'>Một lưu ý nhỏ tránh hoang mang: mọi phím tắt tự động im lặng khi con trỏ "
         "đang nằm trong một ô nhập liệu bất kỳ (ngoại trừ "
-        + help_kbd("Ctrl/Cmd", "Enter") + " và " + help_kbd("Esc")
+        + sec_kbd("Ctrl/Cmd", "Enter") + " và " + sec_kbd("Esc")
         + " ngay trong ô ghi chú, hai phím này vẫn hoạt động bình thường), và cũng không nhận khi bạn "
         "đang giữ Ctrl/Cmd/Alt — để khỏi vô tình nhảy trang lúc chỉ đang gõ chữ.</div>")
 
     # ==========================================
     # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app")
-    help_block(
+    sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
         "<li><b>Đồng bộ ngay</b> (ở Tuỳ biến → 1. Dữ liệu đầu vào) — chỉ một nút bấm mà nạp cả dữ liệu "
@@ -7433,7 +7452,7 @@ elif nav == "Hướng dẫn":
         "<i>bao nhiêu</i> giờ, còn ghi chú mới kể được bạn làm <i>gì và vì sao</i> — một năm sau nhìn lại, "
         "cái thứ hai mới là thứ đáng đọc, chứ không ai ngồi gặm nhấm con số cũ cả.</li>"
         "</ol>")
-    help_block(
+    sec_block(
         "<h4>Nút Gộp của ghi chú nhanh — bấm rồi mà vẫn hồi hộp không biết đã xoá chưa?</h4>"
         "Bấm <b>Gộp</b> trên một dòng ghi chú nhanh sẽ chèn nguyên nội dung dòng đó vào cuối ô soạn Ghi chú "
         "chính (tự mở ô soạn luôn nếu bạn chưa mở) rồi gạch mờ dòng đó đi cho biết là “đã xử lý” — nhưng yên "
@@ -7441,7 +7460,7 @@ elif nav == "Hướng dẫn":
         "tay bấm Gộp rồi đổi ý, cứ bấm Huỷ (hoặc Xoá ghi chú chính) là bỏ đánh dấu, ghi chú nhanh vẫn còn "
         "nguyên xi không mất gì cả. Còn nếu bạn sửa một dòng thành trống trơn rồi bấm Cập nhật, dòng đó cũng "
         "bị xoá luôn — giống y hệt cách Ghi chú chính hoạt động, không có gì bất ngờ ở đây.")
-    help_block(
+    sec_block(
         "<h4>Vì sao ghi chú lại quan trọng hơn mọi biểu đồ đẹp đẽ khác</h4>"
         "Ghi chú là loại dữ liệu <b>duy nhất trong cả app không thể nạp lại được</b> nếu lỡ để trống: phiên "
         "Forest, tiến độ Reminders, hay trích dẫn Kindle — tất cả đều có thể khôi phục lại từ file gốc nếu "
@@ -7453,7 +7472,7 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi")
     _q_rows = [
         ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (biểu đồ tròn)", "Báo cáo → Tháng / Tuần"],
@@ -7464,9 +7483,9 @@ elif nav == "Hướng dẫn":
         ["Ngày nào đỉnh nhất từ trước tới giờ?", "Bảng vàng: Ngày nổi bật &amp; Kỷ lục", "Bảng số liệu của từng trang"],
         ["Một việc cụ thể đang tiến triển ra sao?", "Báo cáo → Dự án (lọc riêng đúng 1 Nhóm/Dự án)", "Báo cáo → Dự án"],
     ]
-    help_block(
+    sec_block(
         "<h4>Đang thắc mắc điều gì — thì nên nhìn vào biểu đồ nào</h4>"
-        + help_table(["Câu hỏi trong đầu bạn", "Mở biểu đồ này lên", "Tìm ở đâu"], _q_rows))
+        + sec_table(["Câu hỏi trong đầu bạn", "Mở biểu đồ này lên", "Tìm ở đâu"], _q_rows))
     _heat_lv = [0, 1, 3, 2, 0, 4, 6, 2, 1, 0, 5, 7, 3, 1,
                 2, 0, 1, 4, 5, 2, 0, 3, 6, 1, 2, 4, 0, 2,
                 1, 3, 0, 2, 6, 1, 4, 0, 2, 5, 1, 3, 7, 0,
@@ -7475,20 +7494,20 @@ elif nav == "Hướng dẫn":
     _bar_h = [35, 55, 20, 70, 45, 4, 12, 60, 80, 50, 30, 65, 40, 92, 55, 25, 70, 45, 60, 35]
     _bars = "".join(f"<i style='height:{h}%'></i>" for h in _bar_h)
     st.markdown(
-        "<div class='help-grid'>"
-        "<div class='help-card'><h4>Biểu đồ lịch — thang màu tuyệt đối, không nói dối</h4>"
-        f"<div class='help-heat'>{_heat}</div>"
-        "<div class='help-cap'>8 bậc màu được neo cứng theo mốc giờ cố định, không hề co giãn theo đúng dữ "
+        "<div class='sec-grid'>"
+        "<div class='sec-card'><h4>Biểu đồ lịch — thang màu tuyệt đối, không nói dối</h4>"
+        f"<div class='sec-heat'>{_heat}</div>"
+        "<div class='sec-cap'>8 bậc màu được neo cứng theo mốc giờ cố định, không hề co giãn theo đúng dữ "
         "liệu đang xem trên màn hình — nên “đậm bằng nhau” luôn có nghĩa là “số giờ bằng "
         "nhau” thật, so sánh được thoải mái giữa tháng này với tháng khác mà không sợ một ngày "
         "bất thường làm lệch cả thang đo, kiểu như hồi bạn cày liền 10 tiếng vì deadline dí.</div></div>"
-        "<div class='help-card'><h4>Xu hướng — đường trung bình thẳng thắn, không tô hồng</h4>"
-        f"<div class='help-bars'>{_bars}<span class='avg'></span></div>"
-        "<div class='help-cap'>Đường trung bình động 7 ngày này tính luôn cả những ngày 0 giờ tuyệt đối, "
+        "<div class='sec-card'><h4>Xu hướng — đường trung bình thẳng thắn, không tô hồng</h4>"
+        f"<div class='sec-bars'>{_bars}<span class='avg'></span></div>"
+        "<div class='sec-cap'>Đường trung bình động 7 ngày này tính luôn cả những ngày 0 giờ tuyệt đối, "
         "chứ không chỉ đếm ngày có hoạt động rồi lờ đi phần còn lại — nên nghỉ liền vài hôm sẽ thấy đường "
         "đi xuống rõ ràng ngay, không có chuyện bị làm mượt cho đẹp mắt.</div></div>"
         "</div>", unsafe_allow_html=True)
-    help_block(
+    sec_block(
         "<h4>Đọc số cho đúng cách — bốn luật ngầm nên biết trước khi hoảng</h4>"
         "<ul>"
         "<li><b>Kỳ dở dang luôn được cắt gọn để so sánh công bằng</b> — nếu kỳ đang xem chưa đi hết (ví dụ "
@@ -7509,7 +7528,7 @@ elif nav == "Hướng dẫn":
         "được vinh dự gắn chip huy chương lên Timeline — vì nếu gắn cả Ngày nổi bật (thứ gần như tuần nào "
         "cũng có) thì cảm giác hiếm có sẽ mất sạch, huy chương phát tràn lan thì còn gì là huy chương nữa.</li>"
         "</ul>")
-    help_block(
+    sec_block(
         "<h4>Ba cái bẫy dễ sa vào nhất — cẩn thận kẻo dính</h4>"
         "<ol>"
         "<li><b>Tối ưu con số thay vì tối ưu công việc thật</b> — bấm trồng cây cho một phiên đọc tin vặt lan "
@@ -7529,9 +7548,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 5: SÁCH, GUNDAM & SỨC KHOẺ
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ")
-    help_block(
+    sec_block(
         "<h4>Quy ước đặt tên trong Apple Reminders — nhớ đặt đúng kẻo app đoán sai</h4>"
         "Mỗi <b>Reminder List</b> trên điện thoại tương ứng với 1 cuốn sách hoặc 1 series, đặt tên theo "
         "khuôn “Tác giả - Tên sách”; còn mỗi reminder đã được tick hoàn thành là 1 "
@@ -7540,7 +7559,7 @@ elif nav == "Hướng dẫn":
         "ăn): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ đi. Còn nếu tên list "
         "bắt đầu bằng chữ “gundam” (viết hoa hay thường đều được, app không khó tính), nó sẽ tự "
         "động được xếp sang trang Gundam thay vì trang Sách.")
-    help_block(
+    sec_block(
         "<h4>“Số ngày” được tính kiểu gì khi có tận 2 nguồn dữ liệu cùng lúc</h4>"
         "Mỗi cuốn sách hay series được ghép lại từ tối đa 2 nguồn: phiên Forest (khi tên Dự án trùng khớp "
         "với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” sẽ lấy <b>hợp</b> "
@@ -7548,7 +7567,7 @@ elif nav == "Hướng dẫn":
         "— nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang chỉ tick Reminders "
         "cho tiện) thì khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn một nguồn sẽ "
         "hiện dấu gạch ngang “—” cho biết là thiếu dữ liệu, thay vì để trống trơn khiến bạn tưởng lỗi.")
-    help_block(
+    sec_block(
         "<h4>Gundam: vì sao app phải “đoán mò” xem bạn đang xem series nào</h4>"
         "Vì Forest chỉ có đúng 1 tag chung chung là “Gundam” cho mọi series, chứ không tách "
         "riêng từng bộ như Sách. Cho nên với mỗi ngày có phiên gắn tag đó, app sẽ đi tìm lần tick Reminder "
@@ -7561,7 +7580,7 @@ elif nav == "Hướng dẫn":
         "trang Gundam mà sửa lại tay — ngày nào đã sửa tay sẽ mang dấu “Gán tay” cho dễ phân "
         "biệt, còn nếu sau này bạn sửa lại trùng đúng với kết quả suy luận tự động thì dấu đó tự động biến "
         "mất, coi như huề cả làng.")
-    help_block(
+    sec_block(
         "<h4>Trích dẫn Kindle — sửa một lần là ăn chắc, không sợ mất lại</h4>"
         "Mọi thao tác bạn làm trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú "
         "riêng của mình) đều được lưu hẳn vào Supabase một cách nghiêm túc: có nạp lại file "
@@ -7573,7 +7592,7 @@ elif nav == "Hướng dẫn":
         "và gộp lại, chỉ giữ đúng bản đầy đủ nhất, không làm phiền bạn bằng cả đống bản nháp. Trong Nhật ký "
         "đọc, các trích dẫn tự sắp xếp theo <b>Vị trí</b> trong sách — đúng thứ tự bạn đọc thật, không cần "
         "tự tay gán từng câu vào đúng chương nào cả.")
-    help_block(
+    sec_block(
         "<h4>Sức khoẻ — nhập liệu bằng ảnh chụp phiếu, nhờ Claude làm hộ phần khó</h4>"
         "Quy trình gợi ý cho đỡ mất công gõ tay: chụp lại 2 phiếu xét nghiệm (Huyết học và Sinh hóa) mỗi lần "
         "đi khám, đưa ảnh vào Claude và nhờ đọc rồi xuất đúng khuôn JSON như bên dưới, sau đó dán thẳng vào "
@@ -7594,23 +7613,23 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 6: NẠP DỮ LIỆU & ĐỒNG BỘ
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn")
-    help_block(
+    sec_block(
         "<h4>Đường đi của dữ liệu — từ điện thoại tới màn hình bạn đang xem</h4>"
-        "<div class='help-flow'>"
-        "<span class='help-flow-col'><span class='help-flow-node'>Forest CSV</span>"
-        "<span class='help-flow-node'>Reminders</span></span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Shortcut iOS</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Bucket Storage</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node help-flow-hub'>Đồng bộ ngay</span>"
-        "<span class='help-flow-arr'></span>"
-        "<span class='help-flow-node'>Dashboard</span>"
+        "<div class='sec-flow'>"
+        "<span class='sec-flow-col'><span class='sec-flow-node'>Forest CSV</span>"
+        "<span class='sec-flow-node'>Reminders</span></span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Shortcut iOS</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Bucket Storage</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node sec-flow-hub'>Đồng bộ ngay</span>"
+        "<span class='sec-flow-arr'></span>"
+        "<span class='sec-flow-node'>Dashboard</span>"
         "</div>"
-        "<div class='help-cap'>Cái Shortcut này chạy ngay từ share sheet mỗi khi bạn Export CSV từ app "
+        "<div class='sec-cap'>Cái Shortcut này chạy ngay từ share sheet mỗi khi bạn Export CSV từ app "
         "Forest: nó tiện tay lấy luôn file backup Reminder rồi tải cả 2 file lên chung một bucket Supabase "
         "Storage (tên file luôn bắt đầu bằng <code>forest</code> hoặc <code>reminder</code>, "
         "kiểu như <code>forest_2026-07-06.csv</code>). Về phía app, nút Đồng bộ ngay sẽ tự tìm file mới "
@@ -7631,10 +7650,10 @@ elif nav == "Hướng dẫn":
          "cho tiện, hoặc tự chọn 2 mốc ngày riêng — dùng khoảng rộng hơn khi cần lấp đầy dữ liệu lịch cũ "
          "cho tính năng Ngày này năm trước"],
     ]
-    help_block(
+    sec_block(
         "<h4>Cộng thêm hay thay thế hoàn toàn — mỗi nguồn một kiểu, đừng nhầm lẫn</h4>"
-        + help_table(["Nguồn dữ liệu", "Kiểu nạp", "Cách chống trùng &amp; lưu ý cần nhớ"], _sync_rows))
-    help_block(
+        + sec_table(["Nguồn dữ liệu", "Kiểu nạp", "Cách chống trùng &amp; lưu ý cần nhớ"], _sync_rows))
+    sec_block(
         "<h4>Xoá phiên là một kiểu xoá có trí nhớ dai, không phải xoá xong là quên luôn</h4>"
         "Khi bạn xoá phiên ở mục <b>3. Dữ liệu làm việc hiện tại</b> (nút màu đỏ, bấm là xoá ngay không hỏi "
         "lại lần nào), phiên đó được app âm thầm ghi nhớ riêng vào một bảng tên là "
@@ -7648,9 +7667,9 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện")
-    help_block(
+    sec_block(
         "<h4>Một màu accent duy nhất, lan ra ba nơi khác nhau, bằng ba cơ chế khác nhau</h4>"
         "<ul>"
         "<li><b>Nút bấm / khung viền / chip</b> — đi qua biến CSS <code>--accent</code>, toàn bộ stylesheet "
@@ -7667,7 +7686,7 @@ elif nav == "Hướng dẫn":
         "vào bảng <code>settings</code> trên Supabase. Nếu chẳng may bảng đó chưa được tạo, hoặc giá trị "
         "lưu trong đó bị hỏng vì lý do gì đó, app sẽ lặng lẽ rơi về màu “Chàm biển” mặc định "
         "thay vì báo lỗi đỏ lòm hay sập luôn — một cách xử lý khá lịch sự.")
-    help_block(
+    sec_block(
         "<h4>Dark mode — vì sao lại không có mỗi cái nút bật/tắt cho tiện</h4>"
         "App tự động đổi giữa tối và sáng theo đúng cài đặt hệ thống của thiết bị bạn đang dùng (hoặc theo "
         "lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu bạn muốn tự chọn khác với "
@@ -7675,7 +7694,7 @@ elif nav == "Hướng dẫn":
         "đổi theme ngay lúc đang chạy, app chỉ đọc được theme hiện tại là gì rồi tô đúng bộ màu tương ứng "
         "theo đó thôi — kể cả biểu đồ, bảng nhiệt lẫn ô ghi chú đều được lo liệu đầy đủ, không sợ bị "
         "lệch tông giữa các phần.")
-    help_block(
+    sec_block(
         "<h4>Sao lưu — lớp an toàn thứ hai, phòng khi lớp thứ nhất cũng có ngày trở chứng</h4>"
         "Dữ liệu vốn đã khá bền vững trên Supabase rồi (không hề mất khi app khởi động lại hay redeploy), "
         "nhưng nút <b>Sao lưu</b> vẫn đóng gói toàn bộ mọi bảng dữ liệu thành 1 file .zip để bạn tải về máy, "
@@ -7691,7 +7710,7 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch8", 8, "FAQ", "Câu hỏi thường gặp")
     with st.container(key="help_faq"):
         help_faq_item(
@@ -7773,7 +7792,7 @@ elif nav == "Hướng dẫn":
     # ==========================================
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
     # ==========================================
-    help_chapter(
+    sec_chapter(
         "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
         dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
