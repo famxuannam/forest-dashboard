@@ -2915,9 +2915,13 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     else:
         _tab_detail = _tabs[1]
 
+    # Tên trang cho hero -- chỉ Sách mới có Yêu thích (show_favorites) nên dùng luôn cờ đó để suy
+    # ra thay vì thêm 1 tham số page_name riêng trùng lặp thông tin.
+    _page_name = "Sách" if show_favorites else "Gundam"
+
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                                  _sec_timeslot, _today, labels)
+                                  _sec_timeslot, _today, labels, _page_name)
         if extra_overview is not None:
             extra_overview()
 
@@ -2926,13 +2930,16 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             _render_kindle_favorites_tab()
 
     with _tab_detail:
-        _render_reading_detail(t, reading_log_df, labels)
+        _render_reading_detail(t, reading_log_df, labels, _page_name)
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                              _sec_timeslot, _today, labels):
+                              _sec_timeslot, _today, labels, page_name):
     """Sub-tab "Tổng quan" của render_reading_log(): 3 thẻ hero/nhóm chip + thanh phân bổ +
-    bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series."""
+    bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
+    (đã flat sẵn từ trước) -- chỉ thêm hero cho đồng bộ với các trang khác, không có chip mục lục
+    (không có chương/mục nào để nhảy tới trong đúng 1 sub-tab ngắn này)."""
+    sec_hero(None, f"Những cuốn/series đã và đang {labels['verb']}", None, [])
     # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
@@ -3014,17 +3021,21 @@ _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn 
 # trong ô chọn "Chi tiết" -- xem _render_reading_detail().
 
 
-def _render_reading_detail(t, reading_log_df, labels):
-    """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện 4 mục đánh số
+def _render_reading_detail(t, reading_log_df, labels, page_name):
+    """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện 4 chương đánh số
     -- 1. Số liệu (hero chip, tái dùng render_stat_panel), 2. Nhật ký đọc (_reading_rows_html),
     3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
     ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels.
 
+    Hero chỉ render SAU khi đã chọn 1 cuốn/series (không phải ngay khi vào tab) -- tránh chip mục
+    lục trỏ tới chương chưa tồn tại lúc ô chọn còn để trống, đúng quyết định đã chốt khi thiết kế
+    (giống cách "Báo cáo → Dự án" chỉ hiện hero sau khi chọn Nhóm/Dự án).
+
     Ô chọn CŨNG liệt kê thêm các nguồn Kindle KHÔNG gắn Dự án nào (vd tạp chí The Economist --
     project để trống trong kindle_book_map lúc import, xem "Tải trích dẫn Kindle" ở tab Tuỳ biến)
     -- các nguồn này không có tiến độ đọc (không phiên Forest, không phần Reminders) nên chọn vào
-    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 mục đánh số phía trên (vốn đều dựa trên
-    dữ liệu tiến độ mà nguồn độc lập không có)."""
+    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 chương đánh số phía trên (vốn đều dựa
+    trên dữ liệu tiến độ mà nguồn độc lập không có)."""
     _kh_all = load_kindle_highlights()
     _indep_sources = (sorted(_kh_all[_kh_all['Dự án'].isna()]['Cuốn sách'].dropna().unique())
                        if not _kh_all.empty else [])
@@ -3038,82 +3049,90 @@ def _render_reading_detail(t, reading_log_df, labels):
         st.info(f"Chọn 1 {labels['item_col'].lower()} ở trên để xem chi tiết.")
         return
 
+    _anchor_ns = "rl-ct" if page_name == "Sách" else "gd-ct"
+
     if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
         _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
         _kh_src = _kh_all[_kh_all['Cuốn sách'] == _src]
-        with st.expander("Trích dẫn & Ghi chú", expanded=True):
-            with st.container(border=True, key="jcard_reading_detail_indep"):
-                _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
+        sec_hero(None, html_escape(str(_src)), None,
+                 [(f"{_anchor_ns}-quote", "Trích dẫn &amp; Ghi chú")])
+        sec_chapter(f"{_anchor_ns}-quote", None, None, "Trích dẫn &amp; Ghi chú")
+        with st.container(border=True, key="jcard_reading_detail_indep"):
+            _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
         return
 
     _row = t[t['Cuốn sách'] == _detail_sel].iloc[0]
     _rl_detail = reading_log_df[reading_log_df['Cuốn sách'] == _detail_sel]
 
-    with st.expander("1. Số liệu", expanded=True):
-        _secs = [{"label": "Mốc thời gian", "chips": [
-            {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
-            {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
-            {"k": "Số ngày", "v": f"{int(_row['Số ngày'])}" if pd.notna(_row['Số ngày']) else "—"},
-        ]}]
-        _nhip = []
-        if pd.notna(_row['Giờ/tuần']):
-            _nhip.append({"k": "Giờ/tuần", "v": f"{_fmt_hours_short(_row['Giờ/tuần'])}"})
-        if pd.notna(_row['Tổng giờ']) and pd.notna(_row['Số ngày']) and _row['Số ngày']:
-            _nhip.append({"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_row['Tổng giờ'] / _row['Số ngày'])}"})
-        if _nhip:
-            _secs.append({"label": "Nhịp độ", "chips": _nhip})
-        _tt = [{"k": "Hiện tại", "v": _row['Trạng thái'], "hl": _row['Trạng thái'] == labels['ongoing']}]
-        if pd.notna(_row['Phần gần nhất']):
-            _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
-        _secs.append({"label": "Trạng thái", "chips": _tt})
+    sec_hero(None, html_escape(str(_detail_sel)), None,
+             [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Nhật ký đọc"),
+              (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")])
 
-        render_stat_panel(
-            hero_items=[
-                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
-                {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
-            ],
-            sections=_secs,
-        )
+    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu")
+    _secs = [{"label": "Mốc thời gian", "chips": [
+        {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
+        {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
+        {"k": "Số ngày", "v": f"{int(_row['Số ngày'])}" if pd.notna(_row['Số ngày']) else "—"},
+    ]}]
+    _nhip = []
+    if pd.notna(_row['Giờ/tuần']):
+        _nhip.append({"k": "Giờ/tuần", "v": f"{_fmt_hours_short(_row['Giờ/tuần'])}"})
+    if pd.notna(_row['Tổng giờ']) and pd.notna(_row['Số ngày']) and _row['Số ngày']:
+        _nhip.append({"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_row['Tổng giờ'] / _row['Số ngày'])}"})
+    if _nhip:
+        _secs.append({"label": "Nhịp độ", "chips": _nhip})
+    _tt = [{"k": "Hiện tại", "v": _row['Trạng thái'], "hl": _row['Trạng thái'] == labels['ongoing']}]
+    if pd.notna(_row['Phần gần nhất']):
+        _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
+    _secs.append({"label": "Trạng thái", "chips": _tt})
 
-    with st.expander("2. Nhật ký đọc", expanded=True):
-        # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
-        # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
-        # là mục riêng -- xem _render_reading_kindle_days(). _kh_all đã tính sẵn ở đầu hàm (dùng
-        # chung để liệt kê nguồn độc lập trong ô chọn phía trên), không gọi lại load lần 2.
-        _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
-        if not _rl_detail.empty or not _kh_book.empty:
-            with st.container(border=True, key="jcard_reading_detail"):
-                _render_reading_kindle_days(_rl_detail, _kh_book)
-        else:
-            st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
+    render_stat_panel(
+        hero_items=[
+            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
+            {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
+        ],
+        sections=_secs,
+    )
 
-    with st.expander("3. Biểu đồ lịch", expanded=False):
-        if not _rl_detail.empty:
-            render_reading_calendar_grid(_rl_detail, labels)
-        else:
-            st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Nhật ký đọc")
+    # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
+    # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
+    # là mục riêng -- xem _render_reading_kindle_days(). _kh_all đã tính sẵn ở đầu hàm (dùng
+    # chung để liệt kê nguồn độc lập trong ô chọn phía trên), không gọi lại load lần 2.
+    _kh_book = _kh_all[_kh_all['Cuốn sách'] == _detail_sel] if not _kh_all.empty else _kh_all
+    if not _rl_detail.empty or not _kh_book.empty:
+        with st.container(border=True, key="jcard_reading_detail"):
+            _render_reading_kindle_days(_rl_detail, _kh_book)
+    else:
+        st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
-    with st.expander("4. Bảng số liệu", expanded=False):
-        if not _rl_detail.empty:
-            _day_tbl = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
-                        .groupby('_d').size().reset_index(name='n').sort_values('_d', ascending=False))
-            _vmax = float(_day_tbl['n'].max()) if not _day_tbl.empty else 0.0
-            _rows = ''
-            for _, r in _day_tbl.iterrows():
-                _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
-                _rows += '<tr class="prow">'
-                _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
-                _rows += _heat_cell(float(r['n']), _vmax, as_hours=False)
-                _rows += '</tr>'
-            st.markdown(DTBL_CSS + f"""
+    sec_chapter(f"{_anchor_ns}-ch3", 3, None, "Biểu đồ lịch")
+    if not _rl_detail.empty:
+        render_reading_calendar_grid(_rl_detail, labels)
+    else:
+        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+
+    sec_chapter(f"{_anchor_ns}-ch4", 4, None, "Bảng số liệu")
+    if not _rl_detail.empty:
+        _day_tbl = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
+                    .groupby('_d').size().reset_index(name='n').sort_values('_d', ascending=False))
+        _vmax = float(_day_tbl['n'].max()) if not _day_tbl.empty else 0.0
+        _rows = ''
+        for _, r in _day_tbl.iterrows():
+            _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
+            _rows += '<tr class="prow">'
+            _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
+            _rows += _heat_cell(float(r['n']), _vmax, as_hours=False)
+            _rows += '</tr>'
+        st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap">
 <table class="dtbl">
 <thead><tr><th class="lbl">Ngày</th><th class="txt">Thứ</th><th>{labels['parts_label']}</th></tr></thead>
 <tbody>{_rows}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-        else:
-            st.caption("Chưa có dữ liệu để hiện bảng.")
+    else:
+        st.caption("Chưa có dữ liệu để hiện bảng.")
 
 
 def render_reading_calendar_grid(rl_detail_df, labels):
@@ -3543,42 +3562,46 @@ def _render_health_report(df_health):
         st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
         return
 
+    sec_hero(None, "Chỉ số theo thời gian", None,
+             [("hm-bc-abn", "Chỉ số bất thường"), ("hm-bc-ch1", "1 · Số liệu"),
+              ("hm-bc-ch2", "2 · Biểu đồ theo dõi")])
+
     # "Chỉ số bất thường" -- lấy NGUYÊN lần khám gần nhất (cùng test_date, có thể gộp nhiều Nhóm
     # nếu khám nhiều loại cùng lúc), không phụ thuộc Nhóm/Chỉ số đang chọn bên dưới. Đây là thứ
     # người dùng thực sự cần thấy NGAY sau khi vừa nhập kết quả khám mới -- xem docstring hàm.
     _latest_date = df_health['Ngày lấy mẫu'].max()
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    with st.expander(f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}", expanded=True):
-        if _latest_num.empty:
-            st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
+    sec_chapter("hm-bc-abn", None, None, f"Chỉ số bất thường · lần khám {_latest_date:%d/%m/%Y}")
+    if _latest_num.empty:
+        st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
+    else:
+        _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
+        if not _abn_latest.empty:
+            # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
+            # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
+            # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
+            # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
+            # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
+            # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
+            # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
+            # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
+            # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
+            # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
+            _abn_latest = (
+                _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
+                .sort_values('_namelen')
+                .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
+                .drop(columns='_namelen'))
+        if _abn_latest.empty:
+            st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
         else:
-            _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
-            if not _abn_latest.empty:
-                # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
-                # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
-                # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
-                # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
-                # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
-                # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
-                # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
-                # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
-                # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
-                # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
-                _abn_latest = (
-                    _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
-                    .sort_values('_namelen')
-                    .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
-                    .drop(columns='_namelen'))
-            if _abn_latest.empty:
-                st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
-            else:
-                st.warning(f"{len(_abn_latest)}/{len(_latest_num)} chỉ số ngoài khoảng tham chiếu:")
-                render_stat_panel(hero_items=[], sections=[{"label": "Ngoài khoảng tham chiếu", "chips": [
-                    {"k": f"{r['Chỉ số']} ({r['Nhóm']})",
-                     "v": f"{r['Giá trị']:g} {r['Đơn vị'] if pd.notna(r['Đơn vị']) else ''}".strip()
-                          + (f" · TC {r['Khoảng tham chiếu']}" if pd.notna(r['Khoảng tham chiếu']) else ""),
-                     "hl": True} for _, r in _abn_latest.iterrows()]}])
+            st.warning(f"{len(_abn_latest)}/{len(_latest_num)} chỉ số ngoài khoảng tham chiếu:")
+            render_stat_panel(hero_items=[], sections=[{"label": "Ngoài khoảng tham chiếu", "chips": [
+                {"k": f"{r['Chỉ số']} ({r['Nhóm']})",
+                 "v": f"{r['Giá trị']:g} {r['Đơn vị'] if pd.notna(r['Đơn vị']) else ''}".strip()
+                      + (f" · TC {r['Khoảng tham chiếu']}" if pd.notna(r['Khoảng tham chiếu']) else ""),
+                 "hl": True} for _, r in _abn_latest.iterrows()]}])
 
     cc1, cc2 = st.columns(2)
     cats = sorted(df_health['Nhóm'].dropna().unique())
@@ -3590,74 +3613,74 @@ def _render_health_report(df_health):
     s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
 
     if s_num.empty:
-        with st.expander("1. Số liệu", expanded=True):
-            st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
-        with st.expander("2. Biểu đồ theo dõi", expanded=True):
-            st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
+        sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+        st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
+        sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+        st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
         return
 
     _unit_vals = s_num['Đơn vị'].dropna()
     unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
     is_abn = _health_is_abnormal(s_num)
 
-    with st.expander("1. Số liệu", expanded=True):
-        last = s_num.iloc[-1]
-        deltas = []
-        if len(s_num) > 1:
-            d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
-            dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
-            deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
-        hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
-                       "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
-        hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
-        n_abn = int(is_abn.sum())
-        sections = [
-            {"label": "Thống kê", "chips": [
-                {"k": "Số quan sát", "v": str(len(s_num))},
-                {"k": "Khoảng thời gian",
-                 "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
-                {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
-                {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-                {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-            ]},
-            {"label": "Bất thường", "chips": [
-                {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
-            ]},
-        ]
-        render_stat_panel(hero_items, sections=sections)
+    sec_chapter("hm-bc-ch1", 1, None, "Số liệu")
+    last = s_num.iloc[-1]
+    deltas = []
+    if len(s_num) > 1:
+        d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
+        dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
+        deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
+    hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
+                   "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
+    hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
+    n_abn = int(is_abn.sum())
+    sections = [
+        {"label": "Thống kê", "chips": [
+            {"k": "Số quan sát", "v": str(len(s_num))},
+            {"k": "Khoảng thời gian",
+             "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
+            {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
+            {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+            {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
+        ]},
+        {"label": "Bất thường", "chips": [
+            {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
+        ]},
+    ]
+    render_stat_panel(hero_items, sections=sections)
 
-    with st.expander("2. Biểu đồ theo dõi", expanded=True):
-        _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
-        _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
-        fig = go.Figure()
-        if s_num['Ref cao'].notna().any():
-            fig.add_trace(go.Scatter(
-                x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
-                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
-        if s_num['Ref thấp'].notna().any():
-            fig.add_trace(go.Scatter(
-                x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
-                line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-                fill='tonexty', fillcolor=_band_fill,
-                name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+    sec_chapter("hm-bc-ch2", 2, None, "Biểu đồ theo dõi")
+    _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
+    _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
+    fig = go.Figure()
+    if s_num['Ref cao'].notna().any():
         fig.add_trace(go.Scatter(
-            x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
-            line=dict(color=ACCENT, width=2.5),
-            marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
-            name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
-            hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
-        ))
-        fig.update_layout(
-            height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
-            xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
-            yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-        )
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-        if is_abn.any():
-            st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
-        render_health_log_table(s_num, is_abn)
+            x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
+            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+            name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
+    if s_num['Ref thấp'].notna().any():
+        fig.add_trace(go.Scatter(
+            x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
+            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
+            fill='tonexty', fillcolor=_band_fill,
+            name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter(
+        x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
+        line=dict(color=ACCENT, width=2.5),
+        marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
+        name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
+        hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
+    ))
+    fig.update_layout(
+        height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
+        xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
+        yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+    )
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    if is_abn.any():
+        st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
+    render_health_log_table(s_num, is_abn)
 
 
 def _render_health_history(df_health):
@@ -4548,12 +4571,23 @@ def sec_hero(kicker, title, sub, chips):
     """Khối mở đầu 1 trang cuộn dọc kiểu "chương": kicker + tiêu đề lớn + đoạn tóm tắt ngắn +
     hàng chip nhảy nhanh tới từng chương (chips: list[(anchor, nhãn)]). Factor lại từ khối hero
     viết tay ban đầu của trang Trợ giúp -- dùng chung cho mọi trang chuyển sang bố cục này để
-    không lặp lại cùng 1 khối HTML nhiều lần."""
-    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+    không lặp lại cùng 1 khối HTML nhiều lần.
+
+    kicker=None/"" -> bỏ hẳn dòng kicker; sub=None/"" -> bỏ hẳn đoạn tóm tắt. Dùng cho các trang
+    chỉ cần tiêu đề + chip mục lục, không cần nhãn ngữ cảnh hay câu mô tả thêm (mọi hero ngoài
+    Trợ giúp hiện đều gọi kiểu này -- Trợ giúp là ngoại lệ duy nhất còn giữ đủ cả 2, vì đó là nội
+    dung hướng dẫn thật cần câu mở đầu giải thích app, không phải phần "dư thừa" như các trang
+    khác). chips=[] -> bỏ hẳn hàng chip (không render div rỗng để lại khoảng trắng thừa) -- dùng
+    khi sub-tab không có chương/mục nào khác để nhảy tới (vd Sách/Gundam → Tổng quan)."""
+    _kicker_html = f"<div class='hh-kicker'>{kicker}</div>" if kicker else ""
+    _sub_html = f"<div class='hh-sub'>{sub}</div>" if sub else ""
+    _toc_html = ""
+    if chips:
+        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+        _toc_html = f"<div class='sec-toc'>{_chips_html}</div>"
     st.markdown(
-        f"<div class='sec-hero'><div class='hh-kicker'>{kicker}</div>"
-        f"<div class='hh-title'>{title}</div><div class='hh-sub'>{sub}</div>"
-        f"<div class='sec-toc'>{_chips_html}</div></div>",
+        f"<div class='sec-hero'>{_kicker_html}"
+        f"<div class='hh-title'>{title}</div>{_sub_html}{_toc_html}</div>",
         unsafe_allow_html=True)
 
 
@@ -6425,63 +6459,68 @@ elif nav == "Báo cáo":
 
     if bc_sub == "Tổng quan":
         if not df.empty:
-            with st.expander("1. Tổng quan", expanded=True):
-                # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
-                # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
-                # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
-                total_hrs = df['Thời lượng (Phút)'].sum() / 60
-                total_trees = len(df)
-                num_days = df['Ngày'].nunique() or 1
-                base_avg = total_hrs / num_days
+            sec_hero(None, "Toàn cảnh từ ngày đầu tiên", None,
+                     [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
+                      ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
+                      ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan")
+            # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
+            # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
+            # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
+            total_hrs = df['Thời lượng (Phút)'].sum() / 60
+            total_trees = len(df)
+            num_days = df['Ngày'].nunique() or 1
+            base_avg = total_hrs / num_days
 
-                s_stat = _streak_stats(df)
-                by_wd = _weekday_avg(df)
-                overall_top3 = _top_days(df, 3)
-                _sections = [
-                    {"label": "Trung bình (toàn thời gian)", "chips": [
-                        {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(base_avg)}"},
-                        {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
-                        {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
-                    ]},
-                    {"label": "Chuỗi ngày", "chips": [
-                        {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
-                        {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
-                        {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
-                    ]},
-                ]
-                if len(by_wd) and by_wd.max() > 0:
-                    _sections.append({"label": "Theo thứ", "chips": [
-                        {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
-                        {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
-                    ]})
-                if overall_top3:
-                    _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
-                _nud = _streak_nudge(s_stat)
-                _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
+            s_stat = _streak_stats(df)
+            by_wd = _weekday_avg(df)
+            overall_top3 = _top_days(df, 3)
+            _sections = [
+                {"label": "Trung bình (toàn thời gian)", "chips": [
+                    {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(base_avg)}"},
+                    {"k": "Số cây / ngày", "v": f"{total_trees/num_days:.1f}"},
+                    {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df):.0f} phút"},
+                ]},
+                {"label": "Chuỗi ngày", "chips": [
+                    {"k": "Tổng cộng", "v": f"{s_stat['total']} ngày"},
+                    {"k": "Dài nhất", "v": f"{s_stat['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_stat['current']} ngày", "hl": True},
+                ]},
+            ]
+            if len(by_wd) and by_wd.max() > 0:
+                _sections.append({"label": "Theo thứ", "chips": [
+                    {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
+                    {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
+                ]})
+            if overall_top3:
+                _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
+            _nud = _streak_nudge(s_stat)
+            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
-                render_stat_panel(
-                    hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
-                        {"label": "Số cây đã trồng", "value": f"{total_trees}"},
-                    ],
-                    sections=_sections,
-                    footer=_footer,
-                )
-                render_session_bar(df)
+            render_stat_panel(
+                hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
+                    {"label": "Số cây đã trồng", "value": f"{total_trees}"},
+                ],
+                sections=_sections,
+                footer=_footer,
+            )
+            render_session_bar(df)
 
-                st.write("")
-                c_top1, c_top2 = st.columns(2)
-                _wk_now = _today_vn().strftime('%G-W%V')
-                with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
-                with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
-            with st.expander("2. Biểu đồ lịch", expanded=False):
-                frag_calendar(df, "range_cal")
-            with st.expander("3. Xu hướng theo thời gian", expanded=False):
-                frag_trend(df, "trend_main", "Danh mục")
-            with st.expander("4. Xu hướng tập trung theo khung giờ", expanded=False):
-                frag_hourly(df, "hour_main", "Danh mục")
-            with st.expander("5. Bảng số liệu", expanded=False):
-                frag_data_table(df, "tbl_main")
+            st.write("")
+            c_top1, c_top2 = st.columns(2)
+            _wk_now = _today_vn().strftime('%G-W%V')
+            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
+            with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
+
+            sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
+            frag_calendar(df, "range_cal")
+            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng theo thời gian")
+            frag_trend(df, "trend_main", "Danh mục")
+            sec_chapter("bc-tq-ch4", 4, None, "Xu hướng tập trung theo khung giờ")
+            frag_hourly(df, "hour_main", "Danh mục")
+            sec_chapter("bc-tq-ch5", 5, None, "Bảng số liệu")
+            frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
 
@@ -6503,9 +6542,7 @@ elif nav == "Báo cáo":
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
-                sec_hero("Báo cáo · Tuần", "Một tuần vừa qua",
-                         "So sánh tuần đang xem với tuần trước và trung bình các tuần, kèm nhật "
-                         "ký và bảng số liệu theo ngày.",
+                sec_hero(None, "Một tuần vừa qua", None,
                          [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
                           ("bc-tuan-ch3", "3 · Phân bổ thời gian"),
                           ("bc-tuan-ch4", "4 · Xu hướng theo thời gian"),
@@ -6544,9 +6581,7 @@ elif nav == "Báo cáo":
             prev_m, avg_m = _period_comparison(df, 'Tháng', selected_month, prev_month_key, elapsed_mask_m)
 
             if not df_m.empty:
-                sec_hero("Báo cáo · Tháng", "Một tháng vừa qua",
-                         "So sánh tháng đang xem với tháng trước và trung bình các tháng, kèm "
-                         "nhật ký và bảng số liệu theo ngày.",
+                sec_hero(None, "Một tháng vừa qua", None,
                          [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Nhật ký"),
                           ("bc-thang-ch3", "3 · Phân bổ thời gian"),
                           ("bc-thang-ch4", "4 · Xu hướng theo thời gian"),
@@ -6577,8 +6612,7 @@ elif nav == "Báo cáo":
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
-                sec_hero("Báo cáo · Năm", "Một năm nhìn lại",
-                         "Toàn bộ số liệu, biểu đồ lịch và tiến độ sách/Gundam gộp theo năm.",
+                sec_hero(None, "Một năm nhìn lại", None,
                          [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
                           ("bc-nam-ch3", "3 · Sách &amp; Gundam"), ("bc-nam-ch4", "4 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
@@ -6647,98 +6681,111 @@ elif nav == "Báo cáo":
             else:
                 _kind, sel_grp = sel
                 df_g = df[df['Danh mục'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
-        
-                with st.expander("1. Tổng quan", expanded=True):
-                    curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
-                    curr_trees_g = len(df_g)
-                    num_days_g = df_g['Ngày'].nunique() or 1
-                    num_weeks_g = df_g['Tuần'].nunique() or 1
 
-                    first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
-                    last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
-
-                    s_g = _streak_stats(df_g)
-                    wd_g = _weekday_avg(df_g)
-
-                    _grp_sections = [
-                        {"label": "Trung bình", "chips": [
-                            {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(curr_hrs_g/num_days_g)}"},
-                            {"k": "Thời gian / tuần", "v": f"{_fmt_hours_short(curr_hrs_g/num_weeks_g)}"},
-                            {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
-                            {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
-                            {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
-                        ]},
-                    ]
-
-                    df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
-                    if not df_g_thisweek.empty:
-                        _grp_sections.append({"label": "Tuần này", "chips": [
-                            {"k": "Thời gian", "v": f"{_fmt_hours_short(df_g_thisweek['Thời lượng (Phút)'].sum()/60)}", "hl": True},
-                            {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
-                        ]})
-
-                    # "Tổng cộng" của chuỗi chính là số ngày hoạt động -> bỏ trùng ở Mốc thời gian
-                    _grp_sections.append({"label": "Chuỗi ngày", "chips": [
-                        {"k": "Tổng cộng", "v": f"{s_g['total']} ngày"},
-                        {"k": "Dài nhất", "v": f"{s_g['longest']} ngày"},
-                        {"k": "Hiện tại", "v": f"{s_g['current']} ngày", "hl": True},
-                    ]})
-                    if len(wd_g) and wd_g.max() > 0:
-                        _grp_sections.append({"label": "Theo thứ", "chips": [
-                            {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({_fmt_hours_short(wd_g.max())})"},
-                            {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({_fmt_hours_short(wd_g.min())})"},
-                        ]})
-                    _grp_sections.append({"label": "Mốc thời gian", "chips": [
-                        {"k": "Ngày đầu tiên", "v": first_day},
-                        {"k": "Ngày gần nhất", "v": last_day},
-                    ]})
-
-                    records_g = _compute_alltime_records(df)
-                    _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
-                    if _rec_g:
-                        # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
-                        # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
-                        # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
-                        # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
-                        _grp_sections.append({"label": "Ngày nổi bật", "chips": [
-                            {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
-                        ]})
-
-                    _nud_g = _streak_nudge(s_g)
-                    _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
-
-                    render_stat_panel(
-                        hero_items=[
-                            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
-                            {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
-                        ],
-                        sections=_grp_sections,
-                        footer=_footer_g,
-                    )
-                    render_session_bar(df_g)
-
+                # Mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1 cuốn sách theo dõi qua
+                # Reminders (so _book_title() của List với tên Dự án) -- KHÔNG đánh số (giữ nguyên
+                # số các mục 1-5 cố định) vì đây là mục điều kiện, đúng tiền lệ "Ghi chú ngày"
+                # không số ở nhánh rỗng-phiên của Hôm nay. Hiện trọn lịch sử phần đã đọc của đúng
+                # cuốn đó, không giới hạn theo kỳ (khác Nhật ký đọc sách ở Báo cáo tuần/tháng). Tính
+                # TRƯỚC hero để biết có cần thêm chip mục lục cho mục này hay không -- load_reading_
+                # log() có @st.cache_data nên gọi ở đây không tốn thêm truy vấn thật.
+                _rl_book = pd.DataFrame()
                 if _kind == "proj":
-                    # Mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1 cuốn sách theo dõi qua
-                    # Reminders (so _book_title() của List với tên Dự án) -- KHÔNG đánh số (giữ nguyên
-                    # số các mục 1-5 cố định) vì đây là mục điều kiện, đúng tiền lệ "Ghi chú ngày"
-                    # không số ở nhánh rỗng-phiên của Báo cáo ngày. Hiện trọn lịch sử phần đã đọc của
-                    # đúng cuốn đó, không giới hạn theo kỳ (khác Nhật ký đọc sách ở Báo cáo tuần/tháng).
-                    rl_all = load_reading_log()
-                    rl_book = rl_all[rl_all['Cuốn sách'] == sel_grp] if not rl_all.empty else rl_all
-                    if not rl_book.empty:
-                        with st.expander("Nhật ký đọc", expanded=True):
-                            with st.container(border=True, key="jcard_reading_proj"):
-                                st.markdown(f"<div class='jrows'>{_reading_rows_html(rl_book, label_book=False)}</div>",
-                                            unsafe_allow_html=True)
+                    _rl_all = load_reading_log()
+                    _rl_book = _rl_all[_rl_all['Cuốn sách'] == sel_grp] if not _rl_all.empty else _rl_all
 
-                with st.expander("2. Biểu đồ lịch", expanded=False):
-                    frag_calendar(df_g, "range_grp_cal")
-                with st.expander("3. Xu hướng theo thời gian", expanded=False):
-                    frag_trend(df_g, "trend_grp", "Dự án")
-                with st.expander("4. Phân bố độ dài phiên", expanded=False):
-                    render_session_histogram(df_g)
-                with st.expander("5. Bảng số liệu", expanded=False):
-                    frag_period_table(df_g, "view_grp")
+                _hero_chips_g = [("bc-duan-ch1", "1 · Tổng quan")]
+                if not _rl_book.empty:
+                    _hero_chips_g.append(("bc-duan-chrl", "Nhật ký đọc"))
+                _hero_chips_g += [("bc-duan-ch2", "2 · Biểu đồ lịch"),
+                                  ("bc-duan-ch3", "3 · Xu hướng theo thời gian"),
+                                  ("bc-duan-ch4", "4 · Phân bố độ dài phiên"),
+                                  ("bc-duan-ch5", "5 · Bảng số liệu")]
+                sec_hero(None, "Đi sâu vào 1 việc cụ thể", None, _hero_chips_g)
+
+                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan")
+                curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
+                curr_trees_g = len(df_g)
+                num_days_g = df_g['Ngày'].nunique() or 1
+                num_weeks_g = df_g['Tuần'].nunique() or 1
+
+                first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
+                last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
+
+                s_g = _streak_stats(df_g)
+                wd_g = _weekday_avg(df_g)
+
+                _grp_sections = [
+                    {"label": "Trung bình", "chips": [
+                        {"k": "Thời gian / ngày", "v": f"{_fmt_hours_short(curr_hrs_g/num_days_g)}"},
+                        {"k": "Thời gian / tuần", "v": f"{_fmt_hours_short(curr_hrs_g/num_weeks_g)}"},
+                        {"k": "Số cây / ngày", "v": f"{curr_trees_g/num_days_g:.1f}"},
+                        {"k": "Số cây / tuần", "v": f"{curr_trees_g/num_weeks_g:.1f}"},
+                        {"k": "Thời gian / phiên", "v": f"{_avg_session_min(df_g):.0f} phút"},
+                    ]},
+                ]
+
+                df_g_thisweek = df_g[df_g['Tuần'] == _today_vn().strftime('%G-W%V')]
+                if not df_g_thisweek.empty:
+                    _grp_sections.append({"label": "Tuần này", "chips": [
+                        {"k": "Thời gian", "v": f"{_fmt_hours_short(df_g_thisweek['Thời lượng (Phút)'].sum()/60)}", "hl": True},
+                        {"k": "Số cây", "v": f"{len(df_g_thisweek)}", "hl": True},
+                    ]})
+
+                # "Tổng cộng" của chuỗi chính là số ngày hoạt động -> bỏ trùng ở Mốc thời gian
+                _grp_sections.append({"label": "Chuỗi ngày", "chips": [
+                    {"k": "Tổng cộng", "v": f"{s_g['total']} ngày"},
+                    {"k": "Dài nhất", "v": f"{s_g['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_g['current']} ngày", "hl": True},
+                ]})
+                if len(wd_g) and wd_g.max() > 0:
+                    _grp_sections.append({"label": "Theo thứ", "chips": [
+                        {"k": "Mạnh nhất", "v": f"{wd_g.idxmax()} ({_fmt_hours_short(wd_g.max())})"},
+                        {"k": "Yếu nhất", "v": f"{wd_g.idxmin()} ({_fmt_hours_short(wd_g.min())})"},
+                    ]})
+                _grp_sections.append({"label": "Mốc thời gian", "chips": [
+                    {"k": "Ngày đầu tiên", "v": first_day},
+                    {"k": "Ngày gần nhất", "v": last_day},
+                ]})
+
+                records_g = _compute_alltime_records(df)
+                _rec_g = (records_g["category_records"] if _kind == "cat" else records_g["project_records"]).get(sel_grp)
+                if _rec_g:
+                    # Gộp ngày + giờ vào 1 chip "#1 {ngày} · {giờ}h" -- đúng khuôn
+                    # _top_days_chips() dùng ở Bảng số liệu Tuần/Tháng/Năm, thay vì 2 chip
+                    # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
+                    # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
+                    _grp_sections.append({"label": "Ngày nổi bật", "chips": [
+                        {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
+                    ]})
+
+                _nud_g = _streak_nudge(s_g)
+                _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
+
+                render_stat_panel(
+                    hero_items=[
+                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
+                        {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
+                    ],
+                    sections=_grp_sections,
+                    footer=_footer_g,
+                )
+                render_session_bar(df_g)
+
+                if not _rl_book.empty:
+                    sec_chapter("bc-duan-chrl", None, None, "Nhật ký đọc")
+                    with st.container(border=True, key="jcard_reading_proj"):
+                        st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
+                                    unsafe_allow_html=True)
+
+                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
+                frag_calendar(df_g, "range_grp_cal")
+                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng theo thời gian")
+                frag_trend(df_g, "trend_grp", "Dự án")
+                sec_chapter("bc-duan-ch4", 4, None, "Phân bố độ dài phiên")
+                render_session_histogram(df_g)
+                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
+                frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
     # nếu người dùng chỉ có dữ liệu đọc sách từ Reminders, chưa từng tải CSV Forest (an toàn
