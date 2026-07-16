@@ -5313,6 +5313,24 @@ st.markdown(
        không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
        đã "canh giữa". Ép cùng 36px cho cả 3 phần tử trên 1 hàng thẳng hàng thật sự. */
     [class*="st-key-day_stepper"] button { height: 36px !important; min-height: 0 !important; }
+    /* Cột giữa (chứa st.date_input) cao hơn hẳn 2 cột nút (~50px vs 36px) dù widget bên trong chỉ
+       cao 36px -- Streamlit tự dành sẵn 1 khoảng "block" tối thiểu cho mỗi widget (từng chứa
+       nhãn) bất kể label_visibility="collapsed" đã ẩn nhãn đi, CỘNG THÊM 1 stElementContainer ẩn
+       thứ 2 (thông báo cho screen reader) khiến scrollHeight thật > offsetHeight -- xác nhận qua
+       DevTools thật, ảnh chụp người dùng gửi. Vì cột này CAO HƠN nên vertical_alignment="center"
+       của st.columns coi nó là chuẩn để so - 2 nút bị đẩy xuống canh giữa theo chiều cao NÀY.
+       Thử canh giữa nội dung trong cột (justify-content) KHÔNG ăn -- phần tử ẩn thứ 2 khiến tổng
+       nội dung "tràn" ra ngoài khối 50px, trình duyệt rơi về "safe center" (= flex-start) thay vì
+       centering thật khi nội dung tổng vượt quá kích thước khối chứa. Ép thẳng khối bọc (và ép
+       tràn bị cắt bởi overflow:hidden) về đúng 36px như 2 cột nút -- cả 3 cột bằng nhau thì
+       vertical_alignment="center" không còn gì để lệch nữa, không phụ thuộc justify-content. */
+    [class*="st-key-day_stepper"] [data-testid="stColumn"] [data-testid="stVerticalBlock"] {
+        height: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        overflow: hidden !important;
+        flex-grow: 0 !important;
+    }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
