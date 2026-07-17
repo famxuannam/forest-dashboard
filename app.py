@@ -3117,8 +3117,8 @@ def _render_reading_billboard(t, df_books, today):
         f"Tủ sách {today.year}", f"{len(done_year)}", "cuốn đã đọc xong",
         f"{len(reading_now)} đang đọc · {_fmt_hours_short(hrs_year)} đọc năm nay",
         _right,
-        [("sach-tq-ch1", "1 · Nhật ký đọc"), ("sach-tq-ch2", "2 · Tủ sách năm nay"),
-         ("sach-tq-ch3", "3 · Trích dẫn & Ghi chú"), ("sach-tq-ch4", "4 · Thống kê")])
+        [("sach-tq-ch1", "1 · Thống kê"), ("sach-tq-ch2", "2 · Tủ sách năm nay"),
+         ("sach-tq-ch3", "3 · Nhật ký đọc"), ("sach-tq-ch4", "4 · Trích dẫn & Ghi chú")])
 
 
 def _render_reading_bookshelf_table(t, today):
@@ -3189,104 +3189,109 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
     (đã flat sẵn từ trước).
 
-    page_name == "Sách": thêm billboard (_render_reading_billboard) + 3 chương mới đầu trang
-    (Nhật ký đọc/Tủ sách năm nay/Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) --
-    3 thẻ hero/nhóm chip cũ GIỮ NGUYÊN, dồn xuống thành chương "4. Thống kê" (xác nhận với người
-    dùng giữ nguyên dữ liệu phong phú hiện có thay vì rút gọn, cùng cách đã làm cho Báo cáo ->
-    Tuần). Gundam KHÔNG đổi gì -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ
-    (không billboard/chương, đúng hành vi gốc)."""
-    if page_name == "Sách":
-        _render_reading_billboard(t, df_books, _today)
-        sec_chapter("sach-tq-ch1", 1, None, "Nhật ký đọc", tight_top=True)
-        _rl_recent = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
-                      if not reading_log_df.empty else reading_log_df)
-        with st.container(border=True, key="jcard_sach_journal"):
-            if _rl_recent.empty:
-                st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
-            else:
-                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
-                            unsafe_allow_html=True)
-        sec_chapter("sach-tq-ch2", 2, None, "Tủ sách năm nay")
-        _render_reading_bookshelf_table(t, _today)
-        sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
-        _render_reading_quotes_teaser()
-        sec_chapter("sach-tq-ch4", 4, None, "Thống kê")
+    page_name == "Sách": thêm billboard (_render_reading_billboard) + 3 chương mới (Tủ sách năm
+    nay/Nhật ký đọc/Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) -- 3 thẻ hero/nhóm
+    chip cũ GIỮ NGUYÊN, dồn thành chương "1. Thống kê" đứng NGAY DƯỚI billboard (theo yêu cầu thứ
+    tự: Thống kê -> Tủ sách năm nay -> Nhật ký đọc -> Trích dẫn & Ghi chú), tách vào closure
+    _render_stats_block() để dùng lại được CẢ CHO GUNDAM (không đổi vị trí, không billboard/chương
+    -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ)."""
+    def _render_stats_block():
+        # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
+        render_stat_panel(
+            hero_items=[
+                {"label": labels['count_label'], "value": f"{len(t)}"},
+                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
+                {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
+            ],
+            sections=_grp_summary,
+        )
 
-    # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
-    render_stat_panel(
-        hero_items=[
-            {"label": labels['count_label'], "value": f"{len(t)}"},
-            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
-            {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
-        ],
-        sections=_grp_summary,
-    )
+        # Thẻ 2: Hoạt động — thẻ độc lập, tách khỏi thẻ trên
+        render_stat_panel(
+            hero_items=[],
+            sections=[
+                {"label": labels['streak_label'], "chips": [
+                    {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
+                    {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
+                    {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
+                ]},
+                {"label": "Đều đặn", "chips": [
+                    {"k": labels['pace_days_label'], "v": f"{s_read['total']}"},
+                    {"k": labels['pace_pct_label'], "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
+                ]},
+                {"label": "Nhịp gần đây", "chips": [
+                    {"k": "7 ngày", "v": f"{_fmt_hours_short(_pace(7))}/ngày"},
+                    {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
+                ]},
+            ],
+            card_style="padding:18px;margin-top:14px;",
+        )
 
-    # Thẻ 2: Hoạt động — thẻ độc lập, tách khỏi thẻ trên
-    render_stat_panel(
-        hero_items=[],
-        sections=[
-            {"label": labels['streak_label'], "chips": [
-                {"k": "Tổng số ngày", "v": f"{s_read['total']}"},
-                {"k": "Dài nhất", "v": f"{s_read['longest']} ngày"},
-                {"k": "Hiện tại", "v": f"{s_read['current']} ngày", "hl": True},
-            ]},
-            {"label": "Đều đặn", "chips": [
-                {"k": labels['pace_days_label'], "v": f"{s_read['total']}"},
-                {"k": labels['pace_pct_label'], "v": f"{s_read['total'] / _span * 100:.0f}%" if _span else "—"},
-            ]},
-            {"label": "Nhịp gần đây", "chips": [
-                {"k": "7 ngày", "v": f"{_fmt_hours_short(_pace(7))}/ngày"},
-                {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
-            ]},
-        ],
-        card_style="padding:18px;margin-top:14px;",
-    )
+        # Thẻ 3: Kỳ này — thẻ độc lập
+        render_stat_panel(
+            hero_items=[],
+            sections=[
+                {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
+                {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
+                _sec_timeslot,
+            ],
+            card_style="padding:18px;margin-top:14px;",
+        )
 
-    # Thẻ 3: Kỳ này — thẻ độc lập
-    render_stat_panel(
-        hero_items=[],
-        sections=[
-            {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
-            {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
-            _sec_timeslot,
-        ],
-        card_style="padding:18px;margin-top:14px;",
-    )
+        render_session_bar(df_books)
 
-    render_session_bar(df_books)
+        # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu". Cột thuộc nguồn Forest
+        # (Số ngày/Ngày đọc/Tổng giờ/Số phiên/Giờ tuần) hoặc nguồn Reminders (Số phần đã đọc/Phần
+        # gần nhất) có thể NaN nếu sách đó chỉ có 1 trong 2 nguồn -- hiện '—' thay vì để lọt "nan"
+        # ra HTML (đặc biệt _heat_cell KHÔNG tự bắt được NaN, phải bọc rõ ràng trước khi gọi).
+        def _c(v, fmt='{:.0f}'):
+            return fmt.format(v) if pd.notna(v) else '—'
 
-    # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu". Cột thuộc nguồn Forest
-    # (Số ngày/Ngày đọc/Tổng giờ/Số phiên/Giờ tuần) hoặc nguồn Reminders (Số phần đã đọc/Phần
-    # gần nhất) có thể NaN nếu sách đó chỉ có 1 trong 2 nguồn -- hiện '—' thay vì để lọt "nan"
-    # ra HTML (đặc biệt _heat_cell KHÔNG tự bắt được NaN, phải bọc rõ ràng trước khi gọi).
-    def _c(v, fmt='{:.0f}'):
-        return fmt.format(v) if pd.notna(v) else '—'
-
-    vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
-    rows_html = ''
-    for _, r in t.iterrows():
-        s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
-        start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
-        last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
-        rows_html += '<tr class="prow">'
-        rows_html += f'<td class="lbl">{html_escape(str(r["Cuốn sách"]))}</td>'
-        rows_html += f'<td>{start_s}</td><td>{last_s}</td>'
-        rows_html += f'<td>{_c(r["Số ngày"])}</td><td>{_c(r["Ngày đọc"])}</td>'
-        rows_html += _heat_cell(float(r['Tổng giờ']), vmax_h) if pd.notna(r['Tổng giờ']) else '<td>—</td>'
-        rows_html += f'<td>{_c(r["Số phiên"])}</td><td>{_c(r["Giờ/tuần"], "{:.1f}")}</td>'
-        rows_html += f'<td>{_c(r["Số phần đã đọc"])}</td>'
-        _pn = html_escape(str(r["Phần gần nhất"])) if pd.notna(r["Phần gần nhất"]) else '—'
-        rows_html += f'<td class="txt">{_pn}</td>'
-        rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
-        rows_html += '</tr>'
-    st.markdown(DTBL_CSS + f"""
+        vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
+        rows_html = ''
+        for _, r in t.iterrows():
+            s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
+            start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
+            last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
+            rows_html += '<tr class="prow">'
+            rows_html += f'<td class="lbl">{html_escape(str(r["Cuốn sách"]))}</td>'
+            rows_html += f'<td>{start_s}</td><td>{last_s}</td>'
+            rows_html += f'<td>{_c(r["Số ngày"])}</td><td>{_c(r["Ngày đọc"])}</td>'
+            rows_html += _heat_cell(float(r['Tổng giờ']), vmax_h) if pd.notna(r['Tổng giờ']) else '<td>—</td>'
+            rows_html += f'<td>{_c(r["Số phiên"])}</td><td>{_c(r["Giờ/tuần"], "{:.1f}")}</td>'
+            rows_html += f'<td>{_c(r["Số phần đã đọc"])}</td>'
+            _pn = html_escape(str(r["Phần gần nhất"])) if pd.notna(r["Phần gần nhất"]) else '—'
+            rows_html += f'<td class="txt">{_pn}</td>'
+            rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
+            rows_html += '</tr>'
+        st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap" style="margin-top:14px;">
 <table class="dtbl">
 <thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+
+    if page_name != "Sách":
+        _render_stats_block()
+        return
+
+    _render_reading_billboard(t, df_books, _today)
+    sec_chapter("sach-tq-ch1", 1, None, "Thống kê", tight_top=True)
+    _render_stats_block()
+    sec_chapter("sach-tq-ch2", 2, None, "Tủ sách năm nay")
+    _render_reading_bookshelf_table(t, _today)
+    sec_chapter("sach-tq-ch3", 3, None, "Nhật ký đọc")
+    _rl_recent = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
+                  if not reading_log_df.empty else reading_log_df)
+    with st.container(border=True, key="jcard_sach_journal"):
+        if _rl_recent.empty:
+            st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
+        else:
+            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
+                        unsafe_allow_html=True)
+    sec_chapter("sach-tq-ch4", 4, None, "Trích dẫn &amp; Ghi chú")
+    _render_reading_quotes_teaser()
 
 
 _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn Kindle KHÔNG gắn Dự án (vd tạp chí)
