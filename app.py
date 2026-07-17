@@ -4794,6 +4794,104 @@ def render_year_month_bars(df_y):
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
+def render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y):
+    """Chương "Danh mục cả năm" (Báo cáo -> Năm, mockup): thanh ngang xếp hạng theo Danh mục --
+    CÙNG khuôn frag_category_bars() (thanh fill dài tỉ lệ theo TỔNG cả năm, màu theo COLOR_MAP)
+    nhưng KHÔNG có toggle Danh mục/Dự án (mockup chỉ vẽ Danh mục) và có thêm % so với CÙNG KỲ
+    năm trước ngay sau giá trị giờ (elapsed_mask_y -- cùng logic công bằng đã dùng cho billboard/
+    Tổng quan, không so năm dở dang với 1 năm đầy đủ)."""
+    if df_y.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    total_min = df_y['Thời lượng (Phút)'].sum()
+    cat_now = df_y.groupby('Danh mục')['Thời lượng (Phút)'].sum().sort_values(ascending=False)
+    prev_scope = (df[(df['Năm'] == prev_year_key) & elapsed_mask_y] if elapsed_mask_y is not None
+                  else df[df['Năm'] == prev_year_key])
+    cat_prev = prev_scope.groupby('Danh mục')['Thời lượng (Phút)'].sum()
+    rows_html = ""
+    for i, (name, mins) in enumerate(cat_now.items()):
+        pct = mins / total_min * 100 if total_min else 0
+        color = COLOR_MAP.get(name, MAC_COLORS[i % len(MAC_COLORS)])
+        _chg = ""
+        _prev_v = cat_prev.get(name)
+        if _prev_v and _prev_v > 0:
+            _pct_chg = (mins - _prev_v) / _prev_v * 100
+            _col = "#34c759" if _pct_chg > 0 else "#ff3b30" if _pct_chg < 0 else "var(--text-2)"
+            _chg = f" <span style='color:{_col};font-weight:600;'>{_pct_chg:+.0f}%</span>"
+        rows_html += (
+            "<div class='catbar-row wide'>"
+            f"<span class='catbar-label'>{html_escape(str(name))}</span>"
+            f"<span class='catbar-track'><span class='catbar-fill' "
+            f"style='width:{pct:.1f}%;background:{color};'></span></span>"
+            f"<span class='catbar-val'>{_fmt_hours_short(mins/60)}{_chg}</span></div>")
+    st.markdown(
+        f"<div class='catbars-card'><div class='catbars'>{rows_html}</div>"
+        f"<div class='catbars-top'>% so với cùng kỳ {prev_year_key}</div></div>",
+        unsafe_allow_html=True)
+
+
+def _longest_streak_range(scope_df):
+    """Chuỗi liên tiếp DÀI NHẤT trong scope_df -- trả (ngày đầu, ngày cuối, độ dài) hoặc None nếu
+    rỗng. Tính lại từ đầu (không tái dùng _streak_stats(), hàm đó chỉ trả SỐ NGÀY của chuỗi HIỆN
+    TẠI/DÀI NHẤT, không có ngày đầu/cuối) -- cần cho chip "Chuỗi dài nhất (dd/mm – dd/mm)" ở
+    chương "Kỷ lục năm"."""
+    u = pd.Series(pd.to_datetime(scope_df['Ngày'].dropna().unique())).sort_values().reset_index(drop=True)
+    if len(u) == 0:
+        return None
+    sid = (u.diff().dt.days > 1).cumsum()
+    best_sid = sid.value_counts().idxmax()
+    best_run = u[sid == best_sid]
+    return best_run.iloc[0].date(), best_run.iloc[-1].date(), len(best_run)
+
+
+def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
+    """Chương "Kỷ lục năm" (Báo cáo -> Năm, mockup): 2 thẻ -- "Kỷ lục {năm}" (ngày dài nhất/chuỗi
+    liên tiếp dài nhất kèm khoảng ngày/tuần cao nhất, tất cả tính RIÊNG trong năm đang chọn qua
+    df_y, KHÔNG phải kỷ lục toàn thời gian) và "Nhịp cả năm" (ngày hoạt động/elapsed, TB giờ mỗi
+    ngày hoạt động + mỗi tuần, thứ năng suất nhất). active_days_y/elapsed_days_y nhận từ billboard
+    (đã tính sẵn ở đó, tránh tính lại)."""
+    if df_y.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    c1, c2 = st.columns(2)
+
+    with c1:
+        by_day_y = df_y.groupby('Ngày')['Thời lượng (Phút)'].sum()
+        _busiest_date = by_day_y.idxmax()
+        _busiest_hrs = by_day_y.max() / 60
+        _streak_range = _longest_streak_range(df_y)
+        _wk_hrs_y = df_y.groupby('Tuần')['Thời lượng (Phút)'].sum()
+        _items = [f"{_mi('emoji_events')} Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}"]
+        if _streak_range:
+            _s, _e, _n = _streak_range
+            _items.append(f"{_mi('local_fire_department')} Chuỗi dài nhất · {_n} ngày ({_s:%d/%m} – {_e:%d/%m})")
+        if len(_wk_hrs_y):
+            _best_wk = _wk_hrs_y.idxmax()
+            _items.append(f"{_mi('calendar_month')} Tuần cao nhất · T{_best_wk.split('-W')[1]} · "
+                           f"{_fmt_hours_short(_wk_hrs_y.max()/60)}")
+        _items_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items)
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            f"<span class='rl-book'>Kỷ lục {selected_year}</span>"
+            f"<div class='hlt-list'>{_items_html}</div></div>", unsafe_allow_html=True)
+
+    with c2:
+        _pct_active = active_days_y / elapsed_days_y * 100 if elapsed_days_y else 0
+        _num_weeks_y = df_y['Tuần'].nunique() or 1
+        _tb_day = df_y['Thời lượng (Phút)'].sum() / 60 / (active_days_y or 1)
+        _tb_week = df_y['Thời lượng (Phút)'].sum() / 60 / _num_weeks_y
+        wd_y = _weekday_avg(df_y)
+        _items2 = [f"Ngày hoạt động {active_days_y}/{elapsed_days_y} ({_pct_active:.0f}%)",
+                   f"TB ngày hoạt động {_fmt_hours_short(_tb_day)} · TB tuần {_fmt_hours_short(_tb_week)}"]
+        if len(wd_y) and wd_y.max() > 0:
+            _items2.append(f"Thứ năng suất nhất <b>{wd_y.idxmax()}</b> (TB {_fmt_hours_short(wd_y.max())})")
+        _items2_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items2)
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<span class='rl-book'>Nhịp cả năm</span>"
+            f"<div class='hlt-list'>{_items2_html}</div></div>", unsafe_allow_html=True)
+
+
 def render_month_week_bars(df_m):
     """Chương "Theo tuần trong tháng" (Báo cáo -> Tháng, mockup): mỗi tuần ISO có chạm tháng đang
     chọn 1 hàng thanh ngang -- nhãn "T{tuần} · {đầu tuần}–{cuối tuần}" (khoảng ISO ĐẦY ĐỦ, có thể
@@ -5952,6 +6050,10 @@ st.markdown(
     .catbars { display: flex; flex-direction: column; gap: 10px; }
     .catbar-row { display: grid; grid-template-columns: 150px 1fr 60px; align-items: center;
         gap: 10px; font-size: 13px; }
+    /* Chương "Danh mục cả năm" (Báo cáo -> Năm, mockup, render_year_category_bars()) -- cột giá
+       trị rộng hơn (110px so với 60px mặc định) vì có thêm % so với cùng kỳ năm trước cạnh giờ
+       (vd "112h +31%"), 60px gốc không đủ chỗ. */
+    .catbar-row.wide { grid-template-columns: 150px 1fr 110px; }
     .catbar-label { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis;
         white-space: nowrap; }
     .catbar-track { height: 18px; background: var(--chip); border-radius: 5px; overflow: hidden;
@@ -8089,17 +8191,18 @@ elif nav == "Báo cáo":
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
                     [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
-                     ("bc-nam-ch3", "3 · Theo tháng"), ("bc-nam-ch4", "4 · Sách & Gundam"),
-                     ("bc-nam-ch5", "5 · Bảng số liệu")])
+                     ("bc-nam-ch3", "3 · Theo tháng"), ("bc-nam-ch4", "4 · Danh mục cả năm"),
+                     ("bc-nam-ch5", "5 · Kỷ lục năm"), ("bc-nam-ch6", "6 · Sách & Gundam"),
+                     ("bc-nam-ch7", "7 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
                                               "Ngày nổi bật trong năm", show_top3=True,
                                               anchor_prefix="bc-nam", top3_suffix=" Năm",
                                               show_footer=False)
 
-                # Nhánh Năm có bộ mục 2-5 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch/Theo tháng + Đọc
-                # sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không
-                # đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
+                # Nhánh Năm có bộ mục 2-7 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch/Theo tháng/Danh
+                # mục cả năm/Kỷ lục năm + Đọc sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung
+                # giờ/Độ dài phiên) -- không đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
@@ -8110,7 +8213,13 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-nam-ch3", 3, None, "Theo tháng")
                 render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch4", 4, None, "Đọc sách & Gundam trong năm")
+                sec_chapter("bc-nam-ch4", 4, None, "Danh mục cả năm")
+                render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
+
+                sec_chapter("bc-nam-ch5", 5, None, "Kỷ lục năm")
+                render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
+
+                sec_chapter("bc-nam-ch6", 6, None, "Đọc sách & Gundam trong năm")
                 # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
                 # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
                 # phức tạp để tách ra cho 1 mục tổng kết năm.
@@ -8124,7 +8233,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
                     ])
 
-                sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch7", 7, None, "Bảng số liệu")
                 render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
