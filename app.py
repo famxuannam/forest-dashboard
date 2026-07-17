@@ -2608,7 +2608,7 @@ def _top_days_section(df_scope, label, n=3):
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  anchor_prefix, top3_suffix=""):
+                                  anchor_prefix, top3_suffix="", show_footer=True):
     """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
@@ -2620,7 +2620,12 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ('Tuần'/'Tháng'/'Năm') PHẢI khớp đúng cột `_period_comparison()` đã dùng để tính prev/avg --
     dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
-    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương")."""
+    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương").
+
+    show_footer=False (Tuần) -- billboard riêng của Tuần (render_period_billboard) đã có câu nhận
+    định tự tính bao gồm đúng nội dung của _smart_digest (so kỳ trước) ở cột phải, dòng "nhận xét"
+    cuối thẻ ở đây thành thừa/lặp lại nếu giữ cả 2. Tháng/Năm CHƯA có billboard tương tự -- vẫn
+    show_footer=True (mặc định) để không mất thông tin."""
     sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan", tight_top=True)
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
@@ -2654,7 +2659,8 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút",
          "deltas": [d for d in [_delta_t(d1_ms, f"phút {lbl_prev}"), _delta_t(d2_ms, f"phút {lbl_avg}")] if d]},
     ], sections=_top_days_section(df_period, top_days_label),
-        footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None))
+        footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
+        if show_footer else None)
     render_session_bar(df_period)
     if show_top3:
         st.write("")
@@ -5692,6 +5698,30 @@ st.markdown(
         overflow: hidden !important;
         flex-grow: 0 !important;
     }
+    /* Bộ chọn kỳ (period_stepper key="stepper_week"/"stepper_month"/"stepper_year", Báo cáo ->
+       Tuần/Tháng/Năm) thu gọn + canh giữa CÙNG kiểu day_stepper (Hôm nay) -- xem lại thấy đồng bộ
+       đẹp hơn để full-width như trước (ghi chú cũ ở rule [class*="stepper"] phía trên vẫn đúng lý
+       do LÚC ĐÓ, chỉ là đổi quyết định thẩm mỹ). 4 cột (lùi/chọn kỳ/tiến/về hiện tại) -- 3 cột nút
+       cố định 44px (chọn theo :not(:nth-child(2)), không phải :first-child/:last-child như
+       day_stepper 3 cột, vì period_stepper có thêm cột nút "về hiện tại" thứ 4), cột selectbox co
+       theo nội dung. */
+    [class*="st-key-stepper_"] [data-testid="stHorizontalBlock"] {
+        width: fit-content !important; margin: 0 auto !important;
+    }
+    [class*="st-key-stepper_"] [data-testid="stColumn"]:not(:nth-child(2)) {
+        flex: 0 0 44px !important; width: 44px !important;
+    }
+    [class*="st-key-stepper_"] [data-testid="stColumn"]:nth-child(2) {
+        flex: 0 0 auto !important; width: auto !important;
+    }
+    [class*="st-key-stepper_"] button { height: 36px !important; min-height: 0 !important; }
+    [class*="st-key-stepper_"] [data-testid="stColumn"] [data-testid="stVerticalBlock"] {
+        height: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        overflow: hidden !important;
+        flex-grow: 0 !important;
+    }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
@@ -7221,7 +7251,7 @@ elif nav == "Báo cáo":
                 _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
-                                              anchor_prefix="bc-tuan")
+                                              anchor_prefix="bc-tuan", show_footer=False)
                 sec_chapter("bc-tuan-ch2", 2, None, "Nhật ký")
                 render_notes_journal(selected_week, 'week', df)
                 sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
