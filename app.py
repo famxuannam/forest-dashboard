@@ -6417,7 +6417,8 @@ st.markdown(
        var(--card), nên hoạ tiết chấm bi của .stApp lộ xuyên qua, trông "rỗng"/không giống thẻ
        thật. Ép nền đặc var(--card) cho khớp phần còn lại của app. */
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card, .st-key-tb_theme_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card {
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_account_card {
         background: var(--card) !important;
     }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
@@ -6520,12 +6521,12 @@ st.markdown(
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
        các khối xếp dọc, quá sát khi Thứ/ngày xếp chồng ngay trên nhau qua nhiều ngày liền. Thêm
        padding dọc + đường kẻ dưới cùng KHUÔN với .jrows .jrow để 2 nơi trông nhất quán. */
-    /* padding-top TĂNG lên 18px (không phải 10px đều 2 phía) -- phản hồi thực tế: đường kẻ đáy
-       hàng N nằm sát ngày/tháng hàng N+1 ngay dưới nó, dù khoảng cách dưới đường kẻ (10px padding
-       + 10px gap flex mặc định = 20px) đủ rộng, khoảng TRÊN mỗi ngày (chỉ 10px padding-top, không
-       có gap phụ nào cộng thêm vì đây là padding TRONG hàng N+1, không phải khoảng cách 2 hàng)
-       lại hẹp hơn hẳn -- tăng riêng padding-top bù lại cho cân xứng thị giác 2 phía đường kẻ. */
-    [class*="st-key-jkq_row_"] { padding: 18px 0 10px; border-bottom: 1px solid var(--divider); }
+    /* Lần sửa trước tăng padding-TOP (10->18px), nhưng phản hồi thực tế xác nhận đây SAI phía:
+       đường kẻ đáy của CHÍNH hàng đó vẫn sát ngay dưới ngày/chip của hàng đó (padding-bottom
+       chưa đổi, vẫn 10px) -- không phải khoảng cách TỚI hàng kế tiếp như đoán ban đầu. Tăng đều
+       cả 2 phía lên 16px thay vì đoán riêng 1 phía, để chắc chắn phần đệm NGAY TRÊN đường kẻ
+       (giữa nội dung hàng và đường kẻ đáy của chính hàng đó) cũng nới ra rõ rệt. */
+    [class*="st-key-jkq_row_"] { padding: 16px 0; border-bottom: 1px solid var(--divider); }
     /* :last-child đặt ngay trên chính div key KHÔNG có tác dụng -- Streamlit bọc mỗi container
        trong 1 lớp [data-testid="stLayoutWrapper"] riêng, nên div key luôn là con DUY NHẤT (và do
        đó luôn là last-child) của chính wrapper của nó, khiến rule khớp với MỌI hàng chứ không chỉ
@@ -8530,8 +8531,11 @@ elif nav == "Tuỳ biến":
         "</style>", unsafe_allow_html=True)
     # Thẻ "Tài khoản" (Đăng nhập với .../Đăng xuất) chỉ thêm khi có cấu hình đăng nhập Google
     # (_auth_configured) -- xếp CÙNG hàng 1x4 với 3 thẻ kia (không phải khối riêng dưới divider
-    # như bản trước) để đồng nhất khuôn nhãn+help text+nút, theo lựa chọn của người dùng.
-    _sysmgmt_cols = st.columns(4 if _auth_configured else 3)
+    # như bản trước) để đồng nhất khuôn nhãn+help text+nút, theo lựa chọn của người dùng. Thẻ
+    # Tài khoản rộng hơn 3 thẻ kia (tỉ lệ 1:1:1:2, không chia đều 1:1:1:1) -- help text của nó là
+    # "Đăng nhập với <email>" luôn dài hơn hẳn 3 câu help text kia (vd "Chưa sao lưu lần nào."),
+    # chia đều 4 cột sẽ xuống 2 dòng và làm thẻ này CAO HƠN 3 thẻ còn lại dù đã ép height:100%.
+    _sysmgmt_cols = st.columns([1, 1, 1, 2] if _auth_configured else [1, 1, 1])
     c1, c2, c3 = _sysmgmt_cols[:3]
     _today = _today_vn().strftime('%Y-%m-%d')
     _sysrow_label_css = "font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;"
@@ -8575,8 +8579,11 @@ elif nav == "Tuỳ biến":
                 _tb_restore_dialog()
     with c3:
         with st.container(border=True, key="tb_wipe_card"):
+            # Help text NGẮN hơn "Xoá toàn bộ dữ liệu — cần xác nhận" (bản trước) -- cột hẹp lại
+            # (tỉ lệ [1,1,1,2] để nhường chỗ cho thẻ Tài khoản) khiến câu dài xuống 2 dòng, làm
+            # thẻ này cao hơn 3 thẻ còn lại dù đã ép height:100%.
             st.markdown(f"<div style='{_sysrow_label_css}'>Làm mới</div>"
-                        f"<div style='{_sysrow_help_css}'>Xoá toàn bộ dữ liệu — cần xác nhận</div>",
+                        f"<div style='{_sysrow_help_css}'>Không thể hoàn tác.</div>",
                         unsafe_allow_html=True)
             if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open"):
                 _tb_wipe_dialog()
