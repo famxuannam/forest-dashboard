@@ -2396,9 +2396,9 @@ def render_session_bar(df):
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
-        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<div class='glass-card' style='padding:14px 18px;margin-top:14px;'>"
         "<span class='rl-book'>Phân bổ độ dài phiên</span>"
-        f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
+        f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
         unsafe_allow_html=True,
@@ -3341,7 +3341,7 @@ def render_day_timeline(day_df):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
@@ -5974,9 +5974,9 @@ st.markdown(
        nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
     .st-key-today_billboard {
         border-color: var(--border) !important;
-        padding: 24px 30px !important;
-        border-radius: 16px !important;
-        margin: 0 0 16px !important;
+        padding: 20px 28px 16px !important;
+        border-radius: 12px !important;
+        margin: 0 0 6px !important;
     }
     /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
        dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
@@ -5988,9 +5988,20 @@ st.markdown(
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
        khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
     .tbill-date { text-align: center; }
+    /* "Tab lịch xé" -- thanh accent bo góc trên + 2 chấm tròn màu nền trang (giả lỗ đục lịch bàn)
+       nằm NGAY TRÊN số ngày to, hiện tháng/năm dạng nhãn nhỏ in hoa (mockup billboard Hôm nay). */
+    .tbill-tab { position: relative; background: var(--accent); border-radius: 8px 8px 0 0;
+        padding: 8px 0 7px; margin-bottom: 8px; }
+    .tbill-tab::before, .tbill-tab::after { content: ''; position: absolute; top: 6px;
+        width: 9px; height: 9px; border-radius: 50%; background: var(--bg);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.35); }
+    .tbill-tab::before { left: 22px; }
+    .tbill-tab::after { right: 22px; }
+    .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
+        text-transform: uppercase; color: var(--card); }
     .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 6px; }
-    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 12px; line-height: 1.7; }
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
@@ -6004,6 +6015,11 @@ st.markdown(
     }
     .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] p {
         font-size: 18px !important; line-height: 1 !important; color: var(--text-3) !important;
+    }
+    /* Nút xáo (icon Material "shuffle", KHÁC nút Yêu thích ở trên -- vẫn dùng icon font vì không
+       có ký tự đơn thay thế hợp lý như "★"/"☆") -- màu nhạt var(--text-3) khớp mockup, cỡ 16px. */
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] span[data-testid="stIconMaterial"] {
+        font-size: 16px !important; color: var(--text-3) !important;
     }
     /* Đã Yêu thích -> chữ "★" màu accent (hình dạng đặc/rỗng đã đủ phân biệt, màu chỉ để nhấn
        thêm) -- xem chú thích [class*="st-key-kq_favbtn_on_"] phía trên cho lý do đổi hẳn sang ký
@@ -6642,10 +6658,12 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
         _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
                      f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
 
+    _tab_label = f"{VN_MONTHS_WORD[sel.month - 1]} {sel.year}"
     _date_html = (
         "<div class='tbill-date'>"
+        f"<div class='tbill-tab'><span class='tbill-tab-label'>{_tab_label}</span></div>"
         f"<div class='tbill-num'>{sel.day}</div>"
-        f"<div class='tbill-dow'>{vn_dow}, {VN_MONTHS_WORD[sel.month - 1]} {sel.year}</div>"
+        f"<div class='tbill-dow'>{vn_dow}</div>"
         f"<div class='tbill-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
 
     with st.container(key="today_billboard", border=True):
