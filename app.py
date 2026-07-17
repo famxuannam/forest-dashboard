@@ -844,6 +844,14 @@ def _is_gundam_list(list_name):
 @st.cache_data
 def load_reading_log():
     sb = _get_supabase()
+    # .order("completed_date").order("uid") ở PHÍA SUPABASE chỉ để .range() phân trang ổn định
+    # (xem docstring _sb_select_all) -- KHÔNG dùng để quyết định thứ tự hiển thị cuối cùng, vì
+    # "uid" (dạng "restored-N", sinh ở save_reading_log_bulk) là CHUỖI: PostgREST so chuỗi nên
+    # "restored-10" < "restored-2", sai thứ tự đọc thật khi 1 ngày có ≥2 phần và tổng số dòng
+    # ≥10 (bug thật đã gặp: 1 ngày đọc "Phần 5,6,7,8" hiện lệch thành "6,7,8,5"). Sắp lại đúng
+    # bằng khoá SỐ tách từ uid ngay dưới đây, vì "Ngày hoàn thành" tự nó không đủ phân biệt thứ
+    # tự trong ngày (Reminders chỉ ghi NGÀY hoàn thành, không có giờ -- xem docstring
+    # _render_reading_kindle_days()).
     data = _sb_select_all(lambda: sb.table("reading_log")
                            .select("uid,completed_date,book,title").order("completed_date").order("uid"))
     cols = ["Ngày hoàn thành", "Sách (gốc)", "Tiêu đề phần"]
@@ -852,8 +860,10 @@ def load_reading_log():
     df = pd.DataFrame(data).rename(columns={
         "completed_date": "Ngày hoàn thành", "book": "Sách (gốc)", "title": "Tiêu đề phần"})
     df["Ngày hoàn thành"] = pd.to_datetime(df["Ngày hoàn thành"], format='ISO8601')
+    df["_uid_n"] = df["uid"].astype(str).str.extract(r'(\d+)$')[0].astype(float)
+    df = df.sort_values(["Ngày hoàn thành", "_uid_n"], kind="stable").drop(columns=["_uid_n", "uid"])
     df["Cuốn sách"] = df["Sách (gốc)"].map(_book_title)
-    return df[cols + ["Cuốn sách"]]
+    return df[cols + ["Cuốn sách"]].reset_index(drop=True)
 
 def save_reading_log_bulk(df):
     """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu, hoặc khi tải file Shortcut ở mục "Tải
@@ -2807,7 +2817,7 @@ def _assign_gundam_sessions(gundam_sessions, rl_gundam, overrides=None):
     # .astype('datetime64[ns]') ép cả 2 vế về CÙNG độ chính xác -- pandas >=3 coi datetime64[s]
     # (từ .dt.normalize()) và datetime64[us]/[ns] (từ pd.to_datetime trên cột date) là 2 kiểu
     # khác nhau, merge_asof() sẽ ném MergeError nếu lệch nhau, không tự nới lỏng như trước.
-    marks = (rl_gundam.sort_values('Ngày hoàn thành')
+    marks = (rl_gundam.sort_values('Ngày hoàn thành', kind='stable')
              .assign(_d=lambda d: d['Ngày hoàn thành'].dt.normalize().astype('datetime64[ns]'))
              .drop_duplicates('_d', keep='first')[['_d', 'Cuốn sách']]
              .sort_values('_d'))
@@ -2944,7 +2954,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             'Số phiên': len(g) if has_forest else float('nan'),
             'Giờ/tuần': round(per_week, 1) if has_forest else float('nan'),
             'Số phần đã đọc': len(r) if has_rl else float('nan'),
-            'Phần gần nhất': r.sort_values('Ngày hoàn thành').iloc[-1]['Tiêu đề phần'] if has_rl else None,
+            'Phần gần nhất': r.sort_values('Ngày hoàn thành', kind='stable').iloc[-1]['Tiêu đề phần'] if has_rl else None,
             'Trạng thái': labels['ongoing'] if ongoing else 'Đã xong',
         })
     t = pd.DataFrame(rows).sort_values('Bắt đầu').reset_index(drop=True)
@@ -3364,6 +3374,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         return
 
     _anchor_ns = "rl-ct" if page_name == "Sách" else "gd-ct"
+    _journal_label = "Nhật ký đọc" if page_name == "Sách" else "Nhật ký xem"
 
     if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
         _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
@@ -3411,7 +3422,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         f"bắt đầu {pd.Timestamp(_row['Bắt đầu']):%d/%m} · lần {labels['verb']} gần nhất "
         f"{_rel_day_label(_row['Gần nhất'], _today_vn())}",
         _right_ct,
-        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Nhật ký đọc"),
+        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", f"2 · {_journal_label}"),
          (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
         key="bc_billboard_detail")
 
@@ -3441,7 +3452,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         sections=_secs,
     )
 
-    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Nhật ký đọc")
+    sec_chapter(f"{_anchor_ns}-ch2", 2, None, _journal_label)
     # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
     # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
@@ -4328,7 +4339,7 @@ def _book_chips_html(day_g):
     for book, g in groups:
         _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
         parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                        for _, r in g.sort_values('Ngày hoàn thành').iterrows())
+                        for _, r in g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
         out += _chip_row_html(html_escape(book), parts)
     return out
 
@@ -4350,7 +4361,7 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
         else:
             _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
             chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                                 for _, r in day_g.sort_values('Ngày hoàn thành').iterrows())
+                                 for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
@@ -4403,7 +4414,7 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
                 if not day_rl.empty:
                     _cls = 'jchip gundam' if _is_gundam_list(day_rl['Sách (gốc)'].iloc[0]) else 'jchip book'
                     chips = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                                    for _, r in day_rl.sort_values('Ngày hoàn thành').iterrows())
+                                    for _, r in day_rl.sort_values('Ngày hoàn thành', kind='stable').iterrows())
                     if df_books is not None and not df_books.empty:
                         _book = str(day_rl['Cuốn sách'].iloc[0])
                         _mins = df_books[(df_books['Dự án'] == _book)
@@ -6406,7 +6417,8 @@ st.markdown(
        var(--card), nên hoạ tiết chấm bi của .stApp lộ xuyên qua, trông "rỗng"/không giống thẻ
        thật. Ép nền đặc var(--card) cho khớp phần còn lại của app. */
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card, .st-key-tb_theme_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card {
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_account_card {
         background: var(--card) !important;
     }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
@@ -6509,7 +6521,12 @@ st.markdown(
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
        các khối xếp dọc, quá sát khi Thứ/ngày xếp chồng ngay trên nhau qua nhiều ngày liền. Thêm
        padding dọc + đường kẻ dưới cùng KHUÔN với .jrows .jrow để 2 nơi trông nhất quán. */
-    [class*="st-key-jkq_row_"] { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+    /* Lần sửa trước tăng padding-TOP (10->18px), nhưng phản hồi thực tế xác nhận đây SAI phía:
+       đường kẻ đáy của CHÍNH hàng đó vẫn sát ngay dưới ngày/chip của hàng đó (padding-bottom
+       chưa đổi, vẫn 10px) -- không phải khoảng cách TỚI hàng kế tiếp như đoán ban đầu. Tăng đều
+       cả 2 phía lên 16px thay vì đoán riêng 1 phía, để chắc chắn phần đệm NGAY TRÊN đường kẻ
+       (giữa nội dung hàng và đường kẻ đáy của chính hàng đó) cũng nới ra rõ rệt. */
+    [class*="st-key-jkq_row_"] { padding: 16px 0; border-bottom: 1px solid var(--divider); }
     /* :last-child đặt ngay trên chính div key KHÔNG có tác dụng -- Streamlit bọc mỗi container
        trong 1 lớp [data-testid="stLayoutWrapper"] riêng, nên div key luôn là con DUY NHẤT (và do
        đó luôn là last-child) của chính wrapper của nó, khiến rule khớp với MỌI hàng chứ không chỉ
@@ -7270,9 +7287,11 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                         c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
                         with c_src:
                             _author = kq.get('Tác giả')
-                            _src_txt = html_escape(str(kq['Cuốn sách']))
-                            if pd.notna(_author) and str(_author).strip():
-                                _src_txt += f" · {html_escape(str(_author))}"
+                            # Tên tác giả đứng TRƯỚC tên sách (khớp quy ước trích dẫn văn học
+                            # thường gặp "Tác giả, Tên sách") -- trước đây để sách trước, tác giả
+                            # sau, phản hồi thực tế là ngược thứ tự mong muốn.
+                            _src_txt = (f"{html_escape(str(_author))} · " if pd.notna(_author)
+                                        and str(_author).strip() else "") + html_escape(str(kq['Cuốn sách']))
                             st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
                         with c_shuffle:
                             if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
@@ -7316,11 +7335,14 @@ def render_day_report(df):
     # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
     # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
     # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
+    # "Ngày này năm trước" dời XUỐNG CUỐI (chương 5, sau "Danh sách phiên") -- xác nhận với người
+    # dùng đổi lại khỏi vị trí "ngay sau Ghi chú ngày" của lần dọn dẹp trước (xem Nhật ký phát
+    # triển), giờ chỉ còn là mục tham khảo phụ đọc thêm cuối trang, không còn ở đầu.
     _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
                    if day_df.empty else
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
-                    ("today-ch3", "3 · Ngày này năm trước"), ("today-ch4", "4 · Phân bổ thời gian"),
-                    ("today-ch5", "5 · Danh sách phiên")])
+                    ("today-ch3", "3 · Phân bổ thời gian"), ("today-ch4", "4 · Danh sách phiên"),
+                    ("today-ch5", "5 · Ngày này năm trước")])
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
@@ -7386,13 +7408,10 @@ def render_day_report(df):
         sec_chapter("today-ch2", 2, None, "Ghi chú ngày")
         render_note_editor(sel, sel_day_badges)
 
-        sec_chapter("today-ch3", 3, None, "Ngày này năm trước")
-        render_on_this_day(sel, df)
-
-        sec_chapter("today-ch4", 4, None, "Phân bổ thời gian")
+        sec_chapter("today-ch3", 3, None, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
 
-        sec_chapter("today-ch5", 5, None, "Danh sách phiên")
+        sec_chapter("today-ch4", 4, None, "Danh sách phiên")
         rows_html = ''
         for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
             s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
@@ -7412,6 +7431,9 @@ def render_day_report(df):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+
+        sec_chapter("today-ch5", 5, None, "Ngày này năm trước")
+        render_on_this_day(sel, df)
 
 
 # ==========================================
@@ -8488,7 +8510,8 @@ elif nav == "Tuỳ biến":
         "<style>"
         "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) "
         "{ align-items: stretch !important; }"
-        ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card { height: 100%; }"
+        ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, "
+        ".st-key-tb_account_card { height: 100%; }"
         # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ, giờ nằm trong popup st.dialog()) dùng màu
         # cảnh báo riêng (đỏ #ff3b30, cùng tông đỏ dùng cho delta âm/chỉ số bất thường trong app)
         # thay vì màu nút thường -- tín hiệu thị giác phân biệt mức độ nguy hiểm. key vẫn giữ
@@ -8497,15 +8520,23 @@ elif nav == "Tuỳ biến":
         ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
         "background-color:#ff3b30 !important;color:#fff !important;"
         "border-color:#ff3b30 !important;box-shadow:none !important;}"
-        # Nút 3 thẻ Sao lưu/Khôi phục/Làm mới: nhỏ gọn, KHÔNG full-width (khớp mockup -- nút chỉ
-        # rộng vừa chữ, neo trái dưới nhãn+help text, không kéo hết bề ngang thẻ).
+        # Nút 4 thẻ Sao lưu/Khôi phục/Làm mới/Tài khoản: nhỏ gọn, KHÔNG full-width (khớp mockup --
+        # nút chỉ rộng vừa chữ, neo trái dưới nhãn+help text, không kéo hết bề ngang thẻ).
         ".st-key-tb_backup_card div[data-testid=\"stButton\"] button,"
         ".st-key-tb_restore_card div[data-testid=\"stButton\"] button,"
-        ".st-key-tb_wipe_card div[data-testid=\"stButton\"] button {"
+        ".st-key-tb_wipe_card div[data-testid=\"stButton\"] button,"
+        ".st-key-tb_account_card div[data-testid=\"stButton\"] button {"
         "padding:5px 14px !important;font-size:13px !important;border-radius:7px !important;"
         "font-weight:500 !important;min-height:auto !important;}"
         "</style>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
+    # Thẻ "Tài khoản" (Đăng nhập với .../Đăng xuất) chỉ thêm khi có cấu hình đăng nhập Google
+    # (_auth_configured) -- xếp CÙNG hàng 1x4 với 3 thẻ kia (không phải khối riêng dưới divider
+    # như bản trước) để đồng nhất khuôn nhãn+help text+nút, theo lựa chọn của người dùng. Thẻ
+    # Tài khoản rộng hơn 3 thẻ kia (tỉ lệ 1:1:1:2, không chia đều 1:1:1:1) -- help text của nó là
+    # "Đăng nhập với <email>" luôn dài hơn hẳn 3 câu help text kia (vd "Chưa sao lưu lần nào."),
+    # chia đều 4 cột sẽ xuống 2 dòng và làm thẻ này CAO HƠN 3 thẻ còn lại dù đã ép height:100%.
+    _sysmgmt_cols = st.columns([1, 1, 1, 2] if _auth_configured else [1, 1, 1])
+    c1, c2, c3 = _sysmgmt_cols[:3]
     _today = _today_vn().strftime('%Y-%m-%d')
     _sysrow_label_css = "font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;"
     _sysrow_help_css = "font-size:13px;color:var(--text-2);margin-bottom:10px;"
@@ -8548,16 +8579,21 @@ elif nav == "Tuỳ biến":
                 _tb_restore_dialog()
     with c3:
         with st.container(border=True, key="tb_wipe_card"):
+            # Help text NGẮN hơn "Xoá toàn bộ dữ liệu — cần xác nhận" (bản trước) -- cột hẹp lại
+            # (tỉ lệ [1,1,1,2] để nhường chỗ cho thẻ Tài khoản) khiến câu dài xuống 2 dòng, làm
+            # thẻ này cao hơn 3 thẻ còn lại dù đã ép height:100%.
             st.markdown(f"<div style='{_sysrow_label_css}'>Làm mới</div>"
-                        f"<div style='{_sysrow_help_css}'>Xoá toàn bộ dữ liệu — cần xác nhận</div>",
+                        f"<div style='{_sysrow_help_css}'>Không thể hoàn tác.</div>",
                         unsafe_allow_html=True)
             if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open"):
                 _tb_wipe_dialog()
-
     if _auth_configured:
-        st.divider()
-        st.caption(f"Đăng nhập với **{st.user.email}**")
-        st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
+        with _sysmgmt_cols[3]:
+            with st.container(border=True, key="tb_account_card"):
+                st.markdown(f"<div style='{_sysrow_label_css}'>Tài khoản</div>"
+                            f"<div style='{_sysrow_help_css}'>Đăng nhập với {html_escape(st.user.email)}</div>",
+                            unsafe_allow_html=True)
+                st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
 
     # Chương "5. Dữ liệu làm việc hiện tại" -- KHÔNG có trong mockup (chỉ vẽ 4 chương), xác nhận
     # với người dùng giữ làm chương riêng cuối cùng thay vì gộp vào "1. Dữ liệu đầu vào" (xem
