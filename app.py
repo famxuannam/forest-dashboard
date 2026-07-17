@@ -4602,6 +4602,52 @@ def render_detail_table(scope_df):
 """, unsafe_allow_html=True)
 
 
+def render_period_day_table(df_period, all_days=None):
+    """Bảng chi tiết theo NGÀY (Báo cáo -> Tuần, mục "Bảng số liệu") -- mỗi ngày trong kỳ 1 dòng
+    (Ngày/Giờ/Phiên/TB mỗi phiên/Dự án nhiều nhất), khác trục hẳn với render_detail_table (theo
+    Danh mục/Dự án) -- dùng cho Tuần vì trục Danh mục/Dự án đã có frag_category_bars riêng ở
+    chương trước, bảng ở đây bổ sung trục còn thiếu (theo ngày) thay vì lặp lại cùng 1 trục lần
+    thứ 2 như Tháng/Năm (những trang đó không có frag_category_bars nên vẫn giữ render_detail_table
+    theo Danh mục/Dự án).
+
+    all_days: list[date] đầy đủ của kỳ (vd 7 ngày Thứ Hai->Chủ Nhật) -- truyền vào để bảng hiện ĐỦ
+    cả những ngày KHÔNG có phiên nào (dòng "—"), đúng cảm giác "sổ ghi chép cả tuần" thay vì chỉ
+    liệt kê ngày có dữ liệu. None -> tự suy ra từ chính df_period (bỏ qua ngày trống, hành vi cũ)."""
+    if df_period.empty and not all_days:
+        return
+    days = sorted(all_days) if all_days else sorted(df_period['Ngày'].unique())
+    rows_html = ''
+    tot_min, tot_sessions = 0.0, 0
+    for d in days:
+        day_df = df_period[df_period['Ngày'] == d]
+        mins = float(day_df['Thời lượng (Phút)'].sum())
+        n = len(day_df)
+        avg_min = mins / n if n else 0.0
+        top_proj = day_df.groupby('Dự án')['Thời lượng (Phút)'].sum().idxmax() if n else "—"
+        vn_dow = VN_DAYS.get(pd.Timestamp(d).day_name(), "")
+        rows_html += (
+            '<tr class="prow">'
+            f'<td class="lbl">{vn_dow} {pd.Timestamp(d):%d/%m}</td>'
+            f'<td>{_fmt_hours_short(mins / 60) if n else "—"}</td>'
+            f'<td>{n if n else "—"}</td>'
+            f'<td>{f"{avg_min:.0f}′" if n else "—"}</td>'
+            f'<td class="txt">{html_escape(str(top_proj)) if n else ""}</td></tr>')
+        tot_min += mins
+        tot_sessions += n
+    avg_all = tot_min / tot_sessions if tot_sessions else 0.0
+    rows_html += ('<tr class="cat"><td class="lbl">Tổng</td>'
+                  f'<td class="tot">{_fmt_hours_short(tot_min / 60)}</td>'
+                  f'<td class="tot">{tot_sessions}</td>'
+                  f'<td class="tot">{avg_all:.0f}′</td><td class="tot"></td></tr>')
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Ngày</th><th>Giờ</th><th>Phiên</th><th>TB / phiên</th>
+<th class="txt">Dự án nhiều nhất</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+
 def render_health_log_table(s_num, is_abn):
     """Bảng từng lần đo của 1 chỉ số, dưới biểu đồ theo dõi (Sức khoẻ -> Báo cáo, mục "2. Biểu đồ
     theo dõi") -- dùng cùng khung .dtbl (viền/nền/header dính) với các bảng Báo cáo Thời gian
@@ -4916,6 +4962,45 @@ def frag_pie(scope_df, key, default_color):
         fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
         fig = format_plotly_fig(fig, is_pie=True)
         st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+
+@st.fragment
+def frag_category_bars(scope_df, key, default_color):
+    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở Báo cáo -> Tuần và
+    Hôm nay -- Tháng/Năm vẫn giữ frag_pie, chưa đổi) -- toggle Danh mục/Dự án, mỗi hàng nhãn + 1
+    thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo hàng cao nhất -- đúng theo mockup Forest
+    Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng dồn ra khớp tổng giờ cả kỳ) + giá trị bên
+    phải, cộng dòng tóm tắt "X nổi bật" liệt kê top 3 trong phạm vi TOGGLE ĐANG CHỌN (mockup vẽ
+    tĩnh nên luôn ghi "Dự án nổi bật" dù thanh đang hiện Danh mục -- ở đây đổi nhãn theo đúng toggle
+    cho nhất quán, tránh lệch trục giữa thanh và dòng tóm tắt). Bọc trong container "chartopt_..."
+    (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống nội dung ngay dưới."""
+    with st.container(key=f"chartopt_{key}"):
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                     label_visibility="collapsed") or default_color
+        g = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().sort_values(ascending=False)
+        total_min = scope_df['Thời lượng (Phút)'].sum()
+        if g.empty or total_min <= 0:
+            st.caption("Chưa có dữ liệu.")
+            return
+        rows_html = ""
+        for i, (name, mins) in enumerate(g.items()):
+            pct = mins / total_min * 100
+            color = COLOR_MAP.get(name, MAC_COLORS[i % len(MAC_COLORS)])
+            rows_html += (
+                "<div class='catbar-row'>"
+                f"<span class='catbar-label'>{html_escape(str(name))}</span>"
+                f"<span class='catbar-track'><span class='catbar-fill' "
+                f"style='width:{pct:.1f}%;background:{color};'></span></span>"
+                f"<span class='catbar-val'>{_fmt_hours_short(mins / 60)}</span></div>")
+        top3 = g.head(3)
+        noun = "Danh mục nổi bật" if ccol == "Danh mục" else "Dự án nổi bật"
+        parts = [(f"<b>{html_escape(str(n))} {_fmt_hours_short(v / 60)}</b>" if i == 0
+                   else f"{html_escape(str(n))} {_fmt_hours_short(v / 60)}")
+                  for i, (n, v) in enumerate(top3.items())]
+        st.markdown(
+            f"<div class='catbars-card'><div class='catbars'>{rows_html}</div>"
+            f"<div class='catbars-top'>{noun}: {' · '.join(parts)}</div></div>",
+            unsafe_allow_html=True)
 
 
 @st.fragment
@@ -5279,9 +5364,29 @@ st.markdown(
     [data-testid="stMarkdownContainer"]:has(> .sec-toc),
     [data-testid="stMarkdownContainer"]:has(> .glass-card),
     [data-testid="stMarkdownContainer"]:has(> .dtl-card),
-    [data-testid="stMarkdownContainer"]:has(> .sec-card) {
+    [data-testid="stMarkdownContainer"]:has(> .sec-card),
+    [data-testid="stMarkdownContainer"]:has(> .catbars-card) {
         margin-bottom: 0 !important;
     }
+
+    /* Mục "Danh mục & dự án" dạng thanh ngang xếp hạng (frag_category_bars) -- thay biểu đồ tròn
+       cũ, style theo mockup Forest Dashboard.dc.html: thẻ padding 16px 18px (khác 14px của thẻ
+       biểu đồ Plotly/Vega vì đây là HTML thuần, không tự có card qua rule [data-testid=
+       "stPlotlyChart"]), mỗi hàng nhãn 150px + thanh fill co giãn + giá trị 60px canh phải. */
+    .catbars-card {
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 16px 18px; box-shadow: 0 1px 1px rgba(0,0,0,0.02);
+    }
+    .catbars { display: flex; flex-direction: column; gap: 10px; }
+    .catbar-row { display: grid; grid-template-columns: 150px 1fr 60px; align-items: center;
+        gap: 10px; font-size: 13px; }
+    .catbar-label { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; }
+    .catbar-track { height: 18px; background: var(--chip); border-radius: 5px; overflow: hidden;
+        display: block; }
+    .catbar-fill { height: 100%; border-radius: 5px; display: block; }
+    .catbar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+    .catbars-top { font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
 
     .glass-card {
         background: var(--card);
@@ -6928,7 +7033,7 @@ def render_day_report(df):
         render_on_this_day(sel, df)
 
         sec_chapter("today-ch4", 4, None, "Phân bổ thời gian")
-        frag_pie(day_df, "rad_day", "Dự án")
+        frag_category_bars(day_df, "rad_day", "Dự án")
 
         sec_chapter("today-ch5", 5, None, "Danh sách phiên")
         rows_html = ''
@@ -7063,23 +7168,68 @@ elif nav == "Báo cáo":
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
-                sec_hero(None, "Một tuần vừa qua", None,
-                         [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
-                          ("bc-tuan-ch3", "3 · Phân bổ thời gian"),
-                          ("bc-tuan-ch4", "4 · Xu hướng theo thời gian"),
-                          ("bc-tuan-ch5", "5 · Xu hướng theo khung giờ"),
-                          ("bc-tuan-ch6", "6 · Bảng số liệu")])
+                # Billboard số to + câu nhận định (mockup) -- Tuần KHÔNG còn dùng chung
+                # _render_period_secondary_expanders() với Tháng nữa (tách riêng code): bộ chương
+                # đã khác hẳn theo mockup -- bỏ "Xu hướng tập trung theo khung giờ", đổi "Phân bổ
+                # thời gian" (pie) -> "Danh mục & dự án" (thanh ngang xếp hạng, frag_category_bars),
+                # đổi Bảng số liệu sang trục theo NGÀY (render_period_day_table) thay vì Danh mục/
+                # Dự án (đã có ở chương thanh ngang rồi, không lặp lại trục), và đổi tên chương
+                # "Xu hướng theo thời gian" -> "Theo ngày" (giữ đúng thứ tự mockup: Theo ngày đứng
+                # trước Danh mục & dự án). Tháng/Năm CHƯA đối chiếu mockup riêng -- vẫn giữ nguyên
+                # sec_hero/_render_period_secondary_expanders cũ, không đụng tới.
+                _wy, _wk = selected_week.split('-W')
+                _week_start = date.fromisocalendar(int(_wy), int(_wk), 1)
+                _week_end = _week_start + timedelta(days=6)
+                _active_days_w = df_w['Ngày'].nunique()
+                _curr_hrs_w = df_w['Thời lượng (Phút)'].sum() / 60
+                _by_day_w = df_w.groupby('Ngày')['Thời lượng (Phút)'].sum()
+                _busiest_date_w = _by_day_w.idxmax()
+                _busiest_dow_w = VN_DAYS.get(pd.Timestamp(_busiest_date_w).day_name(), "")
+                _streak_cur_w = _streak_stats(df)['current']
+
+                _delta_txt_w = ""
+                if prev_w and prev_w.get('hrs') is not None:
+                    _dh_w = _curr_hrs_w - prev_w['hrs']
+                    if abs(_dh_w) >= (1 / 60):
+                        _delta_txt_w = f"{'Hơn' if _dh_w > 0 else 'Kém'} tuần trước {_fmt_hours_short(abs(_dh_w))}. "
+                _expected_days_w = (_today_vn().isoweekday()
+                                     if selected_week == _today_vn().strftime('%G-W%V') else 7)
+                _gap_txt_w = ("không ngày nào trống" if _active_days_w >= _expected_days_w
+                              else f"{_expected_days_w - _active_days_w} ngày trống")
+                _streak_txt_w = f" — chuỗi giữ mạch {_streak_cur_w} ngày" if _streak_cur_w > 0 else ""
+                _pbill_sub_w = f"{_delta_txt_w}{_busiest_dow_w} là ngày dày nhất; {_gap_txt_w}{_streak_txt_w}."
+
+                if prev_w and prev_w.get('hrs') is not None and _curr_hrs_w > prev_w['hrs']:
+                    _pbill_title_w = "Một tuần tăng tốc"
+                elif prev_w and prev_w.get('hrs') is not None and _curr_hrs_w < prev_w['hrs']:
+                    _pbill_title_w = "Một tuần chững lại"
+                elif _active_days_w >= _expected_days_w:
+                    _pbill_title_w = "Một tuần nhịp đều"
+                else:
+                    _pbill_title_w = "Một tuần vừa qua"
+
+                render_period_billboard(
+                    f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
+                    f"{_week_start:%d/%m} – {_week_end:%d/%m} · hoạt động {_active_days_w}/7 ngày",
+                    _pbill_title_w, _pbill_sub_w,
+                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
+                     ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Danh mục & dự án"),
+                     ("bc-tuan-ch5", "5 · Bảng số liệu")])
                 # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
-                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở Phân bổ/Bảng số
-                # liệu bên dưới.
+                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Danh mục &
+                # dự án" bên dưới.
                 _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
                                               anchor_prefix="bc-tuan")
-                _render_period_secondary_expanders(
-                    df_w, df, selected_week, 'week', 'Thứ', "Thứ trong tuần", DAYS_ORDER,
-                    pie_key="rad_tab4", trend_key="trend_w_color", hourly_key="hour_w",
-                    anchor_prefix="bc-tuan")
+                sec_chapter("bc-tuan-ch2", 2, None, "Nhật ký")
+                render_notes_journal(selected_week, 'week', df)
+                sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
+                frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
+                sec_chapter("bc-tuan-ch4", 4, None, "Danh mục & dự án")
+                frag_category_bars(df_w, "rad_tab4", "Danh mục")
+                sec_chapter("bc-tuan-ch5", 5, None, "Bảng số liệu")
+                render_period_day_table(df_w, all_days=[_week_start + timedelta(days=i) for i in range(7)])
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
@@ -8117,8 +8267,8 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi")
     _q_rows = [
-        ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (biểu đồ tròn)", "Báo cáo → Tháng / Tuần"],
-        ["Mình hay tập trung sung sức nhất lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tuần / Tháng"],
+        ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (Tháng: biểu đồ tròn · Tuần: Danh mục &amp; dự án dạng thanh xếp hạng)", "Báo cáo → Tháng / Tuần"],
+        ["Mình hay tập trung sung sức nhất lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tháng"],
         ["Nhịp độ đang lên hay đang chùng xuống?", "Xu hướng + đường trung bình động 7 ngày", "Mọi trang Báo cáo"],
         ["Ngày hôm đó làm sâu hay chỉ vụn vặt cho có?", "Thanh phân bố độ dài phiên", "Mọi trang Báo cáo · Sách · Gundam"],
         ["Có việc nào đang âm thầm bị bỏ rơi không?", "Bảng số liệu — nhìn kỹ dấu ▾ đỏ", "Báo cáo → Tháng"],
