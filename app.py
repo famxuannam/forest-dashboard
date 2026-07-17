@@ -3037,7 +3037,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     with _tab_overview:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                                  _sec_timeslot, _today, labels, _page_name)
+                                  _sec_timeslot, _today, labels, _page_name, reading_log_df)
         if extra_overview is not None:
             extra_overview()
 
@@ -3049,12 +3049,169 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
         _render_reading_detail(t, reading_log_df, labels, _page_name)
 
 
+def _reading_author_of(kh_all, book):
+    """Tác giả 1 cuốn/series, tra qua trích dẫn Kindle đã gắn đúng "Cuốn sách" này (cột "Tác giả"
+    lấy từ metadata Kindle lúc import) -- None nếu chưa có trích dẫn nào (sách chỉ theo dõi qua
+    Forest/Reminders, chưa import Kindle) hoặc "Tác giả" rỗng. Dùng chung cho billboard +
+    chương "Tủ sách năm nay" (Sách -> Tổng quan)."""
+    if kh_all.empty:
+        return None
+    m = kh_all[kh_all['Cuốn sách'] == book]['Tác giả'].dropna()
+    return m.iloc[0] if len(m) else None
+
+
+def _render_reading_billboard(t, df_books, today):
+    """Billboard mở đầu Sách -> Tổng quan (render_period_billboard()): số cuốn đã đọc xong TRONG
+    NĂM bên trái + sách đang đọc chính (hoạt động gần nhất) bên phải -- đang đọc song song (nếu
+    có), "đã đọc N phần" (KHÔNG có mẫu số tổng số chương/phần cả cuốn -- dữ liệu Reminders chỉ ghi
+    phần ĐÃ xong, không có tổng số, xác nhận với người dùng bỏ hẳn thanh tiến độ dạng phân số thay
+    vì suy đoán hay thêm 1 input nhập tay hoàn toàn mới), phần đọc gần nhất + số trích dẫn đã lưu.
+    KHÔNG có đánh giá sao -- xác nhận với người dùng giữ nguyên quyết định "Không cần" đã chốt
+    trước đó, mockup có thêm nhưng không áp dụng."""
+    kh_all = load_kindle_highlights()
+
+    def _rel_day(d):
+        delta = (today - pd.Timestamp(d).date()).days
+        if delta == 0:
+            return "Hôm nay"
+        if delta == 1:
+            return "Hôm qua"
+        if delta < 7:
+            return f"{delta} ngày trước"
+        return f"{pd.Timestamp(d):%d/%m}"
+
+    done_year = t[(t['Trạng thái'] == 'Đã xong') & (pd.to_datetime(t['Gần nhất']).dt.year == today.year)]
+    reading_now = t[t['Trạng thái'] == 'Đang đọc'].sort_values('Gần nhất', ascending=False)
+    hrs_year = df_books[pd.to_datetime(df_books['Ngày']).dt.year == today.year]['Thời lượng (Phút)'].sum() / 60
+
+    if len(reading_now):
+        primary = reading_now.iloc[0]
+        book = str(primary['Cuốn sách'])
+        author = _reading_author_of(kh_all, book)
+        _author_html = f" <span class='pbill-author'>· {html_escape(str(author))}</span>" if author else ""
+        chips = []
+        if pd.notna(primary['Số phần đã đọc']) and primary['Số phần đã đọc'] > 0:
+            chips.append(f"<span class='chip'><span class='ck'>Đã đọc</span>"
+                          f"<span class='cv'>{int(primary['Số phần đã đọc'])} phần</span></span>")
+        if len(reading_now) > 1:
+            other = reading_now.iloc[1]
+            _part = f" · {html_escape(str(other['Phần gần nhất']))}" if pd.notna(other['Phần gần nhất']) else ""
+            chips.append(f"<span class='chip'><span class='ck'>Cùng lúc</span>"
+                          f"<span class='cv'>{html_escape(str(other['Cuốn sách']))}{_part}</span></span>")
+        _last_day = pd.Timestamp(primary['Gần nhất'])
+        _day_mins = df_books[(df_books['Dự án'] == book) & (df_books['Ngày'] == _last_day.date())]['Thời lượng (Phút)'].sum()
+        _dur = f" · {int(_day_mins)}′" if _day_mins > 0 else ""
+        chips.append(f"<span class='chip'><span class='ck'>Phần đọc gần nhất</span>"
+                      f"<span class='cv'>{_rel_day(_last_day)}{_dur}</span></span>")
+        _n_quotes = len(kh_all[(kh_all['Cuốn sách'] == book) & (kh_all['Loại'] == 'highlight')]) if not kh_all.empty else 0
+        if _n_quotes:
+            chips.append(f"<span class='chip tw'><span class='cv'>{_n_quotes} trích dẫn đã lưu</span></span>")
+        _right = ("<div class='pbill-kicker'>Đang đọc</div>"
+                  f"<div class='pbill-booktitle'>{html_escape(book)}{_author_html}</div>"
+                  f"<div class='pbill-chips'>{''.join(chips)}</div>")
+    else:
+        _right = ("<div class='pbill-kicker'>Đang đọc</div>"
+                   "<div class='pbill-booktitle'>Chưa có cuốn nào đang đọc dở</div>")
+
+    render_period_billboard(
+        f"Tủ sách {today.year}", f"{len(done_year)}", "cuốn đã đọc xong",
+        f"{len(reading_now)} đang đọc · {_fmt_hours_short(hrs_year)} đọc năm nay",
+        _right,
+        [("sach-tq-ch1", "1 · Nhật ký đọc"), ("sach-tq-ch2", "2 · Tủ sách năm nay"),
+         ("sach-tq-ch3", "3 · Trích dẫn & Ghi chú"), ("sach-tq-ch4", "4 · Thống kê")])
+
+
+def _render_reading_bookshelf_table(t, today):
+    """Chương "Tủ sách năm nay" (Sách -> Tổng quan): sách ĐÃ XONG trong năm nay, tối đa 4 dòng +
+    dòng "+ N cuốn khác" trỏ sang tab Chi tiết (bảng đầy đủ mọi sách/mọi năm đã có sẵn ở đó, xem
+    _render_reading_detail() -- không lặp lại toàn bộ ở đây). KHÔNG có cột Đánh giá (sao) -- xác
+    nhận với người dùng giữ nguyên quyết định bỏ tính năng đánh giá sao."""
+    kh_all = load_kindle_highlights()
+    done_year = t[(t['Trạng thái'] == 'Đã xong') & (pd.to_datetime(t['Gần nhất']).dt.year == today.year)]
+    if done_year.empty:
+        st.caption(f"Chưa có cuốn nào đọc xong trong năm {today.year}.")
+        return
+    done_sorted = done_year.sort_values('Gần nhất', ascending=False)
+    shown = done_sorted.head(4)
+    rows_html = ''
+    for _, r in shown.iterrows():
+        book = str(r['Cuốn sách'])
+        author = _reading_author_of(kh_all, book)
+        n_quotes = len(kh_all[(kh_all['Cuốn sách'] == book) & (kh_all['Loại'] == 'highlight')]) if not kh_all.empty else 0
+        book_html = f"<b>{html_escape(book)}</b>"
+        if author:
+            book_html += f" <span style='color:var(--text-2);'>· {html_escape(str(author))}</span>"
+        hrs = _fmt_hours_short(r['Tổng giờ']) if pd.notna(r['Tổng giờ']) else '—'
+        rows_html += ('<tr class="prow">'
+                      f'<td class="lbl">{book_html}</td>'
+                      f'<td>{pd.Timestamp(r["Gần nhất"]):%m/%Y}</td>'
+                      f'<td>{hrs}</td>'
+                      f'<td>{n_quotes}</td></tr>')
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Sách</th><th>Xong</th><th>Giờ đọc</th><th>Trích dẫn</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+    remaining = len(done_sorted) - len(shown)
+    if remaining > 0:
+        st.caption(f"+ {remaining} cuốn khác · xem tab **Chi tiết**")
+
+
+def _render_reading_quotes_teaser(n=3):
+    """Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan): N trích dẫn gần đây nhất (mọi cuốn), kèm
+    ghi chú cá nhân lồng dưới nếu có (parent_hash trỏ về, xem add_kindle_note()) -- bản CHỈ ĐỌC
+    (không Sửa/Xoá/+ Ghi chú như _render_kindle_day_quotes() ở tab Chi tiết -- tránh trùng key
+    widget khi cùng 1 trích dẫn render ở cả 2 nơi cùng lúc)."""
+    kh_all = load_kindle_highlights()
+    highlights = (kh_all[kh_all['Loại'] == 'highlight'].sort_values('Ngày thêm', ascending=False).head(n)
+                  if not kh_all.empty else kh_all)
+    if highlights.empty:
+        st.caption("Chưa có trích dẫn nào.")
+        return
+    rows_html = ''
+    for _, r in highlights.iterrows():
+        notes = kh_all[(kh_all['Loại'] == 'note') & (kh_all['parent_hash'] == r['dedupe_hash'])]
+        note_html = ''
+        if len(notes):
+            note_html = f"<div class='quote-note'>✎ {html_escape(str(notes.iloc[0]['Nội dung']))}</div>"
+        rows_html += (
+            "<div class='quote-item'>"
+            f"<div class='quote-text'>&ldquo;{html_escape(str(r['Nội dung']))} "
+            f"<span class='quote-meta'>Vị trí {html_escape(str(r['Vị trí']))} · {html_escape(str(r['Cuốn sách']))}</span></div>"
+            f"{note_html}</div>")
+    st.markdown(f"<div class='quotes-card'>{rows_html}</div>", unsafe_allow_html=True)
+
+
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                              _sec_timeslot, _today, labels, page_name):
+                              _sec_timeslot, _today, labels, page_name, reading_log_df):
     """Sub-tab "Tổng quan" của render_reading_log(): 3 thẻ hero/nhóm chip + thanh phân bổ +
     bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
-    (đã flat sẵn từ trước). KHÔNG có billboard/hero ở đầu -- sub-tab này không có chương/mục
-    đánh số nào để nhảy tới (chỉ 1 khối phẳng), nên hero chỉ còn là khung trống không cần thiết."""
+    (đã flat sẵn từ trước).
+
+    page_name == "Sách": thêm billboard (_render_reading_billboard) + 3 chương mới đầu trang
+    (Nhật ký đọc/Tủ sách năm nay/Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) --
+    3 thẻ hero/nhóm chip cũ GIỮ NGUYÊN, dồn xuống thành chương "4. Thống kê" (xác nhận với người
+    dùng giữ nguyên dữ liệu phong phú hiện có thay vì rút gọn, cùng cách đã làm cho Báo cáo ->
+    Tuần). Gundam KHÔNG đổi gì -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ
+    (không billboard/chương, đúng hành vi gốc)."""
+    if page_name == "Sách":
+        _render_reading_billboard(t, df_books, _today)
+        sec_chapter("sach-tq-ch1", 1, None, "Nhật ký đọc", tight_top=True)
+        _rl_recent = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
+                      if not reading_log_df.empty else reading_log_df)
+        with st.container(border=True, key="jcard_sach_journal"):
+            if _rl_recent.empty:
+                st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
+            else:
+                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
+                            unsafe_allow_html=True)
+        sec_chapter("sach-tq-ch2", 2, None, "Tủ sách năm nay")
+        _render_reading_bookshelf_table(t, _today)
+        sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
+        _render_reading_quotes_teaser()
+        sec_chapter("sach-tq-ch4", 4, None, "Thống kê")
+
     # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
     render_stat_panel(
         hero_items=[
@@ -4102,13 +4259,18 @@ def _book_chips_html(day_g):
     return out
 
 
-def _reading_rows_html(rl_df, label_book=True):
+def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
     """HTML .jrows cho các phần đã đọc (rl_df đã lọc sẵn theo kỳ/sách cần hiện) -- một dòng cho
     mỗi ngày có ≥1 phần hoàn thành. label_book=False dùng khi caller đã lọc đúng 1 cuốn (Báo
-    cáo theo dự án) -- bỏ nhãn tên sách vì thừa."""
+    cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu (Sách ->
+    Tổng quan, mockup xếp "Nhật ký đọc" theo kiểu tin mới lên trên) -- mặc định False (cũ nhất
+    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu)."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize())
     rows_html = ''
-    for d, day_g in rl.groupby('_d'):
+    _groups = list(rl.groupby('_d'))
+    if sort_desc:
+        _groups = _groups[::-1]
+    for d, day_g in _groups:
         if label_book:
             chips_html = _book_chips_html(day_g)
         else:
@@ -4820,13 +4982,19 @@ def sec_hero(kicker, title, sub, chips, meta=None):
         unsafe_allow_html=True)
 
 
-def render_period_billboard(tab_label, big_num, big_label, meta, title, subtitle, chips):
-    """Billboard mở đầu 1 sub-tab Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án): số giờ to bên trái
-    đóng khung như tờ giấy lịch bàn + câu nhận định bên phải, style (kính mờ/frosted glass, khung
-    giấy cột trái) dùng chung y hệt billboard Hôm nay -- xem docstring _render_today_billboard()
-    và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng nguyên khối `.tbill-tab`/
-    `.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/nhãn/tiêu đề/mô tả vì cỡ
-    chữ khác billboard Hôm nay (64px so với 76px, do đây là số giờ nhiều chữ số hơn số ngày)."""
+def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips):
+    """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
+    -> Tổng quan): số to bên trái đóng khung như tờ giấy lịch bàn + nội dung tự do bên phải, style
+    (kính mờ/frosted glass) dùng chung y hệt billboard Hôm nay -- xem docstring
+    _render_today_billboard() và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng
+    nguyên khối `.tbill-tab`/`.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/
+    nhãn vì cỡ chữ khác billboard Hôm nay (64px so với 76px, do đây là số nhiều chữ số hơn số
+    ngày).
+
+    right_html: HTML THÔ cho cột phải -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
+    cáo dùng tiêu đề+mô tả câu văn (.pbill-title/.pbill-sub), Sách dùng kicker+tên sách/tác giả
+    (.pbill-kicker/.pbill-booktitle/.pbill-author) + hàng chip riêng (.pbill-chips) -- tham số hoá
+    thẳng bằng HTML thay vì cố nhét đủ loại nội dung vào tham số text/subtitle cố định."""
     _left_html = (
         "<div class='tbill-date'>"
         f"<div class='tbill-tab'><span class='tbill-tab-label'>{tab_label}</span></div>"
@@ -4839,9 +5007,7 @@ def render_period_billboard(tab_label, big_num, big_label, meta, title, subtitle
             with c_left:
                 st.markdown(_left_html, unsafe_allow_html=True)
             with c_right:
-                st.markdown(
-                    f"<div class='pbill-title'>{title}</div><div class='pbill-sub'>{subtitle}</div>",
-                    unsafe_allow_html=True)
+                st.markdown(right_html, unsafe_allow_html=True)
         if chips:
             _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
             st.markdown(f"<div class='sec-toc' style='margin-top:18px;'>{_chips_html}</div>", unsafe_allow_html=True)
@@ -5371,7 +5537,8 @@ st.markdown(
     [data-testid="stMarkdownContainer"]:has(> .glass-card),
     [data-testid="stMarkdownContainer"]:has(> .dtl-card),
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
-    [data-testid="stMarkdownContainer"]:has(> .catbars-card) {
+    [data-testid="stMarkdownContainer"]:has(> .catbars-card),
+    [data-testid="stMarkdownContainer"]:has(> .quotes-card) {
         margin-bottom: 0 !important;
     }
 
@@ -5481,12 +5648,16 @@ st.markdown(
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    .stat-panel .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+    .stat-panel .chip, .pbill-chips .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
-    .stat-panel .chip .ck { color: var(--text-2); }
-    .stat-panel .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
-    .stat-panel .chip .cd { font-weight: 500; margin-left: 6px; }
-    .stat-panel .chip.tw { background: rgba(var(--accent-rgb),0.10); }
+    .stat-panel .chip .ck, .pbill-chips .chip .ck { color: var(--text-2); }
+    .stat-panel .chip .cv, .pbill-chips .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    .stat-panel .chip .cd, .pbill-chips .chip .cd { font-weight: 500; margin-left: 6px; }
+    .stat-panel .chip.tw, .pbill-chips .chip.tw { background: rgba(var(--accent-rgb),0.10); }
+    /* Hàng chip billboard Sách (Cùng lúc/Phần đọc gần nhất/trích dẫn đã lưu...) -- tái dùng
+       nguyên class chip/ck/cv/tw của .stat-panel (giá trị CSS giống hệt mockup), chỉ đổi phạm vi
+       scope sang .pbill-chips vì billboard không phải .stat-panel. */
+    .pbill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
     .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
     .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
@@ -5939,6 +6110,28 @@ st.markdown(
     .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
     .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
         margin-top: 8px; }
+    /* Billboard Sách (Tổng quan) -- cột phải khác Tuần/Báo cáo (kicker "ĐANG ĐỌC" + tên sách/tác
+       giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Cormorant Garamond với trích
+       dẫn Kindle billboard Hôm nay (_QUOTE_FONT_FACE) cho đồng bộ "chữ viết tay" ở mọi nơi trích
+       tên riêng/tác giả trong app. */
+    .pbill-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+        color: var(--text-2); }
+    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.2;
+        margin-top: 4px; }
+    .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
+        font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
+    /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
+       card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
+       (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
+       trái có vạch màu (giống nháp tay viết cạnh câu trích). */
+    .quotes-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 6px 18px; box-shadow: 0 1px 1px rgba(0,0,0,0.02); }
+    .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+    .quote-item:last-child { border-bottom: none; }
+    .quote-text { font-size: 14.5px; line-height: 1.6; color: var(--text); }
+    .quote-meta { font-size: 11.5px; color: var(--text-3); }
+    .quote-note { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip);
+        margin-top: 6px; font-size: 14.5px; color: var(--text); }
     .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid var(--border);
@@ -7121,8 +7314,8 @@ elif nav == "Báo cáo":
             render_period_billboard(
                 "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
                 f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
-                "Nhìn lại tất cả thời gian đã trồng",
-                "Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.",
+                "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
+                "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>",
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                  ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
                  ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
@@ -7241,7 +7434,7 @@ elif nav == "Báo cáo":
                 render_period_billboard(
                     f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
                     f"{_week_start:%d/%m} – {_week_end:%d/%m} · hoạt động {_active_days_w}/7 ngày",
-                    _pbill_title_w, _pbill_sub_w,
+                    f"<div class='pbill-title'>{_pbill_title_w}</div><div class='pbill-sub'>{_pbill_sub_w}</div>",
                     [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
                      ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Danh mục & dự án"),
                      ("bc-tuan-ch5", "5 · Bảng số liệu")])
