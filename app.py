@@ -3107,6 +3107,63 @@ def _render_reading_billboard(t, df_books, today):
          ("sach-tq-ch3", "3 · Trích dẫn & Ghi chú"), ("sach-tq-ch4", "4 · Bảng số liệu")])
 
 
+def _render_gundam_billboard(t, df_books, reading_log_df, today):
+    """Billboard mở đầu Gundam -> Tổng quan (render_period_billboard()), theo mockup Forest
+    Dashboard.dc.html ("Phòng chiếu"): số tập ĐÃ XEM của series đang xem bên trái (KHÔNG có mẫu
+    số/thanh % -- cùng lý do đã chốt ở billboard Sách, dữ liệu Reminders không có tổng số tập cả
+    series, xác nhận với người dùng không thêm bảng nhập tay riêng chỉ để có mẫu số) + series
+    đang xem bên phải. Khác billboard Sách (đã xác nhận với người dùng khi làm chương này):
+    - KHÔNG có chip "Tiếp theo · Tập N" -- mockup có nhưng đòi suy số tập kế tiếp bằng regex tách
+      số cuối trong tiêu đề tự do rồi +1, dễ sai nếu tiêu đề không theo khuôn "Tập N" (vd tên tập
+      không có số, hoặc 1 dòng gộp nhiều tập như "Tập 19 – 21") -- bỏ hẳn thay vì suy đoán sai.
+    - KHÔNG có đánh giá sao -- không có nguồn dữ liệu nào (cùng quyết định đã chốt ở Sách).
+    - Có thêm chip "Nhịp xem" (~N tập/tuần, đếm số lần hoàn thành trong 30 ngày gần nhất của đúng
+      series đang xem) -- Sách không có chip tương đương vì đơn vị "phần" đọc sách không đều nhịp
+      như 1 tập phim, ít có ý nghĩa để đếm tốc độ theo tuần."""
+    reading_now = t[t['Trạng thái'] == 'Đang xem'].sort_values('Gần nhất', ascending=False)
+    done_all = t[t['Trạng thái'] == 'Đã xong']
+    hrs_all = df_books['Thời lượng (Phút)'].sum() / 60 if not df_books.empty else 0.0
+
+    if len(reading_now):
+        primary = reading_now.iloc[0]
+        series = str(primary['Cuốn sách'])
+        chips = []
+        if pd.notna(primary['Số phần đã đọc']) and primary['Số phần đã đọc'] > 0:
+            chips.append(f"<span class='chip'><span class='ck'>Đã xem</span>"
+                          f"<span class='cv'>{int(primary['Số phần đã đọc'])} tập</span></span>")
+        if len(reading_now) > 1:
+            other = reading_now.iloc[1]
+            chips.append(f"<span class='chip'><span class='ck'>Cùng lúc</span>"
+                          f"<span class='cv'>{html_escape(str(other['Cuốn sách']))}</span></span>")
+        _last_day = pd.Timestamp(primary['Gần nhất'])
+        _rl_series = (reading_log_df[reading_log_df['Cuốn sách'] == series]
+                      if not reading_log_df.empty else reading_log_df)
+        _n_that_day = len(_rl_series[_rl_series['Ngày hoàn thành'].dt.normalize() == _last_day.normalize()])
+        _cnt_s = f" · {_n_that_day} tập" if _n_that_day > 0 else ""
+        chips.append(f"<span class='chip'><span class='ck'>Lần xem gần nhất</span>"
+                      f"<span class='cv'>{_rel_day_label(_last_day, today)}{_cnt_s}</span></span>")
+        _recent = (_rl_series[_rl_series['Ngày hoàn thành'] >= pd.Timestamp(today - timedelta(days=29))]
+                   if not _rl_series.empty else _rl_series)
+        if len(_recent):
+            chips.append(f"<span class='chip'><span class='ck'>Nhịp xem</span>"
+                          f"<span class='cv'>~{len(_recent) / (30 / 7):.0f} tập/tuần</span></span>")
+        _right = ("<div class='pbill-kicker'>Đang xem</div>"
+                  f"<div class='pbill-booktitle'>{html_escape(series)}</div>"
+                  f"<div class='pbill-chips'>{''.join(chips)}</div>")
+        _big_num = f"{int(primary['Số phần đã đọc'])}" if pd.notna(primary['Số phần đã đọc']) else "0"
+    else:
+        _right = ("<div class='pbill-kicker'>Đang xem</div>"
+                  "<div class='pbill-booktitle'>Chưa có series nào đang xem dở</div>")
+        _big_num = "0"
+
+    render_period_billboard(
+        "Phòng chiếu", _big_num, "tập đã xem",
+        f"{len(done_all)} series đã xem xong · {_fmt_hours_short(hrs_all)} đã xem",
+        _right,
+        [("gd-tq-ch1", "1 · Thống kê"), ("gd-tq-ch2", "2 · Nhật ký xem"),
+         ("gd-tq-ch3", "3 · Bảng số liệu")])
+
+
 def _render_reading_quotes_teaser(n=3):
     """Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan): N trích dẫn gần đây nhất (mọi cuốn), kèm
     ghi chú cá nhân lồng dưới nếu có (parent_hash trỏ về, xem add_kindle_note()) -- bản CHỈ ĐỌC
@@ -3147,8 +3204,16 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
     Trích dẫn & Ghi chú -> Bảng số liệu). Đã BỎ chương "Tủ sách năm nay" (mockup ban đầu có, người
     dùng xem lại thấy trùng lặp thông tin theo-đầu-sách với Bảng số liệu -- dồn cột "Trích dẫn"
     của nó sang bảng chi tiết cho gọn, xem show_quotes=True). Tách vào 2 closure
-    _render_stats_cards()/_render_stats_table() để dùng lại được CẢ CHO GUNDAM (gọi liền nhau,
-    không billboard/chương -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ)."""
+    _render_stats_cards()/_render_stats_table() để dùng lại được CẢ CHO GUNDAM.
+
+    page_name == "Gundam": billboard riêng (_render_gundam_billboard, "Phòng chiếu") + 3 chương
+    Thống kê/Nhật ký xem/Bảng số liệu -- mockup Gundam gốc chỉ có 2 chương ("Nhật ký xem"/"Hành
+    trình các series") nhưng bảng "Hành trình các series" đó dựa vào mẫu số tổng số tập + đánh giá
+    sao mà dữ liệu hiện có không có (xem docstring _render_gundam_billboard), sau khi bỏ 2 thứ đó
+    bảng gần như trùng hệt _render_stats_table() sẵn có -- xác nhận với người dùng dùng khung 3
+    chương giống hệt Sách (Thống kê/Nhật ký xem/Bảng số liệu) thay vì dựng 1 bảng mới gần trùng
+    lặp. "Nhật ký xem" tái dùng nguyên _reading_rows_html() (cùng cơ chế "Nhật ký đọc" của Sách,
+    lọc theo reading_log_df đã là rl_gundam sẵn -- không cần lọc lại theo _is_gundam_list)."""
     def _render_stats_cards():
         # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
         render_stat_panel(
@@ -3225,8 +3290,20 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
 </table></div>
 """, unsafe_allow_html=True)
 
-    if page_name != "Sách":
+    if page_name == "Gundam":
+        _render_gundam_billboard(t, df_books, reading_log_df, _today)
+        sec_chapter("gd-tq-ch1", 1, None, "Thống kê", tight_top=True)
         _render_stats_cards()
+        sec_chapter("gd-tq-ch2", 2, None, "Nhật ký xem")
+        _rl_recent_g = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
+                        if not reading_log_df.empty else reading_log_df)
+        with st.container(border=True, key="jcard_gundam_journal"):
+            if _rl_recent_g.empty:
+                st.caption("Chưa có tập nào hoàn thành trong 14 ngày gần đây.")
+            else:
+                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True)}</div>",
+                            unsafe_allow_html=True)
+        sec_chapter("gd-tq-ch3", 3, None, "Bảng số liệu")
         _render_stats_table()
         return
 
