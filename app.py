@@ -3589,12 +3589,22 @@ def render_day_timeline(day_df):
         f'<span class="dtl-bl" style="left:{(s + e) / 2 / 24 * 100:.3f}%;">{nm.strip().upper()}</span>'
         for nm, s, e, _ in BUOI_BANDS if (e - s) >= 3)
 
+    _rows = day_df.sort_values('Thời gian bắt đầu').reset_index(drop=True)
     bars_html = ''
-    for _, r in day_df.sort_values('Thời gian bắt đầu').iterrows():
+    for i, r in _rows.iterrows():
         s = pd.Timestamp(r['Thời gian bắt đầu']); e = pd.Timestamp(r['Thời gian kết thúc'])
         s_min = s.hour * 60 + s.minute
+        # Trần độ rộng hiển thị: không vượt quá điểm bắt đầu của phiên kế tiếp (chừa 2 phút hở)
+        # -- bug thật đã gặp: phiên rất ngắn được nới độ rộng tối thiểu (6 phút, để vẫn bấm/nhìn
+        # thấy được) có thể đè lên phiên kế tiếp nếu 2 phiên cách nhau chưa tới 6 phút, làm 2
+        # thanh nhìn như dính/đè vào nhau, mất luôn khoảng hở thật giữa 2 phiên.
+        if i + 1 < len(_rows):
+            _next_s = pd.Timestamp(_rows.iloc[i + 1]['Thời gian bắt đầu'])
+            _max_min = _next_s.hour * 60 + _next_s.minute - s_min - 2
+        else:
+            _max_min = 1440 - s_min
         left = s_min / 1440 * 100
-        width = min(max(float(r['Thời lượng (Phút)']), 6), 1440 - s_min) / 1440 * 100
+        width = min(max(float(r['Thời lượng (Phút)']), 6), max(_max_min, 1)) / 1440 * 100
         proj = str(r['Dự án'])
         lab = f'<span class="dtl-bar-lbl">{html_escape(proj)}</span>' if width > 5.5 else ''
         bars_html += (f'<div class="dtl-bar" title="{html_escape(proj)}: {s:%H:%M}–{e:%H:%M}" '
@@ -3615,7 +3625,7 @@ def render_day_timeline(day_df):
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);border:1.5px solid var(--card);box-sizing:border-box;}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
@@ -3670,10 +3680,19 @@ def render_note_editor(day, day_badges=None):
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
     quill_gen_key = f"note_quill_gen_{day}"
+    content_key = f"note_content_{day}"
 
-    def _enter_edit():
-        # Xoá trạng thái cũ của ô soạn để khởi tạo lại đúng nội dung đang lưu
+    def _enter_edit(base_content=None):
+        """base_content=None -> mở soạn từ nội dung ĐÃ LƯU (nút Sửa/Thêm ghi chú); truyền nội
+        dung đã nối thêm ghi chú nhanh khi mở qua nút Gộp. Ghi vào content_key (KHÔNG phải đọc
+        lại session_state của chính widget Quill, xem _active_quill_key()) -- bug thật đã gặp:
+        streamlit-quill là custom component chạy trong iframe, giá trị echo về session_state của
+        WIDGET đó chỉ tới sau 1 round-trip bất đồng bộ với trình duyệt, nên bấm Gộp 2 lần liên
+        tiếp (trước khi round-trip lần 1 kịp hoàn tất) đọc lại giá trị widget cũ sẽ ra rỗng/cũ,
+        làm MẤT nội dung ghi chú nhanh vừa gộp trước đó. content_key do CHÍNH code này ghi/đọc
+        đồng bộ (không qua widget) nên luôn đúng, không phụ thuộc round-trip."""
         st.session_state.pop(quill_key, None)
+        st.session_state[content_key] = base_content if base_content is not None else cur
         st.session_state[edit_key] = True
 
     def _active_quill_key():
@@ -3755,10 +3774,10 @@ def render_note_editor(day, day_badges=None):
                                                      key=f"qnote_merge_{_qid}", help="Đã gộp — chờ Lưu" if _pending
                                                      else "Gộp vào ghi chú chính", disabled=_pending):
                                             _was_open = st.session_state.get(edit_key, False)
-                                            _base = (st.session_state.get(_active_quill_key(), cur)
+                                            _base = (st.session_state.get(content_key, cur)
                                                      if _was_open else cur) or ""
                                             _piece = f"<p><strong>{r['Thời gian']:%H:%M}</strong> — {html_escape(str(r['Nội dung']))}</p>"
-                                            st.session_state[f"note_merge_content_{day}"] = _base + _piece
+                                            _new_content = _base + _piece
                                             st.session_state.setdefault(merge_pending_key, [])
                                             st.session_state[merge_pending_key].append(_qid)
                                             if _was_open:
@@ -3766,7 +3785,7 @@ def render_note_editor(day, day_badges=None):
                                                 # value không đủ (xem docstring _active_quill_key),
                                                 # phải đổi generation để ép remount widget mới.
                                                 st.session_state[quill_gen_key] = st.session_state.get(quill_gen_key, 0) + 1
-                                            _enter_edit()
+                                            _enter_edit(_new_content)
                                             st.rerun()
                                         if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
                                                      help="Sửa"):
@@ -3790,15 +3809,18 @@ def render_note_editor(day, day_badges=None):
                                 st.markdown("<div class='note-empty'>Chưa có ghi chú cho ngày này.</div>",
                                             unsafe_allow_html=True)
                         else:
-                            # Chế độ soạn: trình soạn Quill inline. Nếu vừa bấm "Gộp" ở 1 ghi chú
-                            # nhanh (xem note_merge_content_{day} ở trên), dùng nội dung đã nối
-                            # sẵn đó làm value khởi tạo thay vì cur -- chỉ đọc 1 lần (pop) vì đây
-                            # là initial value của lần mount MỚI (quill_key vừa bị _enter_edit()
-                            # xoá), không phải giá trị cần giữ lại qua các lần rerun sau.
-                            _merge_content = st.session_state.pop(f"note_merge_content_{day}", None)
-                            content = st_quill(value=_merge_content if _merge_content is not None else cur,
+                            # Chế độ soạn: trình soạn Quill inline -- value khởi tạo lấy từ
+                            # content_key (do _enter_edit() ghi sẵn: nội dung đã lưu, hoặc đã nối
+                            # thêm ghi chú nhanh nếu mở qua nút Gộp). Đồng bộ NGƯỢC lại content_key
+                            # mỗi khi widget trả về giá trị khác None (đang gõ/đã echo xong round-
+                            # trip) -- content_key luôn là bản MỚI NHẤT đã biết, dùng làm _base cho
+                            # lần Gộp kế tiếp thay vì đọc trực tiếp session_state của widget (xem
+                            # docstring _enter_edit về race bất đồng bộ của streamlit-quill).
+                            content = st_quill(value=st.session_state.get(content_key, cur),
                                                html=True, toolbar=NOTE_TOOLBAR,
                                                placeholder="Viết vài dòng về ngày này…", key=_active_quill_key())
+                            if content is not None:
+                                st.session_state[content_key] = content
                             style_quill()
                             _inject_note_editor_shortcuts()
 
@@ -3819,7 +3841,7 @@ def render_note_editor(day, day_badges=None):
                         with st.container(key="note_actions", horizontal=True, gap="small"):
                             if st.button("Cập nhật", icon=":material/check:", type="primary",
                                          key=f"note_save_{day}"):
-                                save_note(day, content if content is not None else st.session_state.get(_active_quill_key(), ""))
+                                save_note(day, content if content is not None else st.session_state.get(content_key, ""))
                                 # Ghi chú nhanh đã "Gộp" (xem nút ở trên) chỉ thực sự bị xoá TẠI ĐÂY,
                                 # sau khi ghi chú chính đã lưu thành công -- Huỷ/Xoá ghi chú bên dưới
                                 # chỉ bỏ đánh dấu, không đụng tới bảng quick_notes.
@@ -7638,8 +7660,13 @@ def _kindle_quote_of_day():
 
     Chỉ số đang chọn (kq_daily_idx) lưu trong session_state để nút xáo có chỗ ghi đè -- ngày đổi
     (kq_daily_date lệch _today_vn()) thì tính lại theo seed như cũ, đè mất lựa chọn xáo tay của
-    ngày hôm trước (đúng ý "quote of the day" -- xáo tay chỉ có tác dụng trong ngày đang xem)."""
+    ngày hôm trước (đúng ý "quote of the day" -- xáo tay chỉ có tác dụng trong ngày đang xem).
+
+    CHỈ chọn trong các dòng Loại == 'highlight' -- bug thật đã gặp: không lọc thì có thể rơi vào
+    1 dòng 'note' (ghi chú cá nhân gắn dưới 1 highlight), khiến card "Trích dẫn hôm nay" (có dấu
+    ngoặc kép lớn, xem _render_today_billboard()) hiện ra một ghi chú thay vì trích dẫn thật."""
     kh = load_kindle_highlights()
+    kh = kh[kh['Loại'] == 'highlight'] if not kh.empty else kh
     if kh.empty:
         return None
     today_iso = _today_vn().isoformat()
@@ -7655,8 +7682,11 @@ def _shuffle_daily_quote():
     """Đổi trích dẫn hôm nay sang 1 trích dẫn NGẪU NHIÊN KHÁC (không lặp lại đúng câu đang hiện
     nếu có từ 2 trích dẫn trở lên) -- callback của nút xáo bên cạnh nút ⭐ Yêu thích, xem
     _render_today_billboard(). Chỉ ghi vào session_state, _kindle_quote_of_day() ở lần rerun kế
-    tiếp sẽ đọc lại đúng chỉ số này."""
-    n = len(load_kindle_highlights())
+    tiếp sẽ đọc lại đúng chỉ số này. Đếm/random CÙNG phạm vi Loại == 'highlight' như
+    _kindle_quote_of_day(), không tính dòng 'note' -- giữ 2 hàm luôn đồng bộ đúng 1 danh sách."""
+    kh = load_kindle_highlights()
+    kh = kh[kh['Loại'] == 'highlight'] if not kh.empty else kh
+    n = len(kh)
     if n <= 1:
         return
     cur = st.session_state.get("kq_daily_idx")
@@ -7710,7 +7740,8 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                         f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
                         unsafe_allow_html=True)
                     with st.container(key="kq_daily_srcrow"):
-                        _kh_count = len(load_kindle_highlights())
+                        _kh_all = load_kindle_highlights()
+                        _kh_count = len(_kh_all[_kh_all['Loại'] == 'highlight']) if not _kh_all.empty else 0
                         c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
                         with c_src:
                             _author = kq.get('Tác giả')
@@ -8447,7 +8478,10 @@ elif nav == "Nhật ký đọc sách":
                                             rl_books['Ngày hoàn thành'].max() if not rl_books.empty else None]
                  if v is not None and pd.notna(v)]
         latest_overall = max(_cands) if _cands else None
-        render_reading_log(books_df, latest_overall, rl_books)
+        # 10 ngày (không phải 14 mặc định) -- xác nhận với người dùng: sách ít hoạt động hơn
+        # Gundam (đọc chậm hơn xem), 14 ngày để quá lâu mới chuyển "Đang đọc" -> "Đã xong".
+        # CHỈ đổi riêng Sách, Gundam vẫn giữ mặc định 14 (không được yêu cầu đổi).
+        render_reading_log(books_df, latest_overall, rl_books, recency_days=10)
 # ==========================================
 # TRANG: GUNDAM
 # ==========================================
