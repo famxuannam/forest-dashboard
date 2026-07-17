@@ -2522,25 +2522,6 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
     fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}/ngày<extra></extra>')
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
-    # Tự nêu "giờ vàng" + buổi mạnh nhất, đặt trong glass card cho đồng bộ
-    if tot.max() > 0:
-        peak_h = int(tot.idxmax())
-        strong_buoi = tot.groupby(_buoi_of).sum().idxmax()
-        _lbl = "font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;"
-        _val = "font-size:17px;color:var(--text);font-weight:600;"
-        st.markdown(
-            "<div class='glass-card' style='display:flex;flex-wrap:wrap;justify-content:center;align-items:center;"
-            "gap:6px 16px;max-width:900px;margin:8px auto 0 auto;padding:12px 18px;'>"
-            f"<span style='{_lbl}'>Giờ tập trung nhất</span>"
-            f"<span style='{_val}'>{peak_h}h</span>"
-            f"<span style='font-size:13px;color:var(--text-2);'>(TB {_fmt_hours_short(tot.max())}/ngày)</span>"
-            "<span style='color:var(--text-4);'>·</span>"
-            f"<span style='{_lbl}'>Buổi mạnh nhất</span>"
-            f"<span style='{_val}'>{strong_buoi}</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
 
 def _streak_stats(streak_df):
     """Số liệu chuỗi ngày trên toàn lịch sử: tổng số ngày có hoạt động, chuỗi
@@ -4787,6 +4768,33 @@ def sec_hero(kicker, title, sub, chips, meta=None):
         unsafe_allow_html=True)
 
 
+def render_period_billboard(tab_label, big_num, big_label, meta, title, subtitle, chips):
+    """Billboard mở đầu 1 sub-tab Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án): số giờ to bên trái
+    đóng khung như tờ giấy lịch bàn + câu nhận định bên phải, style (kính mờ/frosted glass, khung
+    giấy cột trái) dùng chung y hệt billboard Hôm nay -- xem docstring _render_today_billboard()
+    và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng nguyên khối `.tbill-tab`/
+    `.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/nhãn/tiêu đề/mô tả vì cỡ
+    chữ khác billboard Hôm nay (64px so với 76px, do đây là số giờ nhiều chữ số hơn số ngày)."""
+    _left_html = (
+        "<div class='tbill-date'>"
+        f"<div class='tbill-tab'><span class='tbill-tab-label'>{tab_label}</span></div>"
+        f"<div class='pbill-num'>{big_num}</div>"
+        f"<div class='pbill-label'>{big_label}</div>"
+        f"<div class='tbill-meta'>{meta}</div></div>")
+    with st.container(key="bc_billboard", border=True):
+        with st.container(key="bc_billboard_row"):
+            c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+            with c_left:
+                st.markdown(_left_html, unsafe_allow_html=True)
+            with c_right:
+                st.markdown(
+                    f"<div class='pbill-title'>{title}</div><div class='pbill-sub'>{subtitle}</div>",
+                    unsafe_allow_html=True)
+        if chips:
+            _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+            st.markdown(f"<div class='sec-toc' style='margin-top:18px;'>{_chips_html}</div>", unsafe_allow_html=True)
+
+
 def help_faq_item(question, answer_md):
     """1 câu hỏi FAQ = expander native (đã ăn style expander sẵn có của app). Cố ý KHÔNG đánh
     số như expander trang báo cáo -- FAQ tra theo câu hỏi, không đọc tuần tự."""
@@ -4838,60 +4846,68 @@ def render_help_changelog(entries):
 # (nhanh hơn, nhất là trang nhiều dữ liệu/khi xem trên điện thoại).
 @st.fragment
 def frag_calendar(scope_df, key):
-    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng."""
-    df_cal = range_radio(scope_df, key=key)
-    render_calendar_grid(df_cal, df_cal)
+    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng. Bọc trong container "chartopt_..." (xem
+    docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    with st.container(key=f"chartopt_{key}"):
+        df_cal = range_radio(scope_df, key=key)
+        render_calendar_grid(df_cal, df_cal)
 
 
 @st.fragment
 def frag_trend(scope_df, key_prefix, default_color):
-    """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại."""
-    o1, o2, o3 = st.columns([5, 3, 2])
-    with o1:
-        rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
-                                   key=f"{key_prefix}_range", label_visibility="collapsed")
-    with o2:
-        tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày",
-                                     key=f"{key_prefix}_time", label_visibility="collapsed")
-    with o3:
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
-                                     key=f"{key_prefix}_color", label_visibility="collapsed")
-    rl = rl or "90 ngày"
-    tcol = tcol or "Ngày"
-    ccol = ccol or default_color
-    dft = filter_by_range(scope_df, rl)
-    g = dft.groupby([tcol, ccol])['Thời lượng (Phút)'].sum().reset_index()
-    g['Số giờ'] = g['Thời lượng (Phút)'] / 60
-    if tcol == "Ngày":
-        g['Ngày'] = pd.to_datetime(g['Ngày'])
-    fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại. Bọc trong
+    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    ngay dưới."""
+    with st.container(key=f"chartopt_{key_prefix}"):
+        o1, o2, o3 = st.columns([5, 3, 2])
+        with o1:
+            rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
+                                       key=f"{key_prefix}_range", label_visibility="collapsed")
+        with o2:
+            tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày",
+                                         key=f"{key_prefix}_time", label_visibility="collapsed")
+        with o3:
+            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                                         key=f"{key_prefix}_color", label_visibility="collapsed")
+        rl = rl or "90 ngày"
+        tcol = tcol or "Ngày"
+        ccol = ccol or default_color
+        dft = filter_by_range(scope_df, rl)
+        g = dft.groupby([tcol, ccol])['Thời lượng (Phút)'].sum().reset_index()
+        g['Số giờ'] = g['Thời lượng (Phút)'] / 60
+        if tcol == "Ngày":
+            g['Ngày'] = pd.to_datetime(g['Ngày'])
+        fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 @st.fragment
 def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
     """Mục Xu hướng tập trung theo khung giờ — bộ điều khiển ĐỘC LẬP của riêng mục
-    (khoảng thời gian nếu có + phân loại). Không dùng chung với mục nào khác."""
-    if with_range:
-        c1, c2 = st.columns([5, 3])
-        with c1:
-            rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
-                                       key=f"{key_prefix}_range", label_visibility="collapsed")
-        with c2:
+    (khoảng thời gian nếu có + phân loại). Không dùng chung với mục nào khác. Bọc trong container
+    "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    with st.container(key=f"chartopt_{key_prefix}"):
+        if with_range:
+            c1, c2 = st.columns([5, 3])
+            with c1:
+                rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
+                                           key=f"{key_prefix}_range", label_visibility="collapsed")
+            with c2:
+                ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                                             key=f"{key_prefix}_color", label_visibility="collapsed")
+            scope_df = filter_by_range(scope_df, rl or "90 ngày")
+        else:
             ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
                                          key=f"{key_prefix}_color", label_visibility="collapsed")
-        scope_df = filter_by_range(scope_df, rl or "90 ngày")
-    else:
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
-                                     key=f"{key_prefix}_color", label_visibility="collapsed")
-    render_hourly_chart(scope_df, ccol or default_color)
+        render_hourly_chart(scope_df, ccol or default_color)
 
 
 @st.fragment
 def frag_pie(scope_df, key, default_color):
     """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng. Bọc trong container riêng
     (key="piewrap_...") chỉ để CSS thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới (xem rule
-    [class*="st-key-piewrap_"]) mà không đụng margin của mọi segmented_control khác trong app."""
+    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"]) mà không đụng margin của mọi
+    segmented_control khác trong app."""
     with st.container(key=f"piewrap_{key}"):
         ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
@@ -4905,15 +4921,18 @@ def frag_pie(scope_df, key, default_color):
 @st.fragment
 def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
-    Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig)."""
-    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
-                                 label_visibility="collapsed") or default_color
-    g = scope_df.groupby([group_col, ccol])['Thời lượng (Phút)'].sum().reset_index()
-    g['Số giờ'] = g['Thời lượng (Phút)'] / 60
-    if group_col == 'Ngày':
-        g['Ngày'] = pd.to_datetime(g['Ngày'])
-    fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig). Bọc trong
+    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    ngay dưới."""
+    with st.container(key=f"chartopt_{key}"):
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                     label_visibility="collapsed") or default_color
+        g = scope_df.groupby([group_col, ccol])['Thời lượng (Phút)'].sum().reset_index()
+        g['Số giờ'] = g['Thời lượng (Phút)'] / 60
+        if group_col == 'Ngày':
+            g['Ngày'] = pd.to_datetime(g['Ngày'])
+        fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 @st.fragment
@@ -5476,11 +5495,19 @@ st.markdown(
        ÂM (không chỉ về 0) để lấn bớt cả gap flex 10px của khối cha -- 2px rồi 0px vẫn còn rộng
        theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
     .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
-    /* Toggle "Danh mục/Dự án" (frag_pie, container key="piewrap_...") xuống thẻ biểu đồ tròn ngay
-       dưới: cùng lý do/cách sửa như nav ở trên -- thu nhỏ margin-bottom mặc định 10px của
-       stButtonGroup để cân đối với padding các card xung quanh, không đụng margin của các
-       segmented_control khác trong app. */
-    [class*="st-key-piewrap_"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
+    /* Toggle điều khiển (Khoảng thời gian/Gộp theo/Phân loại...) xuống thẻ biểu đồ ngay dưới, ÁP
+       DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_pie key="piewrap_...", frag_calendar/frag_trend/
+       frag_hourly/frag_period_trend key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung (hàng
+       toggle + biểu đồ) trong 1 container riêng, xem docstring frag_pie). Ghi đè trực tiếp "gap"
+       flex của CHÍNH container đó xuống 4px (thay vì 10px chung toàn trang) -- sửa qua margin-
+       bottom của stButtonGroup (như nav bar/sub-tab picker ở trên) KHÔNG hiệu quả ở đây vì
+       frag_trend/frag_hourly xếp 2-3 toggle cạnh nhau qua st.columns(), margin-bottom của từng
+       stButtonGroup lồng trong cột không cộng dồn vào gap flex ngoài cùng như trường hợp 1 toggle
+       đơn (piewrap_/nav) -- đo thật bằng Playwright xác nhận marginBottom áp đúng nhưng khoảng
+       cách hiển thị không đổi, phải sửa thẳng "gap" của container mới ăn. */
+    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"] {
+        gap: 4px !important;
+    }
 
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
@@ -5756,7 +5783,7 @@ st.markdown(
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
-    .st-key-today_billboard {
+    .st-key-today_billboard, .st-key-bc_billboard {
         background: rgba(var(--accent-rgb),0.10) !important;
         backdrop-filter: blur(16px) saturate(1.6);
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
@@ -5770,6 +5797,13 @@ st.markdown(
         margin: 6px 0 8px; line-height: 1.15; }
     .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
     .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
+    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
+       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard). */
+    .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
+    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
+        margin-top: 8px; }
     .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
@@ -6039,7 +6073,7 @@ st.markdown(
     /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
-    .st-key-today_billboard {
+    .st-key-today_billboard, .st-key-bc_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
@@ -6050,18 +6084,21 @@ st.markdown(
        mỗi cột co lại đúng chiều cao nội dung riêng rồi canh giữa so với cột kia (giống grid
        align-items:center của mockup). Scope CHỈ ĐÚNG "tbill_daterow" (không phải mọi
        stHorizontalBlock trong billboard nói chung) -- billboard còn 1 hàng ngang LỒNG BÊN TRONG
-       nữa (kq_daily_srcrow, hàng tên sách + nút xáo/yêu thích), nếu chọn rộng hơn sẽ dính luôn
-       rule khung giấy bên dưới vào NHẦM cột đó (bug thật đã gặp: cột tên sách bị đóng khung/đổ
-       bóng như thẻ giấy, không phải cột ngày). */
-    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+       nữa (kq_daily_srcrow, hàng tên sách + nút xáo/yêu thích). Chuỗi chọn phải đi qua
+       [data-testid="stLayoutWrapper"] -- Streamlit chèn thêm 1 lớp div trung gian giữa container
+       key và stHorizontalBlock, thiếu bước này chuỗi ">" đứt gãy và cả rule (align-self, padding
+       cột phải) LẶNG LẼ không áp dụng (không lỗi console, chỉ đơn giản không match) -- bug thật đã
+       gặp, phát hiện qua getComputedStyle() DOM. Đã thử thêm nền/viền/bóng đóng khung cột trái như
+       1 tờ giấy riêng -- xem lại thấy phẳng như bản gốc đẹp hơn nên bỏ, chỉ giữ canh giữa. */
+    [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
-    /* Cột ngày đóng khung riêng như 1 tờ giấy lịch bàn thật (thay cho kẻ dọc phân cách trước đây)
-       -- viền + bo góc + nền + đổ bóng nhẹ, tách hẳn khỏi cột trích dẫn bên cạnh thay vì chỉ ngăn
-       bằng 1 đường kẻ mảnh. overflow:hidden để .tbill-tab (bo góc trên) không tràn ra ngoài khung. */
-    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
-        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-        overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
+       columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
+       đã tự có mark "" làm khoảng đệm thị giác riêng. */
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+        padding-left: 24px !important;
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
@@ -6936,11 +6973,6 @@ elif nav == "Báo cáo":
 
     if bc_sub == "Tổng quan":
         if not df.empty:
-            sec_hero(None, "Toàn cảnh từ ngày đầu tiên", None,
-                     [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
-                      ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
-                      ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
-            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
             # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
             # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
             # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
@@ -6948,6 +6980,18 @@ elif nav == "Báo cáo":
             total_trees = len(df)
             num_days = df['Ngày'].nunique() or 1
             base_avg = total_hrs / num_days
+            n_cats = df['Danh mục'].nunique()
+            n_projs = df['Dự án'].nunique()
+
+            render_period_billboard(
+                "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
+                f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
+                "Nhìn lại tất cả thời gian đã trồng",
+                "Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.",
+                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
+                 ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
+                 ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
             s_stat = _streak_stats(df)
             by_wd = _weekday_avg(df)
