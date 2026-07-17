@@ -41,11 +41,11 @@ NOTE_TOOLBAR = [
 #   mục danh sách; selector :not(.ql-direction-rtl) để khớp đúng độ ưu tiên của Quill;
 # - bo góc, màu chỉ dẫn (placeholder) nhạt, con trỏ & nút đang bật theo màu accent #00a3ad.
 QUILL_CSS = """
-.ql-toolbar.ql-snow { border-color:#e2e2e7; border-top-left-radius:10px; border-top-right-radius:10px; background:#fafafa; }
-.ql-container.ql-snow { border-color:#e2e2e7; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
-.ql-editor { line-height:1.65; padding:14px 16px; color:#1d1d1f; min-height:150px; caret-color:#00a3ad; }
-.ql-editor.ql-blank::before { color:#aeaeb2; font-style:normal; left:16px; right:16px; }
+.ql-toolbar.ql-snow { border-color:#ddd3b8; border-top-left-radius:10px; border-top-right-radius:10px; background:#ece4d0; }
+.ql-container.ql-snow { border-color:#ddd3b8; border-bottom-left-radius:10px; border-bottom-right-radius:10px;
+  font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
+.ql-editor { line-height:1.65; padding:14px 16px; color:#211c13; min-height:150px; caret-color:#00a3ad; }
+.ql-editor.ql-blank::before { color:#a39877; font-style:normal; left:16px; right:16px; }
 .ql-editor .ql-indent-1:not(.ql-direction-rtl){padding-left:1.6em;}
 .ql-editor .ql-indent-2:not(.ql-direction-rtl){padding-left:3.2em;}
 .ql-editor .ql-indent-3:not(.ql-direction-rtl){padding-left:4.8em;}
@@ -70,14 +70,14 @@ def style_quill():
     _quill_css = QUILL_CSS.replace("#00a3ad", ACCENT)
     if IS_DARK:
         _quill_css = (
-            _quill_css.replace("#fafafa", "#2c2c2e")
-            .replace("#e2e2e7", "#3a3a3c")
-            .replace("#1d1d1f", "#f2f2f7")
-            .replace("#aeaeb2", "#636366")
-            + "\n.ql-editor { background:#1c1c1e; }"
-            + "\n.ql-snow .ql-stroke { stroke:#d1d1d6; }"
-            + "\n.ql-snow .ql-fill { fill:#d1d1d6; }"
-            + "\n.ql-snow .ql-picker { color:#d1d1d6; }"
+            _quill_css.replace("#ece4d0", "#322c20")
+            .replace("#ddd3b8", "#3c3628")
+            .replace("#211c13", "#f1ece0")
+            .replace("#a39877", "#857a5f")
+            + "\n.ql-editor { background:#262117; }"
+            + "\n.ql-snow .ql-stroke { stroke:#b3a688; }"
+            + "\n.ql-snow .ql-fill { fill:#b3a688; }"
+            + "\n.ql-snow .ql-picker { color:#b3a688; }"
         )
     js = (
         "<script>\n"
@@ -384,6 +384,10 @@ try:
     IS_DARK = st.context.theme.type == "dark"
 except Exception:
     IS_DARK = False
+
+# Màu chữ trên biểu đồ Plotly (nhãn tổng, đường TB động, ngưỡng độ dài phiên...) -- khớp token
+# --text light/dark (xem _TOK), gom về 1 hằng để không lặp lại literal + IS_DARK ở nhiều nơi.
+PLOT_TEXT = "#f1ece0" if IS_DARK else "#211c13"
 
 # Accent (màu nhấn) đang chọn -- fallback "Chàm biển" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
 # khi giá trị đã lưu là 1 trong các preset cũ đã bị bỏ lúc rút gọn còn 6 màu -- không crash, chỉ
@@ -1582,10 +1586,9 @@ def prep_analysis_data():
 
 def add_total_labels(fig, df, x_col, y_col):
     totals = df.groupby(x_col)[y_col].sum().reset_index()
-    _txt = "#f2f2f7" if IS_DARK else "#1d1d1f"
     fig.add_trace(go.Scatter(
         x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].map(_fmt_hours_short),
-        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=_txt, size=13)
+        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=PLOT_TEXT, size=13)
     ))
     fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
     return fig
@@ -1602,7 +1605,7 @@ def add_ma_overlay(fig, scope_df, window=7):
     ma = daily.rolling(window, min_periods=1).mean()
     fig.add_trace(go.Scatter(
         x=list(ma.index), y=list(ma.values), mode='lines',
-        line=dict(color=("#f2f2f7" if IS_DARK else "#1d1d1f"), width=2.5, dash='dot'),
+        line=dict(color=PLOT_TEXT, width=2.5, dash='dot'),
         name=f'TB động {window} ngày'
     ))
     return fig
@@ -2254,7 +2257,7 @@ def _clip_card(note):
     )
 
 
-def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:20px;"):
+def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:18px;"):
     """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
 
     hero_items: list dict {label, value, deltas?: [(text, color)]}; rỗng -> bỏ hàng hero.
@@ -2408,7 +2411,7 @@ def render_session_histogram(df):
         customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
     ))
     _threshold_col = "#6ea8ff" if IS_DARK else "#0a52c4"
-    _avg_col = "#f2f2f7" if IS_DARK else "#1d1d1f"
+    _avg_col = PLOT_TEXT
     for t in LEN_THRESHOLDS:
         if start < t <= top:
             fig.add_vline(x=t, line=dict(color=_threshold_col, width=1.5, dash='dot'))
@@ -3079,7 +3082,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                 {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
             ]},
         ],
-        card_style="padding:20px;margin-top:14px;",
+        card_style="padding:18px;margin-top:14px;",
     )
 
     # Thẻ 3: Kỳ này — thẻ độc lập
@@ -3090,7 +3093,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
             {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
             _sec_timeslot,
         ],
-        card_style="padding:20px;margin-top:14px;",
+        card_style="padding:18px;margin-top:14px;",
     )
 
     render_session_bar(df_books)
@@ -4431,7 +4434,7 @@ def render_calendar_grid(scope_df, full_df):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
-.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
+.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
@@ -4955,8 +4958,8 @@ def _wordmark_html(layout="header"):
     Serif, Chromium desktop không tái hiện được vì khác engine xử lý half-leading), giữ phòng ngừa
     tiếp cho Source Serif 4 (cũng là serif có cap-height/overshoot rõ, cùng lớp rủi ro) thay vì bỏ
     workaround rồi phải tìm lại lỗi từ đầu nếu nó tái phát."""
-    _text = "#f2f2f7" if IS_DARK else "#1d1d1f"
-    _text2 = "#98989d" if IS_DARK else "#6e6e73"
+    _text = "#f1ece0" if IS_DARK else "#211c13"
+    _text2 = "#b3a688" if IS_DARK else "#6f6650"
     if layout == "login":
         mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
         return (
@@ -5019,7 +5022,7 @@ if _auth_configured:
         # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
         # dùng var(--text-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal theo IS_DARK
         # -- _wordmark_html() đã tự lo việc này (xem định nghĩa), không cần lặp lại ở đây.
-        _login_txt2 = "#98989d" if IS_DARK else "#6e6e73"
+        _login_txt2 = "#b3a688" if IS_DARK else "#6f6650"
         st.markdown(
             "<div style='max-width:420px;margin:12vh auto 24px;text-align:center;'>"
             f"<div style='margin-bottom:18px;'>{_wordmark_html('login')}</div>"
@@ -5229,7 +5232,7 @@ st.markdown(
         border-radius: 7px !important;
         border: 1px solid var(--border) !important;
         font-weight: 500 !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
     div[data-testid="stButton"] button { width: 100%; }
 
@@ -5922,7 +5925,7 @@ st.markdown(
        nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
     .st-key-today_billboard {
         border-color: var(--border) !important;
-        padding: 28px 30px 22px !important;
+        padding: 24px 30px !important;
         border-radius: 16px !important;
         margin: 0 0 16px !important;
     }
@@ -6230,10 +6233,12 @@ def _inject_keyboard_shortcuts():
     xuyên suốt qua các iframe cũ bị Streamlit xoá đi -- phải tự canh cờ
     window.parent.__appShortcutsInstalled để không gắn trùng listener sau mỗi lần rerun."""
     nav_short_json = json.dumps(list(NAV_SHORT.values()))
-    _txt = "#f2f2f7" if IS_DARK else "#1d1d1f"
-    _txt2 = "#98989d" if IS_DARK else "#6e6e73"
-    _bg = "#2c2c2e" if IS_DARK else "#ffffff"
-    _border = "#3a3a3c" if IS_DARK else "#d1d1d6"
+    # Overlay được append thẳng vào window.parent.document (không phải iframe riêng như Quill)
+    # nên dùng được var(--*) của trang chính, không cần literal theo IS_DARK.
+    _txt = "var(--text)"
+    _txt2 = "var(--text-2)"
+    _bg = "var(--card)"
+    _border = "var(--border)"
     js = (
         "<script>\n"
         "(function(){\n"
@@ -6300,7 +6305,7 @@ def _inject_keyboard_shortcuts():
         "    const wrap = w.document.createElement('div');\n"
         "    wrap.id = 'app-shortcuts-overlay';\n"
         "    wrap.style.cssText = 'display:none;position:fixed;top:16px;right:16px;z-index:99999;'\n"
-        "      + 'background:" + _bg + ";border:1px solid " + _border + ";border-radius:12px;'\n"
+        "      + 'background:" + _bg + ";border:1px solid " + _border + ";border-radius:10px;'\n"
         "      + 'box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:16px 20px;max-width:360px;';\n"
         "    wrap.innerHTML = \"<div style='font-weight:700;color:\" + '" + _txt + "' + \";margin-bottom:6px;font-size:14px;'>Phím tắt bàn phím</div>\" + rows;\n"
         "    w.document.body.appendChild(wrap);\n"
@@ -7558,7 +7563,7 @@ elif nav == "Tuỳ biến":
                 _swatch_css += (
                     f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
                     f"background:{_hex} !important; color:{_txt_color} !important; "
-                    f"border:3px solid {_border} !important; border-radius:12px !important; "
+                    f"border:2px solid {_border} !important; border-radius:10px !important; "
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important; }}")
