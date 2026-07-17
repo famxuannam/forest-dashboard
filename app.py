@@ -5472,8 +5472,10 @@ st.markdown(
         background-color: var(--card) !important;
     }
     /* Giảm khoảng cách dọc xuống Date Picker ngay dưới nav (mặc định 10px margin-bottom của
-       stButtonGroup + 10px gap flex chung = 20px, hơi rộng) -- chỉ scope riêng nav chính. */
-    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
+       stButtonGroup + 10px gap flex chung = 20px, hơi rộng) -- chỉ scope riêng nav chính. Margin
+       ÂM (không chỉ về 0) để lấn bớt cả gap flex 10px của khối cha -- 2px rồi 0px vẫn còn rộng
+       theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
+    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
     /* Toggle "Danh mục/Dự án" (frag_pie, container key="piewrap_...") xuống thẻ biểu đồ tròn ngay
        dưới: cùng lý do/cách sửa như nav ở trên -- thu nhỏ margin-bottom mặc định 10px của
        stButtonGroup để cân đối với padding các card xung quanh, không đụng margin của các
@@ -5747,16 +5749,17 @@ st.markdown(
     .sec-hero {
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
     }
-    /* Billboard Hôm nay: nền phớt accent ĐỀU (KHÔNG gradient mờ dần như .sec-hero) + đổ bóng "tờ
-       giấy lịch thật" bằng filter:drop-shadow -- phiên bản nền đặc var(--card) trước đó bị lẫn
-       hẳn vào các card số liệu trung tính bên dưới (cùng 1 màu), phản hồi thực tế cần billboard
-       nổi bật hơn. Dùng rgba đều 1 mức (không fade-to-transparent) để tránh lặp lại vấn đề cũ
-       của .sec-hero (gradient tạo cảm giác "trong suốt" không đều) -- vẫn hơi ánh lộ hoạ tiết chấm
-       nền trang xuyên qua (chủ ý, tạo khác biệt thị giác với card đặc bên dưới), mức tint NHẸ hơn
-       hẳn .sec-hero (0.06 so với 0.16) vì billboard đứng 1 mình, không cần nổi mạnh như hero mở
-       đầu trang dài. */
+    /* Billboard Hôm nay: hiệu ứng kính mờ (frosted/liquid glass) thật -- nền phớt accent bán
+       trong suốt + backdrop-filter blur/saturate làm mờ VÀ rực màu hoạ tiết chấm nền trang đứng
+       sau nó (khác bản trước chỉ có rgba phẳng, chấm nền vẫn hiện SẮC NÉT xuyên qua, chưa ra được
+       cảm giác "kính" thật). saturate(1.6) bù lại độ nhạt do blur, tránh nền trông xám xịt.
+       filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
+       kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
+       bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
     .st-key-today_billboard {
-        background: rgba(var(--accent-rgb),0.06) !important;
+        background: rgba(var(--accent-rgb),0.10) !important;
+        backdrop-filter: blur(16px) saturate(1.6);
+        -webkit-backdrop-filter: blur(16px) saturate(1.6);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
