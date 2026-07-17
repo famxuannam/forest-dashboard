@@ -115,15 +115,29 @@ def _note_plain_text(html_content):
     return re.sub(r"\s+", " ", html_unescape(re.sub(r"<[^>]+>", " ", str(html_content or "")))).strip()
 
 
-def _note_snippet(html_content, query, radius=60):
-    """Đoạn trích văn bản thuần quanh từ khớp đầu tiên (dùng cho trang Tìm kiếm); không khớp
-    hoặc không có query thì trả về 120 ký tự đầu."""
-    txt = _note_plain_text(html_content)
+def _snippet_around(txt, query, radius=60):
+    """Đoạn trích văn bản thuần quanh từ khớp đầu tiên (dùng cho trang Tìm kiếm, cả ghi chú lẫn
+    trích dẫn Kindle); không khớp hoặc không có query thì trả về 120 ký tự đầu."""
     idx = txt.lower().find(query.lower()) if query else -1
     if idx == -1:
         return txt[:120] + ("…" if len(txt) > 120 else "")
     start, end = max(0, idx - radius), min(len(txt), idx + len(query) + radius)
     return ("…" if start > 0 else "") + txt[start:end] + ("…" if end < len(txt) else "")
+
+
+def _note_snippet(html_content, query, radius=60):
+    """Đoạn trích văn bản thuần quanh từ khớp đầu tiên trong 1 ghi chú Quill."""
+    return _snippet_around(_note_plain_text(html_content), query, radius)
+
+
+def _highlight(text, query):
+    """Escape text rồi bọc phần khớp query (không phân biệt hoa/thường) trong <mark> -- dùng ở
+    trang Tìm kiếm để nổi bật ngay từ khớp trong đoạn trích, không chỉ cắt đoạn văn quanh nó."""
+    esc = html_escape(str(text))
+    if not query:
+        return esc
+    pat = re.compile(re.escape(html_escape(str(query))), re.IGNORECASE)
+    return pat.sub(lambda m: f"<mark>{m.group(0)}</mark>", esc)
 
 # --- CẤU HÌNH ---
 # Tên file dùng làm tên thành viên bên trong .zip Sao lưu/Khôi phục (mục "Quản lý hệ thống")
@@ -3974,14 +3988,18 @@ def render_health_page():
 
 
 def render_search():
-    """Tìm kiếm theo từ khoá trên CẢ 4 nguồn: ghi chú chính, ghi chú nhanh, lịch (tiêu đề
-    appointment), sách/Gundam (tên cuốn/series + tiêu đề phần) -- lọc trực tiếp trong Python trên
-    text thuần, khối lượng dữ liệu nhỏ (vài trăm dòng mỗi nguồn cho vài năm dùng app) nên không
-    cần full-text search phía Supabase. Kết quả gộp theo NGÀY (đúng 1 dòng cho mỗi ngày có ít
-    nhất 1 nguồn khớp), hiện ĐỦ CẢ 4 nguồn của ngày đó (không chỉ riêng phần khớp) để giữ nguyên
-    ngữ cảnh cả ngày -- đúng khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú nhanh -> Ghi
-    chú chính đã dùng ở Nhật ký. Ghi chú nhanh cũng tìm được ở đây dù chỉ tồn tại tạm thời (chờ
-    gộp vào ghi chú chính, xem render_note_editor()) -- tránh lọt mất nếu vài hôm chưa kịp gộp."""
+    """Tìm kiếm theo từ khoá trên CẢ 6 nguồn: ghi chú chính, ghi chú nhanh, lịch (tiêu đề
+    appointment), sách/Gundam (tên cuốn/series + tiêu đề phần), phiên Forest (tên Dự án), trích
+    dẫn/ghi chú Kindle (nội dung) -- lọc trực tiếp trong Python trên text thuần, khối lượng dữ
+    liệu nhỏ (vài trăm-nghìn dòng mỗi nguồn cho vài năm dùng app) nên không cần full-text search
+    phía Supabase. Kết quả gộp theo NGÀY (đúng 1 dòng cho mỗi ngày có ít nhất 1 nguồn khớp), hiện
+    ĐỦ 4 nguồn đầu của ngày đó (không chỉ riêng phần khớp) để giữ nguyên ngữ cảnh cả ngày -- đúng
+    khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú nhanh -> Ghi chú chính đã dùng ở Nhật
+    ký; riêng Phiên/Trích dẫn (2 nguồn có thể rất nhiều dòng/ngày) chỉ hiện ĐÚNG các dòng khớp,
+    không hiện cả ngày, tránh rối mắt. Ghi chú nhanh cũng tìm được ở đây dù chỉ tồn tại tạm thời
+    (chờ gộp vào ghi chú chính, xem render_note_editor()) -- tránh lọt mất nếu vài hôm chưa kịp
+    gộp. Từ khớp được tô sáng bằng <mark> (xem _highlight()) trong mọi đoạn trích tự do (ghi chú,
+    trích dẫn) -- các chip nguồn khác (lịch/sách) vốn đã ngắn gọn nên không cần tô thêm."""
     q = st.text_input("Từ khoá", key="search_q", label_visibility="collapsed")
     if not q or len(q.strip()) < 2:
         return
@@ -4001,14 +4019,22 @@ def render_search():
     rl = load_reading_log()
     if not rl.empty:
         rl = rl.assign(_d=rl['Ngày hoàn thành'].dt.normalize())
+    db = load_db()
+    if not db.empty:
+        db = db.assign(_d=pd.to_datetime(db['Thời gian bắt đầu'], format='ISO8601').dt.normalize())
+    kh = load_kindle_highlights()
+    if not kh.empty:
+        kh = kh.assign(_d=kh['Ngày thêm'].dt.normalize())
 
     note_hits = set(nd[nd['_plain'].str.contains(pat, case=False, na=False)]['_d']) if not nd.empty else set()
     qn_hits = set(qn[qn['Nội dung'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not qn.empty else set()
     cal_hits = set(wc[wc['Tiêu đề'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not wc.empty else set()
     rl_hits = set(rl[rl['Tiêu đề phần'].astype(str).str.contains(pat, case=False, na=False)
                      | rl['Cuốn sách'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not rl.empty else set()
+    sess_hits = set(db[db['Dự án'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not db.empty else set()
+    kh_hits = set(kh[kh['Nội dung'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not kh.empty else set()
 
-    hit_days = sorted(note_hits | qn_hits | cal_hits | rl_hits, reverse=True)
+    hit_days = sorted(note_hits | qn_hits | cal_hits | rl_hits | sess_hits | kh_hits, reverse=True)
     if not hit_days:
         st.info(f"Không tìm thấy kết quả nào chứa \"{q}\".")
         return
@@ -4034,18 +4060,37 @@ def render_search():
                 f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
                 for _, r in day_events.iterrows())
             cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>"
+        sess_html = ''
+        day_sess = (db[(db['_d'] == d) & db['Dự án'].astype(str).str.contains(pat, case=False, na=False)]
+                    if not db.empty else db)
+        if not day_sess.empty:
+            chips = ''.join(
+                f"<span class='jchip'><span class='ck'>{pd.to_datetime(r['Thời gian bắt đầu']):%H:%M}</span>"
+                f"<span class='cv'>{_highlight(r['Dự án'], qq)}</span></span>"
+                for _, r in day_sess.sort_values('Thời gian bắt đầu').iterrows())
+            sess_html = _chip_row_html('Phiên', chips)
         read_html = _book_chips_html(rl[rl['_d'] == d]) if not rl.empty and d in set(rl['_d']) else ''
+        quote_html = ''
+        day_kh = (kh[(kh['_d'] == d) & kh['Nội dung'].astype(str).str.contains(pat, case=False, na=False)]
+                  if not kh.empty else kh)
+        if not day_kh.empty:
+            items = ''.join(
+                "<div class='note-html' style='margin-bottom:4px;'>“"
+                f"{_highlight(_snippet_around(str(r['Nội dung']), qq), qq)}”"
+                f" <span style='color:var(--text-2);font-size:12px;'>— {html_escape(str(r['Cuốn sách']))}</span></div>"
+                for _, r in day_kh.iterrows())
+            quote_html = _chip_row_html('Trích dẫn', items)
         qn_html = _quick_note_chips_html(qn[qn['_d'] == d]) if not qn.empty and d in set(qn['_d']) else ''
         note_html = ''
         if not nd.empty and d in set(nd['_d']):
-            note_html = f"<div class='note-html'>{html_escape(_note_snippet(nd[nd['_d'] == d].iloc[0]['Ghi chú'], qq))}</div>"
+            note_html = f"<div class='note-html'>{_highlight(_note_snippet(nd[nd['_d'] == d].iloc[0]['Ghi chú'], qq), qq)}</div>"
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m/%Y}</div></div></a>"
-            f"<div>{cal_html}{read_html}{qn_html}{note_html}</div>"
+            f"<div>{cal_html}{sess_html}{read_html}{quote_html}{qn_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_search"):
@@ -5819,6 +5864,10 @@ st.markdown(
     .jchip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 5px 11px;
         font-size: 12.5px; margin: 0 6px 6px 0; }
     .jchip .ck { color: var(--text-2); } .jchip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    /* Từ khớp trong trang Tìm kiếm (xem _highlight()) -- tô theo accent thay vì vàng mặc định
+       của trình duyệt, khớp tông "Sổ Tay" thay vì lệch hẳn ra ngoài hệ màu app. */
+    mark { background: rgba(var(--accent-rgb),0.18); color: var(--accent-dark); border-radius: 3px;
+        padding: 0 2px; }
     /* Icon Material Symbols (font Streamlit đã tự load sẵn cho :material/x: của riêng nó, nên
        dùng lại được ở đây không cần nhúng thêm font nào) đặt đầu 1 số jchip -- nhận diện nhanh
        loại chip không cần đọc chữ: 🏆 Kỷ lục (Bảng vàng), sách/gundam phân biệt phần đọc/xem. */
