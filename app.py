@@ -5744,14 +5744,13 @@ st.markdown(
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    /* .hh-meta .chip: hàng chip số liệu ở hero Tuỳ biến (Phiên trong hệ thống/Đồng bộ gần nhất/
-       Sao lưu gần nhất). .maprow .chip: badge Danh mục ở bảng Phân loại tĩnh (Tuỳ biến -> chương
-       "2. Phân loại"). Cả 2 tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ
-       thêm vào phạm vi scope vì không phải billboard/stat-panel. */
-    .stat-panel .chip, .pbill-chips .chip, .hh-meta .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+    /* .maprow .chip: badge Danh mục ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
+       tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ thêm vào phạm vi scope
+       vì không phải billboard/stat-panel. */
+    .stat-panel .chip, .pbill-chips .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
-    .stat-panel .chip .ck, .pbill-chips .chip .ck, .hh-meta .chip .ck { color: var(--text-2); }
-    .stat-panel .chip .cv, .pbill-chips .chip .cv, .hh-meta .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    .stat-panel .chip .ck, .pbill-chips .chip .ck { color: var(--text-2); }
+    .stat-panel .chip .cv, .pbill-chips .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd, .pbill-chips .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw, .pbill-chips .chip.tw { background: rgba(var(--accent-rgb),0.10); }
     /* Hàng chip billboard Sách (Cùng lúc/Phần đọc gần nhất/trích dẫn đã lưu...) -- tái dùng
@@ -6189,7 +6188,7 @@ st.markdown(
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail {
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
         background: rgba(var(--accent-rgb),0.10) !important;
         backdrop-filter: blur(16px) saturate(1.6);
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
@@ -6402,6 +6401,14 @@ st.markdown(
     .maprow .mp-proj { font-weight: 600; }
     .maprow .mp-n { text-align: right; font-variant-numeric: tabular-nums; }
     .maprow.maprow-extra { grid-template-columns: 1fr; font-size: 12.5px; color: var(--text-2); }
+    /* Thẻ st.container(border=True) ở Tuỳ biến (5 chương) mặc định nền TRONG SUỐT (chỉ có viền,
+       không có fill) -- khác mọi thẻ .glass-card/.dtl-card khác trong app luôn nền phẳng
+       var(--card), nên hoạ tiết chấm bi của .stApp lộ xuyên qua, trông "rỗng"/không giống thẻ
+       thật. Ép nền đặc var(--card) cho khớp phần còn lại của app. */
+    .st-key-tb_quick_sync_card, .st-key-tb_mapping_card, .st-key-tb_theme_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card {
+        background: var(--card) !important;
+    }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
@@ -6524,7 +6531,7 @@ st.markdown(
     /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail {
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
@@ -6543,14 +6550,16 @@ st.markdown(
        1 tờ giấy riêng -- xem lại thấy phẳng như bản gốc đẹp hơn nên bỏ, chỉ giữ canh giữa. */
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
     /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
        columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
        đã tự có mark "" làm khoảng đệm thị giác riêng. */
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
         padding-left: 24px !important;
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
@@ -7867,27 +7876,30 @@ elif nav == "Tuỳ biến":
     # Chương "5. Dữ liệu làm việc hiện tại" (bảng phiên thô + xoá hàng loạt) KHÔNG có trong mockup
     # (mockup chỉ vẽ 4 chương) -- xác nhận với người dùng giữ làm chương riêng thứ 5, đặt SAU
     # "4. Quản lý hệ thống" (xem cuối khối này).
+    # Billboard (render_period_billboard(), KHÔNG phải sec_hero()) để khớp đúng style Hôm nay/Báo
+    # cáo/Sách/Gundam đã chuyển trước đó -- sec_hero() là mẫu cũ hơn, thiếu khung "tờ lịch" số to
+    # bên trái nên trông lệch tông so với phần còn lại của app đã đồng bộ hết sang billboard.
     _n_sessions_tb = len(load_db())
     _last_sync_tb = _cached_settings().get("last_quick_sync_at")
     _last_bk_tb = _cached_settings().get("last_backup_at")
-    _tb_meta_chips = [f"<span class='chip'><span class='ck'>Phiên trong hệ thống</span>"
-                       f"<span class='cv'>{_n_sessions_tb}</span></span>"]
+    _tb_meta_parts = []
     if _last_sync_tb:
         _ls_dt_tb = pd.Timestamp(_last_sync_tb)
         _ls_label_tb = (f"hôm nay, {_ls_dt_tb:%H:%M}" if _ls_dt_tb.date() == _today_vn()
                          else f"{_ls_dt_tb:%d/%m/%Y, %H:%M}")
-        _tb_meta_chips.append(f"<span class='chip'><span class='ck'>Đồng bộ gần nhất</span>"
-                               f"<span class='cv'>{_ls_label_tb}</span></span>")
+        _tb_meta_parts.append(f"Đồng bộ gần nhất {_ls_label_tb}")
     if _last_bk_tb:
-        _tb_meta_chips.append(f"<span class='chip'><span class='ck'>Sao lưu gần nhất</span>"
-                               f"<span class='cv'>{pd.Timestamp(_last_bk_tb):%d/%m/%Y}</span></span>")
-    sec_hero(None, "Dữ liệu &amp; giao diện của bạn",
-             "Nạp dữ liệu, gán phân loại, chỉnh màu sắc hoạ tiết và sao lưu — tất cả ở một nơi.",
-             [("tb-ch1", "1 · Dữ liệu đầu vào"), ("tb-ch2", "2 · Phân loại"),
-              ("tb-ch3", "3 · Giao diện"), ("tb-ch4", "4 · Quản lý hệ thống"),
-              ("tb-ch5", "5 · Dữ liệu làm việc hiện tại")],
-             meta="<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;'>"
-                  + "".join(_tb_meta_chips) + "</div>")
+        _tb_meta_parts.append(f"Sao lưu gần nhất {pd.Timestamp(_last_bk_tb):%d/%m/%Y}")
+    _tb_meta = " · ".join(_tb_meta_parts) if _tb_meta_parts else "Chưa đồng bộ/sao lưu lần nào"
+    render_period_billboard(
+        "Tuỳ biến", str(_n_sessions_tb), "phiên trong hệ thống", _tb_meta,
+        "<div class='pbill-title'>Dữ liệu &amp; giao diện của bạn</div>"
+        "<div class='pbill-sub'>Nạp dữ liệu, gán phân loại, chỉnh màu sắc hoạ tiết và sao lưu — "
+        "tất cả ở một nơi.</div>",
+        [("tb-ch1", "1 · Dữ liệu đầu vào"), ("tb-ch2", "2 · Phân loại"),
+         ("tb-ch3", "3 · Giao diện"), ("tb-ch4", "4 · Quản lý hệ thống"),
+         ("tb-ch5", "5 · Dữ liệu làm việc hiện tại")],
+        key="tb_billboard")
 
     sec_chapter("tb-ch1", 1, None, "Dữ liệu đầu vào", tight_top=True)
     with st.container(border=True, key="tb_quick_sync_card"):
