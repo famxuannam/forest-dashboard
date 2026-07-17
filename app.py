@@ -4787,6 +4787,33 @@ def sec_hero(kicker, title, sub, chips, meta=None):
         unsafe_allow_html=True)
 
 
+def render_period_billboard(tab_label, big_num, big_label, meta, title, subtitle, chips):
+    """Billboard mở đầu 1 sub-tab Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án): số giờ to bên trái
+    đóng khung như tờ giấy lịch bàn + câu nhận định bên phải, style (kính mờ/frosted glass, khung
+    giấy cột trái) dùng chung y hệt billboard Hôm nay -- xem docstring _render_today_billboard()
+    và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng nguyên khối `.tbill-tab`/
+    `.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/nhãn/tiêu đề/mô tả vì cỡ
+    chữ khác billboard Hôm nay (64px so với 76px, do đây là số giờ nhiều chữ số hơn số ngày)."""
+    _left_html = (
+        "<div class='tbill-date'>"
+        f"<div class='tbill-tab'><span class='tbill-tab-label'>{tab_label}</span></div>"
+        f"<div class='pbill-num'>{big_num}</div>"
+        f"<div class='pbill-label'>{big_label}</div>"
+        f"<div class='tbill-meta'>{meta}</div></div>")
+    with st.container(key="bc_billboard", border=True):
+        with st.container(key="bc_billboard_row"):
+            c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+            with c_left:
+                st.markdown(_left_html, unsafe_allow_html=True)
+            with c_right:
+                st.markdown(
+                    f"<div class='pbill-title'>{title}</div><div class='pbill-sub'>{subtitle}</div>",
+                    unsafe_allow_html=True)
+        if chips:
+            _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+            st.markdown(f"<div class='sec-toc' style='margin-top:18px;'>{_chips_html}</div>", unsafe_allow_html=True)
+
+
 def help_faq_item(question, answer_md):
     """1 câu hỏi FAQ = expander native (đã ăn style expander sẵn có của app). Cố ý KHÔNG đánh
     số như expander trang báo cáo -- FAQ tra theo câu hỏi, không đọc tuần tự."""
@@ -5756,7 +5783,7 @@ st.markdown(
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
-    .st-key-today_billboard {
+    .st-key-today_billboard, .st-key-bc_billboard {
         background: rgba(var(--accent-rgb),0.10) !important;
         backdrop-filter: blur(16px) saturate(1.6);
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
@@ -5770,6 +5797,13 @@ st.markdown(
         margin: 6px 0 8px; line-height: 1.15; }
     .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
     .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
+    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
+       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard). */
+    .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
+    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
+        margin-top: 8px; }
     .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
         text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
@@ -6039,7 +6073,7 @@ st.markdown(
     /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
-    .st-key-today_billboard {
+    .st-key-today_billboard, .st-key-bc_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
@@ -6052,16 +6086,28 @@ st.markdown(
        stHorizontalBlock trong billboard nói chung) -- billboard còn 1 hàng ngang LỒNG BÊN TRONG
        nữa (kq_daily_srcrow, hàng tên sách + nút xáo/yêu thích), nếu chọn rộng hơn sẽ dính luôn
        rule khung giấy bên dưới vào NHẦM cột đó (bug thật đã gặp: cột tên sách bị đóng khung/đổ
-       bóng như thẻ giấy, không phải cột ngày). */
-    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+       bóng như thẻ giấy, không phải cột ngày). Chuỗi chọn phải đi qua [data-testid="stLayoutWrapper"]
+       -- Streamlit chèn thêm 1 lớp div trung gian giữa container key và stHorizontalBlock, thiếu
+       bước này chuỗi ">" đứt gãy và toàn bộ rule (khung giấy, align-self, padding cột phải) LẶNG LẼ
+       không áp dụng (không lỗi console, chỉ đơn giản không match) -- bug thật đã gặp, phát hiện qua
+       getComputedStyle() DOM. */
+    [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
     /* Cột ngày đóng khung riêng như 1 tờ giấy lịch bàn thật (thay cho kẻ dọc phân cách trước đây)
        -- viền + bo góc + nền + đổ bóng nhẹ, tách hẳn khỏi cột trích dẫn bên cạnh thay vì chỉ ngăn
        bằng 1 đường kẻ mảnh. overflow:hidden để .tbill-tab (bo góc trên) không tràn ra ngoài khung. */
-    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
+    [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child),
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
         background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
+       columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
+       đã tự có mark "" làm khoảng đệm thị giác riêng. */
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+        padding-left: 24px !important;
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
@@ -6936,11 +6982,6 @@ elif nav == "Báo cáo":
 
     if bc_sub == "Tổng quan":
         if not df.empty:
-            sec_hero(None, "Toàn cảnh từ ngày đầu tiên", None,
-                     [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
-                      ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
-                      ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
-            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
             # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
             # xem") -- Hôm nay giờ mới là trang mở đầu tiên, không còn hợp lý để card này
             # đứng đầu Tổng quan (sub-tab không mặc định) nữa.
@@ -6948,6 +6989,18 @@ elif nav == "Báo cáo":
             total_trees = len(df)
             num_days = df['Ngày'].nunique() or 1
             base_avg = total_hrs / num_days
+            n_cats = df['Danh mục'].nunique()
+            n_projs = df['Dự án'].nunique()
+
+            render_period_billboard(
+                "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
+                f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
+                "Nhìn lại tất cả thời gian đã trồng",
+                "Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.",
+                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
+                 ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
+                 ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
             s_stat = _streak_stats(df)
             by_wd = _weekday_avg(df)
