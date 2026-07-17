@@ -5744,10 +5744,13 @@ st.markdown(
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    .stat-panel .chip, .pbill-chips .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+    /* .hh-meta .chip: hàng chip số liệu ở hero Tuỳ biến (Phiên trong hệ thống/Đồng bộ gần nhất/
+       Sao lưu gần nhất) -- tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ
+       thêm .hh-meta vào phạm vi scope vì hero không phải billboard/stat-panel. */
+    .stat-panel .chip, .pbill-chips .chip, .hh-meta .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
-    .stat-panel .chip .ck, .pbill-chips .chip .ck { color: var(--text-2); }
-    .stat-panel .chip .cv, .pbill-chips .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    .stat-panel .chip .ck, .pbill-chips .chip .ck, .hh-meta .chip .ck { color: var(--text-2); }
+    .stat-panel .chip .cv, .pbill-chips .chip .cv, .hh-meta .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
     .stat-panel .chip .cd, .pbill-chips .chip .cd { font-weight: 500; margin-left: 6px; }
     .stat-panel .chip.tw, .pbill-chips .chip.tw { background: rgba(var(--accent-rgb),0.10); }
     /* Hàng chip billboard Sách (Cùng lúc/Phần đọc gần nhất/trích dẫn đã lưu...) -- tái dùng
@@ -7842,7 +7845,35 @@ elif nav == "Tìm kiếm":
 # TAB TUỲ BIẾN
 # ==========================================
 elif nav == "Tuỳ biến":
-    with st.expander("1. Dữ liệu đầu vào", expanded=True):
+    # Hero + 5 chương (chuyển từ 5 expander đánh số cũ, xác nhận với người dùng giữ NGUYÊN mọi
+    # luồng nạp dữ liệu/xử lý bên trong, chỉ đổi vỏ ngoài theo mockup Forest Dashboard.dc.html).
+    # Chương "5. Dữ liệu làm việc hiện tại" (bảng phiên thô + xoá hàng loạt) KHÔNG có trong mockup
+    # (mockup chỉ vẽ 4 chương) -- xác nhận với người dùng giữ làm chương riêng thứ 5, đặt SAU
+    # "4. Quản lý hệ thống" (xem cuối khối này).
+    _n_sessions_tb = len(load_db())
+    _last_sync_tb = _cached_settings().get("last_quick_sync_at")
+    _last_bk_tb = _cached_settings().get("last_backup_at")
+    _tb_meta_chips = [f"<span class='chip'><span class='ck'>Phiên trong hệ thống</span>"
+                       f"<span class='cv'>{_n_sessions_tb}</span></span>"]
+    if _last_sync_tb:
+        _ls_dt_tb = pd.Timestamp(_last_sync_tb)
+        _ls_label_tb = (f"hôm nay, {_ls_dt_tb:%H:%M}" if _ls_dt_tb.date() == _today_vn()
+                         else f"{_ls_dt_tb:%d/%m/%Y, %H:%M}")
+        _tb_meta_chips.append(f"<span class='chip'><span class='ck'>Đồng bộ gần nhất</span>"
+                               f"<span class='cv'>{_ls_label_tb}</span></span>")
+    if _last_bk_tb:
+        _tb_meta_chips.append(f"<span class='chip'><span class='ck'>Sao lưu gần nhất</span>"
+                               f"<span class='cv'>{pd.Timestamp(_last_bk_tb):%d/%m/%Y}</span></span>")
+    sec_hero(None, "Dữ liệu &amp; giao diện của bạn",
+             "Nạp dữ liệu, gán phân loại, chỉnh màu sắc hoạ tiết và sao lưu — tất cả ở một nơi.",
+             [("tb-ch1", "1 · Dữ liệu đầu vào"), ("tb-ch2", "2 · Phân loại"),
+              ("tb-ch3", "3 · Giao diện"), ("tb-ch4", "4 · Quản lý hệ thống"),
+              ("tb-ch5", "5 · Dữ liệu làm việc hiện tại")],
+             meta="<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;'>"
+                  + "".join(_tb_meta_chips) + "</div>")
+
+    sec_chapter("tb-ch1", 1, None, "Dữ liệu đầu vào", tight_top=True)
+    with st.container(border=True, key="tb_quick_sync_card"):
         _qmsg = st.session_state.pop('quick_sync_msg', None)
         if _qmsg:
             (st.success if not st.session_state.pop('quick_sync_has_error', False) else st.warning)(_qmsg)
@@ -7861,6 +7892,7 @@ elif nav == "Tuỳ biến":
                 st.session_state['quick_sync_msg'] = _qres["error"]
                 st.session_state['quick_sync_has_error'] = True
             else:
+                save_setting("last_quick_sync_at", datetime.now(APP_TZ).strftime('%Y-%m-%d %H:%M:%S'))
                 _parts, _has_err = [], False
                 if _qres["forest_error"]:
                     _parts.append(f"Forest lỗi ({_qres['forest_error']})"); _has_err = True
@@ -8128,7 +8160,8 @@ elif nav == "Tuỳ biến":
                         st.session_state['kindle_map_save_msg'] = "Đã lưu ánh xạ mới."
                         st.rerun()
 
-    with st.expander("2. Phân loại", expanded=False):
+    sec_chapter("tb-ch2", 2, None, "Phân loại")
+    with st.container(border=True, key="tb_mapping_card"):
         db_current = load_db()
         mapping_df = load_mapping()
         all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
@@ -8164,60 +8197,8 @@ elif nav == "Tuỳ biến":
                 nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
                 save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                 st.rerun()
-    with st.expander("3. Dữ liệu làm việc hiện tại", expanded=False):
-        # Nút xoá hàng loạt cũng dùng màu cảnh báo -- xem chú thích ở "5. Quản lý hệ thống".
-        st.markdown(
-            "<style>.st-key-tbtn_delete_selected div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
-            "background-color:#ff3b30 !important;color:#fff !important;"
-            "border-color:#ff3b30 !important;box-shadow:none !important;}</style>",
-            unsafe_allow_html=True)
-        if not db_current.empty:
-            db_base = db_current.reset_index(drop=True)
-            _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
-            # Tổng quan: thẻ căn giữa
-            st.markdown(
-                f"<div class='glass-card' style='padding:10px 18px;margin-bottom:14px;text-align:center;'>"
-                f"<span style='font-size:14px;color:var(--text);'>Tổng <b>{len(db_base)}</b> phiên · "
-                f"từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}</span></div>",
-                unsafe_allow_html=True)
-            disp_db = db_base.copy()
-            disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
-            disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
-            if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
-
-            # Phân trang 100 dòng/trang khi nhiều phiên. Đọc trang từ session_state TRƯỚC để cắt
-            # bảng; render widget pagination Ở DƯỚI bảng (cùng key nên vẫn lái được lát cắt qua
-            # mỗi lần rerun). Dòng chọn để xoá là vị trí TRONG trang -> cộng _start ra chỉ số tuyệt đối.
-            PAGE_SIZE = 100
-            n = len(disp_db)
-            paged = n > PAGE_SIZE
-            _start = 0
-            if paged:
-                num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
-                page = min(st.session_state.get("db_page", 1), num_pages)  # clamp khi co lại sau xoá
-                st.session_state["db_page"] = page
-                _start = (page - 1) * PAGE_SIZE
-                page_df = disp_db.iloc[_start:_start + PAGE_SIZE]
-            else:
-                page_df = disp_db
-
-            ev = st.dataframe(page_df, width='stretch', hide_index=True,
-                              on_select="rerun", selection_mode="multi-row", key="db_view")
-            sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
-            if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary", key="tbtn_delete_selected"):
-                add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
-                save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
-                st.rerun()
-
-            # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.
-            if paged:
-                with st.container(key="db_pag"):
-                    st.pagination(num_pages, key="db_page")
-                st.markdown(
-                    f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
-                    f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
-                    unsafe_allow_html=True)
-    with st.expander("4. Giao diện", expanded=False):
+    sec_chapter("tb-ch3", 3, None, "Giao diện")
+    with st.container(border=True, key="tb_theme_card"):
         st.markdown("<div style='font-size:13px;font-weight:600;color:var(--text-2);'>"
                     "Màu accent</div>", unsafe_allow_html=True)
         _preset_items = list(ACCENT_PRESETS.items())
@@ -8288,20 +8269,21 @@ elif nav == "Tuỳ biến":
         _bg_css += "</style>"
         st.markdown(_bg_css, unsafe_allow_html=True)
 
-    with st.expander("5. Quản lý hệ thống", expanded=False):
-        # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
-        # tông đỏ dùng cho delta âm/chỉ số bất thường trong app) thay vì màu nút thường -- tín hiệu
-        # thị giác phân biệt mức độ nguy hiểm, tránh bấm nhầm giữa hàng nút trung tính khác.
-        st.markdown(
-            "<style>"
-            ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"secondary\"],"
-            ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
-            "background-color:#ff3b30 !important;color:#fff !important;"
-            "border-color:#ff3b30 !important;box-shadow:none !important;}"
-            "</style>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        _today = _today_vn().strftime('%Y-%m-%d')
-        with c1:
+    sec_chapter("tb-ch4", 4, None, "Quản lý hệ thống")
+    # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
+    # tông đỏ dùng cho delta âm/chỉ số bất thường trong app) thay vì màu nút thường -- tín hiệu
+    # thị giác phân biệt mức độ nguy hiểm, tránh bấm nhầm giữa hàng nút trung tính khác.
+    st.markdown(
+        "<style>"
+        ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"secondary\"],"
+        ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
+        "background-color:#ff3b30 !important;color:#fff !important;"
+        "border-color:#ff3b30 !important;box-shadow:none !important;}"
+        "</style>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    _today = _today_vn().strftime('%Y-%m-%d')
+    with c1:
+        with st.container(border=True, key="tb_backup_card"):
             st.subheader("Sao lưu")
             # Nhắc sao lưu: chỉ hiện ngay tại đây (không phải banner toàn app) -- đúng nơi và
             # lúc người dùng hành động được ngay. Chưa từng sao lưu, hoặc lần gần nhất quá 30
@@ -8336,7 +8318,8 @@ elif nav == "Tuỳ biến":
                                    on_click=lambda: save_setting("last_backup_at", _today))
             else:
                 st.caption("Chưa có dữ liệu để sao lưu.")
-        with c2:
+    with c2:
+        with st.container(border=True, key="tb_restore_card"):
             st.subheader("Khôi phục")
             res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
             ok_zip = False
@@ -8432,7 +8415,8 @@ elif nav == "Tuỳ biến":
                 st.success("Khôi phục hệ thống thành công!")
                 time.sleep(1)
                 st.rerun()
-        with c3:
+    with c3:
+        with st.container(border=True, key="tb_wipe_card"):
             st.subheader("Làm mới")
             confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu")
             if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete, key="tbtn_wipe_all"):
@@ -8454,10 +8438,68 @@ elif nav == "Tuỳ biến":
                 time.sleep(1)
                 st.rerun()
 
-        if _auth_configured:
-            st.divider()
-            st.caption(f"Đăng nhập với **{st.user.email}**")
-            st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
+    if _auth_configured:
+        st.divider()
+        st.caption(f"Đăng nhập với **{st.user.email}**")
+        st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
+
+    # Chương "5. Dữ liệu làm việc hiện tại" -- KHÔNG có trong mockup (chỉ vẽ 4 chương), xác nhận
+    # với người dùng giữ làm chương riêng cuối cùng thay vì gộp vào "1. Dữ liệu đầu vào" (xem
+    # đầu khối "elif nav == "Tuỳ biến":").
+    sec_chapter("tb-ch5", 5, None, "Dữ liệu làm việc hiện tại")
+    with st.container(border=True, key="tb_rawdata_card"):
+        # Nút xoá hàng loạt cũng dùng màu cảnh báo -- xem chú thích ở "4. Quản lý hệ thống".
+        st.markdown(
+            "<style>.st-key-tbtn_delete_selected div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
+            "background-color:#ff3b30 !important;color:#fff !important;"
+            "border-color:#ff3b30 !important;box-shadow:none !important;}</style>",
+            unsafe_allow_html=True)
+        if not db_current.empty:
+            db_base = db_current.reset_index(drop=True)
+            _dt = pd.to_datetime(db_base['Thời gian bắt đầu'], errors='coerce')
+            # Tổng quan: thẻ căn giữa
+            st.markdown(
+                f"<div class='glass-card' style='padding:10px 18px;margin-bottom:14px;text-align:center;'>"
+                f"<span style='font-size:14px;color:var(--text);'>Tổng <b>{len(db_base)}</b> phiên · "
+                f"từ {_dt.min():%d/%m/%Y} đến {_dt.max():%d/%m/%Y}</span></div>",
+                unsafe_allow_html=True)
+            disp_db = db_base.copy()
+            disp_db['Thời gian bắt đầu'] = pd.to_datetime(disp_db['Thời gian bắt đầu']).dt.strftime('%Y-%m-%d %H:%M')
+            disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
+            if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
+
+            # Phân trang 100 dòng/trang khi nhiều phiên. Đọc trang từ session_state TRƯỚC để cắt
+            # bảng; render widget pagination Ở DƯỚI bảng (cùng key nên vẫn lái được lát cắt qua
+            # mỗi lần rerun). Dòng chọn để xoá là vị trí TRONG trang -> cộng _start ra chỉ số tuyệt đối.
+            PAGE_SIZE = 100
+            n = len(disp_db)
+            paged = n > PAGE_SIZE
+            _start = 0
+            if paged:
+                num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
+                page = min(st.session_state.get("db_page", 1), num_pages)  # clamp khi co lại sau xoá
+                st.session_state["db_page"] = page
+                _start = (page - 1) * PAGE_SIZE
+                page_df = disp_db.iloc[_start:_start + PAGE_SIZE]
+            else:
+                page_df = disp_db
+
+            ev = st.dataframe(page_df, width='stretch', hide_index=True,
+                              on_select="rerun", selection_mode="multi-row", key="db_view")
+            sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
+            if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary", key="tbtn_delete_selected"):
+                add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
+                save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
+                st.rerun()
+
+            # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.
+            if paged:
+                with st.container(key="db_pag"):
+                    st.pagination(num_pages, key="db_page")
+                st.markdown(
+                    f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
+                    f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
+                    unsafe_allow_html=True)
 
 # ==========================================
 # TAB HƯỚNG DẪN
