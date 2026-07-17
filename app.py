@@ -8357,49 +8357,155 @@ elif nav == "Tuỳ biến":
         st.markdown(_bg_css, unsafe_allow_html=True)
 
     sec_chapter("tb-ch4", 4, None, "Quản lý hệ thống")
-    # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
-    # tông đỏ dùng cho delta âm/chỉ số bất thường trong app) thay vì màu nút thường -- tín hiệu
-    # thị giác phân biệt mức độ nguy hiểm, tránh bấm nhầm giữa hàng nút trung tính khác.
+    # 3 thẻ rút gọn về ĐÚNG 1 nhãn + 1 nút (không còn help text/checkbox lộ ngay trên thẻ, theo
+    # phản hồi thực tế) -- 2 thao tác phá huỷ dữ liệu (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch
+    # toàn bộ) chuyển hết phần xác nhận (upload/preview/checkbox/nút xác nhận cuối) vào popup
+    # riêng qua st.dialog(), nút trên thẻ chỉ có nhiệm vụ MỞ popup đó. Sao lưu không phá huỷ gì
+    # nên giữ nguyên 1 nút tải trực tiếp, không cần popup.
+    @st.dialog("Khôi phục dữ liệu")
+    def _tb_restore_dialog():
+        res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
+        ok_zip = False
+        if res is not None:
+            try:
+                res.seek(0)
+                with zipfile.ZipFile(res) as _z:
+                    names = set(_z.namelist())
+                    parts = []
+                    if DB_FILE in names:
+                        _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
+                        _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
+                        _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                        parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
+                    if MAPPING_FILE in names:
+                        parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
+                    if DELETED_FILE in names:
+                        parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
+                    if NOTES_FILE in names:
+                        parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
+                    if QUICK_NOTES_FILE in names:
+                        parts.append(f"Ghi chú nhanh **{len(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE))))}** dòng")
+                    if WORK_CALENDAR_FILE in names:
+                        parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
+                    if READING_LOG_FILE in names:
+                        parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
+                    if SETTINGS_FILE in names:
+                        parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
+                    if HEALTH_METRICS_FILE in names:
+                        parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
+                    if KINDLE_HIGHLIGHTS_FILE in names:
+                        parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
+                    if DELETED_KINDLE_FILE in names:
+                        parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
+                    if GUNDAM_OVERRIDES_FILE in names:
+                        parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
+                if parts:
+                    ok_zip = True
+                    st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
+                else:
+                    st.caption("File .zip không chứa dữ liệu hợp lệ.")
+            except Exception:
+                st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
+        confirm_restore = False
+        if ok_zip:
+            st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
+            confirm_restore = st.checkbox("Tôi xác nhận muốn ghi đè toàn bộ dữ liệu hiện tại",
+                                           key="cb_restore_confirm")
+        if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
+                     key="tbtn_restore_confirm"):
+            res.seek(0)
+            with zipfile.ZipFile(res) as _z:
+                names = set(_z.namelist())
+                if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
+                if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
+                if DELETED_FILE in names:
+                    save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
+                if NOTES_FILE in names:
+                    save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
+                if QUICK_NOTES_FILE in names:
+                    save_quick_notes_bulk(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE)), dtype=str))
+                if WORK_CALENDAR_FILE in names:
+                    save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
+                if READING_LOG_FILE in names:
+                    save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
+                if SETTINGS_FILE in names:
+                    save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
+                if HEALTH_METRICS_FILE in names:
+                    # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
+                    # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
+                    save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
+                # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
+                # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
+                # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
+                if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
+                    _sb_delete_all("kindle_highlights", "dedupe_hash")
+                    _sb_delete_all("kindle_book_map", "kindle_title")
+                if KINDLE_BOOK_MAP_FILE in names:
+                    save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
+                if KINDLE_HIGHLIGHTS_FILE in names:
+                    # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
+                    # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
+                    # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
+                    save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
+                if DELETED_KINDLE_FILE in names:
+                    save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
+                if GUNDAM_OVERRIDES_FILE in names:
+                    save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
+            st.cache_data.clear()
+            st.success("Khôi phục hệ thống thành công!")
+            time.sleep(1)
+            st.rerun()
+
+    @st.dialog("Xoá toàn bộ dữ liệu")
+    def _tb_wipe_dialog():
+        st.warning("Thao tác này **xoá vĩnh viễn** toàn bộ dữ liệu trên hệ thống, không thể hoàn tác.")
+        confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu", key="cb_wipe_confirm")
+        if st.button("Xoá toàn bộ dữ liệu", type="primary", disabled=not confirm_delete, key="tbtn_wipe_all"):
+            _sb_delete_all("sessions", "id")
+            _sb_delete_all("mapping", "project")
+            _sb_delete_all("deleted_sessions", "start_time")
+            _sb_delete_all("notes", "note_date")
+            _sb_delete_all("quick_notes", "id")
+            _sb_delete_all("work_calendar", "uid")
+            _sb_delete_all("reading_log", "uid")
+            _sb_delete_all("settings", "key")
+            _sb_delete_all("health_metrics", "id")
+            _sb_delete_all("kindle_highlights", "dedupe_hash")
+            _sb_delete_all("kindle_book_map", "kindle_title")
+            _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
+            _sb_delete_all("gundam_overrides", "session_date")
+            st.cache_data.clear()
+            st.success("Đã xoá toàn bộ dữ liệu!")
+            time.sleep(1)
+            st.rerun()
+
+    # 3 thẻ cao KHÔNG bằng nhau mặc định -- rule chung [data-testid="stHorizontalBlock"]
+    # { align-items: flex-start !important; } (nơi khác trong file) khiến mỗi cột co theo đúng
+    # chiều cao nội dung riêng. :has() chọn ĐÚNG hàng chứa 3 thẻ này (không cần bọc thêm
+    # st.container(key=...) ngoài, tránh phải thụt lề lại cả khối) rồi ép stretch + 3 thẻ
+    # height:100% để cao bằng nhau dù nhãn/nút dài ngắn khác nhau.
     st.markdown(
         "<style>"
-        ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"secondary\"],"
-        ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
-        "background-color:#ff3b30 !important;color:#fff !important;"
-        "border-color:#ff3b30 !important;box-shadow:none !important;}"
-        # 3 thẻ Sao lưu/Khôi phục/Làm mới cao KHÔNG bằng nhau mặc định -- rule chung
-        # [data-testid="stHorizontalBlock"] { align-items: flex-start !important; } (nơi khác trong
-        # file) khiến mỗi cột co theo đúng chiều cao nội dung riêng (Khôi phục có thêm khung tải
-        # file nên cao hơn hẳn). :has() chọn ĐÚNG hàng chứa 3 thẻ này (không cần bọc thêm
-        # st.container(key=...) ngoài, tránh phải thụt lề lại cả khối) rồi ép stretch + 3 thẻ
-        # height:100% để cao bằng nhau, khớp mockup.
         "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) "
         "{ align-items: stretch !important; }"
         ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card { height: 100%; }"
-        # st.file_uploader() luôn mang khung kéo-thả + dòng "200MB per file..." (chrome cố định
-        # của Streamlit, không đổi được nút thành 1 link "Chọn tệp" gọn như mockup) -- thu gọn hết
-        # mức có thể: ẩn dòng giới hạn dung lượng, giảm padding/bỏ min-height mặc định của khung,
-        # chỉ SCOPE riêng thẻ Khôi phục (không ảnh hưởng uploader CSV/Reminder/Kindle ở Dự phòng).
-        ".st-key-tb_restore_card [data-testid=\"stFileUploaderDropzoneInstructions\"] { display: none; }"
-        ".st-key-tb_restore_card [data-testid=\"stFileUploaderDropzone\"] { "
-        "min-height: auto !important; padding: 6px !important; }"
+        # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ, giờ nằm trong popup st.dialog()) dùng màu
+        # cảnh báo riêng (đỏ #ff3b30, cùng tông đỏ dùng cho delta âm/chỉ số bất thường trong app)
+        # thay vì màu nút thường -- tín hiệu thị giác phân biệt mức độ nguy hiểm. key vẫn giữ
+        # nguyên (tbtn_wipe_all/tbtn_restore_confirm) dù đổi chỗ vào dialog, CSS này không cần đổi.
+        ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"primary\"],"
+        ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
+        "background-color:#ff3b30 !important;color:#fff !important;"
+        "border-color:#ff3b30 !important;box-shadow:none !important;}"
         "</style>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     _today = _today_vn().strftime('%Y-%m-%d')
     with c1:
         with st.container(border=True, key="tb_backup_card"):
             st.subheader("Sao lưu")
-            # Nhắc sao lưu: chỉ hiện ngay tại đây (không phải banner toàn app) -- đúng nơi và
-            # lúc người dùng hành động được ngay. Chưa từng sao lưu, hoặc lần gần nhất quá 30
-            # ngày, thì nhắc nhẹ.
-            _last_bk = _cached_settings().get("last_backup_at")
-            _days_since_bk = (_today_vn() - date.fromisoformat(_last_bk)).days if _last_bk else None
-            if _days_since_bk is None:
-                st.caption("Chưa sao lưu lần nào.")
-            elif _days_since_bk > 30:
-                st.caption(f"Lần sao lưu gần nhất: {_days_since_bk} ngày trước. Nên sao lưu định kỳ.")
             db_now = load_db()
+            _buf = io.BytesIO()
             if not db_now.empty:
-                _buf = io.BytesIO()
                 with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
                     _settings_df = pd.DataFrame(list(load_settings().items()), columns=["key", "value"])
                     for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
@@ -8416,130 +8522,20 @@ elif nav == "Tuỳ biến":
                                           [{"Ngày": k, "Series": v} for k, v in load_gundam_overrides().items()]))]:
                         if not _df.empty:
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
-                st.download_button("Tải bản sao lưu", _buf.getvalue(),
-                                   f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
-                                   on_click=lambda: save_setting("last_backup_at", _today))
-            else:
-                st.caption("Chưa có dữ liệu để sao lưu.")
+            st.download_button("Tải bản sao lưu", _buf.getvalue(),
+                               f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
+                               disabled=db_now.empty, use_container_width=True,
+                               on_click=lambda: save_setting("last_backup_at", _today))
     with c2:
         with st.container(border=True, key="tb_restore_card"):
             st.subheader("Khôi phục")
-            res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
-            ok_zip = False
-            if res is not None:
-                try:
-                    res.seek(0)
-                    with zipfile.ZipFile(res) as _z:
-                        names = set(_z.namelist())
-                        parts = []
-                        if DB_FILE in names:
-                            _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
-                            _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
-                            _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
-                            parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
-                        if MAPPING_FILE in names:
-                            parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
-                        if DELETED_FILE in names:
-                            parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
-                        if NOTES_FILE in names:
-                            parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
-                        if QUICK_NOTES_FILE in names:
-                            parts.append(f"Ghi chú nhanh **{len(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE))))}** dòng")
-                        if WORK_CALENDAR_FILE in names:
-                            parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
-                        if READING_LOG_FILE in names:
-                            parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
-                        if SETTINGS_FILE in names:
-                            parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
-                        if HEALTH_METRICS_FILE in names:
-                            parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
-                        if KINDLE_HIGHLIGHTS_FILE in names:
-                            parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
-                        if DELETED_KINDLE_FILE in names:
-                            parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
-                        if GUNDAM_OVERRIDES_FILE in names:
-                            parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
-                    if parts:
-                        ok_zip = True
-                        st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
-                    else:
-                        st.caption("File .zip không chứa dữ liệu hợp lệ.")
-                except Exception:
-                    st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
-            confirm_restore = False
-            if ok_zip:
-                st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
-                # Cùng mức bảo vệ với "Làm mới" bên cạnh -- 2 thao tác phá huỷ dữ liệu ngang nhau
-                # (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch toàn bộ) nên cần checkbox xác nhận
-                # giống nhau, không để Khôi phục chỉ cần 1 cú bấm trong khi Làm mới cần 2 bước.
-                confirm_restore = st.checkbox("Tôi xác nhận muốn ghi đè toàn bộ dữ liệu hiện tại",
-                                               key="cb_restore_confirm")
-            if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
-                         key="tbtn_restore_confirm"):
-                res.seek(0)
-                with zipfile.ZipFile(res) as _z:
-                    names = set(_z.namelist())
-                    if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
-                    if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
-                    if DELETED_FILE in names:
-                        save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
-                    if NOTES_FILE in names:
-                        save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
-                    if QUICK_NOTES_FILE in names:
-                        save_quick_notes_bulk(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE)), dtype=str))
-                    if WORK_CALENDAR_FILE in names:
-                        save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
-                    if READING_LOG_FILE in names:
-                        save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
-                    if SETTINGS_FILE in names:
-                        save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
-                    if HEALTH_METRICS_FILE in names:
-                        # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
-                        # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
-                        save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
-                    # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
-                    # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
-                    # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
-                    if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
-                        _sb_delete_all("kindle_highlights", "dedupe_hash")
-                        _sb_delete_all("kindle_book_map", "kindle_title")
-                    if KINDLE_BOOK_MAP_FILE in names:
-                        save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
-                    if KINDLE_HIGHLIGHTS_FILE in names:
-                        # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
-                        # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
-                        # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
-                        save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
-                    if DELETED_KINDLE_FILE in names:
-                        save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
-                    if GUNDAM_OVERRIDES_FILE in names:
-                        save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
-                st.cache_data.clear()
-                st.success("Khôi phục hệ thống thành công!")
-                time.sleep(1)
-                st.rerun()
+            if st.button("Khôi phục", key="tbtn_restore_open", use_container_width=True):
+                _tb_restore_dialog()
     with c3:
         with st.container(border=True, key="tb_wipe_card"):
             st.subheader("Làm mới")
-            confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu")
-            if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete, key="tbtn_wipe_all"):
-                _sb_delete_all("sessions", "id")
-                _sb_delete_all("mapping", "project")
-                _sb_delete_all("deleted_sessions", "start_time")
-                _sb_delete_all("notes", "note_date")
-                _sb_delete_all("quick_notes", "id")
-                _sb_delete_all("work_calendar", "uid")
-                _sb_delete_all("reading_log", "uid")
-                _sb_delete_all("settings", "key")
-                _sb_delete_all("health_metrics", "id")
-                _sb_delete_all("kindle_highlights", "dedupe_hash")
-                _sb_delete_all("kindle_book_map", "kindle_title")
-                _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
-                _sb_delete_all("gundam_overrides", "session_date")
-                st.cache_data.clear()
-                st.success("Đã xoá toàn bộ dữ liệu!")
-                time.sleep(1)
-                st.rerun()
+            if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open", use_container_width=True):
+                _tb_wipe_dialog()
 
     if _auth_configured:
         st.divider()
