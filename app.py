@@ -3117,45 +3117,8 @@ def _render_reading_billboard(t, df_books, today):
         f"Tủ sách {today.year}", f"{len(done_year)}", "cuốn đã đọc xong",
         f"{len(reading_now)} đang đọc · {_fmt_hours_short(hrs_year)} đọc năm nay",
         _right,
-        [("sach-tq-ch1", "1 · Thống kê"), ("sach-tq-ch2", "2 · Tủ sách năm nay"),
-         ("sach-tq-ch3", "3 · Nhật ký đọc"), ("sach-tq-ch4", "4 · Trích dẫn & Ghi chú")])
-
-
-def _render_reading_bookshelf_table(t, today):
-    """Chương "Tủ sách năm nay" (Sách -> Tổng quan): sách ĐÃ XONG trong năm nay, tối đa 4 dòng +
-    dòng "+ N cuốn khác" trỏ sang tab Chi tiết (bảng đầy đủ mọi sách/mọi năm đã có sẵn ở đó, xem
-    _render_reading_detail() -- không lặp lại toàn bộ ở đây). KHÔNG có cột Đánh giá (sao) -- xác
-    nhận với người dùng giữ nguyên quyết định bỏ tính năng đánh giá sao."""
-    kh_all = load_kindle_highlights()
-    done_year = t[(t['Trạng thái'] == 'Đã xong') & (pd.to_datetime(t['Gần nhất']).dt.year == today.year)]
-    if done_year.empty:
-        st.caption(f"Chưa có cuốn nào đọc xong trong năm {today.year}.")
-        return
-    done_sorted = done_year.sort_values('Gần nhất', ascending=False)
-    shown = done_sorted.head(4)
-    rows_html = ''
-    for _, r in shown.iterrows():
-        book = str(r['Cuốn sách'])
-        author = _reading_author_of(kh_all, book)
-        n_quotes = len(kh_all[(kh_all['Cuốn sách'] == book) & (kh_all['Loại'] == 'highlight')]) if not kh_all.empty else 0
-        book_html = f"<b>{html_escape(book)}</b>"
-        if author:
-            book_html += f" <span style='color:var(--text-2);'>· {html_escape(str(author))}</span>"
-        hrs = _fmt_hours_short(r['Tổng giờ']) if pd.notna(r['Tổng giờ']) else '—'
-        rows_html += ('<tr class="prow">'
-                      f'<td class="lbl">{book_html}</td>'
-                      f'<td>{pd.Timestamp(r["Gần nhất"]):%m/%Y}</td>'
-                      f'<td>{hrs}</td>'
-                      f'<td>{n_quotes}</td></tr>')
-    st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Sách</th><th>Xong</th><th>Giờ đọc</th><th>Trích dẫn</th></tr></thead>
-<tbody>{rows_html}</tbody>
-</table></div>
-""", unsafe_allow_html=True)
-    remaining = len(done_sorted) - len(shown)
-    if remaining > 0:
-        st.caption(f"+ {remaining} cuốn khác · xem tab **Chi tiết**")
+        [("sach-tq-ch1", "1 · Thống kê"), ("sach-tq-ch2", "2 · Nhật ký đọc"),
+         ("sach-tq-ch3", "3 · Trích dẫn & Ghi chú"), ("sach-tq-ch4", "4 · Bảng số liệu")])
 
 
 def _render_reading_quotes_teaser(n=3):
@@ -3189,13 +3152,16 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
     bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
     (đã flat sẵn từ trước).
 
-    page_name == "Sách": thêm billboard (_render_reading_billboard) + 3 chương mới (Tủ sách năm
-    nay/Nhật ký đọc/Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) -- 3 thẻ hero/nhóm
-    chip cũ GIỮ NGUYÊN, dồn thành chương "1. Thống kê" đứng NGAY DƯỚI billboard (theo yêu cầu thứ
-    tự: Thống kê -> Tủ sách năm nay -> Nhật ký đọc -> Trích dẫn & Ghi chú), tách vào closure
-    _render_stats_block() để dùng lại được CẢ CHO GUNDAM (không đổi vị trí, không billboard/chương
-    -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ)."""
-    def _render_stats_block():
+    page_name == "Sách": thêm billboard (_render_reading_billboard) + chương mới (Nhật ký đọc/
+    Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) -- 3 thẻ hero/nhóm chip cũ GIỮ
+    NGUYÊN thành chương "1. Thống kê" đứng NGAY DƯỚI billboard, bảng chi tiết cũ TÁCH RIÊNG thành
+    chương cuối "4. Bảng số liệu" kèm cột "Trích dẫn" mới (theo thứ tự: Thống kê -> Nhật ký đọc ->
+    Trích dẫn & Ghi chú -> Bảng số liệu). Đã BỎ chương "Tủ sách năm nay" (mockup ban đầu có, người
+    dùng xem lại thấy trùng lặp thông tin theo-đầu-sách với Bảng số liệu -- dồn cột "Trích dẫn"
+    của nó sang bảng chi tiết cho gọn, xem show_quotes=True). Tách vào 2 closure
+    _render_stats_cards()/_render_stats_table() để dùng lại được CẢ CHO GUNDAM (gọi liền nhau,
+    không billboard/chương -- chưa có mockup riêng để đối chiếu, giữ nguyên layout phẳng cũ)."""
+    def _render_stats_cards():
         # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
         render_stat_panel(
             hero_items=[
@@ -3240,13 +3206,18 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
 
         render_session_bar(df_books)
 
-        # Bảng số liệu: dùng cùng style (DTBL) với mục 5 "Bảng số liệu". Cột thuộc nguồn Forest
+    def _render_stats_table(show_quotes=False):
+        # Bảng số liệu: dùng cùng style (DTBL) với mục cuối "Bảng số liệu". Cột thuộc nguồn Forest
         # (Số ngày/Ngày đọc/Tổng giờ/Số phiên/Giờ tuần) hoặc nguồn Reminders (Số phần đã đọc/Phần
         # gần nhất) có thể NaN nếu sách đó chỉ có 1 trong 2 nguồn -- hiện '—' thay vì để lọt "nan"
         # ra HTML (đặc biệt _heat_cell KHÔNG tự bắt được NaN, phải bọc rõ ràng trước khi gọi).
+        # show_quotes=True (chỉ Sách -- Gundam không có khái niệm trích dẫn) -- thêm cột "Trích
+        # dẫn" (số highlight Kindle đã lưu cho đúng cuốn đó) thay cho chương "Tủ sách năm nay" đã
+        # bỏ (người dùng thấy 2 nơi cùng liệt kê theo đầu sách là dư, gộp lại đây cho gọn).
         def _c(v, fmt='{:.0f}'):
             return fmt.format(v) if pd.notna(v) else '—'
 
+        kh_all = load_kindle_highlights() if show_quotes else None
         vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
         rows_html = ''
         for _, r in t.iterrows():
@@ -3262,26 +3233,30 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
             rows_html += f'<td>{_c(r["Số phần đã đọc"])}</td>'
             _pn = html_escape(str(r["Phần gần nhất"])) if pd.notna(r["Phần gần nhất"]) else '—'
             rows_html += f'<td class="txt">{_pn}</td>'
+            if show_quotes:
+                _nq = (len(kh_all[(kh_all['Cuốn sách'] == r['Cuốn sách']) & (kh_all['Loại'] == 'highlight')])
+                       if not kh_all.empty else 0)
+                rows_html += f'<td>{_nq}</td>'
             rows_html += f'<td class="txt" style="color:{s_col};font-weight:600;">{r["Trạng thái"]}</td>'
             rows_html += '</tr>'
+        _quote_th = '<th>Trích dẫn</th>' if show_quotes else ''
         st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap" style="margin-top:14px;">
 <table class="dtbl">
-<thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th><th class="txt">Trạng thái</th></tr></thead>
+<thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th>{_quote_th}<th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
 
     if page_name != "Sách":
-        _render_stats_block()
+        _render_stats_cards()
+        _render_stats_table()
         return
 
     _render_reading_billboard(t, df_books, _today)
     sec_chapter("sach-tq-ch1", 1, None, "Thống kê", tight_top=True)
-    _render_stats_block()
-    sec_chapter("sach-tq-ch2", 2, None, "Tủ sách năm nay")
-    _render_reading_bookshelf_table(t, _today)
-    sec_chapter("sach-tq-ch3", 3, None, "Nhật ký đọc")
+    _render_stats_cards()
+    sec_chapter("sach-tq-ch2", 2, None, "Nhật ký đọc")
     _rl_recent = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
                   if not reading_log_df.empty else reading_log_df)
     with st.container(border=True, key="jcard_sach_journal"):
@@ -3290,8 +3265,10 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
         else:
             st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
                         unsafe_allow_html=True)
-    sec_chapter("sach-tq-ch4", 4, None, "Trích dẫn &amp; Ghi chú")
+    sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
     _render_reading_quotes_teaser()
+    sec_chapter("sach-tq-ch4", 4, None, "Bảng số liệu")
+    _render_stats_table(show_quotes=True)
 
 
 _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn Kindle KHÔNG gắn Dự án (vd tạp chí)
