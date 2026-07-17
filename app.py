@@ -181,8 +181,7 @@ READING_LABELS = dict(
     item_col="Cuốn sách", count_label="Số cuốn", days_label="Ngày đọc",
     parts_label="Số phần đã đọc", part_recent_label="Phần gần nhất", part_word="phần",
     verb="đọc", ongoing="Đang đọc", empty_msg="Chưa có dữ liệu sách trong nhóm này.",
-    timeslot_label="Khung giờ đọc",
-    timeslot_best="Hay đọc nhất", streak_label="Chuỗi đọc", pace_days_label="Số ngày đọc",
+    streak_label="Chuỗi đọc", pace_days_label="Số ngày đọc",
     pace_pct_label="% ngày có đọc", avg_hr_label="TB giờ/cuốn", avg_days_label="TB ngày/cuốn",
     fastest_label="Đọc nhanh nhất",
 )
@@ -190,8 +189,7 @@ GUNDAM_LABELS = dict(
     READING_LABELS, item_col="Series", count_label="Số series", days_label="Ngày xem",
     parts_label="Số tập đã xem", part_recent_label="Tập gần nhất", part_word="tập",
     verb="xem", ongoing="Đang xem", empty_msg="Chưa có dữ liệu Gundam trong nhóm này.",
-    timeslot_label="Khung giờ xem",
-    timeslot_best="Hay xem nhất", streak_label="Chuỗi xem", pace_days_label="Số ngày xem",
+    streak_label="Chuỗi xem", pace_days_label="Số ngày xem",
     pace_pct_label="% ngày có xem", avg_hr_label="TB giờ/series", avg_days_label="TB ngày/series",
     fastest_label="Xem nhanh nhất",
 )
@@ -2958,15 +2956,6 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     _today = _today_vn()
     s_read = _streak_stats(df_books)
 
-    def _period_chips(scope):
-        _h = scope['Thời lượng (Phút)'].sum() / 60
-        _nd = scope['Ngày'].nunique()
-        return [
-            {"k": labels['count_label'], "v": f"{scope['Dự án'].nunique()}"},
-            {"k": "Số giờ", "v": f"{_fmt_hours_short(_h)}"},
-            {"k": "TB giờ/ngày", "v": f"{_fmt_hours_short(_h / _nd)}" if _nd else "—"},
-        ]
-
     def _pace(d):
         """Nhịp đọc gần đây: chia cho số ngày CÓ đọc trong cửa sổ d ngày (không phải d),
         khớp cách tính '7 ngày gần đây' ở bảng tổng quan chính -> không bị pha loãng bởi
@@ -2978,12 +2967,6 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     # df_books rỗng (sách chỉ theo dõi qua Reminders, chưa từng tải CSV Forest) -> NaT arithmetic
     # sẽ lỗi, phải chặn trước (chip "% ngày có đọc" bên dưới đã tự xử "if _span else '—'").
     _span = 0 if df_books.empty else (pd.Timestamp(df_books['Ngày'].max()) - pd.Timestamp(df_books['Ngày'].min())).days + 1
-
-    _hr = _explode_session_hours(df_books, 'Dự án').groupby('Khung giờ')['giờ'].sum()
-    _sec_timeslot = {"label": labels['timeslot_label'], "chips": [
-        {"k": labels['timeslot_best'], "v": f"{int(_hr.idxmax())}h"},
-        {"k": "Buổi mạnh nhất", "v": f"{_hr.groupby(_buoi_of).sum().idxmax()}"},
-    ]} if (len(_hr) and _hr.sum() > 0) else {"label": "", "chips": []}
 
     # Nhóm 1 · Tổng kết: thống kê theo đầu cuốn. done['Tổng giờ']/['Số ngày'] có thể TOÀN NaN
     # (mọi sách "Đã xong" trong kỳ đều chỉ theo dõi qua Reminders, không có phiên Forest nào)
@@ -3036,8 +3019,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     _page_name = "Sách" if show_favorites else "Gundam"
 
     with _tab_overview:
-        _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                                  _sec_timeslot, _today, labels, _page_name, reading_log_df)
+        _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
+                                  _today, labels, _page_name, reading_log_df)
         if extra_overview is not None:
             extra_overview()
 
@@ -3146,14 +3129,16 @@ def _render_reading_quotes_teaser(n=3):
     st.markdown(f"<div class='quotes-card'>{rows_html}</div>", unsafe_allow_html=True)
 
 
-def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _period_chips,
-                              _sec_timeslot, _today, labels, page_name, reading_log_df):
-    """Sub-tab "Tổng quan" của render_reading_log(): 3 thẻ hero/nhóm chip + thanh phân bổ +
+def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
+                              _today, labels, page_name, reading_log_df):
+    """Sub-tab "Tổng quan" của render_reading_log(): 2 thẻ hero/nhóm chip + thanh phân bổ +
     bảng "Chi tiết từng cuốn" tổng hợp toàn bộ đầu cuốn/series. Không có expander nào ở đây
-    (đã flat sẵn từ trước).
+    (đã flat sẵn từ trước). Đã bỏ hẳn thẻ "Kỳ này" (Tháng này/Tuần này/Khung giờ đọc) -- xác nhận
+    với người dùng không cần thiết, cũng bỏ luôn _period_chips()/_sec_timeslot() ở render_reading_log
+    (chỉ dùng riêng cho thẻ đó, không còn nơi gọi nào khác).
 
     page_name == "Sách": thêm billboard (_render_reading_billboard) + chương mới (Nhật ký đọc/
-    Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) -- 3 thẻ hero/nhóm chip cũ GIỮ
+    Trích dẫn & Ghi chú, theo mockup Forest Dashboard.dc.html) -- 2 thẻ hero/nhóm chip cũ GIỮ
     NGUYÊN thành chương "1. Thống kê" đứng NGAY DƯỚI billboard, bảng chi tiết cũ TÁCH RIÊNG thành
     chương cuối "4. Bảng số liệu" kèm cột "Trích dẫn" mới (theo thứ tự: Thống kê -> Nhật ký đọc ->
     Trích dẫn & Ghi chú -> Bảng số liệu). Đã BỎ chương "Tủ sách năm nay" (mockup ban đầu có, người
@@ -3189,17 +3174,6 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace, _p
                     {"k": "7 ngày", "v": f"{_fmt_hours_short(_pace(7))}/ngày"},
                     {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
                 ]},
-            ],
-            card_style="padding:18px;margin-top:14px;",
-        )
-
-        # Thẻ 3: Kỳ này — thẻ độc lập
-        render_stat_panel(
-            hero_items=[],
-            sections=[
-                {"label": "Tháng này", "chips": _period_chips(df_books[df_books['Tháng'] == _today.strftime('%Y-%m')])},
-                {"label": "Tuần này", "chips": _period_chips(df_books[df_books['Tuần'] == _today.strftime('%G-W%V')])},
-                _sec_timeslot,
             ],
             card_style="padding:18px;margin-top:14px;",
         )
