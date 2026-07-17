@@ -2881,7 +2881,15 @@ def _render_kindle_favorites_tab():
     duyệt lại mọi trích dẫn/ghi chú Kindle đã đánh dấu ⭐, gộp theo cuốn sách. Đây thuần là 1 cách
     LỌC khác của cùng bảng kindle_highlights (Yêu thích == True), không phải dữ liệu riêng -- tái
     dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh dấu được
-    thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó."""
+    thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
+
+    Thêm 3 bộ lọc/sắp xếp (theo mockup): ô tìm theo nội dung trích dẫn, sắp xếp Mới lưu nhất/Cũ
+    nhất (theo "Ngày thêm" -- mốc lưu vào Yêu thích, DÙNG CHUNG với show_added_date ở
+    _render_kindle_quote_row(), KHÔNG phải "Vị trí" Kindle như "2. Nhật ký đọc"), và chip lọc theo
+    cuốn sách (st.segmented_control, đếm số trích dẫn không đổi theo ô tìm để nhãn chip ổn định
+    giữa các lần rerun). Sách nhiều hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng thứ tự sắp xếp
+    đang chọn), có nút "Hiện thêm" mở hết -- trạng thái mở lưu ở session_state, KHÔNG reset khi đổi
+    tìm/sắp xếp/lọc để tránh giật khi người dùng đang duyệt."""
     kh = load_kindle_highlights()
     favs = kh[kh['Yêu thích']] if not kh.empty else kh
     if favs.empty:
@@ -2889,10 +2897,56 @@ def _render_kindle_favorites_tab():
                 "\"2. Nhật ký đọc\" (tab Chi tiết) hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
                 "nay để lưu lại đây, thỉnh thoảng mở ra đọc lại cho vui.")
         return
-    for book, grp in favs.groupby('Cuốn sách'):
-        st.markdown(f"<span class='rl-book'>{html_escape(str(book))}</span>", unsafe_allow_html=True)
-        for _, r in grp.sort_values('Vị trí', key=lambda s: s.map(_kindle_location_sort_key)).iterrows():
-            _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_")
+
+    fcol1, fcol2 = st.columns([2, 1])
+    with fcol1:
+        search = st.text_input("Tìm trong trích dẫn đã lưu", key="fav_search",
+                                placeholder="Tìm theo nội dung trích dẫn...")
+    with fcol2:
+        sort_label = st.selectbox("Sắp xếp", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
+
+    book_counts = favs.groupby('Cuốn sách').size()
+    chip_opts = [f"Tất cả · {len(favs)}"] + [f"{b} · {n}" for b, n in book_counts.items()]
+    chip_pick = st.segmented_control("Lọc theo sách", chip_opts, default=chip_opts[0],
+                                      key="fav_book_filter", label_visibility="collapsed")
+
+    view = favs
+    if search.strip():
+        view = view[view['Nội dung'].str.contains(search.strip(), case=False, na=False)]
+    if chip_pick and not chip_pick.startswith("Tất cả · "):
+        view = view[view['Cuốn sách'] == chip_pick.rsplit(" · ", 1)[0]]
+    if view.empty:
+        st.info("Không có trích dẫn nào khớp bộ lọc hiện tại.")
+        return
+
+    ascending = (sort_label == "Cũ nhất")
+    book_order = (view.groupby('Cuốn sách')['Ngày thêm'].agg('min' if ascending else 'max')
+                  .sort_values(ascending=ascending, kind='stable').index.tolist())
+
+    show_more_key = "fav_show_all_books"
+    show_all = st.session_state.get(show_more_key, False)
+    visible_books = book_order if show_all else book_order[:3]
+    hidden_books = [] if show_all else book_order[3:]
+
+    for i, book in enumerate(visible_books):
+        grp = view[view['Cuốn sách'] == book]
+        author = _reading_author_of(kh, book)
+        _mt = "0" if i == 0 else "26px"
+        st.markdown(
+            f"<div class='fav-book-head' style='margin-top:{_mt}'>"
+            f"<div class='fav-book-titles'><span class='pbill-booktitle'>{html_escape(str(book))}</span>"
+            + (f"<span class='pbill-author'>{html_escape(str(author))}</span>" if author else "")
+            + f"</div><span class='fav-count-badge'>{len(grp)}</span></div>",
+            unsafe_allow_html=True)
+        for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
+            _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+
+    if hidden_books:
+        hidden_n = sum(len(view[view['Cuốn sách'] == b]) for b in hidden_books)
+        if st.button(f"Hiện thêm {len(hidden_books)} cuốn · {hidden_n} trích dẫn",
+                      key="fav_show_more_btn"):
+            st.session_state[show_more_key] = True
+            st.rerun()
 
 
 def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS,
@@ -6243,6 +6297,15 @@ st.markdown(
         margin-top: 4px; }
     .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
+    /* Tiêu đề mỗi cuốn sách trong sub-tab "Yêu thích" (_render_kindle_favorites_tab()) -- tái
+       dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ đứt ngăn cách + badge
+       đếm số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
+       không phải nội dung tuần tự theo chương). */
+    .fav-book-head { display: flex; align-items: baseline; justify-content: space-between;
+        gap: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; margin-bottom: 14px; }
+    .fav-book-titles { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .fav-count-badge { font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--chip);
+        border-radius: 20px; padding: 3px 10px; white-space: nowrap; }
     /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
        card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
        (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
