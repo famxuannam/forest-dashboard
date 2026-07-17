@@ -8497,12 +8497,25 @@ elif nav == "Tuỳ biến":
         ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
         "background-color:#ff3b30 !important;color:#fff !important;"
         "border-color:#ff3b30 !important;box-shadow:none !important;}"
+        # Nút 3 thẻ Sao lưu/Khôi phục/Làm mới: nhỏ gọn, KHÔNG full-width (khớp mockup -- nút chỉ
+        # rộng vừa chữ, neo trái dưới nhãn+help text, không kéo hết bề ngang thẻ).
+        ".st-key-tb_backup_card div[data-testid=\"stButton\"] button,"
+        ".st-key-tb_restore_card div[data-testid=\"stButton\"] button,"
+        ".st-key-tb_wipe_card div[data-testid=\"stButton\"] button {"
+        "padding:5px 14px !important;font-size:13px !important;border-radius:7px !important;"
+        "font-weight:500 !important;min-height:auto !important;}"
         "</style>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     _today = _today_vn().strftime('%Y-%m-%d')
+    _sysrow_label_css = "font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;"
+    _sysrow_help_css = "font-size:13px;color:var(--text-2);margin-bottom:10px;"
     with c1:
         with st.container(border=True, key="tb_backup_card"):
-            st.subheader("Sao lưu")
+            _last_bk = _cached_settings().get("last_backup_at")
+            _bk_help = (f"Lần gần nhất: {pd.Timestamp(_last_bk):%d/%m/%Y}" if _last_bk
+                        else "Chưa sao lưu lần nào.")
+            st.markdown(f"<div style='{_sysrow_label_css}'>Sao lưu</div>"
+                        f"<div style='{_sysrow_help_css}'>{_bk_help}</div>", unsafe_allow_html=True)
             db_now = load_db()
             _buf = io.BytesIO()
             if not db_now.empty:
@@ -8524,17 +8537,21 @@ elif nav == "Tuỳ biến":
                             _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
             st.download_button("Tải bản sao lưu", _buf.getvalue(),
                                f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
-                               disabled=db_now.empty, use_container_width=True,
+                               disabled=db_now.empty,
                                on_click=lambda: save_setting("last_backup_at", _today))
     with c2:
         with st.container(border=True, key="tb_restore_card"):
-            st.subheader("Khôi phục")
-            if st.button("Khôi phục", key="tbtn_restore_open", use_container_width=True):
+            st.markdown(f"<div style='{_sysrow_label_css}'>Khôi phục</div>"
+                        f"<div style='{_sysrow_help_css}'>Tải lên bản sao lưu (.zip)</div>",
+                        unsafe_allow_html=True)
+            if st.button("Khôi phục", key="tbtn_restore_open"):
                 _tb_restore_dialog()
     with c3:
         with st.container(border=True, key="tb_wipe_card"):
-            st.subheader("Làm mới")
-            if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open", use_container_width=True):
+            st.markdown(f"<div style='{_sysrow_label_css}'>Làm mới</div>"
+                        f"<div style='{_sysrow_help_css}'>Xoá toàn bộ dữ liệu — cần xác nhận</div>",
+                        unsafe_allow_html=True)
+            if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open"):
                 _tb_wipe_dialog()
 
     if _auth_configured:
