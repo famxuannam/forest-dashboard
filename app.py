@@ -5391,6 +5391,51 @@ def frag_period_table(scope_df, key):
     render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
 
 
+def render_project_week_trend(df_g, n_weeks=12):
+    """Chương "Xu hướng theo tuần" (Báo cáo -> Dự án, mockup): N tuần gần nhất (mặc định 12) của
+    dự án/nhóm đang xem, mỗi cột = tổng giờ đúng tuần đó -- tô đậm riêng cột tuần kỷ lục (nhiều
+    giờ nhất trong dải N tuần), còn lại đồng 1 màu teal trung bình. Khác thang gradient nhiều bậc
+    của "Theo tháng" (Báo cáo -> Năm, xem render_year_month_bars) vì ở đây chỉ cần nổi bật ĐÚNG 1
+    tuần nổi bật nhất, không cần phân bậc cả dải."""
+    if df_g.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    wk_hrs = df_g.groupby('Tuần')['Thời lượng (Phút)'].sum() / 60
+    recent_weeks = sorted(wk_hrs.index)[-n_weeks:]
+    vals = wk_hrs.reindex(recent_weeks, fill_value=0.0)
+    best_week = vals.idxmax() if len(vals) else None
+    _light, _mid, _dark = _teal_shades(3)
+    colors = [_dark if w == best_week else _mid for w in recent_weeks]
+    labels = [f"T{w.split('-W')[1]}" for w in recent_weeks]
+    fig = go.Figure(go.Bar(x=labels, y=list(vals), marker_color=colors))
+    fig = format_plotly_fig(fig)
+    fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+
+
+def render_project_recent_sessions(df_g, n=5):
+    """Chương "Phiên gần đây" (Báo cáo -> Dự án, mockup): N phiên GẦN NHẤT (mặc định 5) của dự
+    án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi (buổi tra qua _buoi_of() dùng chung với
+    biểu đồ khung giờ) -- khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng)
+    vì đây là danh sách PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở
+    "Biểu đồ lịch" hay đổi bộ lọc kỳ."""
+    if df_g.empty:
+        st.caption("Chưa có phiên nào.")
+        return
+    recent = df_g.sort_values('Thời gian bắt đầu', ascending=False, kind='stable').head(n)
+    rows_html = ""
+    for _, r in recent.iterrows():
+        ts = pd.Timestamp(r['Thời gian bắt đầu'])
+        rows_html += (f"<tr><td class='txt lbl'>{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}</td>"
+                      f"<td>{ts:%H:%M}</td><td>{int(r['Thời lượng (Phút)'])}′</td>"
+                      f"<td>{_buoi_of(ts.hour)}</td></tr>")
+    st.markdown(
+        DTBL_CSS + "<div class='dtbl-wrap'><table class='dtbl'><thead><tr>"
+        "<th class='txt lbl'>Ngày</th><th>Bắt đầu</th><th>Độ dài</th><th>Buổi</th>"
+        f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
+        unsafe_allow_html=True)
+
+
 # --- LOGO: mark "nhịp phiên" (session-rhythm bars) phẳng + wordmark, hệ thiết kế "Sổ Tay" (xem
 # design handoff) -- thay bản v2 skeuomorphic (khối bo tròn kiểu iOS 6 phủ gradient/gloss + 3
 # vòng tuổi cây khắc chìm): mark mới là 1 khối vuông bo góc TÔ ĐẶC 1 màu ACCENT (không gradient,
@@ -5827,6 +5872,13 @@ st.markdown(
        nguyên class chip/ck/cv/tw của .stat-panel (giá trị CSS giống hệt mockup), chỉ đổi phạm vi
        scope sang .pbill-chips vì billboard không phải .stat-panel. */
     .pbill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    /* Badge trạng thái "Đang hoạt động"/"Không hoạt động" cạnh tên Dự án/Nhóm ở billboard Báo
+       cáo -> Dự án (mockup) -- đặt cạnh .pbill-booktitle nên dùng vertical-align để canh giữa
+       theo dòng chữ 26px, không lệch lên/xuống. */
+    .pbill-status { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 3px 10px;
+        border-radius: 20px; margin-left: 10px; vertical-align: middle; }
+    .pbill-status.active { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); }
+    .pbill-status.inactive { background: var(--chip); color: var(--text-3); }
     .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
     .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
     .stat-panel > .sp-glabel:first-child { margin-top: 0; }
@@ -7911,24 +7963,71 @@ elif nav == "Báo cáo":
                     _rl_all = load_reading_log()
                     _rl_book = _rl_all[_rl_all['Cuốn sách'] == sel_grp] if not _rl_all.empty else _rl_all
 
-                _hero_chips_g = [("bc-duan-ch1", "1 · Tổng quan")]
-                if not _rl_book.empty:
-                    _hero_chips_g.append(("bc-duan-chrl", "Nhật ký đọc"))
-                _hero_chips_g += [("bc-duan-ch2", "2 · Biểu đồ lịch"),
-                                  ("bc-duan-ch3", "3 · Xu hướng theo thời gian"),
-                                  ("bc-duan-ch4", "4 · Phân bố độ dài phiên"),
-                                  ("bc-duan-ch5", "5 · Bảng số liệu")]
-                sec_hero(None, "Đi sâu vào 1 việc cụ thể", None, _hero_chips_g)
-
-                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
+                # Billboard số to + hồ sơ (mockup) -- KHÁC billboard Tuần/Tháng/Năm (câu nhận
+                # định động về 1 KỲ thời gian): đây là hồ sơ 1 THỰC THỂ (Dự án/Nhóm) nên cột phải
+                # theo đúng khuôn Sách/Gundam (.pbill-kicker/.pbill-booktitle + .pbill-chips),
+                # không phải câu văn tự tính. Các chip ở đây (TB/tuần gần đây, phiên gần nhất,
+                # tuần kỷ lục) là thông tin ĐỊNH DANH nhẹ, không lặp lại panel "Tổng quan" chi
+                # tiết hơn giữ nguyên bên dưới (deltas/chuỗi/theo thứ/mốc thời gian) nên KHÔNG cần
+                # bớt gì như đã làm ở Tuần/Tháng/Năm.
                 curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
                 curr_trees_g = len(df_g)
                 num_days_g = df_g['Ngày'].nunique() or 1
                 num_weeks_g = df_g['Tuần'].nunique() or 1
 
-                first_day = pd.Timestamp(df_g['Ngày'].min()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].min()) else "—"
-                last_day = pd.Timestamp(df_g['Ngày'].max()).strftime('%d/%m/%Y') if pd.notna(df_g['Ngày'].max()) else "—"
+                _first_day_ts = pd.Timestamp(df_g['Ngày'].min()) if pd.notna(df_g['Ngày'].min()) else None
+                _last_day_ts = pd.Timestamp(df_g['Ngày'].max()) if pd.notna(df_g['Ngày'].max()) else None
+                first_day = _first_day_ts.strftime('%d/%m/%Y') if _first_day_ts is not None else "—"
+                last_day = _last_day_ts.strftime('%d/%m/%Y') if _last_day_ts is not None else "—"
 
+                # Ngưỡng 14 ngày -- khớp recency_days=14 mặc định của render_reading_log()
+                # ("Đang đọc"/"Đã xong"), đồng bộ ngữ nghĩa "hoạt động gần đây" xuyên app.
+                _is_active_g = _last_day_ts is not None and (_today_vn() - _last_day_ts.date()).days <= 14
+                _status_html_g = (f"<span class='pbill-status {'active' if _is_active_g else 'inactive'}'>"
+                                   f"{'Đang hoạt động' if _is_active_g else 'Không hoạt động'}</span>")
+
+                _last_sess_g = df_g.sort_values('Thời gian bắt đầu', kind='stable').iloc[-1] if not df_g.empty else None
+                _recent28_g = df_g[pd.to_datetime(df_g['Ngày']) >= pd.Timestamp(_today_vn() - timedelta(days=27))]
+                _tb_4w_hrs_g = _recent28_g['Thời lượng (Phút)'].sum() / 60 / 4
+                _wk_hrs_g = df_g.groupby('Tuần')['Thời lượng (Phút)'].sum()
+
+                _chips_g_bb = []
+                if _kind == "proj":
+                    _cat_of_proj = proj_to_cat.get(sel_grp)
+                    if pd.notna(_cat_of_proj):
+                        _chips_g_bb.append({"k": "Danh mục", "v": html_escape(str(_cat_of_proj))})
+                else:
+                    _chips_g_bb.append({"k": "Số dự án", "v": f"{df_g['Dự án'].nunique()}"})
+                _chips_g_bb.append({"k": "TB / tuần (4 tuần)", "v": _fmt_hours_short(_tb_4w_hrs_g)})
+                if _last_sess_g is not None:
+                    _last_ts_g = pd.Timestamp(_last_sess_g['Thời gian bắt đầu'])
+                    _chips_g_bb.append({"k": "Phiên gần nhất",
+                                         "v": f"{_rel_day_label(_last_ts_g.normalize(), _today_vn())} · "
+                                              f"{int(_last_sess_g['Thời lượng (Phút)'])}′"})
+                if len(_wk_hrs_g):
+                    _best_wk_key_g = _wk_hrs_g.idxmax()
+                    _chips_g_bb.append({"k": "🏆 Tuần kỷ lục",
+                                         "v": f"T{_best_wk_key_g.split('-W')[1]} · "
+                                              f"{_fmt_hours_short(_wk_hrs_g.max()/60)}"})
+                _chips_html_g = ''.join(
+                    f"<span class='chip'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span></span>"
+                    for c in _chips_g_bb)
+                _right_html_g = (f"<div class='pbill-kicker'>{'DỰ ÁN' if _kind == 'proj' else 'NHÓM'}</div>"
+                                  f"<div class='pbill-booktitle'>{html_escape(str(sel_grp))}{_status_html_g}</div>"
+                                  f"<div class='pbill-chips'>{_chips_html_g}</div>")
+
+                render_period_billboard(
+                    "Hồ sơ dự án", _fmt_hours_short(curr_hrs_g), "tổng thời gian đã trồng",
+                    (f"{curr_trees_g} phiên · bắt đầu {_first_day_ts:%m/%Y}" if _first_day_ts is not None
+                     else f"{curr_trees_g} phiên"),
+                    _right_html_g,
+                    [("bc-duan-ch1", "1 · Tổng quan")]
+                    + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
+                    + [("bc-duan-ch2", "2 · Xu hướng theo tuần"), ("bc-duan-ch3", "3 · Phiên gần đây"),
+                       ("bc-duan-ch4", "4 · Biểu đồ lịch"), ("bc-duan-ch5", "5 · Xu hướng theo thời gian"),
+                       ("bc-duan-ch6", "6 · Phân bố độ dài phiên"), ("bc-duan-ch7", "7 · Bảng số liệu")])
+
+                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 s_g = _streak_stats(df_g)
                 wd_g = _weekday_avg(df_g)
 
@@ -7995,13 +8094,17 @@ elif nav == "Báo cáo":
                         st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
                                     unsafe_allow_html=True)
 
-                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
+                sec_chapter("bc-duan-ch2", 2, "12 tuần gần nhất", "Xu hướng theo tuần")
+                render_project_week_trend(df_g)
+                sec_chapter("bc-duan-ch3", 3, None, "Phiên gần đây")
+                render_project_recent_sessions(df_g)
+                sec_chapter("bc-duan-ch4", 4, None, "Biểu đồ lịch")
                 frag_calendar(df_g, "range_grp_cal")
-                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng theo thời gian")
+                sec_chapter("bc-duan-ch5", 5, None, "Xu hướng theo thời gian")
                 frag_trend(df_g, "trend_grp", "Dự án")
-                sec_chapter("bc-duan-ch4", 4, None, "Phân bố độ dài phiên")
+                sec_chapter("bc-duan-ch6", 6, None, "Phân bố độ dài phiên")
                 render_session_histogram(df_g)
-                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch7", 7, None, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
