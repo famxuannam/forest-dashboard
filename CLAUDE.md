@@ -91,3 +91,65 @@ xác nhận với người dùng:
   kiểm thử không cần mạng thật.
 - [`.claude/docs/git-workflow.md`](.claude/docs/git-workflow.md) — nhánh làm việc theo phiên, quy
   trình PR squash-merge, cách làm sạch nhánh sau mỗi lần merge.
+
+## 7. Karpathy Skills — nguyên tắc hành vi khi code
+
+Nguồn: [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). Bổ sung
+cho mục 5 (không thay thế) — thiên về cẩn trọng hơn tốc độ; với việc nhỏ/hiển nhiên thì dùng
+judgement, không cần áp cứng nhắc.
+
+### 7.1 Think Before Coding
+
+Đừng giả định. Đừng giấu chỗ chưa rõ. Nêu rõ trade-off.
+
+- Nói rõ giả định đang đặt ra trước khi code. Nếu không chắc, hỏi lại.
+- Nếu có nhiều cách hiểu yêu cầu, trình bày cả các cách hiểu đó — không tự chọn 1 rồi im lặng làm.
+- Nếu có cách đơn giản hơn, nói ra. Phản biện lại yêu cầu khi thấy cần.
+- Nếu có điểm chưa rõ, dừng lại, nêu đúng chỗ đang vướng, rồi hỏi.
+
+### 7.2 Simplicity First
+
+Viết lượng code tối thiểu đủ giải quyết vấn đề. Không viết gì mang tính suy đoán trước.
+
+- Không thêm tính năng ngoài yêu cầu.
+- Không tạo abstraction cho code chỉ dùng 1 lần.
+- Không thêm "linh hoạt"/"tuỳ biến" nếu không ai yêu cầu.
+- Không xử lý lỗi cho tình huống không thể xảy ra.
+- Nếu viết 200 dòng mà có thể rút về 50, viết lại.
+
+Tự hỏi: "1 kỹ sư senior nhìn vào có thấy đang làm phức tạp hoá không?" — nếu có, đơn giản lại.
+
+### 7.3 Surgical Changes
+
+Chỉ đụng vào đúng phần cần đụng. Chỉ dọn rác do chính mình tạo ra.
+
+- Không "cải thiện" code/comment/format ở những dòng không liên quan.
+- Không refactor những chỗ không hỏng.
+- Theo đúng style code đã có, dù cá nhân có thể làm khác.
+- Nếu thấy dead code không liên quan, nêu ra — không tự xoá.
+- Khi thay đổi của mình làm phát sinh phần thừa (import/biến/hàm không còn dùng do CHÍNH thay đổi
+  đó), thì xoá phần thừa đó. Không xoá dead code có từ trước nếu không được yêu cầu.
+
+Bài kiểm: mỗi dòng thay đổi phải truy được thẳng về yêu cầu của người dùng.
+
+### 7.4 Goal-Driven Execution
+
+Định nghĩa rõ tiêu chí hoàn thành. Lặp lại tới khi xác minh được.
+
+Biến yêu cầu mơ hồ thành mục tiêu kiểm chứng được, ví dụ:
+- "Thêm validation" → "Viết test cho input không hợp lệ, rồi làm cho test đó pass"
+- "Sửa bug này" → "Viết 1 test tái hiện đúng bug, rồi làm cho test đó pass"
+- "Refactor X" → "Đảm bảo test pass cả trước và sau khi refactor"
+
+Với việc nhiều bước, nêu ngắn 1 kế hoạch dạng:
+```
+1. [Bước] → xác minh: [cách kiểm tra]
+2. [Bước] → xác minh: [cách kiểm tra]
+3. [Bước] → xác minh: [cách kiểm tra]
+```
+
+Tiêu chí thành công rõ ràng giúp tự lặp độc lập được; tiêu chí mơ hồ ("làm cho nó chạy được") sẽ
+cần hỏi lại liên tục.
+
+**4 nguyên tắc này đang phát huy hiệu quả nếu:** diff bớt hẳn thay đổi không cần thiết, ít phải viết
+lại vì làm phức tạp hoá, và câu hỏi làm rõ xuất hiện TRƯỚC khi code thay vì SAU khi đã lỡ sai.
