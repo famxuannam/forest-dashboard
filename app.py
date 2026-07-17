@@ -6174,12 +6174,12 @@ st.markdown(
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    /* Nền gradient phớt accent mờ dần dùng cho "billboard/hero" đầu trang kiểu chương dài
-       (Trợ giúp, Báo cáo, ...) -- KHÔNG áp cho billboard Hôm nay nữa (xem rule riêng ngay dưới):
-       mockup billboard Hôm nay dùng nền phẳng #fdfbf5 (var(--card)) như mọi thẻ khác, không có
-       gradient/độ trong suốt. */
+    /* sec_hero() (Trợ giúp, Sức khoẻ, sub-hero Sách/Gundam...) -- ĐÃ TỪNG cố ý tô gradient phớt
+       accent để phân biệt với billboard nền phẳng, nhưng xác nhận lại với người dùng (đối chiếu
+       ảnh Trợ giúp thật) là mockup gốc dùng nền PHẲNG var(--card) giống mọi thẻ khác, không có
+       gradient -- đổi lại khớp mockup, áp dụng cho MỌI nơi gọi sec_hero(), không riêng Trợ giúp. */
     .sec-hero {
-        background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
+        background: var(--card) !important;
     }
     /* Billboard Hôm nay: hiệu ứng kính mờ (frosted/liquid glass) thật -- nền phớt accent bán
        trong suốt + backdrop-filter blur/saturate làm mờ VÀ rực màu hoạ tiết chấm nền trang đứng
@@ -6194,13 +6194,13 @@ st.markdown(
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
-    .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
+    .sec-hero { padding: 20px 28px 16px; border-radius: 12px; border: 1px solid var(--border);
         margin-bottom: 34px; }
     .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
         text-transform: uppercase; color: var(--accent-dark); }
-    .sec-hero .hh-title { font-size: 33px; font-weight: 800; color: var(--text);
-        margin: 6px 0 8px; line-height: 1.15; }
-    .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 640px; line-height: 1.55; }
+    .sec-hero .hh-title { font-size: 30px; font-weight: 800; color: var(--text);
+        margin: 6px 0 8px; line-height: 1.2; }
+    .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55; }
     .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
     /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
        tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard). */
