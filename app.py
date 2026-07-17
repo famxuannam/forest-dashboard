@@ -5245,6 +5245,21 @@ st.markdown(
        chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
        khớp pixel chính xác, không còn là ước lượng "trung dung" như trước. */
     [data-testid="stVerticalBlock"] { gap: 10px !important; }
+    /* Streamlit bọc MỌI st.markdown(html) trong [data-testid="stMarkdownContainer"] có sẵn
+       margin-bottom:-16px (bù trừ margin mặc định của <p> cuối cùng trong Markdown thật) -- các
+       khối HTML tự viết ở đây đều là <div> thuần, không có <p> nào để bù, nên -16px này ăn thẳng
+       vào chiều cao đo được của khối, làm phần tử kế tiếp (theo gap flex của khối cha) trèo lên
+       che mất phần nội dung phía dưới cùng (xác nhận qua DevTools: .sec-ch cao 30px thật nhưng
+       container cha chỉ đo được 14px). Huỷ margin âm này cho đúng nhóm khối bị ảnh hưởng RÕ RỆT
+       (chương ngắn/thẻ đứng cuối 1 container) -- không áp toàn cục vì nhiều nơi khác đã tự xử lý
+       việc này qua ":last-child { margin-bottom:0 }" nội bộ, không cần lặp lại. */
+    [data-testid="stMarkdownContainer"]:has(> .sec-ch),
+    [data-testid="stMarkdownContainer"]:has(> .sec-toc),
+    [data-testid="stMarkdownContainer"]:has(> .glass-card),
+    [data-testid="stMarkdownContainer"]:has(> .dtl-card),
+    [data-testid="stMarkdownContainer"]:has(> .sec-card) {
+        margin-bottom: 0 !important;
+    }
 
     .glass-card {
         background: var(--card);
@@ -5996,24 +6011,28 @@ st.markdown(
         border-radius: 12px !important;
         margin: 0 0 6px !important;
     }
-    /* Cột trong billboard mặc định STRETCH hết chiều cao hàng (flex align-items: stretch của
-       Streamlit) -- ép align-self: center để mỗi cột co lại đúng chiều cao nội dung riêng rồi
-       canh giữa so với cột kia (giống grid align-items:center của mockup). Không có rule này,
-       kẻ dọc phân tách bên dưới sẽ kéo dài chạm sát mép trên/dưới thẻ thay vì có khoảng đệm đúng
-       cảm giác "canh giữa" của mockup. */
-    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    /* Cột trong HÀNG NGOÀI CÙNG (ngày/trích dẫn, container key="tbill_daterow") mặc định STRETCH
+       hết chiều cao hàng (flex align-items: stretch của Streamlit) -- ép align-self: center để
+       mỗi cột co lại đúng chiều cao nội dung riêng rồi canh giữa so với cột kia (giống grid
+       align-items:center của mockup). Scope CHỈ ĐÚNG "tbill_daterow" (không phải mọi
+       stHorizontalBlock trong billboard nói chung) -- billboard còn 1 hàng ngang LỒNG BÊN TRONG
+       nữa (kq_daily_srcrow, hàng tên sách + nút xáo/yêu thích), nếu chọn rộng hơn sẽ dính luôn
+       rule khung giấy bên dưới vào NHẦM cột đó (bug thật đã gặp: cột tên sách bị đóng khung/đổ
+       bóng như thẻ giấy, không phải cột ngày). */
+    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
-    /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
-       dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
-       selector này. */
-    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
-        border-right: 1px solid var(--divider);
+    /* Cột ngày đóng khung riêng như 1 tờ giấy lịch bàn thật (thay cho kẻ dọc phân cách trước đây)
+       -- viền + bo góc + nền + đổ bóng nhẹ, tách hẳn khỏi cột trích dẫn bên cạnh thay vì chỉ ngăn
+       bằng 1 đường kẻ mảnh. overflow:hidden để .tbill-tab (bo góc trên) không tràn ra ngoài khung. */
+    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
        khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
-    .tbill-date { text-align: center; }
+    .tbill-date { text-align: center; padding: 16px 16px 14px; }
     /* "Tab lịch xé" -- thanh accent bo góc trên + 2 chấm tròn màu nền trang (giả lỗ đục lịch bàn)
        nằm NGAY TRÊN số ngày to, hiện tháng/năm dạng nhãn nhỏ in hoa (mockup billboard Hôm nay). */
     .tbill-tab { position: relative; background: var(--accent); border-radius: 8px 8px 0 0;
@@ -6058,7 +6077,17 @@ st.markdown(
        dương nhẹ (KHÔNG âm như bản trước) -- bản âm (-6px) làm nút ⭐ chạm/đè lên dòng cuối chữ
        trích dẫn khi trích dẫn dài đủ 2-3 dòng, phản hồi thực tế là "trông không đẹp". */
     [class*="st-key-kq_daily_srcrow"] { margin-top: 10px; }
-    [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; }
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; gap: 10px !important; }
+    /* 2 cột nút (xáo/yêu thích) mặc định rộng theo tỉ lệ st.columns([9,1,1]) -- mỗi cột ~60-70px
+       trong khi nút chỉ 30px, khiến 2 nút trông cách nhau rất xa (đo thật ~34px, mockup chỉ 10px).
+       Ép cột nút co đúng 30px (khớp width nút), cột tên sách giãn nốt phần còn lại -- gap 10px của
+       hàng ngang (rule trên) trở thành khoảng cách DUY NHẤT giữa 2 nút, khớp mockup. */
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stColumn"]:first-child {
+        flex: 1 1 auto !important; width: auto !important;
+    }
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stColumn"]:not(:first-child) {
+        flex: 0 0 30px !important; width: 30px !important; min-width: 30px !important;
+    }
     /* Font Cormorant Garamond (xem _QUOTE_FONT_FACE) -- chọn qua mockup ảnh gửi duyệt, cỡ chữ
        chỉnh LỚN HƠN bản Manrope cũ (mark 52->58px, text 21->23px, src 16.5->17.5px) vì đây là
        kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
@@ -6694,35 +6723,36 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
 
     with st.container(key="today_billboard", border=True):
         if kq is not None:
-            c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
-            with c_date:
-                st.markdown(_date_html, unsafe_allow_html=True)
-            with c_quote:
-                st.markdown(
-                    "<div class='kq-daily-mark'>“</div>"
-                    f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
-                    unsafe_allow_html=True)
-                with st.container(key="kq_daily_srcrow"):
-                    _kh_count = len(load_kindle_highlights())
-                    c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
-                    with c_src:
-                        _author = kq.get('Tác giả')
-                        _src_txt = html_escape(str(kq['Cuốn sách']))
-                        if pd.notna(_author) and str(_author).strip():
-                            _src_txt += f" · {html_escape(str(_author))}"
-                        st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
-                    with c_shuffle:
-                        if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
-                                                        help="Đổi trích dẫn khác"):
-                            _shuffle_daily_quote()
-                            st.rerun()
-                    with c_fav:
-                        _fav = bool(kq.get('Yêu thích', False))
-                        if st.button("★" if _fav else "☆",
-                                     key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
-                                     help="Bỏ Yêu thích" if _fav else "Yêu thích"):
-                            set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
-                            st.rerun()
+            with st.container(key="tbill_daterow"):
+                c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
+                with c_date:
+                    st.markdown(_date_html, unsafe_allow_html=True)
+                with c_quote:
+                    st.markdown(
+                        "<div class='kq-daily-mark'>“</div>"
+                        f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
+                        unsafe_allow_html=True)
+                    with st.container(key="kq_daily_srcrow"):
+                        _kh_count = len(load_kindle_highlights())
+                        c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
+                        with c_src:
+                            _author = kq.get('Tác giả')
+                            _src_txt = html_escape(str(kq['Cuốn sách']))
+                            if pd.notna(_author) and str(_author).strip():
+                                _src_txt += f" · {html_escape(str(_author))}"
+                            st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                        with c_shuffle:
+                            if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
+                                                            help="Đổi trích dẫn khác"):
+                                _shuffle_daily_quote()
+                                st.rerun()
+                        with c_fav:
+                            _fav = bool(kq.get('Yêu thích', False))
+                            if st.button("★" if _fav else "☆",
+                                         key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
+                                         help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                                set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
+                                st.rerun()
         else:
             st.markdown(_date_html, unsafe_allow_html=True)
 
