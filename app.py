@@ -5413,27 +5413,98 @@ def render_project_week_trend(df_g, n_weeks=12):
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
-def render_project_recent_sessions(df_g, n=5):
-    """Chương "Phiên gần đây" (Báo cáo -> Dự án, mockup): N phiên GẦN NHẤT (mặc định 5) của dự
-    án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi (buổi tra qua _buoi_of() dùng chung với
-    biểu đồ khung giờ) -- khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng)
+def render_project_recent_sessions(df_g, days=30):
+    """Chương "Phiên gần đây" (Báo cáo -> Dự án, mockup): MỌI phiên trong N ngày gần nhất (mặc
+    định 30, KHÔNG giới hạn số dòng) của dự án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi
+    (buổi tra qua _buoi_of() dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số
+    phiên trong cửa sổ) -- khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng)
     vì đây là danh sách PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở
     "Biểu đồ lịch" hay đổi bộ lọc kỳ."""
     if df_g.empty:
         st.caption("Chưa có phiên nào.")
         return
-    recent = df_g.sort_values('Thời gian bắt đầu', ascending=False, kind='stable').head(n)
+    cutoff = pd.Timestamp(_today_vn() - timedelta(days=days - 1))
+    recent = df_g[pd.to_datetime(df_g['Thời gian bắt đầu']) >= cutoff].sort_values(
+        'Thời gian bắt đầu', ascending=False, kind='stable')
+    if recent.empty:
+        st.caption(f"Chưa có phiên nào trong {days} ngày gần nhất.")
+        return
     rows_html = ""
     for _, r in recent.iterrows():
         ts = pd.Timestamp(r['Thời gian bắt đầu'])
         rows_html += (f"<tr><td class='txt lbl'>{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}</td>"
                       f"<td>{ts:%H:%M}</td><td>{int(r['Thời lượng (Phút)'])}′</td>"
                       f"<td>{_buoi_of(ts.hour)}</td></tr>")
+    _tot_hrs = recent['Thời lượng (Phút)'].sum() / 60
+    rows_html += (f"<tr style='font-weight:700;'><td class='txt lbl'>Tổng {days} ngày</td><td></td>"
+                  f"<td>{_fmt_hours_short(_tot_hrs)}</td><td>{len(recent)} phiên</td></tr>")
     st.markdown(
         DTBL_CSS + "<div class='dtbl-wrap'><table class='dtbl'><thead><tr>"
         "<th class='txt lbl'>Ngày</th><th>Bắt đầu</th><th>Độ dài</th><th>Buổi</th>"
         f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
         unsafe_allow_html=True)
+
+
+def render_project_rhythm(df_g):
+    """Chương "Nhịp làm việc" (Báo cáo -> Dự án, mockup): 2 thẻ ngang -- "Theo buổi" (tỉ trọng
+    Sáng/Chiều/Tối/Khuya, tô teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng dự án/nhóm này, buổi
+    chiếm nhiều nhất tô đậm nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không
+    hợp để tô thanh phân bổ đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã
+    có, KHÔNG kèm legend chi tiết như render_session_bar() ở chương "Tổng quan" -- ở đây chỉ cần
+    1 câu nhận định gọn, nhãn chi tiết từng khoảng đã có sẵn ở chương "Phân bố độ dài phiên" phía
+    dưới, tránh lặp thông tin)."""
+    if df_g.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    c1, c2 = st.columns(2)
+
+    with c1:
+        buoi_min = (df_g.assign(_b=pd.to_datetime(df_g['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
+                    .groupby('_b')['Thời lượng (Phút)'].sum())
+        buoi_min = buoi_min.reindex(["Sáng", "Chiều", "Tối", "Khuya"]).dropna().sort_values(ascending=False)
+        total_min = buoi_min.sum()
+        _n_b = len(buoi_min)
+        shades_b = _teal_shades(max(_n_b, 2))[::-1][:_n_b]
+        seg1 = ""
+        for (b, m), col in zip(buoi_min.items(), shades_b):
+            pct = m / total_min * 100
+            lbl = f"{b} {pct:.0f}%" if pct >= 9 else ""
+            seg1 += (f"<div title='{b}: {_fmt_hours_long(m/60)}' style='width:{pct:.4f}%;background:{col};"
+                     f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
+                     f"align-items:center;justify-content:center;'>{lbl}</div>")
+        _dom_buoi, _dom_min = buoi_min.index[0], buoi_min.iloc[0]
+        _dom_pct = _dom_min / total_min * 100
+        _insight1 = (f"Dự án \"{_dom_buoi.lower()}\" rõ rệt — {_dom_pct:.0f}% thời gian rơi vào buổi này."
+                     if _dom_pct >= 50 else "Thời gian trải khá đều giữa các buổi trong ngày.")
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<span class='rl-book'>Theo buổi</span>"
+            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg1}</div>"
+            f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight1}</div>"
+            "</div>", unsafe_allow_html=True)
+
+    with c2:
+        d = df_g['Thời lượng (Phút)']
+        n = len(df_g)
+        counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
+        seg2 = ""
+        for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
+            if not c:
+                continue
+            pct = c / n * 100
+            lbl = f"{pct:.0f}%" if pct >= 9 else ""
+            seg2 += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};"
+                     f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
+                     f"align-items:center;justify-content:center;'>{lbl}</div>")
+        _best_i = counts.index(max(counts))
+        _typical_rng = SESSION_BUCKETS[_best_i][1].replace('–<', '–')
+        _insight2 = f"Phiên điển hình {_typical_rng} · TB {_avg_session_min(df_g):.0f}′/phiên"
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<span class='rl-book'>Độ dài phiên</span>"
+            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg2}</div>"
+            f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight2}</div>"
+            "</div>", unsafe_allow_html=True)
 
 
 # --- LOGO: mark "nhịp phiên" (session-rhythm bars) phẳng + wordmark, hệ thiết kế "Sổ Tay" (xem
@@ -8023,9 +8094,10 @@ elif nav == "Báo cáo":
                     _right_html_g,
                     [("bc-duan-ch1", "1 · Tổng quan")]
                     + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
-                    + [("bc-duan-ch2", "2 · Xu hướng theo tuần"), ("bc-duan-ch3", "3 · Phiên gần đây"),
-                       ("bc-duan-ch4", "4 · Biểu đồ lịch"), ("bc-duan-ch5", "5 · Xu hướng theo thời gian"),
-                       ("bc-duan-ch6", "6 · Phân bố độ dài phiên"), ("bc-duan-ch7", "7 · Bảng số liệu")])
+                    + [("bc-duan-ch2", "2 · Xu hướng theo tuần"), ("bc-duan-ch3", "3 · Nhịp làm việc"),
+                       ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Biểu đồ lịch"),
+                       ("bc-duan-ch6", "6 · Xu hướng theo thời gian"), ("bc-duan-ch7", "7 · Phân bố độ dài phiên"),
+                       ("bc-duan-ch8", "8 · Bảng số liệu")])
 
                 sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 s_g = _streak_stats(df_g)
@@ -8096,15 +8168,17 @@ elif nav == "Báo cáo":
 
                 sec_chapter("bc-duan-ch2", 2, "12 tuần gần nhất", "Xu hướng theo tuần")
                 render_project_week_trend(df_g)
-                sec_chapter("bc-duan-ch3", 3, None, "Phiên gần đây")
+                sec_chapter("bc-duan-ch3", 3, None, "Nhịp làm việc")
+                render_project_rhythm(df_g)
+                sec_chapter("bc-duan-ch4", 4, "30 ngày gần nhất", "Phiên gần đây")
                 render_project_recent_sessions(df_g)
-                sec_chapter("bc-duan-ch4", 4, None, "Biểu đồ lịch")
+                sec_chapter("bc-duan-ch5", 5, None, "Biểu đồ lịch")
                 frag_calendar(df_g, "range_grp_cal")
-                sec_chapter("bc-duan-ch5", 5, None, "Xu hướng theo thời gian")
+                sec_chapter("bc-duan-ch6", 6, None, "Xu hướng theo thời gian")
                 frag_trend(df_g, "trend_grp", "Dự án")
-                sec_chapter("bc-duan-ch6", 6, None, "Phân bố độ dài phiên")
+                sec_chapter("bc-duan-ch7", 7, None, "Phân bố độ dài phiên")
                 render_session_histogram(df_g)
-                sec_chapter("bc-duan-ch7", 7, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch8", 8, None, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
