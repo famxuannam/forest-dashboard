@@ -8036,11 +8036,13 @@ elif nav == "Báo cáo":
 
                 # Billboard số to + hồ sơ (mockup) -- KHÁC billboard Tuần/Tháng/Năm (câu nhận
                 # định động về 1 KỲ thời gian): đây là hồ sơ 1 THỰC THỂ (Dự án/Nhóm) nên cột phải
-                # theo đúng khuôn Sách/Gundam (.pbill-kicker/.pbill-booktitle + .pbill-chips),
-                # không phải câu văn tự tính. Các chip ở đây (TB/tuần gần đây, phiên gần nhất,
-                # tuần kỷ lục) là thông tin ĐỊNH DANH nhẹ, không lặp lại panel "Tổng quan" chi
-                # tiết hơn giữ nguyên bên dưới (deltas/chuỗi/theo thứ/mốc thời gian) nên KHÔNG cần
-                # bớt gì như đã làm ở Tuần/Tháng/Năm.
+                # theo đúng khuôn Sách/Gundam (.pbill-kicker/.pbill-booktitle + .pbill-chips).
+                # Đã rà soát bỏ những gì TRÙNG với panel "Tổng quan" chi tiết hơn giữ nguyên bên
+                # dưới: KHÔNG có chip "Phiên gần nhất"/"bắt đầu MM-YYYY" trong meta (đã có "Ngày
+                # gần nhất"/"Ngày đầu tiên" ở mục Mốc thời gian, cùng 1 sự thật, billboard lặp lại
+                # sẽ dư), thay vào đó chuyển câu NHẬN ĐỊNH CHUỖI (trước là footer của panel Tổng
+                # quan) lên đây -- billboard là nơi hợp lý hơn cho 1 câu "động lực" ngắn, tránh
+                # 2 nơi cùng nói về chuỗi (panel còn giữ số liệu THÔ: Tổng cộng/Dài nhất/Hiện tại).
                 curr_hrs_g = df_g['Thời lượng (Phút)'].sum() / 60
                 curr_trees_g = len(df_g)
                 num_days_g = df_g['Ngày'].nunique() or 1
@@ -8057,10 +8059,17 @@ elif nav == "Báo cáo":
                 _status_html_g = (f"<span class='pbill-status {'active' if _is_active_g else 'inactive'}'>"
                                    f"{'Đang hoạt động' if _is_active_g else 'Không hoạt động'}</span>")
 
-                _last_sess_g = df_g.sort_values('Thời gian bắt đầu', kind='stable').iloc[-1] if not df_g.empty else None
                 _recent28_g = df_g[pd.to_datetime(df_g['Ngày']) >= pd.Timestamp(_today_vn() - timedelta(days=27))]
                 _tb_4w_hrs_g = _recent28_g['Thời lượng (Phút)'].sum() / 60 / 4
                 _wk_hrs_g = df_g.groupby('Tuần')['Thời lượng (Phút)'].sum()
+
+                s_g = _streak_stats(df_g)
+                _nud_g = _streak_nudge(s_g)
+                _nudge_html_g = ""
+                if _nud_g:
+                    _nud_bg_g, _nud_fg_g = NUDGE_TONES[_nud_g[1]]
+                    _nudge_html_g = (f"<div class='pbill-sub' style='color:{_nud_fg_g};margin-top:10px;'>"
+                                      f"{_nud_g[0]}</div>")
 
                 _chips_g_bb = []
                 if _kind == "proj":
@@ -8070,11 +8079,6 @@ elif nav == "Báo cáo":
                 else:
                     _chips_g_bb.append({"k": "Số dự án", "v": f"{df_g['Dự án'].nunique()}"})
                 _chips_g_bb.append({"k": "TB / tuần (4 tuần)", "v": _fmt_hours_short(_tb_4w_hrs_g)})
-                if _last_sess_g is not None:
-                    _last_ts_g = pd.Timestamp(_last_sess_g['Thời gian bắt đầu'])
-                    _chips_g_bb.append({"k": "Phiên gần nhất",
-                                         "v": f"{_rel_day_label(_last_ts_g.normalize(), _today_vn())} · "
-                                              f"{int(_last_sess_g['Thời lượng (Phút)'])}′"})
                 if len(_wk_hrs_g):
                     _best_wk_key_g = _wk_hrs_g.idxmax()
                     _chips_g_bb.append({"k": "🏆 Tuần kỷ lục",
@@ -8085,12 +8089,11 @@ elif nav == "Báo cáo":
                     for c in _chips_g_bb)
                 _right_html_g = (f"<div class='pbill-kicker'>{'DỰ ÁN' if _kind == 'proj' else 'NHÓM'}</div>"
                                   f"<div class='pbill-booktitle'>{html_escape(str(sel_grp))}{_status_html_g}</div>"
-                                  f"<div class='pbill-chips'>{_chips_html_g}</div>")
+                                  f"<div class='pbill-chips'>{_chips_html_g}</div>{_nudge_html_g}")
 
                 render_period_billboard(
                     "Hồ sơ dự án", _fmt_hours_short(curr_hrs_g), "tổng thời gian đã trồng",
-                    (f"{curr_trees_g} phiên · bắt đầu {_first_day_ts:%m/%Y}" if _first_day_ts is not None
-                     else f"{curr_trees_g} phiên"),
+                    f"{curr_trees_g} phiên",
                     _right_html_g,
                     [("bc-duan-ch1", "1 · Tổng quan")]
                     + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
@@ -8100,7 +8103,6 @@ elif nav == "Báo cáo":
                        ("bc-duan-ch8", "8 · Bảng số liệu")])
 
                 sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
-                s_g = _streak_stats(df_g)
                 wd_g = _weekday_avg(df_g)
 
                 _grp_sections = [
@@ -8147,16 +8149,12 @@ elif nav == "Báo cáo":
                         {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
                     ]})
 
-                _nud_g = _streak_nudge(s_g)
-                _footer_g = (_nud_g[0],) + NUDGE_TONES[_nud_g[1]] if _nud_g else None
-
                 render_stat_panel(
                     hero_items=[
                         {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
-                    footer=_footer_g,
                 )
                 render_session_bar(df_g)
 
