@@ -4463,7 +4463,7 @@ def _render_kindle_day_quotes(day_kh):
             _render_kindle_quote_row(child, is_reply=True)
 
 
-def _render_kindle_quote_row(r, is_reply=False, key_suffix=""):
+def _render_kindle_quote_row(r, is_reply=False, key_suffix="", show_added_date=False):
     """1 dòng quote/note Kindle + cụm nút Yêu thích/Sửa/Xoá/+ Ghi chú -- cùng bố cục hàng thật
     (st.columns) và cùng phong cách nút (icon nhỏ, nền trong suốt) với hàng "Ghi chú nhanh"
     (qnote_row) trong render_note_editor(): đọc = chữ + icon mờ bám phải; bấm Sửa = textarea +
@@ -4479,7 +4479,12 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix=""):
     nơi gọi thứ 2 (vd _render_kindle_favorites_tab()) PHẢI truyền key_suffix riêng để tách khoá.
     Chèn NGAY TRƯỚC hash (giữa tiền tố cố định "kqrow_"/"kqreply_"/"kqnew_" và hash) thay vì đặt ở
     đầu toàn bộ key -- giữ nguyên các tiền tố này làm chuỗi con để CSS
-    ([class*="st-key-kqrow_"] v.v.) vẫn khớp bất kể key_suffix là gì."""
+    ([class*="st-key-kqrow_"] v.v.) vẫn khớp bất kể key_suffix là gì.
+
+    show_added_date=True (chỉ dùng ở sub-tab "Yêu thích", xem _render_kindle_favorites_tab()) --
+    thêm "· lưu DD/MM/YYYY" ngay sau vị trí, dùng ĐÚNG "Ngày thêm" (mốc nhập từ Kindle, KHÔNG phải
+    mốc bấm ⭐ Yêu thích thật -- cột đó không tồn tại trong schema, xác nhận với người dùng dùng
+    tạm mốc thêm gốc thay vì thêm cột mới) làm proxy cho "mới lưu nhất"."""
     h = r['dedupe_hash']
     edit_key = f"kq_edit_{key_suffix}{h}"
     addnote_key = f"kq_addnote_{key_suffix}{h}"
@@ -4502,11 +4507,19 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix=""):
             with rc1:
                 _mark = '“' if r['Loại'] == 'highlight' else '✎'
                 _style = "font-style:italic;color:var(--text-2);" if r['Loại'] == 'note' else ''
-                _loc = (f" <span class='kq-loc'>· vị trí {html_escape(str(r['Vị trí']))}</span>"
-                        if pd.notna(r['Vị trí']) and str(r['Vị trí']).strip() else "")
+                # "Vị trí" gộp chung 2 dạng gốc từ Kindle (location SỐ, hoặc "trang N" -- xem
+                # parse_kindle_clippings()) -- phải PHÂN BIỆT tiền tố hiển thị, không được luôn
+                # gán cứng "vị trí" phía trước (bug thật: ra "· vị trí trang 402" cho sách dùng
+                # số trang thay vì vị trí Kindle).
+                _loc_val = str(r['Vị trí']) if pd.notna(r['Vị trí']) and str(r['Vị trí']).strip() else ""
+                _loc_label = _loc_val if _loc_val.lower().startswith('trang ') else (
+                    f"vị trí {_loc_val}" if _loc_val else "")
+                _loc = f" <span class='kq-loc'>· {_loc_label}</span>" if _loc_label else ""
+                _added = (f" <span class='kq-loc'>· lưu {pd.Timestamp(r['Ngày thêm']):%d/%m/%Y}</span>"
+                          if show_added_date and pd.notna(r.get('Ngày thêm')) else "")
                 st.markdown(
                     f"<div style='font-size:14.5px;line-height:1.6;{_style}'>"
-                    f"<span class='kq-mark'>{_mark}</span>{html_escape(str(r['Nội dung']))}{_loc}</div>",
+                    f"<span class='kq-mark'>{_mark}</span>{html_escape(str(r['Nội dung']))}{_loc}{_added}</div>",
                     unsafe_allow_html=True)
             with rc2:
                 with st.container(horizontal=True, gap="small"):
