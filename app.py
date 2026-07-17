@@ -5745,9 +5745,10 @@ st.markdown(
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
     /* .hh-meta .chip: hàng chip số liệu ở hero Tuỳ biến (Phiên trong hệ thống/Đồng bộ gần nhất/
-       Sao lưu gần nhất) -- tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ
-       thêm .hh-meta vào phạm vi scope vì hero không phải billboard/stat-panel. */
-    .stat-panel .chip, .pbill-chips .chip, .hh-meta .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+       Sao lưu gần nhất). .maprow .chip: badge Danh mục ở bảng Phân loại tĩnh (Tuỳ biến -> chương
+       "2. Phân loại"). Cả 2 tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ
+       thêm vào phạm vi scope vì không phải billboard/stat-panel. */
+    .stat-panel .chip, .pbill-chips .chip, .hh-meta .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
     .stat-panel .chip .ck, .pbill-chips .chip .ck, .hh-meta .chip .ck { color: var(--text-2); }
     .stat-panel .chip .cv, .pbill-chips .chip .cv, .hh-meta .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
@@ -6385,6 +6386,22 @@ st.markdown(
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
+    /* Bảng Phân loại TĨNH (Tuỳ biến -> chương "2. Phân loại") -- badge màu Danh mục không thể vẽ
+       trong 1 ô data_editor (SelectboxColumn chỉ nhận text đơn thuần, không chèn được HTML màu),
+       nên hiển thị dạng bảng tĩnh khớp mockup; sửa phân loại chuyển sang 1 form riêng bên dưới
+       (chọn Dự án + Danh mục + nút Lưu) thay vì sửa ngay trong ô bảng. */
+    /* Mọi hàng (kể cả dòng "+N dự án khác" cuối bảng) đều là div.maprow trực tiếp trong .maptbl
+       -- :last-child (không phải :last-of-type, vốn so theo TAG chứ không theo class, sẽ khớp
+       nhầm nếu dòng cuối mang thêm class phụ) mới chắc chắn khớp đúng div cuối cùng để bỏ viền. */
+    .maptbl { display: flex; flex-direction: column; }
+    .maprow { display: grid; grid-template-columns: 2fr 2fr 1fr; column-gap: 10px; align-items: center;
+        padding: 9px 0; border-bottom: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+    .maptbl .maprow:last-child { border-bottom: none; }
+    .maprow-head { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase;
+        letter-spacing: 0.4px; }
+    .maprow .mp-proj { font-weight: 600; }
+    .maprow .mp-n { text-align: right; font-variant-numeric: tabular-nums; }
+    .maprow.maprow-extra { grid-template-columns: 1fr; font-size: 12.5px; color: var(--text-2); }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
@@ -7880,19 +7897,40 @@ elif nav == "Tuỳ biến":
         _qfiles = _list_sync_files()
         _qf = _latest_sync_file(_qfiles, "forest")
         _qr = _latest_sync_file(_qfiles, "reminder")
-        qc1, qc2 = st.columns(2)
-        with qc1:
-            st.markdown(f"**File Forest mới nhất**  \n{_qf['name'] if _qf else '_— chưa có —_'}")
-        with qc2:
-            st.markdown(f"**File Reminder mới nhất**  \n{_qr['name'] if _qr else '_— chưa có —_'}")
-        if st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync", disabled=not (_qf or _qr)):
+        _last_sync_raw = _cached_settings().get("last_quick_sync_at")
+        _last_sync_summary = _cached_settings().get("last_quick_sync_summary")
+        if _last_sync_raw:
+            _ls_dt = pd.Timestamp(_last_sync_raw)
+            _ls_label = (f"hôm nay, {_ls_dt:%H:%M}" if _ls_dt.date() == _today_vn()
+                         else f"{_ls_dt:%d/%m/%Y, %H:%M}")
+            _qsub = f"Lần gần nhất: {_ls_label}" + (f" · {_last_sync_summary}" if _last_sync_summary else "")
+        else:
+            _qsub = "Chưa đồng bộ lần nào."
+        # Chữ trái + nút phải trên CÙNG 1 hàng (khớp mockup) -- st.columns() mặc định
+        # align-items:stretch nên 2 cột cao bằng nhau nhưng nội dung neo TRÊN; ép align-items:center
+        # qua CSS descendant selector (KHÔNG dùng ">") để nút "Đồng bộ ngay" canh giữa theo chiều dọc
+        # với khối chữ 2 dòng bên trái dù cao hơn 1 dòng của nút.
+        st.markdown(
+            "<style>.st-key-tb_quick_sync_row [data-testid=\"stHorizontalBlock\"] "
+            "{ align-items: center; }</style>", unsafe_allow_html=True)
+        with st.container(key="tb_quick_sync_row"):
+            qc1, qc2 = st.columns([3, 1])
+            with qc1:
+                st.markdown(
+                    f"<div style='font-size:14.5px;font-weight:700;color:var(--text);'>"
+                    f"Đồng bộ nhanh từ Forest</div>"
+                    f"<div style='font-size:13px;color:var(--text-2);margin-top:2px;'>{_qsub}</div>",
+                    unsafe_allow_html=True)
+            with qc2:
+                _qclicked = st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync",
+                                      disabled=not (_qf or _qr), use_container_width=True)
+        if _qclicked:
             with st.spinner("Đang đồng bộ..."):
                 _qres = sync_from_storage(_today_vn() - timedelta(days=90), _today_vn() + timedelta(days=90))
             if _qres["error"]:
                 st.session_state['quick_sync_msg'] = _qres["error"]
                 st.session_state['quick_sync_has_error'] = True
             else:
-                save_setting("last_quick_sync_at", datetime.now(APP_TZ).strftime('%Y-%m-%d %H:%M:%S'))
                 _parts, _has_err = [], False
                 if _qres["forest_error"]:
                     _parts.append(f"Forest lỗi ({_qres['forest_error']})"); _has_err = True
@@ -7906,6 +7944,8 @@ elif nav == "Tuỳ biến":
                     _parts.append(f"lịch lỗi ({_qres['calendar_error']})"); _has_err = True
                 elif _qres["calendar"] is not None:
                     _parts.append(f"{_qres['calendar']} appointment lịch")
+                save_setting("last_quick_sync_at", datetime.now(APP_TZ).strftime('%Y-%m-%d %H:%M:%S'))
+                save_setting("last_quick_sync_summary", ", ".join(_parts) if _parts else "không có gì mới")
                 st.session_state['quick_sync_msg'] = "Đã đồng bộ: " + ", ".join(_parts) + "." if _parts else "Không có file mới để đồng bộ."
                 st.session_state['quick_sync_has_error'] = _has_err
             st.rerun()
@@ -8177,29 +8217,63 @@ elif nav == "Tuỳ biến":
             else:
                 st.success("Tất cả dự án đã được phân loại.")
 
+            # Bảng TĨNH (badge màu Danh mục, khớp mockup) -- data_editor cũ không vẽ được badge
+            # màu trong ô (SelectboxColumn chỉ nhận text đơn thuần), nên sửa chuyển xuống form
+            # riêng bên dưới bảng (xem "Sửa phân loại"). Sắp theo số phiên giảm dần, cắt bớt nếu
+            # danh sách dài (khớp mockup "+N dự án khác") -- form sửa vẫn chọn được MỌI dự án qua
+            # selectbox riêng, không phụ thuộc dự án đó có đang hiện trong bảng hay không.
+            _proj_sessions = db_current['Dự án'].astype(str).value_counts()
+            _cat_colors = build_color_map(existing_cats) if existing_cats else {}
+            _rows_sorted = sorted(all_projs, key=lambda p: -_proj_sessions.get(p, 0))
+            _MAP_SHOW = 8
+            _show_rows = _rows_sorted[:_MAP_SHOW]
+            _extra_n = len(_rows_sorted) - len(_show_rows)
+
+            _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Danh mục</span><span style='text-align:right;'>Phiên</span></div>"
+            for p in _show_rows:
+                _cat = cur_map.get(p)
+                _cat = str(_cat) if pd.notna(_cat) and str(_cat).strip() else None
+                if _cat:
+                    _dot = _cat_colors.get(_cat, "var(--accent)")
+                    _badge = (f"<span class='chip' style='display:inline-flex;align-items:center;'>"
+                              f"<i style='display:inline-block;width:9px;height:9px;border-radius:3px;"
+                              f"margin-right:6px;background:{_dot};'></i>{html_escape(_cat)}</span>")
+                else:
+                    _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— chưa phân loại —</span>"
+                _n = int(_proj_sessions.get(p, 0))
+                _rows_html += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
+                               f"<span class='mp-cat'>{_badge}</span>"
+                               f"<span class='mp-n'>{_n}</span></div>")
+            if _extra_n > 0:
+                _rows_html += f"<div class='maprow maprow-extra'>+ {_extra_n} dự án khác · sửa phân loại bên dưới</div>"
+            st.markdown(f"<div class='maptbl'>{_rows_html}</div>", unsafe_allow_html=True)
+
+            st.markdown("<div style='margin-top:16px;font-size:13px;font-weight:600;"
+                        "color:var(--text-2);'>Sửa phân loại</div>", unsafe_allow_html=True)
             new_cat = st.text_input("Tạo nhóm mới:").strip()
             opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
-            tbl = pd.DataFrame({"Dự án": all_projs, "Nhóm (Danh mục)": [cur_map.get(p) for p in all_projs]})
-            edited = st.data_editor(
-                tbl, hide_index=True, width='stretch', key="map_editor",
-                column_config={
-                    "Dự án": st.column_config.TextColumn("Dự án", disabled=True),
-                    # Ô trống luôn hiện chữ "None" (canvas riêng của SelectboxColumn, không phải
-                    # DOM nên không sửa được bằng CSS/đổi kiểu None->NaN) -> chú thích rõ ý nghĩa
-                    # qua tooltip cột thay vì cố "ẩn" nó đi.
-                    "Nhóm (Danh mục)": st.column_config.SelectboxColumn(
-                        "Nhóm (Danh mục)", options=opts,
-                        help="Để trống (hiện 'None') = dự án tự đứng riêng, không thuộc nhóm nào."),
-                },
-            )
-            if st.button("Lưu phân loại", type="primary", key="tbtn_save_mapping"):
-                nm = edited.rename(columns={"Nhóm (Danh mục)": "Danh mục"})
-                nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
-                save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
-                st.rerun()
+            fc1, fc2, fc3 = st.columns([2, 2, 1])
+            with fc1:
+                edit_proj = st.selectbox("Dự án", all_projs, key="map_edit_proj")
+            with fc2:
+                _cur_val = cur_map.get(edit_proj)
+                _cur_idx = opts.index(_cur_val) if _cur_val in opts else None
+                edit_cat = st.selectbox("Danh mục", opts, index=_cur_idx, key="map_edit_cat",
+                                        placeholder="— Chọn danh mục —")
+            with fc3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
+                    if edit_cat:
+                        nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
+                              if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Danh mục"]))
+                        nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Danh mục": edit_cat}])],
+                                       ignore_index=True)
+                        save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
+                        st.rerun()
     sec_chapter("tb-ch3", 3, None, "Giao diện")
     with st.container(border=True, key="tb_theme_card"):
-        st.markdown("<div style='font-size:13px;font-weight:600;color:var(--text-2);'>"
+        st.markdown("<div style='font-size:15px;font-weight:700;text-transform:uppercase;"
+                    "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
                     "Màu accent</div>", unsafe_allow_html=True)
         _preset_items = list(ACCENT_PRESETS.items())
         _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
@@ -8235,7 +8309,8 @@ elif nav == "Tuỳ biến":
         _swatch_css += "</style>"
         st.markdown(_swatch_css, unsafe_allow_html=True)
 
-        st.markdown("<div style='margin-top:18px;font-size:13px;font-weight:600;color:var(--text-2);'>"
+        st.markdown("<div style='margin-top:2px;font-size:15px;font-weight:700;text-transform:uppercase;"
+                    "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
                     "Kiểu nền trang</div>", unsafe_allow_html=True)
         _bg_items = list(BG_PRESETS.items())
         _bg_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
@@ -8279,6 +8354,22 @@ elif nav == "Tuỳ biến":
         ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
         "background-color:#ff3b30 !important;color:#fff !important;"
         "border-color:#ff3b30 !important;box-shadow:none !important;}"
+        # 3 thẻ Sao lưu/Khôi phục/Làm mới cao KHÔNG bằng nhau mặc định -- rule chung
+        # [data-testid="stHorizontalBlock"] { align-items: flex-start !important; } (nơi khác trong
+        # file) khiến mỗi cột co theo đúng chiều cao nội dung riêng (Khôi phục có thêm khung tải
+        # file nên cao hơn hẳn). :has() chọn ĐÚNG hàng chứa 3 thẻ này (không cần bọc thêm
+        # st.container(key=...) ngoài, tránh phải thụt lề lại cả khối) rồi ép stretch + 3 thẻ
+        # height:100% để cao bằng nhau, khớp mockup.
+        "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) "
+        "{ align-items: stretch !important; }"
+        ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card { height: 100%; }"
+        # st.file_uploader() luôn mang khung kéo-thả + dòng "200MB per file..." (chrome cố định
+        # của Streamlit, không đổi được nút thành 1 link "Chọn tệp" gọn như mockup) -- thu gọn hết
+        # mức có thể: ẩn dòng giới hạn dung lượng, giảm padding/bỏ min-height mặc định của khung,
+        # chỉ SCOPE riêng thẻ Khôi phục (không ảnh hưởng uploader CSV/Reminder/Kindle ở Dự phòng).
+        ".st-key-tb_restore_card [data-testid=\"stFileUploaderDropzoneInstructions\"] { display: none; }"
+        ".st-key-tb_restore_card [data-testid=\"stFileUploaderDropzone\"] { "
+        "min-height: auto !important; padding: 6px !important; }"
         "</style>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     _today = _today_vn().strftime('%Y-%m-%d')
