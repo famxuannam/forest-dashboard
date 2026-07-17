@@ -4783,6 +4783,112 @@ def render_year_month_bars(df_y):
     st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
+def render_month_week_bars(df_m):
+    """Chương "Theo tuần trong tháng" (Báo cáo -> Tháng, mockup): mỗi tuần ISO có chạm tháng đang
+    chọn 1 hàng thanh ngang -- nhãn "T{tuần} · {đầu tuần}–{cuối tuần}" (khoảng ISO ĐẦY ĐỦ, có thể
+    tràn qua tháng liền kề ở 2 đầu tháng) + giá trị {giờ} · {số phiên} bên phải (CHỈ tính phần
+    NẰM TRONG tháng đang chọn, vì df_m đã lọc theo tháng trước khi truyền vào -- 1 tuần giao 2
+    tháng sẽ có 2 hàng riêng ở trang của mỗi tháng, mỗi hàng chỉ cộng đúng phần ngày thuộc tháng
+    đó). Thanh fill dài tỉ lệ theo TỔNG cả tháng, cùng quy ước với frag_category_bars(). Dùng CSS
+    riêng .wkbar-* (KHÔNG tái dùng .catbar-* vì cột nhãn/giá trị ở đó quá hẹp cho text dài "T27 ·
+    29/06 – 05/07"/"16h25 · 20 phiên"). Tuần TRÙNG tuần hiện tại (chưa qua hết 7 ngày) có dấu * +
+    chú thích cuối bảng, tránh hiểu nhầm số liệu tuần đó đã đầy đủ."""
+    if df_m.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    total_min = df_m['Thời lượng (Phút)'].sum()
+    wk_g = df_m.groupby('Tuần')['Thời lượng (Phút)'].agg(['sum', 'size'])
+    wk_g = wk_g.reindex(sorted(wk_g.index))
+    _cur_wk = _today_vn().strftime('%G-W%V')
+    rows_html = ""
+    _has_current = False
+    for wk, row in wk_g.iterrows():
+        wy, wn = wk.split('-W')
+        wk_start = date.fromisocalendar(int(wy), int(wn), 1)
+        wk_end = wk_start + timedelta(days=6)
+        pct = row['sum'] / total_min * 100 if total_min else 0
+        _star = ""
+        if wk == _cur_wk:
+            _star = "*"
+            _has_current = True
+        rows_html += (
+            "<div class='wkbar-row'>"
+            f"<span class='wkbar-label'>T{int(wn)} · {wk_start:%d/%m} – {wk_end:%d/%m}{_star}</span>"
+            f"<span class='wkbar-track'><span class='wkbar-fill' style='width:{pct:.1f}%;'></span></span>"
+            f"<span class='wkbar-val'>{_fmt_hours_short(row['sum']/60)} · {int(row['size'])} phiên</span></div>")
+    _foot = "<div class='catbars-top'>* tuần hiện tại, chưa kết thúc</div>" if _has_current else ""
+    st.markdown(f"<div class='catbars-card'><div class='catbars'>{rows_html}</div>{_foot}</div>",
+                unsafe_allow_html=True)
+
+
+def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
+    """Chương "Điểm nhấn" (Báo cáo -> Tháng, mockup): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong
+    tháng" (ngày dài nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính
+    RIÊNG trong tháng đang chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng
+    trước" (4 dòng delta: tổng giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt
+    động). Đã xác nhận với người dùng: giữ đủ như mockup dù 1 vài dòng lặp lại thông tin đã có ở
+    billboard/chương Tổng quan (Ngày dài nhất, 3 delta tổng) -- đây là chương "tóm tắt nhanh"
+    riêng, không bắt buộc tránh lặp hoàn toàn như đã làm với billboard Dự án."""
+    if df_m.empty:
+        st.caption("Chưa có dữ liệu.")
+        return
+    c1, c2 = st.columns(2)
+
+    with c1:
+        by_day_m = df_m.groupby('Ngày')['Thời lượng (Phút)'].sum()
+        _busiest_date = by_day_m.idxmax()
+        _busiest_hrs = by_day_m.max() / 60
+        _longest_sess = df_m.loc[df_m['Thời lượng (Phút)'].idxmax()]
+        _longest_sess_ts = pd.Timestamp(_longest_sess['Thời gian bắt đầu'])
+        _longest_streak = _streak_stats(df_m)['longest']
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<span class='rl-book'>Kỷ lục trong tháng</span><div class='hlt-list'>"
+            f"<div class='hlt-item'>🏆 Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
+            f"<div class='hlt-item'>⏱️ Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
+            f"{int(_longest_sess['Thời lượng (Phút)'])}′ ({html_escape(str(_longest_sess['Dự án']))})</div>"
+            f"<div class='hlt-item'>🔥 Chuỗi trong tháng · {_longest_streak} ngày liên tiếp</div>"
+            "</div></div>", unsafe_allow_html=True)
+
+    with c2:
+        _lines = []
+        if prev_m and prev_m.get('hrs') is not None:
+            _dh = df_m['Thời lượng (Phút)'].sum() / 60 - prev_m['hrs']
+            _col = "#34c759" if _dh > 0 else "#ff3b30" if _dh < 0 else "var(--text-2)"
+            _arrow = "▲" if _dh > 0 else "▼" if _dh < 0 else "–"
+            _lines.append(f"Tổng giờ <span style='color:{_col};font-weight:600;'>"
+                           f"{_fmt_hours_delta(_dh)} {_arrow}</span>")
+        if prev_m and prev_m.get('trees') is not None:
+            _dn = len(df_m) - prev_m['trees']
+            _col_n = "#34c759" if _dn > 0 else "#ff3b30" if _dn < 0 else "var(--text-2)"
+            _arrow_n = "▲" if _dn > 0 else "▼" if _dn < 0 else "–"
+            _lines.append(f"Số phiên <span style='color:{_col_n};font-weight:600;'>"
+                           f"{_fmt_delta(_dn)} {_arrow_n}</span>")
+
+        _prev_scope = (df[(df['Tháng'] == prev_month_key) & elapsed_mask_m] if elapsed_mask_m is not None
+                        else df[df['Tháng'] == prev_month_key])
+        _cat_now = df_m.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
+        _cat_prev = _prev_scope.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
+        _cat_idx = _cat_now.index.union(_cat_prev.index)
+        _cat_delta = _cat_now.reindex(_cat_idx, fill_value=0) - _cat_prev.reindex(_cat_idx, fill_value=0)
+        if len(_cat_delta) and _cat_delta.min() < 0 and _cat_delta.max() > 0:
+            _worst, _best = _cat_delta.idxmin(), _cat_delta.idxmax()
+            _lines.append(f"{html_escape(str(_worst))} giảm {_fmt_hours_short(abs(_cat_delta[_worst]))} "
+                           f"— bù bởi {html_escape(str(_best))}")
+
+        _active_days_now = df_m['Ngày'].nunique() or 1
+        _tb_day_now = df_m['Thời lượng (Phút)'].sum() / 60 / _active_days_now
+        if prev_m and prev_m.get('hrs_day') is not None:
+            _lines.append(f"TB/ngày hoạt động {_fmt_hours_short(_tb_day_now)} so với "
+                           f"{_fmt_hours_short(prev_m['hrs_day'])} tháng trước")
+
+        _lines_html = "".join(f"<div class='hlt-item'>{ln}</div>" for ln in _lines)
+        st.markdown(
+            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<span class='rl-book'>So với tháng trước</span>"
+            f"<div class='hlt-list'>{_lines_html}</div></div>", unsafe_allow_html=True)
+
+
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
@@ -5842,6 +5948,23 @@ st.markdown(
     .catbar-fill { height: 100%; border-radius: 5px; display: block; }
     .catbar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
     .catbars-top { font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
+    /* Chương "Theo tuần trong tháng" (Báo cáo -> Tháng, mockup, render_month_week_bars()) -- CÙNG
+       khuôn thẻ/thanh fill với .catbars-card/.catbar-* ở trên (frag_category_bars) nhưng cột
+       nhãn/giá trị RỘNG HƠN hẳn (220px/110px so với 150px/60px) vì text dài hơn nhiều ("T27 ·
+       29/06 – 05/07" so với "Học tập"), tách riêng class để không ảnh hưởng .catbar-* gốc. */
+    .wkbar-row { display: grid; grid-template-columns: 220px 1fr 110px; align-items: center;
+        gap: 10px; font-size: 13px; }
+    .wkbar-label { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; }
+    .wkbar-track { height: 18px; background: var(--chip); border-radius: 5px; overflow: hidden;
+        display: block; }
+    .wkbar-fill { height: 100%; border-radius: 5px; display: block; background: var(--accent); }
+    .wkbar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+    /* Chương "Điểm nhấn" (Báo cáo -> Tháng, mockup, render_month_highlights()) -- 2 thẻ ngang,
+       mỗi thẻ 1 danh sách dòng gọn (icon/emoji + câu ngắn), KHÔNG dùng .sp-chips (chip pill) vì
+       mockup vẽ dạng danh sách dòng trần, không phải chip. */
+    .hlt-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .hlt-item { font-size: 13.5px; color: var(--text); line-height: 1.5; }
 
     .glass-card {
         background: var(--card);
@@ -7865,10 +7988,11 @@ elif nav == "Báo cáo":
                     f"{_active_days_m} ngày hoạt động · {len(df_m)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_m}</div><div class='pbill-sub'>{_pbill_sub_m}</div>",
                     [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Lịch tháng"),
-                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Nhật ký"),
-                     ("bc-thang-ch5", "5 · Xu hướng theo thời gian"),
-                     ("bc-thang-ch6", "6 · Xu hướng tập trung theo khung giờ"),
-                     ("bc-thang-ch7", "7 · Bảng số liệu")])
+                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Theo tuần trong tháng"),
+                     ("bc-thang-ch5", "5 · Điểm nhấn"), ("bc-thang-ch6", "6 · Nhật ký"),
+                     ("bc-thang-ch7", "7 · Xu hướng theo thời gian"),
+                     ("bc-thang-ch8", "8 · Xu hướng tập trung theo khung giờ"),
+                     ("bc-thang-ch9", "9 · Bảng số liệu")])
                 _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
                                               "Ngày nổi bật trong tháng", show_top3=True,
@@ -7884,13 +8008,18 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-thang-ch3", 3, None, "Phân bổ danh mục")
                 frag_category_bars(df_m, "rad_tab3", "Danh mục")
 
-                sec_chapter("bc-thang-ch4", 4, None, "Nhật ký")
+                sec_chapter("bc-thang-ch4", 4, None, "Theo tuần trong tháng")
+                render_month_week_bars(df_m)
+                sec_chapter("bc-thang-ch5", 5, None, "Điểm nhấn")
+                render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
+
+                sec_chapter("bc-thang-ch6", 6, None, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
-                sec_chapter("bc-thang-ch5", 5, None, "Xu hướng theo thời gian")
+                sec_chapter("bc-thang-ch7", 7, None, "Xu hướng theo thời gian")
                 frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
-                sec_chapter("bc-thang-ch6", 6, None, "Xu hướng tập trung theo khung giờ")
+                sec_chapter("bc-thang-ch8", 8, None, "Xu hướng tập trung theo khung giờ")
                 frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
-                sec_chapter("bc-thang-ch7", 7, None, "Bảng số liệu")
+                sec_chapter("bc-thang-ch9", 9, None, "Bảng số liệu")
                 render_detail_table(df_m)
     elif bc_sub == "Năm":
         if not df.empty:
