@@ -3594,17 +3594,14 @@ def render_day_timeline(day_df):
     for i, r in _rows.iterrows():
         s = pd.Timestamp(r['Thời gian bắt đầu']); e = pd.Timestamp(r['Thời gian kết thúc'])
         s_min = s.hour * 60 + s.minute
-        # Trần độ rộng hiển thị: không vượt quá điểm bắt đầu của phiên kế tiếp (chừa 2 phút hở)
-        # -- bug thật đã gặp: phiên rất ngắn được nới độ rộng tối thiểu (6 phút, để vẫn bấm/nhìn
-        # thấy được) có thể đè lên phiên kế tiếp nếu 2 phiên cách nhau chưa tới 6 phút, làm 2
-        # thanh nhìn như dính/đè vào nhau, mất luôn khoảng hở thật giữa 2 phiên.
-        if i + 1 < len(_rows):
-            _next_s = pd.Timestamp(_rows.iloc[i + 1]['Thời gian bắt đầu'])
-            _max_min = _next_s.hour * 60 + _next_s.minute - s_min - 2
-        else:
-            _max_min = 1440 - s_min
+        # Độ rộng = ĐÚNG thời lượng thật, KHÔNG nới lên 1 mức tối thiểu nào cả -- bug thật đã gặp:
+        # nới độ rộng phiên rất ngắn lên 1 mức cố định (vd 6 phút) để dễ nhìn/bấm có thể đè lên
+        # phiên kế tiếp nếu 2 phiên cách nhau chưa tới mức đó. Vì left/width đều tỉ lệ TUYẾN TÍNH
+        # theo đúng mốc giờ thật (không phiên nào chồng giờ thật với phiên khác), width tính từ
+        # thời lượng thật KHÔNG BAO GIỜ chồng lấn nhau -- cách duy nhất chắc chắn hết đè, không
+        # cần vá thêm logic giới hạn theo phiên kế tiếp hay viền phân tách giữa các thanh.
         left = s_min / 1440 * 100
-        width = min(max(float(r['Thời lượng (Phút)']), 6), max(_max_min, 1)) / 1440 * 100
+        width = min(float(r['Thời lượng (Phút)']), 1440 - s_min) / 1440 * 100
         proj = str(r['Dự án'])
         lab = f'<span class="dtl-bar-lbl">{html_escape(proj)}</span>' if width > 5.5 else ''
         bars_html += (f'<div class="dtl-bar" title="{html_escape(proj)}: {s:%H:%M}–{e:%H:%M}" '
@@ -3625,7 +3622,7 @@ def render_day_timeline(day_df):
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:3px;height:38px;min-width:4px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);border:1.5px solid var(--card);box-sizing:border-box;}}
+.dtl-bar{{position:absolute;top:3px;height:38px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:16px;margin-top:4px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
