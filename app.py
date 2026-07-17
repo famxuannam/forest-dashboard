@@ -5911,7 +5911,7 @@ st.markdown(
         margin-top: 8px; }
     .sec-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .sec-toc-chip { font-size: 12.5px; font-weight: 600; color: var(--text) !important;
-        text-decoration: none !important; background: var(--chip); border: 1px solid transparent;
+        text-decoration: none !important; background: var(--chip); border: 1px solid var(--border);
         border-radius: 999px; padding: 5px 12px; }
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa.
