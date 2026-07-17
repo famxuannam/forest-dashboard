@@ -3370,10 +3370,8 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
     # với billboard).
     if not _rl_detail.empty or not _kh_book.empty:
-        _notes_df = load_notes()
-        _notes_map = dict(zip(_notes_df['Ngày'], _notes_df['Ghi chú'])) if not _notes_df.empty else {}
         with st.container(border=True, key="jcard_reading_detail"):
-            _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books, daily_notes=_notes_map)
+            _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books)
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
@@ -4287,7 +4285,7 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
     return rows_html
 
 
-def _render_reading_kindle_days(rl_df, kh_df, df_books=None, daily_notes=None):
+def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
     """Bản CÓ TƯƠNG TÁC của mục "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) -- CHỈ dùng ở đúng 1
     chỗ gọi này (_render_reading_detail()), khác _reading_rows_html() (HTML tĩnh, dùng ở nhiều nơi
     khác -- Tìm kiếm, Ghi chú ngày... -- không cần sửa/xoá). Mỗi ngày là 1 hàng THẬT
@@ -4303,12 +4301,12 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, daily_notes=None):
     trí" tăng dần theo đúng thứ tự trang sách lại TỰ NHIÊN phản ánh đúng thứ tự đọc thật (đọc tuần
     tự), nên không cần gán/sắp tay gì thêm mà vẫn ra đúng thứ tự mong muốn.
 
-    df_books/daily_notes (tuỳ chọn, theo mockup Forest Dashboard.dc.html): df_books cho phép tính
-    chip "Thời gian" (tổng phút phiên Forest của đúng cuốn này trong đúng ngày đó -- KHÔNG phải dữ
-    liệu mới, chỉ cross-reference session Forest đã có); daily_notes (dict {Ngày(str): Ghi chú})
-    cho phép hiện lại "Ghi chú ngày" (tính năng nhật ký chung đã có, xem load_notes()) ngay dưới
-    chip nếu đúng ngày đó có ghi -- KHÔNG phải ghi chú gắn riêng cho việc đọc, chỉ mượn lại ghi chú
-    ngày chung nếu trùng ngày, đúng như mockup thể hiện."""
+    df_books (tuỳ chọn): cho phép tính chip "Thời gian" (tổng phút phiên Forest của đúng cuốn này
+    trong đúng ngày đó -- KHÔNG phải dữ liệu mới, chỉ cross-reference session Forest đã có). CỐ Ý
+    KHÔNG hiện "Ghi chú ngày"/"Ghi chú nhanh" ở đây (khác Nhật ký Báo cáo Tuần/Tháng,
+    render_notes_journal()) -- xác nhận với người dùng mục này chỉ cần đúng Phần/Chương đọc + Thời
+    gian, không cần kéo thêm ghi chú chung của ngày vào (từng thử thêm rồi bỏ lại theo phản hồi
+    thực tế)."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize()) if not rl_df.empty else rl_df
     kh = kh_df.copy()
     if not kh.empty:
@@ -4337,11 +4335,6 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, daily_notes=None):
                             chips += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
                                       f"<span class='cv'>{int(_mins)}′</span></span>")
                     st.markdown(chips, unsafe_allow_html=True)
-                    if daily_notes:
-                        _note = daily_notes.get(str(d.date()), "")
-                        if _note:
-                            st.markdown(f"<div class='note-html' style='margin-top:6px;'>{_note}</div>",
-                                        unsafe_allow_html=True)
                 if not day_kh.empty:
                     _render_kindle_day_quotes(day_kh)
 
@@ -6413,7 +6406,14 @@ st.markdown(
        các khối xếp dọc, quá sát khi Thứ/ngày xếp chồng ngay trên nhau qua nhiều ngày liền. Thêm
        padding dọc + đường kẻ dưới cùng KHUÔN với .jrows .jrow để 2 nơi trông nhất quán. */
     [class*="st-key-jkq_row_"] { padding: 10px 0; border-bottom: 1px solid var(--divider); }
-    [class*="st-key-jkq_row_"]:last-child { border-bottom: none; }
+    /* :last-child đặt ngay trên chính div key KHÔNG có tác dụng -- Streamlit bọc mỗi container
+       trong 1 lớp [data-testid="stLayoutWrapper"] riêng, nên div key luôn là con DUY NHẤT (và do
+       đó luôn là last-child) của chính wrapper của nó, khiến rule khớp với MỌI hàng chứ không chỉ
+       hàng cuối (bug thật đã gặp, phát hiện qua getComputedStyle(): border-bottom trả về "0px
+       none" ở tất cả các hàng, kể cả hàng đầu). Phải nhắm :last-child vào wrapper (con của khối
+       cha xếp dọc chung, nơi các wrapper mới thực sự là anh em) rồi mới chọn xuống div key bên
+       trong. */
+    [data-testid="stLayoutWrapper"]:last-child > [class*="st-key-jkq_row_"] { border-bottom: none; }
     /* "Trích dẫn hôm nay" -- xem _render_daily_quote_card()/_kindle_quote_of_day(). Nền phớt màu
        accent (khác var(--card) trung tính của mọi thẻ khác trên trang) để mắt dừng lại ngay, đúng
        mục tiêu không bị lướt qua như bản cũ (từng chôn ở cuối trang, cùng màu mọi thẻ số liệu
