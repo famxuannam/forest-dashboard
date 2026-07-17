@@ -2630,10 +2630,9 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
     không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương").
 
-    show_footer=False (Tuần/Tháng) -- billboard riêng của từng trang (render_period_billboard) đã
-    có câu nhận định tự tính bao gồm đúng nội dung của _smart_digest (so kỳ trước) ở cột phải,
-    dòng "nhận xét" cuối thẻ ở đây thành thừa/lặp lại nếu giữ cả 2. Năm CHƯA có billboard tương tự
-    -- vẫn show_footer=True (mặc định) để không mất thông tin."""
+    show_footer=False (Tuần/Tháng/Năm) -- billboard riêng của từng trang (render_period_billboard)
+    đã có câu nhận định tự tính bao gồm đúng nội dung của _smart_digest (so kỳ trước) ở cột phải,
+    dòng "nhận xét" cuối thẻ ở đây thành thừa/lặp lại nếu giữ cả 2."""
     sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan", tight_top=True)
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
@@ -4765,6 +4764,23 @@ def render_calendar_grid(scope_df, full_df):
         background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
+
+
+def render_year_month_bars(df_y):
+    """Chương "Theo tháng" (Báo cáo -> Năm, mockup): 12 cột Th1-Th12, mỗi cột = tổng giờ tháng đó
+    TRONG NĂM ĐANG CHỌN -- tô đậm/nhạt theo tỉ lệ so với tháng cao nhất (cùng thang teal với
+    Biểu đồ lịch, xem _teal_shades) để 2 chương liền kề đồng bộ 1 họ màu. Tháng chưa có dữ liệu
+    (chưa tới hoặc trống) hiện cột cao 0 (chỉ còn trục nền) -- KHÔNG bỏ hẳn khỏi trục, để vẫn thấy
+    đủ 12 tháng như 1 lịch năm, đúng bố cục mockup."""
+    hrs_by_month = df_y.groupby(pd.to_datetime(df_y['Ngày']).dt.month)['Thời lượng (Phút)'].sum() / 60
+    hrs_by_month = hrs_by_month.reindex(range(1, 13), fill_value=0.0)
+    max_hrs = hrs_by_month.max() or 1.0
+    shades = _teal_shades(6)
+    colors = [shades[min(int(h / max_hrs * 5), 5)] if h > 0 else "rgba(0,0,0,0)" for h in hrs_by_month]
+    fig = go.Figure(go.Bar(x=[f"Th{m}" for m in range(1, 13)], y=list(hrs_by_month), marker_color=colors))
+    fig = format_plotly_fig(fig)
+    fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
+    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 DTBL_CSS = """
@@ -7770,17 +7786,57 @@ elif nav == "Báo cáo":
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
-                sec_hero(None, "Một năm nhìn lại", None,
-                         [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
-                          ("bc-nam-ch3", "3 · Sách &amp; Gundam"), ("bc-nam-ch4", "4 · Bảng số liệu")])
+                # Billboard số to + câu nhận định (mockup, theo đúng pattern Tuần/Tháng đã làm --
+                # xem chú thích ở nhánh Tháng). Cột phải là câu nhận định tự tính (KHÔNG phải hàng
+                # chip "vs năm trước"/"Dự án của năm"/... như mockup vẽ tĩnh -- các số đó ĐÃ có ở
+                # chương "Tổng quan" giữ nguyên bên dưới, lặp lại ở billboard sẽ dư thừa).
+                _curr_hrs_y = df_y['Thời lượng (Phút)'].sum() / 60
+                _active_days_y = df_y['Ngày'].nunique()
+                _by_month_y = df_y.groupby(pd.to_datetime(df_y['Ngày']).dt.month)['Thời lượng (Phút)'].sum()
+                _busiest_month_y = _by_month_y.idxmax()
+                _busiest_month_hrs_y = _by_month_y.max() / 60
+                _streak_cur_y = _streak_stats(df)['current']
+                _is_current_year_y = (selected_year == str(_today_vn().year))
+                _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).dayofyear
+                _elapsed_days_y = _today_vn().timetuple().tm_yday if _is_current_year_y else _days_in_year_y
+
+                _delta_txt_y = ""
+                if prev_y and prev_y.get('hrs') is not None:
+                    _dh_y = _curr_hrs_y - prev_y['hrs']
+                    if abs(_dh_y) >= (1 / 60):
+                        _delta_txt_y = f"{'Hơn' if _dh_y > 0 else 'Kém'} năm trước {_fmt_hours_short(abs(_dh_y))}. "
+                _gap_txt_y = ("không ngày nào trống" if _active_days_y >= _elapsed_days_y
+                              else f"{_elapsed_days_y - _active_days_y} ngày trống")
+                _streak_txt_y = f" — chuỗi giữ mạch {_streak_cur_y} ngày" if _streak_cur_y > 0 else ""
+                _pbill_sub_y = (f"{_delta_txt_y}Tháng {_busiest_month_y} là tháng cao nhất "
+                                 f"({_fmt_hours_short(_busiest_month_hrs_y)}); {_gap_txt_y}{_streak_txt_y}.")
+
+                if prev_y and prev_y.get('hrs') is not None and _curr_hrs_y > prev_y['hrs']:
+                    _pbill_title_y = "Một năm tăng tốc"
+                elif prev_y and prev_y.get('hrs') is not None and _curr_hrs_y < prev_y['hrs']:
+                    _pbill_title_y = "Một năm chững lại"
+                elif _active_days_y >= _elapsed_days_y:
+                    _pbill_title_y = "Một năm nhịp đều"
+                else:
+                    _pbill_title_y = "Một năm nhìn lại"
+
+                render_period_billboard(
+                    f"Năm {selected_year}", _fmt_hours_short(_curr_hrs_y),
+                    (f"tính đến {_today_vn():%d/%m}" if _is_current_year_y else "tổng thời gian năm này"),
+                    f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
+                    f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
+                    [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
+                     ("bc-nam-ch3", "3 · Theo tháng"), ("bc-nam-ch4", "4 · Sách & Gundam"),
+                     ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
                                               "Ngày nổi bật trong năm", show_top3=True,
-                                              anchor_prefix="bc-nam", top3_suffix=" Năm")
+                                              anchor_prefix="bc-nam", top3_suffix=" Năm",
+                                              show_footer=False)
 
-                # Nhánh Năm có bộ mục 2-4 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch + Đọc sách &
-                # Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ
-                # giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
+                # Nhánh Năm có bộ mục 2-5 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch/Theo tháng + Đọc
+                # sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không
+                # đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
@@ -7788,7 +7844,10 @@ elif nav == "Báo cáo":
                 # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
                 render_calendar_grid(df_y, df_y)
 
-                sec_chapter("bc-nam-ch3", 3, None, "Đọc sách & Gundam trong năm")
+                sec_chapter("bc-nam-ch3", 3, None, "Theo tháng")
+                render_year_month_bars(df_y)
+
+                sec_chapter("bc-nam-ch4", 4, None, "Đọc sách & Gundam trong năm")
                 # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
                 # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
                 # phức tạp để tách ra cho 1 mục tổng kết năm.
@@ -7802,7 +7861,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
                     ])
 
-                sec_chapter("bc-nam-ch4", 4, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
                 render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
