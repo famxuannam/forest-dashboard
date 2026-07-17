@@ -2396,9 +2396,9 @@ def render_session_bar(df):
                    f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
                    f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
     st.markdown(
-        "<div class='glass-card' style='padding:16px 18px;margin-top:14px;'>"
+        "<div class='glass-card' style='padding:14px 18px;margin-top:14px;'>"
         "<span class='rl-book'>Phân bổ độ dài phiên</span>"
-        f"<div style='display:flex;height:24px;border-radius:7px;overflow:hidden;'>{seg}</div>"
+        f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg}</div>"
         f"<div style='margin-top:12px;'>{legend}</div>"
         "</div>",
         unsafe_allow_html=True,
@@ -3341,7 +3341,7 @@ def render_day_timeline(day_df):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,0.02);padding:14px 18px;margin-top:14px;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
@@ -4479,9 +4479,9 @@ def render_calendar_grid(scope_df, full_df):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
-.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+.dtbl { border-collapse:collapse; width:100%; font-size:13.5px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:11px; padding:5px 9px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
 .dtbl thead th.lbl { z-index:3; background:var(--chip); }
 /* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
@@ -4714,41 +4714,40 @@ def sec_table(headers, rows):
 
 def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=None):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
-    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
-    dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
-    tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
+    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): ô vuông số thứ tự nhỏ + tiêu đề +
+    badge tuỳ chọn + kẻ ngang mở + kicker tuỳ chọn, tất cả trên CÙNG 1 hàng canh giữa dọc (đúng
+    khuôn mockup hiện hành -- không còn số lớn mờ chồng góc phải của bản trước). anchor là id cho
+    chip mục lục nhảy tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của
+    Streamlit khỏi che tiêu đề).
 
-    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, dùng cho panel tham khảo không
-    nằm trong 1 chuỗi đếm thật sự).
+    num=None -> bỏ hẳn ô số thứ tự (mục không đánh số, dùng cho panel tham khảo không nằm trong 1
+    chuỗi đếm thật sự).
 
-    kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
-    vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
-    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
-    của Trợ giúp).
+    kicker=None/"" -> bỏ hẳn nhãn kicker cuối hàng (dùng khi kicker chỉ lặp lại đúng tên trang
+    đang đứng, vd "Hôm nay" ở tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
+    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như "Universal
+    Century"/"Dự án → Danh mục" trong mockup). Kicker đứng SAU kẻ ngang (cuối hàng), không phải
+    trước tiêu đề.
 
-    tight_top=True -> bỏ margin-top 36px mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay
-    sau 1 sec_hero()/billboard: margin-top 36px đó cộng dồn với margin-bottom sẵn có của hero/
-    billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
-    như block thường) tạo khoảng trắng gấp đôi ngay dưới hero, trong khi giữa các chương với nhau
+    tight_top=True -> bỏ margin-top mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay sau 1
+    sec_hero()/billboard: margin-top đó cộng dồn với margin-bottom sẵn có của hero/billboard + gap
+    flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item như block
+    thường) tạo khoảng trắng rộng bất thường ngay dưới hero, trong khi giữa các chương với nhau
     (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
-
-    Số thứ tự (nếu có) nằm CÙNG 1 hàng ngang với tiêu đề (.sec-ch-row, flex space-between, canh
-    baseline) -- tiêu đề bên trái, số bên phải, thay cho kiểu số tuyệt đối chồng lên góc trên bên
-    phải trước đây (dễ đọc nhầm thành 2 dòng tách biệt không liên quan tới nhau).
 
     badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026" ở "Chỉ số bất thường"
     của Sức khoẻ) -- tách phần thông tin động (ngày/giá trị cụ thể) ra khỏi CHÍNH văn bản tiêu đề,
     để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ liệu hiện dưới dạng chip cạnh bên
-    thay vì nối chuỗi vào title."""
-    _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
-    _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
+    thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề, trước kẻ ngang."""
+    _num_html = f"<span class='sec-ch-num'>{num}</span>" if num is not None else ""
     _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
+    _kicker_html = f"<span class='sec-ch-kicker'>{kicker}</span>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
-        f"<div class='{_cls}' id='{anchor}'>{_kicker_html}"
-        f"<div class='sec-ch-row'><div class='sec-ch-titlewrap'><h2 class='sec-ch-title'>{title}</h2>"
-        f"{_badge_html}</div>{_num_html}</div>{_lead}</div>",
+        f"<div class='{_cls}' id='{anchor}'>"
+        f"<div class='sec-ch-row'>{_num_html}<span class='sec-ch-title'>{title}</span>{_badge_html}"
+        f"<span class='sec-ch-rule'></span>{_kicker_html}</div>{_lead}</div>",
         unsafe_allow_html=True)
 
 
@@ -4890,14 +4889,17 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
 
 @st.fragment
 def frag_pie(scope_df, key, default_color):
-    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng."""
-    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
-                                 label_visibility="collapsed") or default_color
-    pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
-    pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
-    fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
-    fig = format_plotly_fig(fig, is_pie=True)
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng. Bọc trong container riêng
+    (key="piewrap_...") chỉ để CSS thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới (xem rule
+    [class*="st-key-piewrap_"]) mà không đụng margin của mọi segmented_control khác trong app."""
+    with st.container(key=f"piewrap_{key}"):
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                     label_visibility="collapsed") or default_color
+        pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
+        pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
+        fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
+        fig = format_plotly_fig(fig, is_pie=True)
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 @st.fragment
@@ -5199,6 +5201,7 @@ _TOK = {
     "border":  ("#ddd3b8", "#3c3628"),
     "chip":    ("#ece4d0", "#322c20"),   # nền chip (gộp cả #f7f7f9/#eef0f2/#fafafa cũ)
     "divider": ("rgba(33,28,19,0.14)", "rgba(255,255,255,0.12)"),   # gộp mọi rgba(0,0,0,0.05-0.14)
+    "divider-2": ("rgba(33,28,19,0.2)", "rgba(255,255,255,0.17)"),  # kẻ ngang mở đầu chương (sec-ch-rule) -- đậm hơn --divider thường
 }
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
@@ -5240,10 +5243,26 @@ st.markdown(
        của stHeader) sau khi bị che thật ở cả mobile lẫn desktop hẹp -- ĐỪNG giảm số này xuống dưới
        ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước. */
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
-    /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng bị siết xuống 0.6rem (đợt "thu
-       gọn"), phản hồi thực tế sau đó là quá sát/ngột ngạt, nới lại về mức trung dung (0.6rem gốc
-       Streamlit là 1rem) thay vì siết hay revert hẳn 1 trong 2 thái cực. */
-    [data-testid="stVerticalBlock"] { gap: 0.9rem !important; }
+    /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng thử 0.6rem (quá sát) rồi 0.9rem
+       (trung dung), nay đổi hẳn về 10px theo ĐÚNG mockup hiện hành (mọi trang cuộn dọc kiểu
+       chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
+       khớp pixel chính xác, không còn là ước lượng "trung dung" như trước. */
+    [data-testid="stVerticalBlock"] { gap: 10px !important; }
+    /* Streamlit bọc MỌI st.markdown(html) trong [data-testid="stMarkdownContainer"] có sẵn
+       margin-bottom:-16px (bù trừ margin mặc định của <p> cuối cùng trong Markdown thật) -- các
+       khối HTML tự viết ở đây đều là <div> thuần, không có <p> nào để bù, nên -16px này ăn thẳng
+       vào chiều cao đo được của khối, làm phần tử kế tiếp (theo gap flex của khối cha) trèo lên
+       che mất phần nội dung phía dưới cùng (xác nhận qua DevTools: .sec-ch cao 30px thật nhưng
+       container cha chỉ đo được 14px). Huỷ margin âm này cho đúng nhóm khối bị ảnh hưởng RÕ RỆT
+       (chương ngắn/thẻ đứng cuối 1 container) -- không áp toàn cục vì nhiều nơi khác đã tự xử lý
+       việc này qua ":last-child { margin-bottom:0 }" nội bộ, không cần lặp lại. */
+    [data-testid="stMarkdownContainer"]:has(> .sec-ch),
+    [data-testid="stMarkdownContainer"]:has(> .sec-toc),
+    [data-testid="stMarkdownContainer"]:has(> .glass-card),
+    [data-testid="stMarkdownContainer"]:has(> .dtl-card),
+    [data-testid="stMarkdownContainer"]:has(> .sec-card) {
+        margin-bottom: 0 !important;
+    }
 
     .glass-card {
         background: var(--card);
@@ -5445,6 +5464,23 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
+    /* Nút CHƯA chọn trên nav chính: nền kem var(--card) khớp màu mọi card bên dưới (mặc định
+       Streamlit/BaseWeb không đặt nền riêng cho nút segmented_control chưa chọn, rơi về nền
+       trắng/xám trung tính của theme, lệch tông khỏi hệ "Sổ Tay"). Chỉ áp cho nav chính, không
+       đụng các segmented_control khác (bộ lọc biểu đồ...) -- những nơi đó chưa có yêu cầu đổi. */
+    .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+        background-color: var(--card) !important;
+    }
+    /* Giảm khoảng cách dọc xuống Date Picker ngay dưới nav (mặc định 10px margin-bottom của
+       stButtonGroup + 10px gap flex chung = 20px, hơi rộng) -- chỉ scope riêng nav chính. Margin
+       ÂM (không chỉ về 0) để lấn bớt cả gap flex 10px của khối cha -- 2px rồi 0px vẫn còn rộng
+       theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
+    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
+    /* Toggle "Danh mục/Dự án" (frag_pie, container key="piewrap_...") xuống thẻ biểu đồ tròn ngay
+       dưới: cùng lý do/cách sửa như nav ở trên -- thu nhỏ margin-bottom mặc định 10px của
+       stButtonGroup để cân đối với padding các card xung quanh, không đụng margin của các
+       segmented_control khác trong app. */
+    [class*="st-key-piewrap_"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
 
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
@@ -5487,6 +5523,20 @@ st.markdown(
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
     [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* day_stepper riêng: mockup thu gọn cả hàng ◀ [ngày] ▶ về đúng bề rộng nội dung rồi canh
+       giữa trang (KHÔNG kéo giãn full-width như period_stepper của Báo cáo, vốn cần chiếm hết
+       hàng ngang cho các lựa chọn kỳ) -- 2 cột nút cố định 44px, cột ngày co theo nội dung
+       thay vì flex-grow theo tỉ lệ [1,8,1] mặc định. */
+    [class*="st-key-day_stepper"] [data-testid="stHorizontalBlock"] {
+        width: fit-content !important; margin: 0 auto !important;
+    }
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:first-child,
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:last-child {
+        flex: 0 0 44px !important; width: 44px !important;
+    }
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:not(:first-child):not(:last-child) {
+        flex: 0 0 auto !important; width: auto !important;
+    }
     /* Nút ◀/▶ ở day_stepper cao 40px (min-height mặc định Streamlit) trong khi ô st.date_input
        chỉ cao ~36px -- vertical_alignment="center" của st.columns canh giữa theo TÂM mỗi item,
        không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
@@ -5681,16 +5731,36 @@ st.markdown(
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
         background: var(--card) !important;
     }
+    /* Padding riêng theo mockup: "Ghi chú ngày" (note_card, 1 khối duy nhất, không chia hàng năm)
+       rộng rãi hơn 16px 18px; các thẻ nhiều hàng kiểu "jrow" (Ngày này năm trước, Nhật ký...) chỉ
+       6px 18px vì bản thân MỖI hàng đã tự có padding dọc riêng (xem .jrows .jrow), viền ngoài chỉ
+       cần đệm rất mỏng. Streamlit không có padding mặc định khớp sẵn 2 giá trị này nên phải khai
+       báo tay. */
+    .st-key-note_card { padding: 16px 18px !important; }
+    [class*="st-key-jcard"] { padding: 6px 18px !important; }
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    /* Nền gradient phớt accent mờ dần dùng CHUNG cho mọi "billboard/hero" đầu trang (Trợ giúp,
-       Hôm nay, và các trang sẽ chuyển sang bố cục chương sau này) -- gộp 1 rule duy nhất ở đây,
-       thêm selector mới vào danh sách này thay vì lặp lại background riêng từng nơi, để đổi độ
-       mờ 1 lần là áp dụng đồng loạt. */
-    .sec-hero, .st-key-today_billboard {
+    /* Nền gradient phớt accent mờ dần dùng cho "billboard/hero" đầu trang kiểu chương dài
+       (Trợ giúp, Báo cáo, ...) -- KHÔNG áp cho billboard Hôm nay nữa (xem rule riêng ngay dưới):
+       mockup billboard Hôm nay dùng nền phẳng #fdfbf5 (var(--card)) như mọi thẻ khác, không có
+       gradient/độ trong suốt. */
+    .sec-hero {
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
+    }
+    /* Billboard Hôm nay: hiệu ứng kính mờ (frosted/liquid glass) thật -- nền phớt accent bán
+       trong suốt + backdrop-filter blur/saturate làm mờ VÀ rực màu hoạ tiết chấm nền trang đứng
+       sau nó (khác bản trước chỉ có rgba phẳng, chấm nền vẫn hiện SẮC NÉT xuyên qua, chưa ra được
+       cảm giác "kính" thật). saturate(1.6) bù lại độ nhạt do blur, tránh nền trông xám xịt.
+       filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
+       kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
+       bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
+    .st-key-today_billboard {
+        background: rgba(var(--accent-rgb),0.10) !important;
+        backdrop-filter: blur(16px) saturate(1.6);
+        -webkit-backdrop-filter: blur(16px) saturate(1.6);
+        filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
         margin-bottom: 34px; }
@@ -5706,34 +5776,31 @@ st.markdown(
         border-radius: 999px; padding: 5px 12px; }
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa.
-       margin-top 18px (đã giảm từ 36px, phương án C trong mock up "khoảng cách giữa các mục
-       trang" -- gọn hơn nhưng vẫn đủ tách bạch giữa card kết quả của chương trước và tiêu đề
-       chương sau, không dính sát). */
-    .sec-ch { position: relative; margin: 18px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
-    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): margin-top 36px
-       ở trên CỘNG THÊM margin-bottom riêng của hero/billboard (34px hoặc 16px) + gap flex mặc
-       định giữa 2 khối (~14px) cộng dồn (Streamlit render mỗi khối trong 1 flex item riêng, margin
-       KHÔNG collapse giữa flex item như block thường) -> khoảng trắng dưới billboard bị gấp đôi so
-       với khoảng cách giữa các chương với nhau. Class riêng thay vì dò cấu trúc DOM bằng CSS
-       sibling/:has() -- số lượng phần tử chen giữa hero và chương 1 đổi tuỳ trang (vd billboard
-       Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
-       hẳn so với đánh dấu thẳng từ phía gọi Python. */
+       margin-top 8px khớp đúng mockup hiện hành (khoảng cách giữa các mục trang dựa chủ yếu vào
+       gap flex 10px của khối cha, xem [data-testid="stVerticalBlock"] -- 8px này chỉ là phần cộng
+       thêm riêng của chương, không phải toàn bộ khoảng cách nhìn thấy). */
+    .sec-ch { position: relative; margin: 8px 0 0; scroll-margin-top: 80px; }
+    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): bỏ hẳn margin-top
+       riêng của chương (chỉ còn margin-bottom của hero/billboard + gap flex của khối cha) -- có
+       margin riêng nữa sẽ cộng dồn vì Streamlit không collapse margin giữa các flex item như
+       block thường, tạo khoảng trắng rộng bất thường ngay dưới hero. */
     .sec-ch.sec-ch-tight { margin-top: 0; }
-    /* Số thứ tự CÙNG 1 hàng với tiêu đề (thay vì tuyệt đối chồng góc trên bên phải, từng bị đọc
-       nhầm thành 2 dòng tách biệt không liên quan) -- .sec-ch-row là hàng flex space-between,
-       canh baseline: tiêu đề bên trái, số bên phải. Cỡ 64px (phương án C trong mock up "cùng 1
-       hàng, tiêu đề trái/số phải" đã chọn). */
-    .sec-ch-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    .sec-ch-titlewrap { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .sec-ch-num { font-size: 64px; font-weight: 800; line-height: 1; flex-shrink: 0;
-        color: rgba(var(--accent-rgb),0.24); user-select: none; }
-    .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--text-2); }
-    .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    /* Header chương kiểu mockup hiện hành: 1 hàng ngang canh giữa dọc, không còn số lớn mờ chồng
+       góc phải (bản cũ) -- ô vuông teal chứa số nhỏ + tiêu đề + badge tuỳ chọn + kẻ ngang mở
+       (flex:1, lấp hết chỗ trống còn lại) + kicker tuỳ chọn (đặt SAU kẻ ngang, không phải trước
+       tiêu đề như bản cũ -- xem ví dụ "Universal Century"/"Dự án → Danh mục" trong mockup). */
+    .sec-ch-row { display: flex; align-items: center; gap: 10px; }
+    .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
+        color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
+        justify-content: center; }
+    .sec-ch-title { font-size: 19px; font-weight: 750; color: var(--text); }
     /* Chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026") -- tách thông tin ĐỘNG theo dữ liệu ra
        khỏi văn bản tiêu đề cố định, xem docstring sec_chapter() tham số badge. */
-    .sec-ch-badge { font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--chip);
-        border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+    .sec-ch-badge { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+        background: var(--chip); border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+    .sec-ch-rule { flex: 1; height: 1px; background: var(--divider-2); min-width: 24px; }
+    .sec-ch-kicker { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+        text-transform: uppercase; color: var(--text-3); }
     .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
     .sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
@@ -5842,7 +5909,7 @@ st.markdown(
        khoảng cách quanh đường kẻ lệch nhau dù CSS đặt padding bằng nhau, do JS tính sẵn
        chiều cao hàng theo layout ban đầu, không cập nhật lại khi nội dung dài tràn khung). */
     .jrows .jrow { display: grid; grid-template-columns: 1fr 5fr; align-items: start;
-        column-gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
+        column-gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--divider); }
     .jrows .jrow:last-child { border-bottom: none; }
     .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link {
         border-right: 1px solid var(--divider); padding-right: 10px;
@@ -5969,28 +6036,51 @@ st.markdown(
        [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
        margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
        để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
-    /* Nền gradient phớt accent mờ dần (KHÔNG còn color-mix đặc như bản đầu) -- giống hệt .sec-hero
-       của trang Trợ giúp, để billboard nổi bật hơn card số liệu trung tính bên dưới nhưng vẫn nhẹ
-       nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
+    /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
+       khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
+       bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
     .st-key-today_billboard {
         border-color: var(--border) !important;
-        padding: 24px 30px !important;
-        border-radius: 16px !important;
-        margin: 0 0 16px !important;
+        padding: 20px 28px 16px !important;
+        border-radius: 12px !important;
+        margin: 0 0 6px !important;
     }
-    /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
-       dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
-       selector này. */
-    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
-        border-right: 1px solid var(--divider);
+    /* Cột trong HÀNG NGOÀI CÙNG (ngày/trích dẫn, container key="tbill_daterow") mặc định STRETCH
+       hết chiều cao hàng (flex align-items: stretch của Streamlit) -- ép align-self: center để
+       mỗi cột co lại đúng chiều cao nội dung riêng rồi canh giữa so với cột kia (giống grid
+       align-items:center của mockup). Scope CHỈ ĐÚNG "tbill_daterow" (không phải mọi
+       stHorizontalBlock trong billboard nói chung) -- billboard còn 1 hàng ngang LỒNG BÊN TRONG
+       nữa (kq_daily_srcrow, hàng tên sách + nút xáo/yêu thích), nếu chọn rộng hơn sẽ dính luôn
+       rule khung giấy bên dưới vào NHẦM cột đó (bug thật đã gặp: cột tên sách bị đóng khung/đổ
+       bóng như thẻ giấy, không phải cột ngày). */
+    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        align-self: center !important;
+    }
+    /* Cột ngày đóng khung riêng như 1 tờ giấy lịch bàn thật (thay cho kẻ dọc phân cách trước đây)
+       -- viền + bo góc + nền + đổ bóng nhẹ, tách hẳn khỏi cột trích dẫn bên cạnh thay vì chỉ ngăn
+       bằng 1 đường kẻ mảnh. overflow:hidden để .tbill-tab (bo góc trên) không tràn ra ngoài khung. */
+    [class*="st-key-tbill_daterow"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child:not(:last-child) {
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
        cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
        khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
-    .tbill-date { text-align: center; }
+    .tbill-date { text-align: center; padding: 16px 16px 14px; }
+    /* "Tab lịch xé" -- thanh accent bo góc trên + 2 chấm tròn màu nền trang (giả lỗ đục lịch bàn)
+       nằm NGAY TRÊN số ngày to, hiện tháng/năm dạng nhãn nhỏ in hoa (mockup billboard Hôm nay). */
+    .tbill-tab { position: relative; background: var(--accent); border-radius: 8px 8px 0 0;
+        padding: 8px 0 7px; margin-bottom: 8px; }
+    .tbill-tab::before, .tbill-tab::after { content: ''; position: absolute; top: 6px;
+        width: 9px; height: 9px; border-radius: 50%; background: var(--bg);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.35); }
+    .tbill-tab::before { left: 22px; }
+    .tbill-tab::after { right: 22px; }
+    .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
+        text-transform: uppercase; color: var(--card); }
     .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 6px; }
-    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 12px; line-height: 1.7; }
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
@@ -6005,6 +6095,11 @@ st.markdown(
     .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] p {
         font-size: 18px !important; line-height: 1 !important; color: var(--text-3) !important;
     }
+    /* Nút xáo (icon Material "shuffle", KHÁC nút Yêu thích ở trên -- vẫn dùng icon font vì không
+       có ký tự đơn thay thế hợp lý như "★"/"☆") -- màu nhạt var(--text-3) khớp mockup, cỡ 16px. */
+    .st-key-today_billboard div[data-testid="stButton"] button[kind="secondary"] span[data-testid="stIconMaterial"] {
+        font-size: 16px !important; color: var(--text-3) !important;
+    }
     /* Đã Yêu thích -> chữ "★" màu accent (hình dạng đặc/rỗng đã đủ phân biệt, màu chỉ để nhấn
        thêm) -- xem chú thích [class*="st-key-kq_favbtn_on_"] phía trên cho lý do đổi hẳn sang ký
        tự chữ thay vì icon font. */
@@ -6016,7 +6111,17 @@ st.markdown(
        dương nhẹ (KHÔNG âm như bản trước) -- bản âm (-6px) làm nút ⭐ chạm/đè lên dòng cuối chữ
        trích dẫn khi trích dẫn dài đủ 2-3 dòng, phản hồi thực tế là "trông không đẹp". */
     [class*="st-key-kq_daily_srcrow"] { margin-top: 10px; }
-    [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; }
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stHorizontalBlock"] { align-items: center !important; gap: 10px !important; }
+    /* 2 cột nút (xáo/yêu thích) mặc định rộng theo tỉ lệ st.columns([9,1,1]) -- mỗi cột ~60-70px
+       trong khi nút chỉ 30px, khiến 2 nút trông cách nhau rất xa (đo thật ~34px, mockup chỉ 10px).
+       Ép cột nút co đúng 30px (khớp width nút), cột tên sách giãn nốt phần còn lại -- gap 10px của
+       hàng ngang (rule trên) trở thành khoảng cách DUY NHẤT giữa 2 nút, khớp mockup. */
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stColumn"]:first-child {
+        flex: 1 1 auto !important; width: auto !important;
+    }
+    [class*="st-key-kq_daily_srcrow"] [data-testid="stColumn"]:not(:first-child) {
+        flex: 0 0 30px !important; width: 30px !important; min-width: 30px !important;
+    }
     /* Font Cormorant Garamond (xem _QUOTE_FONT_FACE) -- chọn qua mockup ảnh gửi duyệt, cỡ chữ
        chỉnh LỚN HƠN bản Manrope cũ (mark 52->58px, text 21->23px, src 16.5->17.5px) vì đây là
        kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
@@ -6167,7 +6272,7 @@ st.markdown(
 )
 
 st.markdown(
-    f"<div style='margin:0 0 1.3em 0;'>{_wordmark_html('header')}</div>",
+    f"<div style='margin:0 0 1.8em 0;'>{_wordmark_html('header')}</div>",
     unsafe_allow_html=True,
 )
 
@@ -6642,43 +6747,46 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
         _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
                      f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
 
+    _tab_label = f"{VN_MONTHS_WORD[sel.month - 1]} {sel.year}"
     _date_html = (
         "<div class='tbill-date'>"
+        f"<div class='tbill-tab'><span class='tbill-tab-label'>{_tab_label}</span></div>"
         f"<div class='tbill-num'>{sel.day}</div>"
-        f"<div class='tbill-dow'>{vn_dow}, {VN_MONTHS_WORD[sel.month - 1]} {sel.year}</div>"
+        f"<div class='tbill-dow'>{vn_dow}</div>"
         f"<div class='tbill-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
 
     with st.container(key="today_billboard", border=True):
         if kq is not None:
-            c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
-            with c_date:
-                st.markdown(_date_html, unsafe_allow_html=True)
-            with c_quote:
-                st.markdown(
-                    "<div class='kq-daily-mark'>“</div>"
-                    f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
-                    unsafe_allow_html=True)
-                with st.container(key="kq_daily_srcrow"):
-                    _kh_count = len(load_kindle_highlights())
-                    c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
-                    with c_src:
-                        _author = kq.get('Tác giả')
-                        _src_txt = html_escape(str(kq['Cuốn sách']))
-                        if pd.notna(_author) and str(_author).strip():
-                            _src_txt += f" · {html_escape(str(_author))}"
-                        st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
-                    with c_shuffle:
-                        if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
-                                                        help="Đổi trích dẫn khác"):
-                            _shuffle_daily_quote()
-                            st.rerun()
-                    with c_fav:
-                        _fav = bool(kq.get('Yêu thích', False))
-                        if st.button("★" if _fav else "☆",
-                                     key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
-                                     help="Bỏ Yêu thích" if _fav else "Yêu thích"):
-                            set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
-                            st.rerun()
+            with st.container(key="tbill_daterow"):
+                c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
+                with c_date:
+                    st.markdown(_date_html, unsafe_allow_html=True)
+                with c_quote:
+                    st.markdown(
+                        "<div class='kq-daily-mark'>“</div>"
+                        f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
+                        unsafe_allow_html=True)
+                    with st.container(key="kq_daily_srcrow"):
+                        _kh_count = len(load_kindle_highlights())
+                        c_src, c_shuffle, c_fav = st.columns([9, 1, 1])
+                        with c_src:
+                            _author = kq.get('Tác giả')
+                            _src_txt = html_escape(str(kq['Cuốn sách']))
+                            if pd.notna(_author) and str(_author).strip():
+                                _src_txt += f" · {html_escape(str(_author))}"
+                            st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
+                        with c_shuffle:
+                            if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
+                                                            help="Đổi trích dẫn khác"):
+                                _shuffle_daily_quote()
+                                st.rerun()
+                        with c_fav:
+                            _fav = bool(kq.get('Yêu thích', False))
+                            if st.button("★" if _fav else "☆",
+                                         key=f"kq_daily_favbtn_{'on' if _fav else 'off'}",
+                                         help="Bỏ Yêu thích" if _fav else "Yêu thích"):
+                                set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
+                                st.rerun()
         else:
             st.markdown(_date_html, unsafe_allow_html=True)
 
