@@ -4479,9 +4479,9 @@ def render_calendar_grid(scope_df, full_df):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:10px; border:1px solid var(--border); background:var(--card); box-shadow:0 1px 1px rgba(0,0,0,0.02); }
-.dtbl { border-collapse:collapse; width:100%; font-size:14px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+.dtbl { border-collapse:collapse; width:100%; font-size:13.5px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
+.dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:11px; padding:5px 9px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
 .dtbl thead th.lbl { z-index:3; background:var(--chip); }
 /* Header 2 hàng (khi cột trải nhiều năm): hàng năm (nhóm colspan) đứng trên, hàng nhãn kỳ
@@ -5711,6 +5711,13 @@ st.markdown(
         box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important;
         background: var(--card) !important;
     }
+    /* Padding riêng theo mockup: "Ghi chú ngày" (note_card, 1 khối duy nhất, không chia hàng năm)
+       rộng rãi hơn 16px 18px; các thẻ nhiều hàng kiểu "jrow" (Ngày này năm trước, Nhật ký...) chỉ
+       6px 18px vì bản thân MỖI hàng đã tự có padding dọc riêng (xem .jrows .jrow), viền ngoài chỉ
+       cần đệm rất mỏng. Streamlit không có padding mặc định khớp sẵn 2 giá trị này nên phải khai
+       báo tay. */
+    .st-key-note_card { padding: 16px 18px !important; }
+    [class*="st-key-jcard"] { padding: 6px 18px !important; }
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
@@ -5875,7 +5882,7 @@ st.markdown(
        khoảng cách quanh đường kẻ lệch nhau dù CSS đặt padding bằng nhau, do JS tính sẵn
        chiều cao hàng theo layout ban đầu, không cập nhật lại khi nội dung dài tràn khung). */
     .jrows .jrow { display: grid; grid-template-columns: 1fr 5fr; align-items: start;
-        column-gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
+        column-gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--divider); }
     .jrows .jrow:last-child { border-bottom: none; }
     .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link {
         border-right: 1px solid var(--divider); padding-right: 10px;
