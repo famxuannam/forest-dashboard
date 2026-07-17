@@ -5744,7 +5744,10 @@ st.markdown(
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    .stat-panel .chip, .pbill-chips .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+    /* .maprow .chip: badge Danh mục ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
+       tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ thêm vào phạm vi scope
+       vì không phải billboard/stat-panel. */
+    .stat-panel .chip, .pbill-chips .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
     .stat-panel .chip .ck, .pbill-chips .chip .ck { color: var(--text-2); }
     .stat-panel .chip .cv, .pbill-chips .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
@@ -6185,7 +6188,7 @@ st.markdown(
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail {
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
         background: rgba(var(--accent-rgb),0.10) !important;
         backdrop-filter: blur(16px) saturate(1.6);
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
@@ -6382,6 +6385,30 @@ st.markdown(
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
+    /* Bảng Phân loại TĨNH (Tuỳ biến -> chương "2. Phân loại") -- badge màu Danh mục không thể vẽ
+       trong 1 ô data_editor (SelectboxColumn chỉ nhận text đơn thuần, không chèn được HTML màu),
+       nên hiển thị dạng bảng tĩnh khớp mockup; sửa phân loại chuyển sang 1 form riêng bên dưới
+       (chọn Dự án + Danh mục + nút Lưu) thay vì sửa ngay trong ô bảng. */
+    /* Mọi hàng (kể cả dòng "+N dự án khác" cuối bảng) đều là div.maprow trực tiếp trong .maptbl
+       -- :last-child (không phải :last-of-type, vốn so theo TAG chứ không theo class, sẽ khớp
+       nhầm nếu dòng cuối mang thêm class phụ) mới chắc chắn khớp đúng div cuối cùng để bỏ viền. */
+    .maptbl { display: flex; flex-direction: column; }
+    .maprow { display: grid; grid-template-columns: 2fr 2fr 1fr; column-gap: 10px; align-items: center;
+        padding: 9px 0; border-bottom: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+    .maptbl .maprow:last-child { border-bottom: none; }
+    .maprow-head { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase;
+        letter-spacing: 0.4px; }
+    .maprow .mp-proj { font-weight: 600; }
+    .maprow .mp-n { text-align: right; font-variant-numeric: tabular-nums; }
+    .maprow.maprow-extra { grid-template-columns: 1fr; font-size: 12.5px; color: var(--text-2); }
+    /* Thẻ st.container(border=True) ở Tuỳ biến (5 chương) mặc định nền TRONG SUỐT (chỉ có viền,
+       không có fill) -- khác mọi thẻ .glass-card/.dtl-card khác trong app luôn nền phẳng
+       var(--card), nên hoạ tiết chấm bi của .stApp lộ xuyên qua, trông "rỗng"/không giống thẻ
+       thật. Ép nền đặc var(--card) cho khớp phần còn lại của app. */
+    .st-key-tb_quick_sync_card, .st-key-tb_mapping_card, .st-key-tb_theme_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card {
+        background: var(--card) !important;
+    }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
     .jdate .jdow { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 6px; }
     .jdate .jdowbig { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
@@ -6504,7 +6531,7 @@ st.markdown(
     /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail {
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
@@ -6523,14 +6550,16 @@ st.markdown(
        1 tờ giấy riêng -- xem lại thấy phẳng như bản gốc đẹp hơn nên bỏ, chỉ giữ canh giữa. */
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
     /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
        columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
        đã tự có mark "" làm khoảng đệm thị giác riêng. */
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
         padding-left: 24px !important;
     }
     /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
@@ -7842,19 +7871,72 @@ elif nav == "Tìm kiếm":
 # TAB TUỲ BIẾN
 # ==========================================
 elif nav == "Tuỳ biến":
-    with st.expander("1. Dữ liệu đầu vào", expanded=True):
+    # Hero + 5 chương (chuyển từ 5 expander đánh số cũ, xác nhận với người dùng giữ NGUYÊN mọi
+    # luồng nạp dữ liệu/xử lý bên trong, chỉ đổi vỏ ngoài theo mockup Forest Dashboard.dc.html).
+    # Chương "5. Dữ liệu làm việc hiện tại" (bảng phiên thô + xoá hàng loạt) KHÔNG có trong mockup
+    # (mockup chỉ vẽ 4 chương) -- xác nhận với người dùng giữ làm chương riêng thứ 5, đặt SAU
+    # "4. Quản lý hệ thống" (xem cuối khối này).
+    # Billboard (render_period_billboard(), KHÔNG phải sec_hero()) để khớp đúng style Hôm nay/Báo
+    # cáo/Sách/Gundam đã chuyển trước đó -- sec_hero() là mẫu cũ hơn, thiếu khung "tờ lịch" số to
+    # bên trái nên trông lệch tông so với phần còn lại của app đã đồng bộ hết sang billboard.
+    _n_sessions_tb = len(load_db())
+    _last_sync_tb = _cached_settings().get("last_quick_sync_at")
+    _last_bk_tb = _cached_settings().get("last_backup_at")
+    _tb_meta_parts = []
+    if _last_sync_tb:
+        _ls_dt_tb = pd.Timestamp(_last_sync_tb)
+        _ls_label_tb = (f"hôm nay, {_ls_dt_tb:%H:%M}" if _ls_dt_tb.date() == _today_vn()
+                         else f"{_ls_dt_tb:%d/%m/%Y, %H:%M}")
+        _tb_meta_parts.append(f"Đồng bộ gần nhất {_ls_label_tb}")
+    if _last_bk_tb:
+        _tb_meta_parts.append(f"Sao lưu gần nhất {pd.Timestamp(_last_bk_tb):%d/%m/%Y}")
+    _tb_meta = " · ".join(_tb_meta_parts) if _tb_meta_parts else "Chưa đồng bộ/sao lưu lần nào"
+    render_period_billboard(
+        "Tuỳ biến", str(_n_sessions_tb), "phiên trong hệ thống", _tb_meta,
+        "<div class='pbill-title'>Dữ liệu &amp; giao diện của bạn</div>"
+        "<div class='pbill-sub'>Nạp dữ liệu, gán phân loại, chỉnh màu sắc hoạ tiết và sao lưu — "
+        "tất cả ở một nơi.</div>",
+        [("tb-ch1", "1 · Dữ liệu đầu vào"), ("tb-ch2", "2 · Phân loại"),
+         ("tb-ch3", "3 · Giao diện"), ("tb-ch4", "4 · Quản lý hệ thống"),
+         ("tb-ch5", "5 · Dữ liệu làm việc hiện tại")],
+        key="tb_billboard")
+
+    sec_chapter("tb-ch1", 1, None, "Dữ liệu đầu vào", tight_top=True)
+    with st.container(border=True, key="tb_quick_sync_card"):
         _qmsg = st.session_state.pop('quick_sync_msg', None)
         if _qmsg:
             (st.success if not st.session_state.pop('quick_sync_has_error', False) else st.warning)(_qmsg)
         _qfiles = _list_sync_files()
         _qf = _latest_sync_file(_qfiles, "forest")
         _qr = _latest_sync_file(_qfiles, "reminder")
-        qc1, qc2 = st.columns(2)
-        with qc1:
-            st.markdown(f"**File Forest mới nhất**  \n{_qf['name'] if _qf else '_— chưa có —_'}")
-        with qc2:
-            st.markdown(f"**File Reminder mới nhất**  \n{_qr['name'] if _qr else '_— chưa có —_'}")
-        if st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync", disabled=not (_qf or _qr)):
+        _last_sync_raw = _cached_settings().get("last_quick_sync_at")
+        _last_sync_summary = _cached_settings().get("last_quick_sync_summary")
+        if _last_sync_raw:
+            _ls_dt = pd.Timestamp(_last_sync_raw)
+            _ls_label = (f"hôm nay, {_ls_dt:%H:%M}" if _ls_dt.date() == _today_vn()
+                         else f"{_ls_dt:%d/%m/%Y, %H:%M}")
+            _qsub = f"Lần gần nhất: {_ls_label}" + (f" · {_last_sync_summary}" if _last_sync_summary else "")
+        else:
+            _qsub = "Chưa đồng bộ lần nào."
+        # Chữ trái + nút phải trên CÙNG 1 hàng (khớp mockup) -- st.columns() mặc định
+        # align-items:stretch nên 2 cột cao bằng nhau nhưng nội dung neo TRÊN; ép align-items:center
+        # qua CSS descendant selector (KHÔNG dùng ">") để nút "Đồng bộ ngay" canh giữa theo chiều dọc
+        # với khối chữ 2 dòng bên trái dù cao hơn 1 dòng của nút.
+        st.markdown(
+            "<style>.st-key-tb_quick_sync_row [data-testid=\"stHorizontalBlock\"] "
+            "{ align-items: center; }</style>", unsafe_allow_html=True)
+        with st.container(key="tb_quick_sync_row"):
+            qc1, qc2 = st.columns([3, 1])
+            with qc1:
+                st.markdown(
+                    f"<div style='font-size:14.5px;font-weight:700;color:var(--text);'>"
+                    f"Đồng bộ nhanh từ Forest</div>"
+                    f"<div style='font-size:13px;color:var(--text-2);margin-top:2px;'>{_qsub}</div>",
+                    unsafe_allow_html=True)
+            with qc2:
+                _qclicked = st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync",
+                                      disabled=not (_qf or _qr), use_container_width=True)
+        if _qclicked:
             with st.spinner("Đang đồng bộ..."):
                 _qres = sync_from_storage(_today_vn() - timedelta(days=90), _today_vn() + timedelta(days=90))
             if _qres["error"]:
@@ -7874,6 +7956,8 @@ elif nav == "Tuỳ biến":
                     _parts.append(f"lịch lỗi ({_qres['calendar_error']})"); _has_err = True
                 elif _qres["calendar"] is not None:
                     _parts.append(f"{_qres['calendar']} appointment lịch")
+                save_setting("last_quick_sync_at", datetime.now(APP_TZ).strftime('%Y-%m-%d %H:%M:%S'))
+                save_setting("last_quick_sync_summary", ", ".join(_parts) if _parts else "không có gì mới")
                 st.session_state['quick_sync_msg'] = "Đã đồng bộ: " + ", ".join(_parts) + "." if _parts else "Không có file mới để đồng bộ."
                 st.session_state['quick_sync_has_error'] = _has_err
             st.rerun()
@@ -8128,7 +8212,8 @@ elif nav == "Tuỳ biến":
                         st.session_state['kindle_map_save_msg'] = "Đã lưu ánh xạ mới."
                         st.rerun()
 
-    with st.expander("2. Phân loại", expanded=False):
+    sec_chapter("tb-ch2", 2, None, "Phân loại")
+    with st.container(border=True, key="tb_mapping_card"):
         db_current = load_db()
         mapping_df = load_mapping()
         all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
@@ -8144,28 +8229,342 @@ elif nav == "Tuỳ biến":
             else:
                 st.success("Tất cả dự án đã được phân loại.")
 
+            # Bảng TĨNH (badge màu Danh mục, khớp mockup) -- data_editor cũ không vẽ được badge
+            # màu trong ô (SelectboxColumn chỉ nhận text đơn thuần), nên sửa chuyển xuống form
+            # riêng bên dưới bảng (xem "Sửa phân loại"). Sắp theo số phiên giảm dần, cắt bớt nếu
+            # danh sách dài (khớp mockup "+N dự án khác") -- form sửa vẫn chọn được MỌI dự án qua
+            # selectbox riêng, không phụ thuộc dự án đó có đang hiện trong bảng hay không.
+            _proj_sessions = db_current['Dự án'].astype(str).value_counts()
+            _cat_colors = build_color_map(existing_cats) if existing_cats else {}
+            _rows_sorted = sorted(all_projs, key=lambda p: -_proj_sessions.get(p, 0))
+            _MAP_SHOW = 8
+            _show_rows = _rows_sorted[:_MAP_SHOW]
+            _extra_n = len(_rows_sorted) - len(_show_rows)
+
+            _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Danh mục</span><span style='text-align:right;'>Phiên</span></div>"
+            for p in _show_rows:
+                _cat = cur_map.get(p)
+                _cat = str(_cat) if pd.notna(_cat) and str(_cat).strip() else None
+                if _cat:
+                    _dot = _cat_colors.get(_cat, "var(--accent)")
+                    _badge = (f"<span class='chip' style='display:inline-flex;align-items:center;'>"
+                              f"<i style='display:inline-block;width:9px;height:9px;border-radius:3px;"
+                              f"margin-right:6px;background:{_dot};'></i>{html_escape(_cat)}</span>")
+                else:
+                    _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— chưa phân loại —</span>"
+                _n = int(_proj_sessions.get(p, 0))
+                _rows_html += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
+                               f"<span class='mp-cat'>{_badge}</span>"
+                               f"<span class='mp-n'>{_n}</span></div>")
+            if _extra_n > 0:
+                _rows_html += f"<div class='maprow maprow-extra'>+ {_extra_n} dự án khác · sửa phân loại bên dưới</div>"
+            st.markdown(f"<div class='maptbl'>{_rows_html}</div>", unsafe_allow_html=True)
+
+            st.markdown("<div style='margin-top:16px;font-size:13px;font-weight:600;"
+                        "color:var(--text-2);'>Sửa phân loại</div>", unsafe_allow_html=True)
             new_cat = st.text_input("Tạo nhóm mới:").strip()
             opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
-            tbl = pd.DataFrame({"Dự án": all_projs, "Nhóm (Danh mục)": [cur_map.get(p) for p in all_projs]})
-            edited = st.data_editor(
-                tbl, hide_index=True, width='stretch', key="map_editor",
-                column_config={
-                    "Dự án": st.column_config.TextColumn("Dự án", disabled=True),
-                    # Ô trống luôn hiện chữ "None" (canvas riêng của SelectboxColumn, không phải
-                    # DOM nên không sửa được bằng CSS/đổi kiểu None->NaN) -> chú thích rõ ý nghĩa
-                    # qua tooltip cột thay vì cố "ẩn" nó đi.
-                    "Nhóm (Danh mục)": st.column_config.SelectboxColumn(
-                        "Nhóm (Danh mục)", options=opts,
-                        help="Để trống (hiện 'None') = dự án tự đứng riêng, không thuộc nhóm nào."),
-                },
-            )
-            if st.button("Lưu phân loại", type="primary", key="tbtn_save_mapping"):
-                nm = edited.rename(columns={"Nhóm (Danh mục)": "Danh mục"})
-                nm = nm[nm["Danh mục"].notna() & (nm["Danh mục"].astype(str).str.strip() != "")]
-                save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
-                st.rerun()
-    with st.expander("3. Dữ liệu làm việc hiện tại", expanded=False):
-        # Nút xoá hàng loạt cũng dùng màu cảnh báo -- xem chú thích ở "5. Quản lý hệ thống".
+            fc1, fc2, fc3 = st.columns([2, 2, 1])
+            with fc1:
+                edit_proj = st.selectbox("Dự án", all_projs, key="map_edit_proj")
+            with fc2:
+                _cur_val = cur_map.get(edit_proj)
+                _cur_idx = opts.index(_cur_val) if _cur_val in opts else None
+                edit_cat = st.selectbox("Danh mục", opts, index=_cur_idx, key="map_edit_cat",
+                                        placeholder="— Chọn danh mục —")
+            with fc3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
+                    if edit_cat:
+                        nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
+                              if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Danh mục"]))
+                        nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Danh mục": edit_cat}])],
+                                       ignore_index=True)
+                        save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
+                        st.rerun()
+    sec_chapter("tb-ch3", 3, None, "Giao diện")
+    with st.container(border=True, key="tb_theme_card"):
+        st.markdown("<div style='font-size:15px;font-weight:700;text-transform:uppercase;"
+                    "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
+                    "Màu accent</div>", unsafe_allow_html=True)
+        _preset_items = list(ACCENT_PRESETS.items())
+        _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
+        _swatch_css = "<style>"
+        for _row_start in range(0, len(_preset_items), _per_row):
+            _row_items = _preset_items[_row_start:_row_start + _per_row]
+            _cols = st.columns(_per_row)
+            for _i, (_name, _hex) in enumerate(_row_items):
+                _idx = _row_start + _i
+                _key = f"accent_sw_{_idx}"
+                _selected = _hex == ACCENT
+                _border = "var(--text)" if _selected else "transparent"
+                _txt_color = _readable_text(_hex)
+                _label = f"✓ {_name}" if _selected else _name
+                # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
+                # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
+                # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
+                # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong. Tên màu
+                # hiện thẳng trên nút (không chỉ tooltip) -- màu chữ tự chọn trắng/đen theo độ
+                # chói nền (_readable_text) để luôn đọc rõ với 6 màu khác nhau.
+                _swatch_css += (
+                    f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background:{_hex} !important; color:{_txt_color} !important; "
+                    f"border:2px solid {_border} !important; border-radius:10px !important; "
+                    f"width:100% !important; height:auto !important; min-height:48px !important; "
+                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
+                    f"white-space:normal !important; line-height:1.25 !important; }}")
+                with _cols[_i]:
+                    if st.button(_label, key=_key, use_container_width=True):
+                        if _hex != ACCENT:
+                            save_setting("accent_hex", _hex)
+                            st.rerun()
+        _swatch_css += "</style>"
+        st.markdown(_swatch_css, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top:2px;font-size:15px;font-weight:700;text-transform:uppercase;"
+                    "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
+                    "Kiểu nền trang</div>", unsafe_allow_html=True)
+        _bg_items = list(BG_PRESETS.items())
+        _bg_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
+        _bg_css = "<style>"
+        for _bg_row_start in range(0, len(_bg_items), _bg_per_row):
+            _bg_row_items = _bg_items[_bg_row_start:_bg_row_start + _bg_per_row]
+            _bg_cols = st.columns(_bg_per_row)
+            for _bg_i, (_bg_name, _bg_cfg) in enumerate(_bg_row_items):
+                _idx = _bg_row_start + _bg_i
+                _bg_key = f"bg_sw_{_idx}"
+                _bg_selected = _bg_name == BG_STYLE
+                _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
+                _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
+                _bg_position = _bg_cfg.get("position", "0 0")
+                # Nút xem trước dùng ĐÚNG background-image/size/position của preset (không phải
+                # màu đặc như accent) -- người dùng thấy được hoạ tiết thật trước khi chọn.
+                _bg_css += (
+                    f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background-color: var(--card-tl) !important; "
+                    f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
+                    f"background-position: {_bg_position} !important; "
+                    f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
+                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
+                    f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
+                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
+                with _bg_cols[_bg_i]:
+                    if st.button(_bg_label, key=_bg_key, use_container_width=True):
+                        if _bg_name != BG_STYLE:
+                            save_setting("bg_style", _bg_name)
+                            st.rerun()
+        _bg_css += "</style>"
+        st.markdown(_bg_css, unsafe_allow_html=True)
+
+    sec_chapter("tb-ch4", 4, None, "Quản lý hệ thống")
+    # 3 thẻ rút gọn về ĐÚNG 1 nhãn + 1 nút (không còn help text/checkbox lộ ngay trên thẻ, theo
+    # phản hồi thực tế) -- 2 thao tác phá huỷ dữ liệu (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch
+    # toàn bộ) chuyển hết phần xác nhận (upload/preview/checkbox/nút xác nhận cuối) vào popup
+    # riêng qua st.dialog(), nút trên thẻ chỉ có nhiệm vụ MỞ popup đó. Sao lưu không phá huỷ gì
+    # nên giữ nguyên 1 nút tải trực tiếp, không cần popup.
+    @st.dialog("Khôi phục dữ liệu")
+    def _tb_restore_dialog():
+        res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
+        ok_zip = False
+        if res is not None:
+            try:
+                res.seek(0)
+                with zipfile.ZipFile(res) as _z:
+                    names = set(_z.namelist())
+                    parts = []
+                    if DB_FILE in names:
+                        _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
+                        _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
+                        _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                        parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
+                    if MAPPING_FILE in names:
+                        parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
+                    if DELETED_FILE in names:
+                        parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
+                    if NOTES_FILE in names:
+                        parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
+                    if QUICK_NOTES_FILE in names:
+                        parts.append(f"Ghi chú nhanh **{len(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE))))}** dòng")
+                    if WORK_CALENDAR_FILE in names:
+                        parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
+                    if READING_LOG_FILE in names:
+                        parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
+                    if SETTINGS_FILE in names:
+                        parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
+                    if HEALTH_METRICS_FILE in names:
+                        parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
+                    if KINDLE_HIGHLIGHTS_FILE in names:
+                        parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
+                    if DELETED_KINDLE_FILE in names:
+                        parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
+                    if GUNDAM_OVERRIDES_FILE in names:
+                        parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
+                if parts:
+                    ok_zip = True
+                    st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
+                else:
+                    st.caption("File .zip không chứa dữ liệu hợp lệ.")
+            except Exception:
+                st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
+        confirm_restore = False
+        if ok_zip:
+            st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
+            confirm_restore = st.checkbox("Tôi xác nhận muốn ghi đè toàn bộ dữ liệu hiện tại",
+                                           key="cb_restore_confirm")
+        if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
+                     key="tbtn_restore_confirm"):
+            res.seek(0)
+            with zipfile.ZipFile(res) as _z:
+                names = set(_z.namelist())
+                if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
+                if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
+                if DELETED_FILE in names:
+                    save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
+                if NOTES_FILE in names:
+                    save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
+                if QUICK_NOTES_FILE in names:
+                    save_quick_notes_bulk(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE)), dtype=str))
+                if WORK_CALENDAR_FILE in names:
+                    save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
+                if READING_LOG_FILE in names:
+                    save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
+                if SETTINGS_FILE in names:
+                    save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
+                if HEALTH_METRICS_FILE in names:
+                    # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
+                    # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
+                    save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
+                # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
+                # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
+                # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
+                if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
+                    _sb_delete_all("kindle_highlights", "dedupe_hash")
+                    _sb_delete_all("kindle_book_map", "kindle_title")
+                if KINDLE_BOOK_MAP_FILE in names:
+                    save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
+                if KINDLE_HIGHLIGHTS_FILE in names:
+                    # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
+                    # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
+                    # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
+                    save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
+                if DELETED_KINDLE_FILE in names:
+                    save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
+                if GUNDAM_OVERRIDES_FILE in names:
+                    save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
+            st.cache_data.clear()
+            st.success("Khôi phục hệ thống thành công!")
+            time.sleep(1)
+            st.rerun()
+
+    @st.dialog("Xoá toàn bộ dữ liệu")
+    def _tb_wipe_dialog():
+        st.warning("Thao tác này **xoá vĩnh viễn** toàn bộ dữ liệu trên hệ thống, không thể hoàn tác.")
+        confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu", key="cb_wipe_confirm")
+        if st.button("Xoá toàn bộ dữ liệu", type="primary", disabled=not confirm_delete, key="tbtn_wipe_all"):
+            _sb_delete_all("sessions", "id")
+            _sb_delete_all("mapping", "project")
+            _sb_delete_all("deleted_sessions", "start_time")
+            _sb_delete_all("notes", "note_date")
+            _sb_delete_all("quick_notes", "id")
+            _sb_delete_all("work_calendar", "uid")
+            _sb_delete_all("reading_log", "uid")
+            _sb_delete_all("settings", "key")
+            _sb_delete_all("health_metrics", "id")
+            _sb_delete_all("kindle_highlights", "dedupe_hash")
+            _sb_delete_all("kindle_book_map", "kindle_title")
+            _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
+            _sb_delete_all("gundam_overrides", "session_date")
+            st.cache_data.clear()
+            st.success("Đã xoá toàn bộ dữ liệu!")
+            time.sleep(1)
+            st.rerun()
+
+    # 3 thẻ cao KHÔNG bằng nhau mặc định -- rule chung [data-testid="stHorizontalBlock"]
+    # { align-items: flex-start !important; } (nơi khác trong file) khiến mỗi cột co theo đúng
+    # chiều cao nội dung riêng. :has() chọn ĐÚNG hàng chứa 3 thẻ này (không cần bọc thêm
+    # st.container(key=...) ngoài, tránh phải thụt lề lại cả khối) rồi ép stretch + 3 thẻ
+    # height:100% để cao bằng nhau dù nhãn/nút dài ngắn khác nhau.
+    st.markdown(
+        "<style>"
+        "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) "
+        "{ align-items: stretch !important; }"
+        ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card { height: 100%; }"
+        # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ, giờ nằm trong popup st.dialog()) dùng màu
+        # cảnh báo riêng (đỏ #ff3b30, cùng tông đỏ dùng cho delta âm/chỉ số bất thường trong app)
+        # thay vì màu nút thường -- tín hiệu thị giác phân biệt mức độ nguy hiểm. key vẫn giữ
+        # nguyên (tbtn_wipe_all/tbtn_restore_confirm) dù đổi chỗ vào dialog, CSS này không cần đổi.
+        ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"primary\"],"
+        ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
+        "background-color:#ff3b30 !important;color:#fff !important;"
+        "border-color:#ff3b30 !important;box-shadow:none !important;}"
+        # Nút 3 thẻ Sao lưu/Khôi phục/Làm mới: nhỏ gọn, KHÔNG full-width (khớp mockup -- nút chỉ
+        # rộng vừa chữ, neo trái dưới nhãn+help text, không kéo hết bề ngang thẻ).
+        ".st-key-tb_backup_card div[data-testid=\"stButton\"] button,"
+        ".st-key-tb_restore_card div[data-testid=\"stButton\"] button,"
+        ".st-key-tb_wipe_card div[data-testid=\"stButton\"] button {"
+        "padding:5px 14px !important;font-size:13px !important;border-radius:7px !important;"
+        "font-weight:500 !important;min-height:auto !important;}"
+        "</style>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    _today = _today_vn().strftime('%Y-%m-%d')
+    _sysrow_label_css = "font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;"
+    _sysrow_help_css = "font-size:13px;color:var(--text-2);margin-bottom:10px;"
+    with c1:
+        with st.container(border=True, key="tb_backup_card"):
+            _last_bk = _cached_settings().get("last_backup_at")
+            _bk_help = (f"Lần gần nhất: {pd.Timestamp(_last_bk):%d/%m/%Y}" if _last_bk
+                        else "Chưa sao lưu lần nào.")
+            st.markdown(f"<div style='{_sysrow_label_css}'>Sao lưu</div>"
+                        f"<div style='{_sysrow_help_css}'>{_bk_help}</div>", unsafe_allow_html=True)
+            db_now = load_db()
+            _buf = io.BytesIO()
+            if not db_now.empty:
+                with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
+                    _settings_df = pd.DataFrame(list(load_settings().items()), columns=["key", "value"])
+                    for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
+                                      (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes()),
+                                      (QUICK_NOTES_FILE, load_quick_notes()),
+                                      (WORK_CALENDAR_FILE, load_work_calendar()),
+                                      (READING_LOG_FILE, load_reading_log()),
+                                      (SETTINGS_FILE, _settings_df),
+                                      (HEALTH_METRICS_FILE, load_health_metrics()),
+                                      (KINDLE_HIGHLIGHTS_FILE, load_kindle_highlights()),
+                                      (KINDLE_BOOK_MAP_FILE, load_kindle_book_map()),
+                                      (DELETED_KINDLE_FILE, load_deleted_kindle()),
+                                      (GUNDAM_OVERRIDES_FILE, pd.DataFrame(
+                                          [{"Ngày": k, "Series": v} for k, v in load_gundam_overrides().items()]))]:
+                        if not _df.empty:
+                            _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
+            st.download_button("Tải bản sao lưu", _buf.getvalue(),
+                               f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
+                               disabled=db_now.empty,
+                               on_click=lambda: save_setting("last_backup_at", _today))
+    with c2:
+        with st.container(border=True, key="tb_restore_card"):
+            st.markdown(f"<div style='{_sysrow_label_css}'>Khôi phục</div>"
+                        f"<div style='{_sysrow_help_css}'>Tải lên bản sao lưu (.zip)</div>",
+                        unsafe_allow_html=True)
+            if st.button("Khôi phục", key="tbtn_restore_open"):
+                _tb_restore_dialog()
+    with c3:
+        with st.container(border=True, key="tb_wipe_card"):
+            st.markdown(f"<div style='{_sysrow_label_css}'>Làm mới</div>"
+                        f"<div style='{_sysrow_help_css}'>Xoá toàn bộ dữ liệu — cần xác nhận</div>",
+                        unsafe_allow_html=True)
+            if st.button("Xoá toàn bộ dữ liệu", key="tbtn_wipe_open"):
+                _tb_wipe_dialog()
+
+    if _auth_configured:
+        st.divider()
+        st.caption(f"Đăng nhập với **{st.user.email}**")
+        st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
+
+    # Chương "5. Dữ liệu làm việc hiện tại" -- KHÔNG có trong mockup (chỉ vẽ 4 chương), xác nhận
+    # với người dùng giữ làm chương riêng cuối cùng thay vì gộp vào "1. Dữ liệu đầu vào" (xem
+    # đầu khối "elif nav == "Tuỳ biến":").
+    sec_chapter("tb-ch5", 5, None, "Dữ liệu làm việc hiện tại")
+    with st.container(border=True, key="tb_rawdata_card"):
+        # Nút xoá hàng loạt cũng dùng màu cảnh báo -- xem chú thích ở "4. Quản lý hệ thống".
         st.markdown(
             "<style>.st-key-tbtn_delete_selected div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
             "background-color:#ff3b30 !important;color:#fff !important;"
@@ -8217,247 +8616,6 @@ elif nav == "Tuỳ biến":
                     f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
                     f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
                     unsafe_allow_html=True)
-    with st.expander("4. Giao diện", expanded=False):
-        st.markdown("<div style='font-size:13px;font-weight:600;color:var(--text-2);'>"
-                    "Màu accent</div>", unsafe_allow_html=True)
-        _preset_items = list(ACCENT_PRESETS.items())
-        _per_row = 4  # 8 màu / 4 mỗi hàng -> đúng 2 hàng đều, không lẻ hàng cuối như 5/hàng cũ
-        _swatch_css = "<style>"
-        for _row_start in range(0, len(_preset_items), _per_row):
-            _row_items = _preset_items[_row_start:_row_start + _per_row]
-            _cols = st.columns(_per_row)
-            for _i, (_name, _hex) in enumerate(_row_items):
-                _idx = _row_start + _i
-                _key = f"accent_sw_{_idx}"
-                _selected = _hex == ACCENT
-                _border = "var(--text)" if _selected else "transparent"
-                _txt_color = _readable_text(_hex)
-                _label = f"✓ {_name}" if _selected else _name
-                # Selector cần đủ đặc hiệu để thắng rule chung .stButton button[kind="secondary"]
-                # (đặt nền trắng !important cho mọi nút phụ trong app) -- .st-key-<key> button đơn
-                # thuần thua rule đó (thiếu 1 bậc [data-testid]/[kind]), nên phải khớp lại cấu trúc
-                # đầy đủ div[data-testid="stButton"] button[kind="secondary"] bên trong. Tên màu
-                # hiện thẳng trên nút (không chỉ tooltip) -- màu chữ tự chọn trắng/đen theo độ
-                # chói nền (_readable_text) để luôn đọc rõ với 6 màu khác nhau.
-                _swatch_css += (
-                    f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                    f"background:{_hex} !important; color:{_txt_color} !important; "
-                    f"border:2px solid {_border} !important; border-radius:10px !important; "
-                    f"width:100% !important; height:auto !important; min-height:48px !important; "
-                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.25 !important; }}")
-                with _cols[_i]:
-                    if st.button(_label, key=_key, use_container_width=True):
-                        if _hex != ACCENT:
-                            save_setting("accent_hex", _hex)
-                            st.rerun()
-        _swatch_css += "</style>"
-        st.markdown(_swatch_css, unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top:18px;font-size:13px;font-weight:600;color:var(--text-2);'>"
-                    "Kiểu nền trang</div>", unsafe_allow_html=True)
-        _bg_items = list(BG_PRESETS.items())
-        _bg_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
-        _bg_css = "<style>"
-        for _bg_row_start in range(0, len(_bg_items), _bg_per_row):
-            _bg_row_items = _bg_items[_bg_row_start:_bg_row_start + _bg_per_row]
-            _bg_cols = st.columns(_bg_per_row)
-            for _bg_i, (_bg_name, _bg_cfg) in enumerate(_bg_row_items):
-                _idx = _bg_row_start + _bg_i
-                _bg_key = f"bg_sw_{_idx}"
-                _bg_selected = _bg_name == BG_STYLE
-                _bg_border = "var(--accent)" if _bg_selected else "var(--border)"
-                _bg_label = f"✓ {_bg_name}" if _bg_selected else _bg_name
-                _bg_position = _bg_cfg.get("position", "0 0")
-                # Nút xem trước dùng ĐÚNG background-image/size/position của preset (không phải
-                # màu đặc như accent) -- người dùng thấy được hoạ tiết thật trước khi chọn.
-                _bg_css += (
-                    f".st-key-{_bg_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                    f"background-color: var(--card-tl) !important; "
-                    f"background-image: {_bg_cfg['image']} !important; background-size: {_bg_cfg['size']} !important; "
-                    f"background-position: {_bg_position} !important; "
-                    f"color: var(--text) !important; border:2px solid {_bg_border} !important; "
-                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
-                    f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
-                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
-                with _bg_cols[_bg_i]:
-                    if st.button(_bg_label, key=_bg_key, use_container_width=True):
-                        if _bg_name != BG_STYLE:
-                            save_setting("bg_style", _bg_name)
-                            st.rerun()
-        _bg_css += "</style>"
-        st.markdown(_bg_css, unsafe_allow_html=True)
-
-    with st.expander("5. Quản lý hệ thống", expanded=False):
-        # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ) dùng màu cảnh báo riêng (đỏ #ff3b30, cùng
-        # tông đỏ dùng cho delta âm/chỉ số bất thường trong app) thay vì màu nút thường -- tín hiệu
-        # thị giác phân biệt mức độ nguy hiểm, tránh bấm nhầm giữa hàng nút trung tính khác.
-        st.markdown(
-            "<style>"
-            ".st-key-tbtn_wipe_all div[data-testid=\"stButton\"] button[kind=\"secondary\"],"
-            ".st-key-tbtn_restore_confirm div[data-testid=\"stButton\"] button[kind=\"primary\"] {"
-            "background-color:#ff3b30 !important;color:#fff !important;"
-            "border-color:#ff3b30 !important;box-shadow:none !important;}"
-            "</style>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        _today = _today_vn().strftime('%Y-%m-%d')
-        with c1:
-            st.subheader("Sao lưu")
-            # Nhắc sao lưu: chỉ hiện ngay tại đây (không phải banner toàn app) -- đúng nơi và
-            # lúc người dùng hành động được ngay. Chưa từng sao lưu, hoặc lần gần nhất quá 30
-            # ngày, thì nhắc nhẹ.
-            _last_bk = _cached_settings().get("last_backup_at")
-            _days_since_bk = (_today_vn() - date.fromisoformat(_last_bk)).days if _last_bk else None
-            if _days_since_bk is None:
-                st.caption("Chưa sao lưu lần nào.")
-            elif _days_since_bk > 30:
-                st.caption(f"Lần sao lưu gần nhất: {_days_since_bk} ngày trước. Nên sao lưu định kỳ.")
-            db_now = load_db()
-            if not db_now.empty:
-                _buf = io.BytesIO()
-                with zipfile.ZipFile(_buf, "w", zipfile.ZIP_DEFLATED) as _z:
-                    _settings_df = pd.DataFrame(list(load_settings().items()), columns=["key", "value"])
-                    for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
-                                      (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes()),
-                                      (QUICK_NOTES_FILE, load_quick_notes()),
-                                      (WORK_CALENDAR_FILE, load_work_calendar()),
-                                      (READING_LOG_FILE, load_reading_log()),
-                                      (SETTINGS_FILE, _settings_df),
-                                      (HEALTH_METRICS_FILE, load_health_metrics()),
-                                      (KINDLE_HIGHLIGHTS_FILE, load_kindle_highlights()),
-                                      (KINDLE_BOOK_MAP_FILE, load_kindle_book_map()),
-                                      (DELETED_KINDLE_FILE, load_deleted_kindle()),
-                                      (GUNDAM_OVERRIDES_FILE, pd.DataFrame(
-                                          [{"Ngày": k, "Series": v} for k, v in load_gundam_overrides().items()]))]:
-                        if not _df.empty:
-                            _z.writestr(os.path.basename(_fn), _df.to_csv(index=False))
-                st.download_button("Tải bản sao lưu", _buf.getvalue(),
-                                   f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
-                                   on_click=lambda: save_setting("last_backup_at", _today))
-            else:
-                st.caption("Chưa có dữ liệu để sao lưu.")
-        with c2:
-            st.subheader("Khôi phục")
-            res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
-            ok_zip = False
-            if res is not None:
-                try:
-                    res.seek(0)
-                    with zipfile.ZipFile(res) as _z:
-                        names = set(_z.namelist())
-                        parts = []
-                        if DB_FILE in names:
-                            _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
-                            _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
-                            _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
-                            parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
-                        if MAPPING_FILE in names:
-                            parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
-                        if DELETED_FILE in names:
-                            parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
-                        if NOTES_FILE in names:
-                            parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
-                        if QUICK_NOTES_FILE in names:
-                            parts.append(f"Ghi chú nhanh **{len(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE))))}** dòng")
-                        if WORK_CALENDAR_FILE in names:
-                            parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
-                        if READING_LOG_FILE in names:
-                            parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
-                        if SETTINGS_FILE in names:
-                            parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
-                        if HEALTH_METRICS_FILE in names:
-                            parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
-                        if KINDLE_HIGHLIGHTS_FILE in names:
-                            parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
-                        if DELETED_KINDLE_FILE in names:
-                            parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
-                        if GUNDAM_OVERRIDES_FILE in names:
-                            parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
-                    if parts:
-                        ok_zip = True
-                        st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
-                    else:
-                        st.caption("File .zip không chứa dữ liệu hợp lệ.")
-                except Exception:
-                    st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
-            confirm_restore = False
-            if ok_zip:
-                st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
-                # Cùng mức bảo vệ với "Làm mới" bên cạnh -- 2 thao tác phá huỷ dữ liệu ngang nhau
-                # (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch toàn bộ) nên cần checkbox xác nhận
-                # giống nhau, không để Khôi phục chỉ cần 1 cú bấm trong khi Làm mới cần 2 bước.
-                confirm_restore = st.checkbox("Tôi xác nhận muốn ghi đè toàn bộ dữ liệu hiện tại",
-                                               key="cb_restore_confirm")
-            if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
-                         key="tbtn_restore_confirm"):
-                res.seek(0)
-                with zipfile.ZipFile(res) as _z:
-                    names = set(_z.namelist())
-                    if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
-                    if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
-                    if DELETED_FILE in names:
-                        save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
-                    if NOTES_FILE in names:
-                        save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
-                    if QUICK_NOTES_FILE in names:
-                        save_quick_notes_bulk(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE)), dtype=str))
-                    if WORK_CALENDAR_FILE in names:
-                        save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
-                    if READING_LOG_FILE in names:
-                        save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
-                    if SETTINGS_FILE in names:
-                        save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
-                    if HEALTH_METRICS_FILE in names:
-                        # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
-                        # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
-                        save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
-                    # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
-                    # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
-                    # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
-                    if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
-                        _sb_delete_all("kindle_highlights", "dedupe_hash")
-                        _sb_delete_all("kindle_book_map", "kindle_title")
-                    if KINDLE_BOOK_MAP_FILE in names:
-                        save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
-                    if KINDLE_HIGHLIGHTS_FILE in names:
-                        # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
-                        # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
-                        # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
-                        save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
-                    if DELETED_KINDLE_FILE in names:
-                        save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
-                    if GUNDAM_OVERRIDES_FILE in names:
-                        save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
-                st.cache_data.clear()
-                st.success("Khôi phục hệ thống thành công!")
-                time.sleep(1)
-                st.rerun()
-        with c3:
-            st.subheader("Làm mới")
-            confirm_delete = st.checkbox("Tôi xác nhận muốn xoá toàn bộ dữ liệu")
-            if st.button("Xoá toàn bộ dữ liệu", disabled=not confirm_delete, key="tbtn_wipe_all"):
-                _sb_delete_all("sessions", "id")
-                _sb_delete_all("mapping", "project")
-                _sb_delete_all("deleted_sessions", "start_time")
-                _sb_delete_all("notes", "note_date")
-                _sb_delete_all("quick_notes", "id")
-                _sb_delete_all("work_calendar", "uid")
-                _sb_delete_all("reading_log", "uid")
-                _sb_delete_all("settings", "key")
-                _sb_delete_all("health_metrics", "id")
-                _sb_delete_all("kindle_highlights", "dedupe_hash")
-                _sb_delete_all("kindle_book_map", "kindle_title")
-                _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
-                _sb_delete_all("gundam_overrides", "session_date")
-                st.cache_data.clear()
-                st.success("Đã xoá toàn bộ dữ liệu!")
-                time.sleep(1)
-                st.rerun()
-
-        if _auth_configured:
-            st.divider()
-            st.caption(f"Đăng nhập với **{st.user.email}**")
-            st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout, key="tbtn_logout")
 
 # ==========================================
 # TAB HƯỚNG DẪN
