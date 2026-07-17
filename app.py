@@ -4889,14 +4889,17 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
 
 @st.fragment
 def frag_pie(scope_df, key, default_color):
-    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng."""
-    ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
-                                 label_visibility="collapsed") or default_color
-    pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
-    pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
-    fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
-    fig = format_plotly_fig(fig, is_pie=True)
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng. Bọc trong container riêng
+    (key="piewrap_...") chỉ để CSS thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới (xem rule
+    [class*="st-key-piewrap_"]) mà không đụng margin của mọi segmented_control khác trong app."""
+    with st.container(key=f"piewrap_{key}"):
+        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+                                     label_visibility="collapsed") or default_color
+        pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
+        pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
+        fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
+        fig = format_plotly_fig(fig, is_pie=True)
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
 
 
 @st.fragment
@@ -5461,6 +5464,21 @@ st.markdown(
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
+    /* Nút CHƯA chọn trên nav chính: nền kem var(--card) khớp màu mọi card bên dưới (mặc định
+       Streamlit/BaseWeb không đặt nền riêng cho nút segmented_control chưa chọn, rơi về nền
+       trắng/xám trung tính của theme, lệch tông khỏi hệ "Sổ Tay"). Chỉ áp cho nav chính, không
+       đụng các segmented_control khác (bộ lọc biểu đồ...) -- những nơi đó chưa có yêu cầu đổi. */
+    .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+        background-color: var(--card) !important;
+    }
+    /* Giảm khoảng cách dọc xuống Date Picker ngay dưới nav (mặc định 10px margin-bottom của
+       stButtonGroup + 10px gap flex chung = 20px, hơi rộng) -- chỉ scope riêng nav chính. */
+    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
+    /* Toggle "Danh mục/Dự án" (frag_pie, container key="piewrap_...") xuống thẻ biểu đồ tròn ngay
+       dưới: cùng lý do/cách sửa như nav ở trên -- thu nhỏ margin-bottom mặc định 10px của
+       stButtonGroup để cân đối với padding các card xung quanh, không đụng margin của các
+       segmented_control khác trong app. */
+    [class*="st-key-piewrap_"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
 
     /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
        "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
@@ -5729,10 +5747,16 @@ st.markdown(
     .sec-hero {
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
     }
-    /* Billboard Hôm nay: nền đặc var(--card) + đổ bóng "tờ giấy lịch thật" bằng filter:drop-shadow
-       (khác box-shadow viền mỏng mặc định của st.container(border=True)) -- đúng khuôn mockup. */
+    /* Billboard Hôm nay: nền phớt accent ĐỀU (KHÔNG gradient mờ dần như .sec-hero) + đổ bóng "tờ
+       giấy lịch thật" bằng filter:drop-shadow -- phiên bản nền đặc var(--card) trước đó bị lẫn
+       hẳn vào các card số liệu trung tính bên dưới (cùng 1 màu), phản hồi thực tế cần billboard
+       nổi bật hơn. Dùng rgba đều 1 mức (không fade-to-transparent) để tránh lặp lại vấn đề cũ
+       của .sec-hero (gradient tạo cảm giác "trong suốt" không đều) -- vẫn hơi ánh lộ hoạ tiết chấm
+       nền trang xuyên qua (chủ ý, tạo khác biệt thị giác với card đặc bên dưới), mức tint NHẸ hơn
+       hẳn .sec-hero (0.06 so với 0.16) vì billboard đứng 1 mình, không cần nổi mạnh như hero mở
+       đầu trang dài. */
     .st-key-today_billboard {
-        background: var(--card) !important;
+        background: rgba(var(--accent-rgb),0.06) !important;
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
@@ -6245,7 +6269,7 @@ st.markdown(
 )
 
 st.markdown(
-    f"<div style='margin:0 0 1.3em 0;'>{_wordmark_html('header')}</div>",
+    f"<div style='margin:0 0 1.8em 0;'>{_wordmark_html('header')}</div>",
     unsafe_allow_html=True,
 )
 
