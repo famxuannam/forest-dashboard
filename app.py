@@ -4714,41 +4714,40 @@ def sec_table(headers, rows):
 
 def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=None):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
-    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): số thứ tự lớn mờ màu accent +
-    dòng kicker in hoa tuỳ chọn + tiêu đề + đoạn dẫn tuỳ chọn. anchor là id cho chip mục lục nhảy
-    tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của Streamlit khỏi che tiêu đề).
+    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): ô vuông số thứ tự nhỏ + tiêu đề +
+    badge tuỳ chọn + kẻ ngang mở + kicker tuỳ chọn, tất cả trên CÙNG 1 hàng canh giữa dọc (đúng
+    khuôn mockup hiện hành -- không còn số lớn mờ chồng góc phải của bản trước). anchor là id cho
+    chip mục lục nhảy tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của
+    Streamlit khỏi che tiêu đề).
 
-    num=None -> bỏ hẳn số thứ tự lớn ở góc (mục không đánh số, dùng cho panel tham khảo không
-    nằm trong 1 chuỗi đếm thật sự).
+    num=None -> bỏ hẳn ô số thứ tự (mục không đánh số, dùng cho panel tham khảo không nằm trong 1
+    chuỗi đếm thật sự).
 
-    kicker=None/"" -> bỏ hẳn dòng kicker (dùng khi kicker chỉ lặp lại đúng tên trang đang đứng,
-    vd "Hôm nay" phía trên tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
-    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như các chương
-    của Trợ giúp).
+    kicker=None/"" -> bỏ hẳn nhãn kicker cuối hàng (dùng khi kicker chỉ lặp lại đúng tên trang
+    đang đứng, vd "Hôm nay" ở tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
+    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như "Universal
+    Century"/"Dự án → Danh mục" trong mockup). Kicker đứng SAU kẻ ngang (cuối hàng), không phải
+    trước tiêu đề.
 
-    tight_top=True -> bỏ margin-top 36px mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay
-    sau 1 sec_hero()/billboard: margin-top 36px đó cộng dồn với margin-bottom sẵn có của hero/
-    billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
-    như block thường) tạo khoảng trắng gấp đôi ngay dưới hero, trong khi giữa các chương với nhau
+    tight_top=True -> bỏ margin-top mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay sau 1
+    sec_hero()/billboard: margin-top đó cộng dồn với margin-bottom sẵn có của hero/billboard + gap
+    flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item như block
+    thường) tạo khoảng trắng rộng bất thường ngay dưới hero, trong khi giữa các chương với nhau
     (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
-
-    Số thứ tự (nếu có) nằm CÙNG 1 hàng ngang với tiêu đề (.sec-ch-row, flex space-between, canh
-    baseline) -- tiêu đề bên trái, số bên phải, thay cho kiểu số tuyệt đối chồng lên góc trên bên
-    phải trước đây (dễ đọc nhầm thành 2 dòng tách biệt không liên quan tới nhau).
 
     badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026" ở "Chỉ số bất thường"
     của Sức khoẻ) -- tách phần thông tin động (ngày/giá trị cụ thể) ra khỏi CHÍNH văn bản tiêu đề,
     để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ liệu hiện dưới dạng chip cạnh bên
-    thay vì nối chuỗi vào title."""
-    _num_html = f"<div class='sec-ch-num'>{num:02d}</div>" if num is not None else ""
-    _kicker_html = f"<div class='sec-ch-kicker'>{kicker}</div>" if kicker else ""
+    thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề, trước kẻ ngang."""
+    _num_html = f"<span class='sec-ch-num'>{num}</span>" if num is not None else ""
     _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
+    _kicker_html = f"<span class='sec-ch-kicker'>{kicker}</span>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
-        f"<div class='{_cls}' id='{anchor}'>{_kicker_html}"
-        f"<div class='sec-ch-row'><div class='sec-ch-titlewrap'><h2 class='sec-ch-title'>{title}</h2>"
-        f"{_badge_html}</div>{_num_html}</div>{_lead}</div>",
+        f"<div class='{_cls}' id='{anchor}'>"
+        f"<div class='sec-ch-row'>{_num_html}<span class='sec-ch-title'>{title}</span>{_badge_html}"
+        f"<span class='sec-ch-rule'></span>{_kicker_html}</div>{_lead}</div>",
         unsafe_allow_html=True)
 
 
@@ -5199,6 +5198,7 @@ _TOK = {
     "border":  ("#ddd3b8", "#3c3628"),
     "chip":    ("#ece4d0", "#322c20"),   # nền chip (gộp cả #f7f7f9/#eef0f2/#fafafa cũ)
     "divider": ("rgba(33,28,19,0.14)", "rgba(255,255,255,0.12)"),   # gộp mọi rgba(0,0,0,0.05-0.14)
+    "divider-2": ("rgba(33,28,19,0.2)", "rgba(255,255,255,0.17)"),  # kẻ ngang mở đầu chương (sec-ch-rule) -- đậm hơn --divider thường
 }
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 st.markdown(
@@ -5240,10 +5240,11 @@ st.markdown(
        của stHeader) sau khi bị che thật ở cả mobile lẫn desktop hẹp -- ĐỪNG giảm số này xuống dưới
        ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước. */
     .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
-    /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng bị siết xuống 0.6rem (đợt "thu
-       gọn"), phản hồi thực tế sau đó là quá sát/ngột ngạt, nới lại về mức trung dung (0.6rem gốc
-       Streamlit là 1rem) thay vì siết hay revert hẳn 1 trong 2 thái cực. */
-    [data-testid="stVerticalBlock"] { gap: 0.9rem !important; }
+    /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng thử 0.6rem (quá sát) rồi 0.9rem
+       (trung dung), nay đổi hẳn về 10px theo ĐÚNG mockup hiện hành (mọi trang cuộn dọc kiểu
+       chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
+       khớp pixel chính xác, không còn là ước lượng "trung dung" như trước. */
+    [data-testid="stVerticalBlock"] { gap: 10px !important; }
 
     .glass-card {
         background: var(--card);
@@ -5487,6 +5488,20 @@ st.markdown(
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
     [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
+    /* day_stepper riêng: mockup thu gọn cả hàng ◀ [ngày] ▶ về đúng bề rộng nội dung rồi canh
+       giữa trang (KHÔNG kéo giãn full-width như period_stepper của Báo cáo, vốn cần chiếm hết
+       hàng ngang cho các lựa chọn kỳ) -- 2 cột nút cố định 44px, cột ngày co theo nội dung
+       thay vì flex-grow theo tỉ lệ [1,8,1] mặc định. */
+    [class*="st-key-day_stepper"] [data-testid="stHorizontalBlock"] {
+        width: fit-content !important; margin: 0 auto !important;
+    }
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:first-child,
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:last-child {
+        flex: 0 0 44px !important; width: 44px !important;
+    }
+    [class*="st-key-day_stepper"] [data-testid="stColumn"]:not(:first-child):not(:last-child) {
+        flex: 0 0 auto !important; width: auto !important;
+    }
     /* Nút ◀/▶ ở day_stepper cao 40px (min-height mặc định Streamlit) trong khi ô st.date_input
        chỉ cao ~36px -- vertical_alignment="center" của st.columns canh giữa theo TÂM mỗi item,
        không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
@@ -5685,12 +5700,18 @@ st.markdown(
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
        (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    /* Nền gradient phớt accent mờ dần dùng CHUNG cho mọi "billboard/hero" đầu trang (Trợ giúp,
-       Hôm nay, và các trang sẽ chuyển sang bố cục chương sau này) -- gộp 1 rule duy nhất ở đây,
-       thêm selector mới vào danh sách này thay vì lặp lại background riêng từng nơi, để đổi độ
-       mờ 1 lần là áp dụng đồng loạt. */
-    .sec-hero, .st-key-today_billboard {
+    /* Nền gradient phớt accent mờ dần dùng cho "billboard/hero" đầu trang kiểu chương dài
+       (Trợ giúp, Báo cáo, ...) -- KHÔNG áp cho billboard Hôm nay nữa (xem rule riêng ngay dưới):
+       mockup billboard Hôm nay dùng nền phẳng #fdfbf5 (var(--card)) như mọi thẻ khác, không có
+       gradient/độ trong suốt. */
+    .sec-hero {
         background: linear-gradient(160deg, rgba(var(--accent-rgb),0.16), rgba(var(--accent-rgb),0.04) 55%, transparent) !important;
+    }
+    /* Billboard Hôm nay: nền đặc var(--card) + đổ bóng "tờ giấy lịch thật" bằng filter:drop-shadow
+       (khác box-shadow viền mỏng mặc định của st.container(border=True)) -- đúng khuôn mockup. */
+    .st-key-today_billboard {
+        background: var(--card) !important;
+        filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     .sec-hero { padding: 32px 30px 26px; border-radius: 16px; border: 1px solid var(--border);
         margin-bottom: 34px; }
@@ -5706,34 +5727,31 @@ st.markdown(
         border-radius: 999px; padding: 5px 12px; }
     .sec-toc-chip:hover { border-color: var(--accent); color: var(--accent-dark) !important; }
     /* scroll-margin-top: header Streamlit dạng fixed che mất tiêu đề khi nhảy anchor nếu không chừa.
-       margin-top 18px (đã giảm từ 36px, phương án C trong mock up "khoảng cách giữa các mục
-       trang" -- gọn hơn nhưng vẫn đủ tách bạch giữa card kết quả của chương trước và tiêu đề
-       chương sau, không dính sát). */
-    .sec-ch { position: relative; margin: 18px 0 6px; padding-top: 6px; scroll-margin-top: 80px; }
-    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): margin-top 36px
-       ở trên CỘNG THÊM margin-bottom riêng của hero/billboard (34px hoặc 16px) + gap flex mặc
-       định giữa 2 khối (~14px) cộng dồn (Streamlit render mỗi khối trong 1 flex item riêng, margin
-       KHÔNG collapse giữa flex item như block thường) -> khoảng trắng dưới billboard bị gấp đôi so
-       với khoảng cách giữa các chương với nhau. Class riêng thay vì dò cấu trúc DOM bằng CSS
-       sibling/:has() -- số lượng phần tử chen giữa hero và chương 1 đổi tuỳ trang (vd billboard
-       Hôm nay có thêm 1 iframe ẩn của _inject_relative_time_ticker() không cố định), dễ vỡ hơn
-       hẳn so với đánh dấu thẳng từ phía gọi Python. */
+       margin-top 8px khớp đúng mockup hiện hành (khoảng cách giữa các mục trang dựa chủ yếu vào
+       gap flex 10px của khối cha, xem [data-testid="stVerticalBlock"] -- 8px này chỉ là phần cộng
+       thêm riêng của chương, không phải toàn bộ khoảng cách nhìn thấy). */
+    .sec-ch { position: relative; margin: 8px 0 0; scroll-margin-top: 80px; }
+    /* Chương ĐẦU TIÊN ngay sau billboard/hero (sec_chapter(..., tight_top=True)): bỏ hẳn margin-top
+       riêng của chương (chỉ còn margin-bottom của hero/billboard + gap flex của khối cha) -- có
+       margin riêng nữa sẽ cộng dồn vì Streamlit không collapse margin giữa các flex item như
+       block thường, tạo khoảng trắng rộng bất thường ngay dưới hero. */
     .sec-ch.sec-ch-tight { margin-top: 0; }
-    /* Số thứ tự CÙNG 1 hàng với tiêu đề (thay vì tuyệt đối chồng góc trên bên phải, từng bị đọc
-       nhầm thành 2 dòng tách biệt không liên quan) -- .sec-ch-row là hàng flex space-between,
-       canh baseline: tiêu đề bên trái, số bên phải. Cỡ 64px (phương án C trong mock up "cùng 1
-       hàng, tiêu đề trái/số phải" đã chọn). */
-    .sec-ch-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    .sec-ch-titlewrap { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .sec-ch-num { font-size: 64px; font-weight: 800; line-height: 1; flex-shrink: 0;
-        color: rgba(var(--accent-rgb),0.24); user-select: none; }
-    .sec-ch-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--text-2); }
-    .sec-ch-title { font-size: 24px; font-weight: 750; color: var(--text); margin: 4px 0 0; }
+    /* Header chương kiểu mockup hiện hành: 1 hàng ngang canh giữa dọc, không còn số lớn mờ chồng
+       góc phải (bản cũ) -- ô vuông teal chứa số nhỏ + tiêu đề + badge tuỳ chọn + kẻ ngang mở
+       (flex:1, lấp hết chỗ trống còn lại) + kicker tuỳ chọn (đặt SAU kẻ ngang, không phải trước
+       tiêu đề như bản cũ -- xem ví dụ "Universal Century"/"Dự án → Danh mục" trong mockup). */
+    .sec-ch-row { display: flex; align-items: center; gap: 10px; }
+    .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
+        color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
+        justify-content: center; }
+    .sec-ch-title { font-size: 19px; font-weight: 750; color: var(--text); }
     /* Chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026") -- tách thông tin ĐỘNG theo dữ liệu ra
        khỏi văn bản tiêu đề cố định, xem docstring sec_chapter() tham số badge. */
-    .sec-ch-badge { font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--chip);
-        border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+    .sec-ch-badge { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+        background: var(--chip); border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+    .sec-ch-rule { flex: 1; height: 1px; background: var(--divider-2); min-width: 24px; }
+    .sec-ch-kicker { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+        text-transform: uppercase; color: var(--text-3); }
     .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
     .sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin: 10px 0;
@@ -5969,14 +5987,22 @@ st.markdown(
        [data-testid="stVerticalBlockBorderWrapper"] chung của Streamlit -- ghi đè nền/viền/padding/
        margin ở đây, không cần định nghĩa lại toàn bộ khung. margin ngang 16px (thay vì full-width)
        để khớp đúng bề rộng card số liệu bên dưới (xem docstring _render_daily_quote_card()). */
-    /* Nền gradient phớt accent mờ dần (KHÔNG còn color-mix đặc như bản đầu) -- giống hệt .sec-hero
-       của trang Trợ giúp, để billboard nổi bật hơn card số liệu trung tính bên dưới nhưng vẫn nhẹ
-       nhàng, không đặc sệt như thẻ trích dẫn Kindle cũ. */
+    /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
+       khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
+       bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
     .st-key-today_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
         margin: 0 0 6px !important;
+    }
+    /* Cột trong billboard mặc định STRETCH hết chiều cao hàng (flex align-items: stretch của
+       Streamlit) -- ép align-self: center để mỗi cột co lại đúng chiều cao nội dung riêng rồi
+       canh giữa so với cột kia (giống grid align-items:center của mockup). Không có rule này,
+       kẻ dọc phân tách bên dưới sẽ kéo dài chạm sát mép trên/dưới thẻ thay vì có khoảng đệm đúng
+       cảm giác "canh giữa" của mockup. */
+    .st-key-today_billboard [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        align-self: center !important;
     }
     /* Kẻ dọc mảnh phân tách cột ngày/cột trích dẫn -- chỉ áp cho hàng có đủ 2 cột (khi có trích
        dẫn); ngày trống trích dẫn chỉ có 1 cột nên :first-child chính là :last-child, không khớp
