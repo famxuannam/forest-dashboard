@@ -2722,6 +2722,17 @@ def _compute_alltime_records(df):
     }
 
 
+def _mi(name, size=13):
+    """1 icon Material Symbols Rounded chèn thẳng vào chuỗi HTML tĩnh (KHÔNG qua tham số
+    icon=":material/x:" của widget Streamlit, vì đây là text HTML thô render bằng
+    unsafe_allow_html) -- span tự khai font-family riêng, không cần nhúng thêm font nào (Streamlit
+    đã tự load sẵn font này cho icon :material/x: của chính nó, xem CSS `.jchip.rec::before`).
+    Dùng thay EMOJI ở mọi nhãn/câu mới thêm (vd "🏆 Tuần kỷ lục" -> "{_mi('emoji_events')} Tuần kỷ
+    lục") để đồng bộ với quy ước icon Material đã có sẵn trong app, không lẫn 2 kiểu icon."""
+    return (f"<span style=\"font-family:'Material Symbols Rounded';font-size:{size}px;"
+            f"vertical-align:-2px;\">{name}</span>")
+
+
 def _chip_row_html(heading, chips_html):
     """1 hàng "heading nhỏ (class .rl-book) + các jchip" -- khuôn dùng chung cho
     _record_chips_html() (chip Kỷ lục) và _book_chips_html() (chip tên sách)."""
@@ -4844,10 +4855,10 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
         st.markdown(
             "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Kỷ lục trong tháng</span><div class='hlt-list'>"
-            f"<div class='hlt-item'>🏆 Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
-            f"<div class='hlt-item'>⏱️ Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
+            f"<div class='hlt-item'>{_mi('emoji_events')} Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
+            f"<div class='hlt-item'>{_mi('timer')} Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
             f"{int(_longest_sess['Thời lượng (Phút)'])}′ ({html_escape(str(_longest_sess['Dự án']))})</div>"
-            f"<div class='hlt-item'>🔥 Chuỗi trong tháng · {_longest_streak} ngày liên tiếp</div>"
+            f"<div class='hlt-item'>{_mi('local_fire_department')} Chuỗi trong tháng · {_longest_streak} ngày liên tiếp</div>"
             "</div></div>", unsafe_allow_html=True)
 
     with c2:
@@ -8210,7 +8221,7 @@ elif nav == "Báo cáo":
                 _chips_g_bb.append({"k": "TB / tuần (4 tuần)", "v": _fmt_hours_short(_tb_4w_hrs_g)})
                 if len(_wk_hrs_g):
                     _best_wk_key_g = _wk_hrs_g.idxmax()
-                    _chips_g_bb.append({"k": "🏆 Tuần kỷ lục",
+                    _chips_g_bb.append({"k": f"{_mi('emoji_events')} Tuần kỷ lục",
                                          "v": f"T{_best_wk_key_g.split('-W')[1]} · "
                                               f"{_fmt_hours_short(_wk_hrs_g.max()/60)}"})
                 _chips_html_g = ''.join(
