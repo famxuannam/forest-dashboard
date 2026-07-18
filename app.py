@@ -2895,42 +2895,50 @@ def _render_kindle_quotes_tab():
     riêng -- tái dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh
     dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
 
-    Thêm 4 bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
+    Thêm bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
     sắp xếp Mới lưu nhất/Cũ nhất (theo "Ngày thêm" -- mốc lưu vào Kindle, DÙNG CHUNG với
     show_added_date ở _render_kindle_quote_row(), KHÔNG phải "Vị trí" Kindle như "2. Nhật ký
-    đọc"), toggle "Chỉ Yêu thích", và chip lọc theo cuốn sách (st.segmented_control, đếm số trích
-    dẫn không đổi theo ô tìm để nhãn chip ổn định giữa các lần rerun -- NHƯNG đổi theo toggle Yêu
-    thích, vì đó là đổi tập dữ liệu nền chứ không phải lọc mềm như ô tìm). Sách nhiều hơn 3 cuốn
-    thu gọn còn 3 cuốn đầu (theo đúng thứ tự sắp xếp đang chọn), có nút "Hiện thêm" mở hết --
-    trạng thái mở lưu ở session_state, KHÔNG reset khi đổi tìm/sắp xếp/lọc để tránh giật khi người
-    dùng đang duyệt."""
+    đọc"), và 1 hàng chip: "Chỉ Yêu thích" đứng ĐẦU hàng, CÙNG style pill với các chip "Lọc theo
+    sách" phía sau -- xác nhận với người dùng: st.toggle (dạng công tắc, thử trước đó) trông không
+    gọn bằng, đổi sang st.segmented_control RIÊNG (selection_mode="multi", chỉ 1 lựa chọn) đặt
+    NGAY TRƯỚC segmented_control "Lọc theo sách" trong CÙNG 1 st.container(horizontal=True) --
+    2 widget tách biệt (không lồng vào lựa chọn 1-trong-N của "Lọc theo sách") nên bật/tắt được
+    ĐỘC LẬP với chip sách đang chọn, nhưng nhờ đặt cùng hàng ngang + cùng gap nên trông liền mạch
+    như 1 dải chip duy nhất. Đếm số trích dẫn ở chip "Lọc theo sách" không đổi theo ô tìm để nhãn
+    chip ổn định giữa các lần rerun -- NHƯNG đổi theo toggle Yêu thích, vì đó là đổi tập dữ liệu
+    nền chứ không phải lọc mềm như ô tìm. Sách nhiều hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng
+    thứ tự sắp xếp đang chọn), có nút "Hiện thêm" mở hết -- trạng thái mở lưu ở session_state,
+    KHÔNG reset khi đổi tìm/sắp xếp/lọc để tránh giật khi người dùng đang duyệt."""
     kh = load_kindle_highlights()
     if kh.empty:
         st.info("Chưa có trích dẫn/ghi chú Kindle nào. Tải file My Clippings.txt ở mục \"Tải "
                 "trích dẫn Kindle\" (tab Tuỳ biến) để bắt đầu.")
         return
 
-    fcol1, fcol2, fcol3 = st.columns([2, 1, 1])
+    fcol1, fcol2 = st.columns([2, 1])
     with fcol1:
         search = st.text_input("Tìm trong trích dẫn đã lưu", key="fav_search",
                                 placeholder="Tìm theo nội dung trích dẫn...")
     with fcol2:
         sort_label = st.selectbox("Sắp xếp", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
-    with fcol3:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        fav_only = st.toggle("⭐ Chỉ Yêu thích", key="fav_only_filter")
 
-    quotes = kh[kh['Yêu thích']] if fav_only else kh
+    with st.container(horizontal=True, gap="small"):
+        fav_sel = st.segmented_control("Yêu thích", ["⭐ Chỉ Yêu thích"], selection_mode="multi",
+                                        key="fav_only_filter", label_visibility="collapsed")
+        fav_only = bool(fav_sel)
+        quotes = kh[kh['Yêu thích']] if fav_only else kh
+        chip_pick = None
+        if not quotes.empty:
+            book_counts = quotes.groupby('Cuốn sách').size()
+            chip_opts = [f"Tất cả · {len(quotes)}"] + [f"{b} · {n}" for b, n in book_counts.items()]
+            chip_pick = st.segmented_control("Lọc theo sách", chip_opts, default=chip_opts[0],
+                                              key="fav_book_filter", label_visibility="collapsed")
+
     if quotes.empty:
         st.info("Chưa có trích dẫn nào được đánh dấu Yêu thích. Bấm ⭐ trên một trích dẫn ở mục "
                 "\"2. Nhật ký đọc\" (tab Chi tiết), hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
                 "nay, để lưu lại đây và đọc lại khi cần.")
         return
-
-    book_counts = quotes.groupby('Cuốn sách').size()
-    chip_opts = [f"Tất cả · {len(quotes)}"] + [f"{b} · {n}" for b, n in book_counts.items()]
-    chip_pick = st.segmented_control("Lọc theo sách", chip_opts, default=chip_opts[0],
-                                      key="fav_book_filter", label_visibility="collapsed")
 
     view = quotes
     if search.strip():
