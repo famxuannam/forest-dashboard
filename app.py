@@ -6952,13 +6952,18 @@ st.markdown(
     /* [class*=...] (substring), KHÔNG phải .st-key-rl_view_tabs (class chính xác) -- Sách dùng
        key "rl_view_tabs", Gundam dùng "rl_view_tabs_gd" (tách riêng để không đụng state tab khi
        chuyển qua lại 2 trang, xem render_reading_log()); chọn theo class chính xác trước đây chỉ
-       khớp Sách, khiến tab Gundam mất hẳn 2 rule căn giữa/ẩn vạch xám bên dưới. */
-    [class*="st-key-rl_view_tabs"] [role="tablist"] { justify-content: center !important; }
+       khớp Sách, khiến tab Gundam mất hẳn 2 rule căn giữa/ẩn vạch xám bên dưới. Gộp thêm
+       "tb_phanloai_tabs" (2 tab "Dự án ↔ Danh mục"/"Dự án ↔ Sách", mục "2. Phân loại" trang Tuỳ
+       biến) vào cùng rule -- style tab gạch chân, căn giữa CÙNG kiểu "Chọn kỳ xem" của Báo cáo,
+       xác nhận với người dùng. */
+    [class*="st-key-rl_view_tabs"] [role="tablist"],
+    [class*="st-key-tb_phanloai_tabs"] [role="tablist"] { justify-content: center !important; }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
        segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
-    [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
+    [class*="st-key-rl_view_tabs"] [role="tablist"]::after,
+    [class*="st-key-tb_phanloai_tabs"] [role="tablist"]::after { display: none !important; }
 
     /* Pagination MỌI bảng .dtbl căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa. margin-top tách khỏi bảng/dtbl-wrap phía trên --
@@ -9483,9 +9488,15 @@ elif nav == "Tuỳ biến":
                         st.rerun()
 
     sec_chapter("tb-ch2", 2, None, "Phân loại")
-    with st.container(border=True, key="tb_mapping_card"):
-        _tab_cat_map, _tab_book_map = st.tabs(["Dự án ↔ Danh mục", "Dự án ↔ Sách"])
-        with _tab_cat_map:
+    # key="tb_phanloai_tabs" -- CSS ở khối .st-key-rl_view_tabs (chương "Sách/Gundam -> Chi tiết")
+    # áp DÙNG CHUNG (dấu phẩy) cho cả key này, để 2 tab "Dự án ↔ Danh mục"/"Dự án ↔ Sách" hiện
+    # đúng kiểu tab gạch chân, căn giữa, ẩn vạch xám -- CÙNG style "Chọn kỳ xem" của Báo cáo
+    # (xác nhận với người dùng). Tabs đặt NGOÀI card màu (mỗi tab tự có card riêng bên trong,
+    # xem tb_mapping_card/tb_book_mapping_card) thay vì lồng trong 1 card chung bọc cả 2 tab như
+    # trước -- nhãn tab không còn bị "kẹt" bên trong khung card nữa.
+    _tab_cat_map, _tab_book_map = st.tabs(["Dự án ↔ Danh mục", "Dự án ↔ Sách"], key="tb_phanloai_tabs")
+    with _tab_cat_map:
+        with st.container(border=True, key="tb_mapping_card"):
             db_current = load_db()
             mapping_df = load_mapping()
             all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
@@ -9555,7 +9566,8 @@ elif nav == "Tuỳ biến":
                             save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                             st.rerun()
 
-        with _tab_book_map:
+    with _tab_book_map:
+        with st.container(border=True, key="tb_book_mapping_card"):
             # Gán tay Dự án Forest -> Cuốn sách -- CÙNG khuôn bảng tĩnh .maptbl/.maprow + form
             # "Sửa" bên dưới như tab "Dự án ↔ Danh mục" ở trên (xác nhận với người dùng), nhưng
             # KHÁC 2 điểm vì bản chất khác: (1) KHÔNG có banner "còn N dự án chưa gán" -- gán Sách
