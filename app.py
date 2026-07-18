@@ -4184,38 +4184,43 @@ def _render_health_history(df_health):
             f"{grp_html}</div></div>", unsafe_allow_html=True)
 
     # 1 expander DUY NHẤT cho sửa/xoá, đặt SAU cả timeline (không chen giữa từng thẻ) -- chọn
-    # đúng 1 lần xét nghiệm (Ngày + Nhóm) qua selectbox rồi mới hiện bảng sửa, xem docstring.
-    with st.expander("Sửa / xoá xét nghiệm đã nhập", expanded=False):
-        _opts = [f"{pdate:%d/%m/%Y} · {pcat}" for pdate, pcat, _ in _panel_keys]
-        _pick = st.selectbox("Chọn lần xét nghiệm", _opts, key="hm_hist_edit_pick")
-        pdate, pcat, grp = _panel_keys[_opts.index(_pick)]
-        _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
-        _abn = _health_is_abnormal(grp)
-        grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
-        grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
-        edited = st.data_editor(
-            grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
-            column_config={"Bất thường": st.column_config.TextColumn(
-                "Bất thường", disabled=True, width="small",
-                help="Tự tính từ Giá trị (gốc)/Khoảng tham chiếu đã lưu, không sửa trực tiếp được ở đây.")})
-        ec1, ec2 = st.columns(2)
-        if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
-            delete_health_metric_panel(pdate.date().isoformat(), pcat)
-            _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
-            if _rows:
-                save_health_metrics_bulk([{
-                    "test_date": pdate.date().isoformat(), "category": pcat,
-                    "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
-                                    "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                   for r in _rows]}])
-            st.success("Đã lưu thay đổi.")
-            time.sleep(1)
-            st.rerun()
-        if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
-            delete_health_metric_panel(pdate.date().isoformat(), pcat)
-            st.success("Đã xoá.")
-            time.sleep(1)
-            st.rerun()
+    # đúng 1 lần xét nghiệm (Ngày + Nhóm) qua selectbox rồi mới hiện bảng sửa, xem docstring. Style
+    # riêng (container key="hm_hist_edit", xem CSS .st-key-hm_hist_edit) để trông như 1 thẻ hộp
+    # khớp .hmtl-card phía trên, thay vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của mọi
+    # st.expander khác, xem rule [data-testid="stExpander"]) -- lạc tông với timeline card ngay
+    # trên nó. Cùng khuôn với FAQ (Trợ giúp, xem CSS .st-key-help_faq), đã có tiền lệ trong app.
+    with st.container(key="hm_hist_edit"):
+        with st.expander("Sửa / xoá xét nghiệm đã nhập", icon=":material/edit_note:", expanded=False):
+            _opts = [f"{pdate:%d/%m/%Y} · {pcat}" for pdate, pcat, _ in _panel_keys]
+            _pick = st.selectbox("Chọn lần xét nghiệm", _opts, key="hm_hist_edit_pick")
+            pdate, pcat, grp = _panel_keys[_opts.index(_pick)]
+            _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
+            _abn = _health_is_abnormal(grp)
+            grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
+            grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
+            edited = st.data_editor(
+                grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
+                column_config={"Bất thường": st.column_config.TextColumn(
+                    "Bất thường", disabled=True, width="small",
+                    help="Tự tính từ Giá trị (gốc)/Khoảng tham chiếu đã lưu, không sửa trực tiếp được ở đây.")})
+            ec1, ec2 = st.columns(2)
+            if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
+                delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
+                if _rows:
+                    save_health_metrics_bulk([{
+                        "test_date": pdate.date().isoformat(), "category": pcat,
+                        "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
+                                        "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                       for r in _rows]}])
+                st.success("Đã lưu thay đổi.")
+                time.sleep(1)
+                st.rerun()
+            if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
+                delete_health_metric_panel(pdate.date().isoformat(), pcat)
+                st.success("Đã xoá.")
+                time.sleep(1)
+                st.rerun()
 
 
 def _render_health_input(df_health):
@@ -6183,6 +6188,23 @@ st.markdown(
        ck/cv) thêm 1 mũi tên Material lên/xuống tuỳ Giá trị vượt Ref cao hay dưới Ref thấp. */
     .jchip.abn { background: rgba(255,59,48,0.10); }
     .jchip.abn .cv { color: #ff3b30; }
+    /* Expander "Sửa / xoá xét nghiệm đã nhập" (_render_health_history()) -- ghi đè riêng trong
+       phạm vi container key="hm_hist_edit" để trông như 1 thẻ hộp khớp .hmtl-card phía trên, thay
+       vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của [data-testid="stExpander"], xem rule
+       phía dưới) sẽ lạc tông với timeline card ngay trên nó. CÙNG khuôn với FAQ (Trợ giúp, key=
+       "help_faq") -- tái dùng đúng pattern đã có, không phát sinh style mới. */
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details {
+        background: var(--card) !important; border: 1px solid var(--border) !important;
+        border-radius: 10px !important; box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary {
+        padding: 12px 16px !important; border-bottom: none !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary p {
+        font-size: 14px !important; font-weight: 600 !important; color: var(--text-2) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details[open] > summary {
+        border-bottom: 1px solid var(--divider) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+        padding: 10px 16px 14px !important; }
 
     .glass-card {
         background: var(--card);
