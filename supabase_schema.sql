@@ -155,6 +155,17 @@ create table if not exists gundam_overrides (
   series text not null
 );
 
+-- Gán tay Dự án Forest -> Cuốn sách (khớp NGUYÊN VĂN với reading_log book title đã strip tác
+-- giả, xem _book_title() trong app.py) -- dùng khi tên Dự án bấm giờ trong Forest không trùng
+-- khớp tuyệt đối với tên sách lấy từ Reminders (khác dấu, viết tắt...), khiến các số liệu/chip
+-- đối chiếu Forest <-> Reminders (vd chip "Thời gian" ở Nhật ký Chi tiết Sách) không tự nối
+-- được qua so sánh chuỗi chính xác. Khoá theo forest_project (mỗi Dự án Forest chỉ gán vào
+-- đúng 1 cuốn sách) -- xem UI "Gán Dự án Forest với Cuốn sách" ở tab Tuỳ biến.
+create table if not exists book_project_map (
+  forest_project text primary key,
+  book_title text not null
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -171,6 +182,7 @@ alter table kindle_highlights enable row level security;
 alter table kindle_book_map enable row level security;
 alter table deleted_kindle_highlights enable row level security;
 alter table gundam_overrides enable row level security;
+alter table book_project_map enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -185,6 +197,7 @@ create policy "anon full access" on kindle_highlights for all using (true) with 
 create policy "anon full access" on kindle_book_map for all using (true) with check (true);
 create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);
 create policy "anon full access" on gundam_overrides for all using (true) with check (true);
+create policy "anon full access" on book_project_map for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
