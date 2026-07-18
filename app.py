@@ -3542,10 +3542,13 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
     # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
-    # với billboard).
-    if not _rl_detail.empty or not _kh_book.empty:
+    # với billboard). _book_forest_ct: phiên Forest đúng cuốn này -- ngày nào CHỈ có phiên Forest
+    # (chưa tick hoàn thành phần nào, chưa có quote) vẫn phải hiện 1 hàng riêng cho chip "Thời
+    # gian" (xác nhận với người dùng), không chỉ dựa vào _rl_detail/_kh_book như trước.
+    _book_forest_ct = df_books[df_books['Dự án'] == _detail_sel] if not df_books.empty else df_books
+    if not _rl_detail.empty or not _kh_book.empty or not _book_forest_ct.empty:
         with st.container(border=True, key="jcard_reading_detail"):
-            _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books)
+            _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books, book_name=_detail_sel)
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
@@ -4682,7 +4685,7 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
     return rows_html
 
 
-def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
+def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
     """Bản CÓ TƯƠNG TÁC của mục "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) -- CHỈ dùng ở đúng 1
     chỗ gọi này (_render_reading_detail()), khác _reading_rows_html() (HTML tĩnh, dùng ở nhiều nơi
     khác -- Tìm kiếm, Ghi chú ngày... -- không cần sửa/xoá). Mỗi ngày là 1 hàng THẬT
@@ -4698,17 +4701,19 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
     trí" tăng dần theo đúng thứ tự trang sách lại TỰ NHIÊN phản ánh đúng thứ tự đọc thật (đọc tuần
     tự), nên không cần gán/sắp tay gì thêm mà vẫn ra đúng thứ tự mong muốn.
 
-    df_books (tuỳ chọn): cho phép tính chip "Thời gian" (tổng phút phiên Forest của đúng cuốn này
-    KỂ TỪ SAU ngày hoàn thành phần trước đó -- hoặc từ ngày bắt đầu đọc nếu là phần đầu tiên --
-    ĐẾN HẾT ngày hoàn thành phần này, KHÔNG chỉ đúng 1 ngày hoàn thành). Đọc sách (khác xem
-    Gundam, thường xem+tick hoàn thành cùng buổi) hay trải dài nhiều ngày trước khi tick xong 1
-    phần, nên cộng dồn cả khoảng mới phản ánh đúng "đọc phần này mất bao nhiêu phút" -- chỉ khớp
-    đúng 1 ngày sẽ gần như luôn ra 0 cho Sách (bug thật đã gặp, xác nhận với người dùng). KHÔNG
-    phải dữ liệu mới, chỉ cross-reference session Forest đã có, và các khoảng liên tiếp không
-    chồng lấn (mỗi ngày chỉ tính vào đúng 1 chip). CỐ Ý KHÔNG hiện "Ghi chú ngày"/"Ghi chú nhanh"
-    ở đây (khác Nhật ký Báo cáo Tuần/Tháng, render_notes_journal()) -- xác nhận với người dùng mục
-    này chỉ cần đúng Phần/Chương đọc + Thời gian, không cần kéo thêm ghi chú chung của ngày vào
-    (từng thử thêm rồi bỏ lại theo phản hồi thực tế)."""
+    df_books + book_name (tuỳ chọn, phải đi cùng nhau): cho phép tính chip "Thời gian" (tổng phút
+    phiên Forest của đúng dự án book_name trong ĐÚNG ngày đó -- KHÔNG cộng dồn qua nhiều ngày:
+    thử cộng dồn theo khoảng giữa 2 lần hoàn thành trước đây, nhưng 1 ngày đọc xong ≥2 phần sẽ
+    không biết chia phút cho phần nào, nên bỏ lại cách đơn giản "đúng ngày" -- xác nhận với người
+    dùng, chấp nhận đánh đổi: ngày đọc nhiều phần thì tổng phút hiện ở phần cuối cùng của ngày đó
+    do gộp theo _d, không tách được theo phần). book_name TRUYỀN RIÊNG (không suy ra từ rl_df/
+    kh_df) vì cả 2 có thể RỖNG trong khi vẫn có phiên Forest cho đúng dự án này (đọc mà chưa tick
+    hoàn thành phần nào/chưa có quote) -- những ngày CHỈ có phiên Forest (không có phần hoàn
+    thành, không có quote) vẫn phải ra 1 hàng riêng chỉ có chip "Thời gian" (xác nhận với người
+    dùng, khác hành vi cũ chỉ duyệt ngày có mặt trong rl_df/kh_df). CỐ Ý KHÔNG hiện "Ghi chú
+    ngày"/"Ghi chú nhanh" ở đây (khác Nhật ký Báo cáo Tuần/Tháng, render_notes_journal()) -- xác
+    nhận với người dùng mục này chỉ cần đúng Phần/Chương đọc + Thời gian, không cần kéo thêm ghi
+    chú chung của ngày vào (từng thử thêm rồi bỏ lại theo phản hồi thực tế)."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize()) if not rl_df.empty else rl_df
     kh = kh_df.copy()
     if not kh.empty:
@@ -4716,22 +4721,11 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
         kh['_loc_key'] = kh['Vị trí'].map(_kindle_location_sort_key)
     rl_days = set(rl['_d'].dropna().unique()) if not rl_df.empty else set()
     kh_days = set(kh['_d'].dropna().unique()) if not kh.empty else set()
-    # Điểm bắt đầu khoảng cộng dồn phút Forest cho mỗi ngày hoàn thành: ngày SAU lần hoàn thành
-    # trước đó (liên tiếp, không chồng lấn); riêng phần ĐẦU TIÊN lấy mốc sớm nhất giữa lần hoàn
-    # thành đầu tiên và phiên Forest đầu tiên của đúng cuốn này (cùng quy tắc "Bắt đầu" ở bảng
-    # tổng hợp render_reading_log()), để không bỏ sót phút đọc trước khi có phần nào hoàn thành.
-    _range_start_by_day = {}
-    if df_books is not None and not df_books.empty and not rl_df.empty:
-        _book_name = str(rl_df['Cuốn sách'].iloc[0])
-        _book_sessions = df_books[df_books['Dự án'] == _book_name]
-        _cands = [pd.Timestamp(rl_df['Ngày hoàn thành'].min())]
-        if not _book_sessions.empty:
-            _cands.append(pd.Timestamp(_book_sessions['Ngày'].min()))
-        _range_cursor = min(_cands).normalize()
-        for dd in sorted(rl_days):
-            _range_start_by_day[dd] = _range_cursor
-            _range_cursor = dd + pd.Timedelta(days=1)
-    for i, d in enumerate(sorted(rl_days | kh_days)):
+    _book_sessions = (df_books[df_books['Dự án'] == book_name]
+                       if df_books is not None and not df_books.empty and book_name else None)
+    forest_days = (set(pd.to_datetime(_book_sessions['Ngày']).dt.normalize().unique())
+                   if _book_sessions is not None and not _book_sessions.empty else set())
+    for i, d in enumerate(sorted(rl_days | kh_days | forest_days)):
         day_rl = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
         day_kh = kh[kh['_d'] == d].sort_values('_loc_key') if not kh.empty else kh
         with st.container(key=f"jkq_row_{i}"):
@@ -4740,19 +4734,17 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None):
                 st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
                             f"<div class='jdm'>{d:%d/%m/%Y}</div></div>", unsafe_allow_html=True)
             with c_body:
+                chips = ''
                 if not day_rl.empty:
                     _cls = 'jchip gundam' if _is_gundam_list(day_rl['Sách (gốc)'].iloc[0]) else 'jchip book'
                     chips = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                     for _, r in day_rl.sort_values('Ngày hoàn thành', kind='stable').iterrows())
-                    if df_books is not None and not df_books.empty:
-                        _book = str(day_rl['Cuốn sách'].iloc[0])
-                        _range_start = _range_start_by_day.get(d, d).date()
-                        _mins = df_books[(df_books['Dự án'] == _book)
-                                          & (df_books['Ngày'] >= _range_start)
-                                          & (df_books['Ngày'] <= d.date())]['Thời lượng (Phút)'].sum()
-                        if _mins > 0:
-                            chips += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
-                                      f"<span class='cv'>{int(_mins)}′</span></span>")
+                if _book_sessions is not None and not _book_sessions.empty:
+                    _mins = _book_sessions[_book_sessions['Ngày'] == d.date()]['Thời lượng (Phút)'].sum()
+                    if _mins > 0:
+                        chips += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                                  f"<span class='cv'>{int(_mins)}′</span></span>")
+                if chips:
                     st.markdown(chips, unsafe_allow_html=True)
                 if not day_kh.empty:
                     _render_kindle_day_quotes(day_kh)
