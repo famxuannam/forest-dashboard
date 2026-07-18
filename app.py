@@ -3291,13 +3291,18 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
     lặp. "Nhật ký xem" tái dùng nguyên _reading_rows_html() (cùng cơ chế "Nhật ký đọc" của Sách,
     lọc theo reading_log_df đã là rl_gundam sẵn -- không cần lọc lại theo _is_gundam_list)."""
     def _render_stats_cards():
-        # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
+        # Thẻ 1: hero + Tổng kết (theo đầu cuốn). "Tổng giờ" CHỈ hiện ở Sách -- billboard Sách chỉ
+        # show giờ đọc NĂM NAY (không trùng hero toàn thời gian ở đây), còn billboard Gundam
+        # "Phòng chiếu" show thẳng giờ xem TOÀN THỜI GIAN (hrs_all) -- trùng đúng số với hero này
+        # nếu giữ, nên bỏ ở Gundam (xác nhận với người dùng, cùng cách đã xử lý ở Chi tiết).
+        _hero_items = [
+            {"label": labels['count_label'], "value": f"{len(t)}"},
+            {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
+        ]
+        if page_name == "Sách":
+            _hero_items.insert(1, {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"})
         render_stat_panel(
-            hero_items=[
-                {"label": labels['count_label'], "value": f"{len(t)}"},
-                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
-                {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
-            ],
+            hero_items=_hero_items,
             sections=_grp_summary,
         )
 
