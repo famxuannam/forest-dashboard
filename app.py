@@ -7237,7 +7237,6 @@ st.markdown(
     @media (max-width: 640px) {
         .sec-hero { padding: 22px 18px; }
         .sec-hero .hh-title { font-size: 26px; }
-        .sec-ch-num { font-size: 40px; }
         .sec-flow { flex-direction: column; align-items: flex-start; }
         .sec-flow-arr::after { content: "↓"; padding: 0; }
         .sec-heat { grid-template-columns: repeat(10, 13px); }
