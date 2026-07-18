@@ -4225,92 +4225,162 @@ def _render_health_history(df_health):
 
 def _render_health_input(df_health):
     """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ Claude
-    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi)."""
+    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi).
+
+    ĐỔI SANG khuôn "chương" của Hôm nay/Báo cáo (billboard + sec_chapter đánh số) thay vì
+    accordion/expander cũ -- xác nhận với người dùng: tab này rất ít vào nên không sợ dài, ưu tiên
+    đồng bộ giao diện với phần còn lại của app hơn là gọn bằng cách gập lại. Cả 2 chương LUÔN MỞ
+    (không còn st.expander bọc ngoài) vì lý do tương tự.
+
+    Billboard "Lần khám gần nhất" dùng render_period_billboard() -- CÙNG key mặc định "bc_billboard"
+    với Báo cáo/Sách/Gundam/Dự án/Tuỳ biến (an toàn vì mỗi nav/sub-tab render độc quyền 1 khối
+    if/elif, không có 2 billboard nào cùng vẽ trong 1 lượt chạy ở đây) -- tái dùng thẳng CSS kính
+    mờ có sẵn, không cần thêm rule mới. Cột phải dùng lại đúng .pbill-title (câu nhận định) +
+    .pbill-chips (chip .jchip/.jchip.abn -- mượn nguyên khuôn từ sub-tab Lịch sử) cho chỉ số. Nút
+    "Sửa lần khám này" KHÔNG tự xây bộ sửa/xoá riêng (trùng lặp) mà nhảy sang sub-tab Lịch sử --
+    nơi đã có UI sửa/xoá đầy đủ, qua cờ chờ xử lý `_hm_sub_jump` (xem đầu render_health_page(),
+    không set trực tiếp session_state của widget segmented_control sau khi nó đã instantiate).
+
+    Mockup còn có nút "Tải lên PDF" (trích số liệu từ file kết quả) -- app không có khả năng đọc
+    PDF (luồng chính là dán JSON do Claude đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
+    (đã xác nhận với người dùng). Mục "Ngưỡng tham chiếu" (tự đặt ngưỡng cảnh báo riêng, chặt hơn
+    mức lab in trên phiếu) cũng bỏ qua -- là tính năng nghiệp vụ MỚI ngoài phạm vi "chỉ sửa giao
+    diện" của yêu cầu này, chưa có nơi lưu/logic nào tương ứng."""
+    _toc = [("hm-in-ch1", "1 · Import hàng loạt"), ("hm-in-ch2", "2 · Nhập kết quả xét nghiệm")]
+
+    if not df_health.empty:
+        _latest_date = pd.Timestamp(df_health['Ngày lấy mẫu'].max())
+        _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
+        _abn = _health_is_abnormal(_latest_panel)
+        _n_abn = int(_abn.sum())
+        chips = ''
+        for (_, r), a in zip(_latest_panel.iterrows(), _abn):
+            val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
+            unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
+            arrow = ''
+            if a and pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
+                arrow = _mi('arrow_upward', 11)
+            elif a and pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
+                arrow = _mi('arrow_downward', 11)
+            chips += (f"<span class='jchip{' abn' if a else ''}'>"
+                      f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
+                      f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
+        _status_line = (f"{_n_abn} chỉ số ngoài khoảng tham chiếu" if _n_abn
+                         else "Tất cả chỉ số trong khoảng tham chiếu")
+        _right_html = (f"<div class='pbill-title'>{_status_line}</div>"
+                        f"<div class='pbill-chips'>{chips}</div>")
+        _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
+        # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
+        # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
+        # đọc lẫn với khuôn "tờ lịch hôm nay" của billboard Hôm nay (cùng CSS .tbill-date/.pbill-num
+        # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi tháng/năm CHỮ ĐẦY ĐỦ (không chỉ số
+        # to + thứ ở trên) + số ngày đã trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác
+        # format_relative() dùng cho mốc giờ thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu
+        # NGÀY lấy mẫu, không có giờ, nên hiển thị "X giờ" ở đây là số liệu giả tạo không có thật.
+        _tab_label = "Lần khám gần nhất"
+        _month_word = f"{VN_MONTHS_WORD[_latest_date.month - 1]} {_latest_date.year}"
+        _days_ago = (_today_vn() - _latest_date.date()).days
+        _rel = "Hôm nay" if _days_ago == 0 else "Hôm qua" if _days_ago == 1 else f"{_days_ago} ngày trước"
+        _meta = f"{_month_word} · {_rel}"
+        render_period_billboard(_tab_label, str(_latest_date.day), _vn_dow, _meta, _right_html, _toc)
+        _bc1, _bc2 = st.columns([5, 1])
+        with _bc2:
+            if st.button("Sửa lần khám này", key="hm_input_latest_edit"):
+                st.session_state["_hm_sub_jump"] = "Lịch sử"
+                st.rerun()
+
     # ==========================================
     # 1. IMPORT HÀNG LOẠT
     # ==========================================
-    with st.expander("1. Import hàng loạt", expanded=df_health.empty):
-        st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
-                    "nhiều lần khám cũ cùng lúc.")
-        with st.expander("Xem định dạng JSON mẫu", expanded=False):
-            st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
-        st.text_area("Dán nội dung JSON vào đây", height=200, key="hm_import_json")
-        if st.button("Xem trước", key="hm_import_preview_btn"):
-            try:
-                parsed = json.loads(st.session_state.get("hm_import_json", "") or "[]")
-                if not isinstance(parsed, list) or not parsed:
-                    raise ValueError("JSON phải là 1 danh sách (list) các lần xét nghiệm.")
-                flat_rows = []
-                for p in parsed:
-                    for ind in p.get("indicators", []):
-                        flat_rows.append({
-                            "Ngày lấy mẫu": p.get("test_date"), "Nhóm": p.get("category"),
-                            "Chỉ số": ind.get("indicator"),
-                            "Giá trị": ind.get("value_raw", ind.get("value")),
-                            "Đơn vị": ind.get("unit"),
-                            "Khoảng tham chiếu": ind.get("ref_raw", ind.get("ref_range")),
-                        })
-                if not flat_rows:
-                    raise ValueError("Không tìm thấy chỉ số nào trong dữ liệu đã dán.")
-                st.session_state["hm_import_preview"] = parsed
-                st.session_state["hm_import_preview_df"] = pd.DataFrame(flat_rows)
-            except Exception as e:
-                st.session_state.pop("hm_import_preview", None)
-                st.session_state.pop("hm_import_preview_df", None)
-                st.error(f"JSON không hợp lệ: {e}")
-        if st.session_state.get("hm_import_preview") is not None:
-            _prev_df = st.session_state["hm_import_preview_df"]
-            _n_panels = len(st.session_state["hm_import_preview"])
-            st.caption(f"Xem trước {len(_prev_df)} chỉ số từ {_n_panels} lần xét nghiệm:")
-            st.dataframe(_prev_df, hide_index=True, width='stretch')
-            if st.button("Xác nhận lưu", type="primary", key="hm_import_confirm_btn"):
-                save_health_metrics_bulk(st.session_state["hm_import_preview"])
-                _saved_n = len(_prev_df)
-                st.session_state.pop("hm_import_preview", None)
-                st.session_state.pop("hm_import_preview_df", None)
-                st.session_state.pop("hm_import_json", None)
-                st.success(f"Đã lưu {_saved_n} chỉ số từ {_n_panels} lần xét nghiệm.")
-                time.sleep(1)
-                st.rerun()
+    @st.dialog("Định dạng JSON mẫu")
+    def _hm_json_example_dialog():
+        st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
+
+    sec_chapter("hm-in-ch1", 1, None, "Import hàng loạt", tight_top=True)
+    st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
+                "nhiều lần khám cũ cùng lúc.")
+    # Khối JSON mẫu để trong popup (st.dialog(), cùng khuôn "Khôi phục dữ liệu"/"Xoá toàn bộ dữ
+    # liệu" ở Tuỳ biến) thay vì hiện trực tiếp -- xác nhận với người dùng: chỉ để tra cứu/copy khi
+    # cần, không nên chiếm không gian mặc định của chương.
+    if st.button("Xem định dạng JSON mẫu", key="hm_json_example_btn"):
+        _hm_json_example_dialog()
+    st.text_area("Dán nội dung JSON vào đây", height=200, key="hm_import_json")
+    if st.button("Xem trước", key="hm_import_preview_btn"):
+        try:
+            parsed = json.loads(st.session_state.get("hm_import_json", "") or "[]")
+            if not isinstance(parsed, list) or not parsed:
+                raise ValueError("JSON phải là 1 danh sách (list) các lần xét nghiệm.")
+            flat_rows = []
+            for p in parsed:
+                for ind in p.get("indicators", []):
+                    flat_rows.append({
+                        "Ngày lấy mẫu": p.get("test_date"), "Nhóm": p.get("category"),
+                        "Chỉ số": ind.get("indicator"),
+                        "Giá trị": ind.get("value_raw", ind.get("value")),
+                        "Đơn vị": ind.get("unit"),
+                        "Khoảng tham chiếu": ind.get("ref_raw", ind.get("ref_range")),
+                    })
+            if not flat_rows:
+                raise ValueError("Không tìm thấy chỉ số nào trong dữ liệu đã dán.")
+            st.session_state["hm_import_preview"] = parsed
+            st.session_state["hm_import_preview_df"] = pd.DataFrame(flat_rows)
+        except Exception as e:
+            st.session_state.pop("hm_import_preview", None)
+            st.session_state.pop("hm_import_preview_df", None)
+            st.error(f"JSON không hợp lệ: {e}")
+    if st.session_state.get("hm_import_preview") is not None:
+        _prev_df = st.session_state["hm_import_preview_df"]
+        _n_panels = len(st.session_state["hm_import_preview"])
+        st.caption(f"Xem trước {len(_prev_df)} chỉ số từ {_n_panels} lần xét nghiệm:")
+        st.dataframe(_prev_df, hide_index=True, width='stretch')
+        if st.button("Xác nhận lưu", type="primary", key="hm_import_confirm_btn"):
+            save_health_metrics_bulk(st.session_state["hm_import_preview"])
+            _saved_n = len(_prev_df)
+            st.session_state.pop("hm_import_preview", None)
+            st.session_state.pop("hm_import_preview_df", None)
+            st.session_state.pop("hm_import_json", None)
+            st.success(f"Đã lưu {_saved_n} chỉ số từ {_n_panels} lần xét nghiệm.")
+            time.sleep(1)
+            st.rerun()
 
     # ==========================================
     # 2. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
     # ==========================================
-    with st.expander("2. Nhập kết quả xét nghiệm", expanded=False):
-        existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
-        cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
-        ic1, ic2 = st.columns(2)
-        entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
-        cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
-        entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
-                           if cat_choice == "+ Nhóm khác..." else cat_choice)
-        _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
-                                     "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
-        entry_df = st.data_editor(
-            _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
-            column_config={
-                "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
-                "Giá trị": st.column_config.TextColumn("Giá trị"),
-                "Đơn vị": st.column_config.TextColumn("Đơn vị"),
-                "Khoảng tham chiếu": st.column_config.TextColumn(
-                    "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
-            })
-        if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
-            rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
-            if not entry_category or not str(entry_category).strip():
-                st.error("Chưa chọn/nhập Nhóm.")
-            elif not rows:
-                st.error("Chưa nhập chỉ số nào.")
-            else:
-                panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
-                         "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
-                                         "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                        for r in rows]}
-                save_health_metrics_bulk([panel])
-                st.session_state.pop("hm_entry_editor", None)
-                st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
-                time.sleep(1)
-                st.rerun()
+    sec_chapter("hm-in-ch2", 2, None, "Nhập kết quả xét nghiệm")
+    existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
+    cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
+    ic1, ic2 = st.columns(2)
+    entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
+    cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
+    entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
+                       if cat_choice == "+ Nhóm khác..." else cat_choice)
+    _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
+                                 "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
+    entry_df = st.data_editor(
+        _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
+        column_config={
+            "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
+            "Giá trị": st.column_config.TextColumn("Giá trị"),
+            "Đơn vị": st.column_config.TextColumn("Đơn vị"),
+            "Khoảng tham chiếu": st.column_config.TextColumn(
+                "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
+        })
+    if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
+        rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
+        if not entry_category or not str(entry_category).strip():
+            st.error("Chưa chọn/nhập Nhóm.")
+        elif not rows:
+            st.error("Chưa nhập chỉ số nào.")
+        else:
+            panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
+                      "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
+                                      "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                     for r in rows]}
+            save_health_metrics_bulk([panel])
+            st.session_state.pop("hm_entry_editor", None)
+            st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
+            time.sleep(1)
+            st.rerun()
 
 
 def render_health_page():
@@ -4321,6 +4391,17 @@ def render_health_page():
     khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
     SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
     df_health = load_health_metrics()
+
+    # Nút "Sửa" ở card "Lần khám gần nhất" (_render_health_input()) nhảy sang sub-tab Lịch sử qua
+    # cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["hm_sub_picker"] tại nút bấm, vì
+    # lúc đó widget segmented_control DƯỚI ĐÂY đã instantiate rồi trong CÙNG lượt chạy (bug thật
+    # đã gặp: StreamlitAPIException "cannot be modified after the widget... is instantiated") --
+    # phải set key của widget TRƯỚC khi nó được gọi, nên phải xử lý ở đây, đầu trang, trước dòng
+    # segmented_control, rồi mới rerun sang lượt chạy mới áp dụng được.
+    if "_hm_sub_jump" in st.session_state:
+        _jump = st.session_state.pop("_hm_sub_jump")
+        st.session_state["hm_sub_picker"] = _jump
+        st.session_state["hm_sub"] = _jump
 
     _sub_pick = st.segmented_control(
         "Xem theo", SUCKHOE_SUBS,
