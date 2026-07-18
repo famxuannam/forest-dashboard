@@ -6952,16 +6952,16 @@ st.markdown(
     /* [class*=...] (substring), KHÔNG phải .st-key-rl_view_tabs (class chính xác) -- Sách dùng
        key "rl_view_tabs", Gundam dùng "rl_view_tabs_gd" (tách riêng để không đụng state tab khi
        chuyển qua lại 2 trang, xem render_reading_log()); chọn theo class chính xác trước đây chỉ
-       khớp Sách, khiến tab Gundam mất hẳn 2 rule căn giữa/ẩn vạch xám bên dưới. Gộp thêm
-       "tb_phanloai_tabs" (2 tab "Dự án ↔ Danh mục"/"Dự án ↔ Sách", mục "2. Phân loại" trang Tuỳ
-       biến) vào cùng rule -- style tab gạch chân, căn giữa CÙNG kiểu "Chọn kỳ xem" của Báo cáo,
-       xác nhận với người dùng. */
-    [class*="st-key-rl_view_tabs"] [role="tablist"],
-    [class*="st-key-tb_phanloai_tabs"] [role="tablist"] { justify-content: center !important; }
+       khớp Sách, khiến tab Gundam mất hẳn rule căn giữa/ẩn vạch xám bên dưới. */
+    [class*="st-key-rl_view_tabs"] [role="tablist"] { justify-content: center !important; }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
-       segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
+       segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. Gộp thêm
+       "tb_phanloai_tabs" (2 tab Danh mục/Sách, mục "2. Phân loại" trang Tuỳ biến) vào rule ẩn
+       vạch xám này -- NHƯNG không gộp vào rule căn giữa ở trên: xác nhận với người dùng tab này
+       giữ style gạch chân giống hệt, chỉ riêng CĂN LỀ TRÁI (mặc định justify-content: flex-start
+       của trình duyệt, không cần khai báo lại) thay vì căn giữa như rl_view_tabs. */
     [class*="st-key-rl_view_tabs"] [role="tablist"]::after,
     [class*="st-key-tb_phanloai_tabs"] [role="tablist"]::after { display: none !important; }
 
@@ -9489,12 +9489,14 @@ elif nav == "Tuỳ biến":
 
     sec_chapter("tb-ch2", 2, None, "Phân loại")
     # key="tb_phanloai_tabs" -- CSS ở khối .st-key-rl_view_tabs (chương "Sách/Gundam -> Chi tiết")
-    # áp DÙNG CHUNG (dấu phẩy) cho cả key này, để 2 tab "Dự án ↔ Danh mục"/"Dự án ↔ Sách" hiện
-    # đúng kiểu tab gạch chân, căn giữa, ẩn vạch xám -- CÙNG style "Chọn kỳ xem" của Báo cáo
-    # (xác nhận với người dùng). Tabs đặt NGOÀI card màu (mỗi tab tự có card riêng bên trong,
-    # xem tb_mapping_card/tb_book_mapping_card) thay vì lồng trong 1 card chung bọc cả 2 tab như
-    # trước -- nhãn tab không còn bị "kẹt" bên trong khung card nữa.
-    _tab_cat_map, _tab_book_map = st.tabs(["Dự án ↔ Danh mục", "Dự án ↔ Sách"], key="tb_phanloai_tabs")
+    # dùng chung rule ẩn vạch xám full-width dưới hàng tab cho cả key này -- cùng style gạch chân,
+    # nhưng CĂN LỀ TRÁI (không căn giữa như rl_view_tabs) -- xác nhận với người dùng. Tabs đặt
+    # NGOÀI card màu (mỗi tab tự có card riêng bên trong, xem tb_mapping_card/tb_book_mapping_card)
+    # thay vì lồng trong 1 card chung bọc cả 2 tab như trước -- nhãn tab không còn bị "kẹt" bên
+    # trong khung card nữa. Nhãn "Danh mục"/"Sách" (KHÔNG dùng ký hiệu "↔" -- xác nhận với người
+    # dùng không thích ký hiệu này) -- ngắn gọn, đã đủ rõ nghĩa nhờ tiêu đề "2. Phân loại" ngay
+    # phía trên, không cần lặp lại chữ "Dự án".
+    _tab_cat_map, _tab_book_map = st.tabs(["Danh mục", "Sách"], key="tb_phanloai_tabs")
     with _tab_cat_map:
         with st.container(border=True, key="tb_mapping_card"):
             db_current = load_db()
@@ -9569,7 +9571,7 @@ elif nav == "Tuỳ biến":
     with _tab_book_map:
         with st.container(border=True, key="tb_book_mapping_card"):
             # Gán tay Dự án Forest -> Cuốn sách -- CÙNG khuôn bảng tĩnh .maptbl/.maprow + form
-            # "Sửa" bên dưới như tab "Dự án ↔ Danh mục" ở trên (xác nhận với người dùng), nhưng
+            # "Sửa" bên dưới như tab "Danh mục" ở trên (xác nhận với người dùng), nhưng
             # KHÁC 2 điểm vì bản chất khác: (1) KHÔNG có banner "còn N dự án chưa gán" -- gán Sách
             # là TUỲ CHỌN (chỉ cần khi tên bấm giờ trong Forest không trùng khớp tuyệt đối với tên
             # sách lấy từ Reminders), khác Danh mục là BẮT BUỘC cho mọi dự án; (2) KHÔNG có ô "Tạo
