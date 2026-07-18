@@ -3014,9 +3014,16 @@ def _render_kindle_quotes_tab():
         for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
             if r['dedupe_hash'] in is_child or r['dedupe_hash'] in orphan_notes:
                 continue
-            _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
-            for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
-                _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
+            # Trích dẫn + ghi chú lồng của nó BỌC CHUNG 1 container (key "kqgroup_fav_<hash>")
+            # để card nền/viền (CSS [class*="st-key-kqgroup_fav_"]) áp cho CẢ CỤM -- trước đó mỗi
+            # dòng (kqrow_fav_/kqreply_fav_) tự có card riêng, khiến ghi chú lồng "trần" tách hẳn
+            # khỏi card highlight cha (không khớp selector "kqrow_fav_"). Xác nhận với người
+            # dùng: phương án A trong mockup so sánh 4 kiểu (kẻ đứt + thụt lề, KHÔNG kèm nhãn
+            # kicker "Ghi chú của bạn").
+            with st.container(key=f"kqgroup_fav_{r['dedupe_hash']}"):
+                _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+                for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
+                    _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
         _rendered_i += 1
 
     if hidden_books:
@@ -7583,16 +7590,27 @@ st.markdown(
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
        hàng highlight cha phía trên. */
     [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
-    /* Sub-tab "Trích dẫn" (trang Sách, xem _render_kindle_quotes_tab()): mỗi trích dẫn bọc
-       trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo Ngày/Tuần/Tháng) --
-       thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Chỉ khớp key_suffix="fav_" (khớp
-       "kqrow_fav_", KHÔNG khớp "kqrow_" trơn của "2. Nhật ký đọc") nên không ảnh hưởng nơi khác.
+    /* Riêng sub-tab "Trích dẫn" (kqreply_fav_, xem _render_kindle_quotes_tab()): thêm kẻ đứt phân
+       cách phía trên ghi chú -- vì giờ ghi chú nằm CHUNG 1 card với highlight cha (xem
+       kqgroup_fav_ ngay dưới) thay vì đứng trần độc lập như "2. Nhật ký đọc" (không có kẻ này),
+       cần 1 ranh giới rõ để không dính liền vào chữ trích dẫn phía trên trong cùng khối nền.
+       KHÔNG kèm nhãn kicker "Ghi chú của bạn" -- phương án A trong mockup, xác nhận với người
+       dùng bỏ hẳn nhãn đó, chỉ cần kẻ + thụt lề + icon "✎" đã có sẵn là đủ phân biệt. */
+    [class*="st-key-kqreply_fav_"] {
+        margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--divider);
+    }
+    /* Sub-tab "Trích dẫn" (trang Sách, xem _render_kindle_quotes_tab()): mỗi CỤM trích dẫn + ghi
+       chú lồng của nó bọc trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo
+       Ngày/Tuần/Tháng) -- thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Card gán ở
+       CONTAINER BỌC NGOÀI "kqgroup_fav_<hash>" (không phải từng dòng kqrow_fav_/kqreply_fav_ như
+       trước) -- ghi chú lồng trước đây tự đứng ngoài card cha vì key "kqreply_fav_" không khớp
+       chuỗi con "kqrow_fav_" của rule cũ, phản hồi thực tế xác nhận trông rất tách rời/"trần".
        Đặt SAU rule margin-bottom:2px chung ở trên để thắng theo thứ tự (cùng độ đặc hiệu). */
-    [class*="st-key-kqrow_fav_"] {
+    [class*="st-key-kqgroup_fav_"] {
         background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin-bottom: 10px !important;
     }
-    [class*="st-key-kqrow_fav_"]:last-child { margin-bottom: 0 !important; }
+    [class*="st-key-kqgroup_fav_"]:last-child { margin-bottom: 0 !important; }
     /* Trích dẫn nhiều dòng (thường gặp -- trích dẫn dài hơn 1 dòng ở bề rộng cột chữ ~83%): cột
        chữ (rc1) là 1 flex item lồng nhiều lớp bên trong hàng cột (rc1/rc2 icon) -- đã xác minh qua
        DevTools rằng khi chữ tự xuống dòng, Chromium tính sai chiều cao "auto" của các lớp bọc
@@ -7604,7 +7622,7 @@ st.markdown(
        toàn nhất, không đụng cấu trúc layout đang hoạt động ổn định ở mọi nơi khác. Không tuyệt đối
        hoàn hảo cho trích dẫn dài 3+ dòng, nhưng đã kiểm tra: cải thiện rõ rệt cho ca 1-2 dòng phổ
        biến, không làm ca 1 dòng (không có bug) trông mất cân đối rõ rệt. */
-    [class*="st-key-kqrow_fav_"] { padding-bottom: 30px; }
+    [class*="st-key-kqgroup_fav_"] { padding-bottom: 30px; }
     /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
        THẬT (không phải .jrows/.jrow HTML tĩnh -- xem _render_reading_kindle_days()), nên không tự
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
