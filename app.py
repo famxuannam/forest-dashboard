@@ -5233,6 +5233,13 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
     if df_m.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    # 2 thẻ cao KHÔNG bằng nhau mặc định (rule chung [data-testid="stHorizontalBlock"]
+    # { align-items: flex-start !important; } khiến mỗi cột co theo đúng chiều cao nội dung riêng)
+    # -- :has(.month-hl-card) chọn đúng hàng này rồi ép stretch, cùng pattern đã dùng cho 3 thẻ
+    # Sao lưu/Khôi phục/Tài khoản ở Tuỳ biến (xem .st-key-tb_backup_card).
+    st.markdown(
+        "<style>[data-testid=\"stHorizontalBlock\"]:has(.month-hl-card) "
+        "{ align-items: stretch !important; }</style>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -5243,7 +5250,7 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
         _longest_sess_ts = pd.Timestamp(_longest_sess['Thời gian bắt đầu'])
         _longest_streak = _streak_stats(df_m)['longest']
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card month-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Kỷ lục trong tháng</span><div class='hlt-list'>"
             f"<div class='hlt-item'>{_mi('emoji_events')} Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
             f"<div class='hlt-item'>{_mi('timer')} Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
@@ -5285,7 +5292,7 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
 
         _lines_html = "".join(f"<div class='hlt-item'>{ln}</div>" for ln in _lines)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card month-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>So với tháng trước</span>"
             f"<div class='hlt-list'>{_lines_html}</div></div>", unsafe_allow_html=True)
 
