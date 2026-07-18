@@ -7628,7 +7628,14 @@ st.markdown(
        note_main (gap="small" mặc định) để 2 khoảng cách dọc không bị ép về cùng 1 giá trị: nhãn↔
        nội dung cần sát (xsmall), nhưng nội dung↔hàng nút bên dưới cần rộng hơn 1 chút để không
        dính liền -- gộp chung 1 container/1 gap từng làm cả 2 khoảng cách xích lại y hệt, "sửa
-       xong" hoá ra ép nhầm khoảng còn lại quá chật (bug vòng trước). */
+       xong" hoá ra ép nhầm khoảng còn lại quá chật (bug vòng trước). Riêng gap="small" của
+       note_main vẫn quá sát giữa dòng cuối ghi chú và nút "Sửa ghi chú"/"Thêm ghi chú"/hàng
+       "Cập nhật-Huỷ-Xoá" (ảnh chụp thật cho thấy nút gần như dính liền chữ) -- bù thêm margin-top
+       riêng cho khối nút, không đụng gap chung của note_main (ảnh hưởng cả khoảng nhãn→nội dung
+       nếu sửa ở container). */
+    [class*="st-key-note_editbtn_"], [class*="st-key-note_addbtn_"], .st-key-note_actions {
+        margin-top: 10px;
+    }
 
     /* Nút tròn nổi "về đầu trang" (tạo bằng JS ở _inject_scroll_to_top_button(), không phải
        st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
@@ -10163,9 +10170,12 @@ elif nav == "Hướng dẫn":
     # ==========================================
     sec_chapter(
         "help-ch9", 9, "Changelog", "Nhật ký phát triển")
+    # Mỗi mục gộp TẤT CẢ PR có ý nghĩa với người dùng cuối merge trong CÙNG 1 ngày thành 1 entry
+    # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
+    # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
     HELP_CHANGELOG = [
-        dict(pr="223", date="18/07/2026", pr_lines=962, total_lines=10324,
-             title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, thuần Việt",
+        dict(pr="223,224", date="18/07/2026", pr_lines=1, total_lines=10352,
+             title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, và sửa lỗi hiển thị trên mobile",
              bullets=[
                  "**Trang Trợ giúp được viết lại toàn bộ** — cả 9 chương, phần Câu hỏi thường gặp, "
                  "và mọi mục Nhật ký phát triển cũ đều đổi sang giọng điềm đạm, mạch lạc hơn, không "
@@ -10176,177 +10186,88 @@ elif nav == "Hướng dẫn":
                  "phải, không còn đùa cợt.",
                  "**Thuần Việt hoá một số từ mượn** — “app” đổi thành “ứng dụng” ở mọi nơi hiển thị "
                  "cho người dùng, “billboard” đổi thành “khung tóm lược”, “wordmark” đổi thành “dòng "
-                 "chữ hiệu”.",
-                 "Cùng với đó là một loạt thông báo trạng thái (rỗng, lỗi, thành công) ở Sách, "
-                 "Gundam, Sức khoẻ, Tuỳ biến và màn hình đăng nhập được viết lại cho nhất quán, bỏ "
-                 "dấu chấm than và câu mệnh lệnh suồng sã. Không có gì đổi về mặt tính năng hay số "
-                 "liệu — đây thuần là một đợt chỉnh lại lời văn.",
+                 "chữ hiệu”; cùng một loạt thông báo trạng thái (rỗng, lỗi, thành công) ở Sách, "
+                 "Gundam, Sức khoẻ, Tuỳ biến được viết lại cho nhất quán, bỏ dấu chấm than và câu "
+                 "mệnh lệnh suồng sã.",
+                 "**Sửa lỗi số thứ tự chương vỡ layout trên mobile** — một dòng CSS cũ còn sót lại "
+                 "từ bản thiết kế trước (số lớn mờ chồng góc, đã bỏ) ghi đè kích thước ô số thứ tự "
+                 "lên 40px trong media query mobile, trong khi ô số hiện tại chỉ rộng 26px, khiến số "
+                 "bị tràn ra ngoài và vỡ xuống dòng riêng trên màn hình nhỏ.",
              ]),
-        dict(pr="192", date="16/07/2026", pr_lines=1784, total_lines=8004,
-             title="Khung tóm lược đầu trang cho Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ và một loạt sửa lỗi nhỏ",
+        dict(pr="185-192", date="16/07/2026", pr_lines=1784, total_lines=8004,
+             title="Khung tóm lược lan khắp ứng dụng, và làm lại toàn bộ trang Trợ giúp",
              bullets=[
                  "**Trang Hôm nay có một khung tóm lược mới** — gộp thẻ “Ngày đang xem”, thẻ trích dẫn "
                  "hôm nay và hàng chip mục lục thành một khối duy nhất, như một tờ lịch xé hằng ngày: số "
                  "ngày lớn bên trái, trích dẫn Kindle bên phải, có gạch dọc ngăn ở giữa và dòng “Cập "
-                 "nhật gần nhất” tự cập nhật theo thời gian thực.",
-                 "**Bố cục chương cuộn dọc của trang Trợ giúp giờ lan sang cả ứng dụng** — Báo cáo (Tổng "
-                 "quan/Tuần/Tháng/Năm/Dự án), Sách/Gundam (Chi tiết) và Sức khoẻ (Báo cáo) đều đổi từ "
-                 "các mục gập đánh số sang khung tóm lược cùng chip mục lục nhảy nhanh, chương nào cũng "
-                 "hiện sẵn khi cuộn thay vì phải bấm mở từng mục.",
-                 "**Tinh chỉnh lại khung tóm lược sau vài vòng xem thử** — bỏ dòng kicker in hoa và câu "
-                 "mô tả thừa ở mọi khung tóm lược (trừ đúng trang Trợ giúp), nới khoảng cách xuống nội "
-                 "dung bên dưới, và bỏ hẳn khung tóm lược ở những sub-tab chỉ có một khối nội dung, "
-                 "không có gì để mục lục chip trỏ tới (Sách/Gundam → Tổng quan). Sức khoẻ có thêm dòng "
-                 "“Cập nhật lần cuối X trước”.",
-                 "**Sửa một lỗi mất nội dung khá khó chịu** — bấm “Gộp” một ghi chú nhanh vào ô soạn "
-                 "đang mở sẵn trước đó không đưa được nội dung thật vào ô soạn (khung soạn thảo không "
-                 "tự vẽ lại), giờ đã dựng lại đúng lúc để nội dung gộp hiện ra thật sự.",
-                 "**Một loạt tinh chỉnh nhỏ khác** — nút Gộp/Sửa/Xoá ở ghi chú nhanh không còn vỡ xuống "
-                 "dòng, khung chọn ngày dịch hẳn sang tiếng Việt, dòng thời gian trong ngày đổi sang "
-                 "kiểu minh hoạ có chú giải theo Nhóm, Báo cáo Tuần/Tháng ẩn tiêu đề “Ghi chú chính” khi "
-                 "không còn ghi chú nhanh đi kèm, tab Sách đổi thứ tự Tổng quan/Yêu thích/Chi tiết, và "
-                 "thêm hai màu accent mới (Cam đất, Ô liu).",
-             ]),
-        dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
-             title="Dọn bớt phần thừa, sửa lỗi nhỏ, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
-             bullets=[
-                 "**Sửa một lỗi khá đáng tiếc** — tab “Cập nhật” của trang Trợ giúp (phiên bản cũ) "
-                 "từng trống trơn mỗi khi mở lên, vì nội dung lỡ bị đặt nhầm vào chỉ số của tab "
-                 "“Tuỳ biến” phía trên thay vì tab “Cập nhật” thật sự — suốt một thời gian, "
-                 "những dòng nhật ký này đã âm thầm nằm sai chỗ mà không ai nhận ra. Nhân đó cũng đổi "
-                 "kiểu chữ cho thẻ Trích dẫn hôm nay sang Cormorant Garamond, đọc có không khí sách vở "
-                 "hơn.",
-                 "**Một đợt dọn dẹp diện rộng** — dời mục “Ngày này năm trước” lên ngay sau Ghi "
-                 "chú ngày cho hợp lý luồng đọc, bớt vài số liệu và biểu đồ ít được dùng tới ở trang Báo "
-                 "cáo, lọc bớt tên sách khỏi danh sách chọn Dự án (vì đã có chỗ riêng ở trang Sách), sửa "
-                 "lỗi trùng lặp chỉ số trong thẻ “Ngoài khoảng tham chiếu” của Sức khoẻ, và để "
-                 "trang Tuỳ biến mặc định chỉ mở đúng mục 1 thay vì mở tung cả năm mục gây rối mắt.",
-                 "**Vài lượt sửa lỗi giao diện nhỏ khác** — nhãn buổi trong biểu đồ khung giờ tập trung "
-                 "không còn đè lên chú giải, khử trùng lặp chỉ số Bilirubin ở Sức khoẻ, khoảng tham chiếu "
-                 "tự điền sẵn cho đỡ gõ tay, và thẻ trích dẫn ở tab Yêu thích không còn bị chữ dòng cuối "
-                 "lấn vào lề dưới.",
-                 "**Dọn mã nguồn phía sau** — gộp hai khối logic gần giống nhau (cách tính phần trăm "
-                 "thời gian đã trôi qua trong kỳ, và cách nạp vài bảng dữ liệu dạng phẳng) thành hai hàm "
-                 "dùng chung, giúp mã nguồn gọn hơn mà không đổi bất kỳ tính năng nào người dùng nhìn "
-                 "thấy. Kèm theo là một đợt rà soát để sửa vài chỗ tài liệu nội bộ ghi sai lệch so với "
-                 "mã nguồn thật.",
+                 "nhật gần nhất” tự cập nhật theo thời gian thực. Bố cục chương cuộn dọc này sau đó lan "
+                 "sang cả Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án), Sách/Gundam (Chi tiết) và Sức khoẻ "
+                 "(Báo cáo) — mọi chương đều hiện sẵn khi cuộn, thay vì phải bấm mở từng mục gập như "
+                 "trước.",
                  "**Và đây, chính là trang Trợ giúp bạn đang đọc** — được làm lại hoàn toàn từ đầu, bỏ "
                  "hẳn 58 tấm ảnh chụp màn hình cồng kềnh, đổi từ tám tab ngang sang một trang cuộn dọc kể "
                  "chuyện theo đúng nhịp một ngày sử dụng thật, thêm mấy hình minh hoạ vẽ tay thuần CSS, "
-                 "một mục tra cứu nhanh, và cả phần Câu hỏi thường gặp này — hy vọng đọc vào thấy dễ "
-                 "chịu hơn bản cũ.",
+                 "một mục tra cứu nhanh, và cả phần Câu hỏi thường gặp — cùng lúc sửa một lỗi khá đáng "
+                 "tiếc khiến tab “Cập nhật” của bản cũ từng trống trơn vì nội dung lỡ đặt nhầm chỗ.",
+                 "**Một đợt dọn dẹp diện rộng** — dời mục “Ngày này năm trước” lên ngay sau Ghi chú "
+                 "ngày cho hợp lý luồng đọc, bớt vài số liệu và biểu đồ ít được dùng tới ở trang Báo "
+                 "cáo, lọc bớt tên sách khỏi danh sách chọn Dự án, sửa lỗi trùng lặp chỉ số ở Sức khoẻ, "
+                 "và để trang Tuỳ biến mặc định chỉ mở đúng mục 1 thay vì mở tung cả năm mục.",
+                 "**Sửa một lỗi mất nội dung khá khó chịu** — bấm “Gộp” một ghi chú nhanh vào ô soạn "
+                 "đang mở sẵn trước đó không đưa được nội dung thật vào ô soạn, giờ đã dựng lại đúng "
+                 "lúc để nội dung gộp hiện ra thật sự. Kèm theo một loạt tinh chỉnh nhỏ khác: nút Gộp/"
+                 "Sửa/Xoá ở ghi chú nhanh không còn vỡ dòng, khung chọn ngày dịch hẳn sang tiếng Việt, "
+                 "và thêm hai màu accent mới (Cam đất, Ô liu).",
              ]),
-        dict(pr="182-184", date="15/07/2026", pr_lines=69, total_lines=7690,
-             title="Trích dẫn Kindle: thẻ nổi bật, tính năng Yêu thích, và gộp bản nháp bút cảm ứng",
+        dict(pr="181-184", date="15/07/2026", pr_lines=69, total_lines=7690,
+             title="Trích dẫn Kindle: thẻ nổi bật, tính năng Yêu thích, và một đợt rà soát đơn giản hoá",
              bullets=[
-                 "**Trích dẫn hôm nay được nâng cấp** — thẻ trích dẫn này chuyển hẳn lên đầu trang Hôm "
-                 "nay, nằm ngay dưới thẻ “Ngày đang xem” để dễ thấy ngay khi vừa mở ứng dụng, "
-                 "đổi sang nền màu accent đậm, chữ trích dẫn được phóng cỡ lớn theo kiểu chữ sách để có "
-                 "không khí văn chương hơn, và có thêm tên tác giả đứng cạnh tên sách để biết ngay câu "
-                 "này trích từ đâu.",
-                 "**Tính năng Yêu thích ra mắt** — giờ đây bạn có thể bấm dấu ★ trên bất kỳ trích dẫn hay "
-                 "ghi chú Kindle nào để đánh dấu lưu lại, rồi xem gộp toàn bộ những gì đã đánh dấu ở một "
-                 "sub-tab riêng tên là “Yêu thích” (nằm trong trang Sách) — mỗi trích dẫn được đặt "
-                 "trong một thẻ nền riêng biệt cho dễ đọc và dễ phân biệt, thay vì trước đây chỉ là những "
-                 "hàng chữ trần xếp chồng lên nhau.",
-                 "**Việc nhập trích dẫn Kindle trở nên thông minh hơn** — ứng dụng giờ tự nhận diện và "
-                 "gộp lại các “bản nháp” sinh ra do thói quen tô highlight bằng bút cảm ứng "
-                 "(những dòng gần giống nhau, cách nhau chỉ vài giây, câu sau luôn dài hơn câu trước một "
-                 "chút do tay kéo thêm), rồi chỉ giữ lại đúng bản đầy đủ nhất — thay vì trước kia mỗi lần "
-                 "tô một highlight lại vô tình sinh ra cả chục trích dẫn trùng lặp gây rối mắt.",
-                 "Ngoài ra còn kèm theo một số việc dọn dẹp nhỏ: sửa lỗi giao diện khiến tab Gundam mất "
-                 "kiểu dáng, sửa nút ★ bị chồng đè lên chữ, dọn bớt các dòng tiêu đề dư thừa ở nhiều bảng "
-                 "số liệu cho gọn gàng hơn, và đổi cách hiển thị Thứ trong Nhật ký từ dạng số sang chữ "
-                 "đầy đủ (ghi “Thứ Tư” thay vì chỉ “Thứ 4”, đọc tự nhiên hơn).",
+                 "**Trích dẫn hôm nay được nâng cấp** — thẻ trích dẫn chuyển hẳn lên đầu trang Hôm "
+                 "nay, đổi sang nền màu accent đậm, chữ trích dẫn phóng cỡ lớn theo kiểu chữ sách, và "
+                 "có thêm tên tác giả đứng cạnh tên sách.",
+                 "**Tính năng Yêu thích ra mắt** — bấm dấu ★ trên bất kỳ trích dẫn hay ghi chú Kindle "
+                 "nào để đánh dấu lưu lại, rồi xem gộp toàn bộ những gì đã đánh dấu ở sub-tab riêng "
+                 "“Yêu thích” trong trang Sách. Việc nhập trích dẫn Kindle cũng thông minh hơn: ứng "
+                 "dụng tự nhận diện và gộp các “bản nháp” sinh ra do thói quen tô highlight bằng bút "
+                 "cảm ứng, chỉ giữ lại đúng bản đầy đủ nhất.",
+                 "**Một đợt rà soát và đơn giản hoá theo phản hồi thực tế** — cắt bỏ vài tính năng hoá "
+                 "ra không đáng công sức (khối Top 3 ở Hôm nay/Báo cáo → Tuần, biểu đồ dòng thời gian "
+                 "tự vẽ ở Sách/Gundam, vài phím tắt ít dùng); đổi lại thêm nút “Gộp” ghi chú "
+                 "nhanh, khả năng sửa tay khi gán series Gundam sai, mục “Chỉ số bất thường” ở Sức "
+                 "khoẻ, mở rộng phạm vi Tìm kiếm sang Ghi chú nhanh, và gộp hai giao diện đồng bộ "
+                 "CalDAV thành một chỗ duy nhất.",
              ]),
-        dict(pr="181", date="15/07/2026", pr_lines=960, total_lines=7448,
-             title="Rà soát và đơn giản hoá theo phản hồi thực tế",
+        dict(pr="155-167", date="06/07/2026", pr_lines=79, total_lines=6162,
+             title="Đồng bộ nhanh làm mặc định, Bảng vàng, Ghi chú nhanh từ iOS, và logo mới",
              bullets=[
-                 "Sau một thời gian sử dụng thật, một số tính năng hoá ra không đáng công sức như ban "
-                 "đầu tưởng nên đã được cắt bỏ để ứng dụng gọn nhẹ hơn: khối Top 3 Danh mục/Dự án ở "
-                 "trang Hôm nay và Báo cáo → Tuần, biểu đồ dòng thời gian tự vẽ ở trang Sách/Gundam → "
-                 "Tổng quan (đẹp nhưng ít được xem tới), và vài phím tắt ít khi dùng đến (Shift+1 tới 5, "
-                 "dấu ngoặc vuông, các phím f/r/l).",
-                 "Đổi lại, có khá nhiều điều hữu ích được thêm vào: nút “Gộp” để chuyển thẳng "
-                 "ghi chú nhanh vào ghi chú chính chỉ với một lần bấm, khả năng sửa tay khi việc gán "
-                 "series Gundam tự động lỡ đoán sai, một mục mới tên “Chỉ số bất thường” hiện ngay "
-                 "ở lần khám Sức khoẻ gần nhất, phạm vi tìm kiếm của trang Tìm kiếm được mở rộng sang cả "
-                 "Ghi chú nhanh, thêm ô xác nhận bắt buộc trước khi bấm “Khôi phục” cho an toàn hơn, "
-                 "và gộp hai giao diện đồng bộ CalDAV vốn tách rời nhau thành một chỗ duy nhất cho đỡ "
-                 "rối.",
+                 "**Đồng bộ nhanh trở thành phương án mặc định** — chỉ một nút bấm là nạp được cả "
+                 "Forest, Reminders và lịch Work cùng lúc, thẳng từ file Shortcut đã tải lên sẵn; ba "
+                 "cách tải tay kiểu cũ vẫn còn nguyên, chỉ gộp gọn vào một khối “Dự phòng” có thể thu "
+                 "lại.",
+                 "**Bảng vàng ra đời** — Bảng số liệu ở mỗi trang Báo cáo có thêm mục “Ngày nổi bật” "
+                 "và khái niệm **Kỷ lục** tính trên toàn bộ thời gian, gắn thành chip huy chương trên "
+                 "Timeline khi xứng đáng.",
+                 "**Ghi chú nhanh chính thức có mặt** — một Shortcut trên iPhone cho phép gửi thẳng "
+                 "một dòng ý tưởng lên ứng dụng mà không cần mở trình duyệt, tách biệt hoàn toàn khỏi "
+                 "Ghi chú chính.",
+                 "Cùng với đó là một bộ logo thiết kế mới (tự đổi màu theo accent) và phong cách nút "
+                 "bấm gọn gàng, nhất quán hơn cho toàn bộ tab Tuỳ biến.",
              ]),
-        dict(pr="158-165", date="06/07/2026", pr_lines=46, total_lines=6115,
-             title="Bảng vàng (Ngày nổi bật và Kỷ lục), Ghi chú nhanh từ iOS",
+        dict(pr="125,126,132,133,136,137,139,140,141-146", date="04/07/2026", pr_lines=15, total_lines=5139,
+             title="Trang Hôm nay ra đời, Báo cáo Năm, Tìm kiếm, chế độ tối, và phím tắt bàn phím",
              bullets=[
-                 "**Bảng vàng ra đời** — Bảng số liệu ở mỗi trang Báo cáo giờ có thêm mục “Ngày nổi "
-                 "bật” (hiện những ngày có nhiều giờ tập trung nhất trong đúng kỳ đang xem), cộng "
-                 "thêm khái niệm **Kỷ lục** tính trên toàn bộ thời gian (cả tính chung lẫn tính riêng theo "
-                 "từng Nhóm/Dự án), được gắn thành một chip hình huy chương nổi bật trên Timeline mỗi khi "
-                 "ngày đó xứng đáng.",
-                 "**Ghi chú nhanh chính thức có mặt** — giờ có một Shortcut ngay trên iPhone cho phép gửi "
-                 "thẳng một dòng ý tưởng thoáng qua lên ứng dụng, không cần mở trình duyệt hay chạm vào "
-                 "máy tính; mỗi dòng ghi chú như vậy có thể sửa hoặc xoá riêng lẻ, hoàn toàn tách biệt "
-                 "khỏi Ghi chú chính để khỏi lẫn lộn.",
-                 "Kèm theo đó là một số việc nhỏ: gọn lại bố cục hiển thị trên điện thoại di động, và sửa "
-                 "lỗi chip trong Bảng số liệu bị tràn ra ngoài khung khi giá trị hiển thị quá dài.",
-             ]),
-        dict(pr="166-167", date="06/07/2026", pr_lines=79, total_lines=6162,
-             title="Logo mới, đồng bộ phong cách nút gọn cho toàn ứng dụng",
-             bullets=[
-                 "Đổi sang một bộ logo thiết kế hoàn toàn mới, tự động đổi màu theo đúng màu accent bạn "
-                 "đang chọn, thay vì bị khoá cứng vào một màu cố định như trước.",
-                 "Đồng bộ lại phong cách nút bấm cho gọn gàng hơn (ôm sát theo chữ bên trong, không còn "
-                 "cao quá khổ như trước) cho toàn bộ các nút nằm trong tab Tuỳ biến, nhìn nhất quán hơn.",
-             ]),
-        dict(pr="155,157", date="06/07/2026", pr_lines=338, total_lines=5654,
-             title="Đồng bộ nhanh trở thành phương án mặc định",
-             bullets=[
-                 "Tab “1. Dữ liệu đầu vào” giờ ưu tiên đưa **Đồng bộ nhanh** lên hàng đầu — chỉ "
-                 "cần một nút bấm duy nhất là nạp được cả Forest, Reminders và lịch Work cùng một lúc, "
-                 "thẳng từ file mà Shortcut đã tải lên sẵn, thay vì trước đây phải làm tay từng bước trong "
-                 "ba lượt riêng lẻ khá mất công.",
-                 "Ba cách tải tay kiểu cũ vẫn còn nguyên, không bị bỏ đi, chỉ được gộp gọn vào trong một "
-                 "khối có thể thu lại tên là “Dự phòng” — dùng tới khi thực sự cần thao tác riêng "
-                 "lẻ từng nguồn.",
-             ]),
-        dict(pr="132,133,136,137", date="04/07/2026", pr_lines=79, total_lines=5089,
-             title="Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc",
-             bullets=[
-                 "**Báo cáo → Năm ra mắt** — một bản tổng kết trọn vẹn cho một năm cụ thể, gồm khối số "
-                 "liệu nổi bật, Biểu đồ lịch trải dài cả năm, mục Đọc sách và Gundam trong năm, và Bảng "
-                 "số liệu chi tiết.",
-                 "**Trang Tìm kiếm ra đời** — một trang hoàn toàn riêng để tra từ khoá cùng lúc trên ghi "
-                 "chú, lịch hẹn Work, và cả sách/Gundam đã đọc hoặc xem qua, rồi gộp toàn bộ kết quả lại "
-                 "theo từng ngày cho dễ theo dõi ngữ cảnh.",
-                 "**Chế độ tối chính thức có mặt** — toàn bộ giao diện, từ nút bấm, biểu đồ, bảng nhiệt, "
-                 "cho tới ô ghi chú, đều được thiết kế thêm một phiên bản màu riêng dành cho chế độ tối, "
-                 "tự động chọn theo đúng cài đặt hệ thống của thiết bị bạn đang dùng.",
-                 "**Nhịp làm việc trở thành mục mới trong Trợ giúp** — nội dung tập trung dạy cách dùng "
-                 "ứng dụng theo đúng nhịp ngày/tuần/tháng thực tế, thay vì chỉ đơn thuần liệt kê mô tả "
-                 "từng tính năng rời rạc như trước.",
-             ]),
-        dict(pr="141-146", date="04/07/2026", pr_lines=15, total_lines=5139,
-             title="Thêm phím tắt bàn phím cho toàn ứng dụng",
-             bullets=[
-                 "Bộ phím tắt đầu tiên của ứng dụng chính thức ra mắt: các phím số 1 tới 7 để nhảy nhanh "
-                 "giữa các trang, phím N để mở nhanh Ghi chú ngày của hôm nay và đặt con trỏ vào ô soạn "
-                 "cho gõ luôn, phím / để đặt con trỏ vào ô Tìm kiếm, và phím Esc để bỏ focus khỏi ô đang "
-                 "gõ mà không làm mất từ khoá đã nhập.",
-                 "Muốn xem đầy đủ toàn bộ danh sách phím tắt hiện có, cứ ghé qua chương “Trong "
-                 "ngày” ngay phía trên trong trang Trợ giúp này.",
-             ]),
-        dict(pr="125,126,139,140", date="04/07/2026", pr_lines=6, total_lines=5089,
-             title="Trang Hôm nay, 14 màu accent, logo và dòng chữ hiệu",
-             bullets=[
-                 "**Trang Hôm nay chính thức ra đời** — được tách riêng từ lát cắt “Ngày” vốn "
-                 "từng nằm bên trong Báo cáo, trở thành mục đầu tiên và cũng là mục mặc định trên thanh "
-                 "điều hướng, vì xét cho cùng đây chính là trang được mở nhiều nhất mỗi ngày, xứng đáng có "
-                 "một vị trí trang trọng riêng.",
-                 "Bảng màu accent được mở rộng thành **14 màu** để chọn, xem trước trực tiếp qua một bản "
-                 "xem trước tương tác ngay khi rê chuột qua, và áp dụng ngay lập tức cho toàn bộ nút bấm, "
-                 "biểu đồ và bảng nhiệt trên khắp ứng dụng.",
-                 "Thêm một logo và dòng chữ hiệu “Forest Dashboard” hẳn hoi, thay cho tiêu đề "
-                 "chữ trơn khô khan hồi trước.",
+                 "**Trang Hôm nay chính thức ra đời** — tách riêng từ lát cắt “Ngày” vốn từng nằm "
+                 "trong Báo cáo, trở thành mục đầu tiên và mặc định trên thanh điều hướng. Cùng lúc, "
+                 "bảng màu accent mở rộng thành **14 màu**, và ứng dụng có một logo cùng dòng chữ hiệu "
+                 "“Forest Dashboard” hẳn hoi.",
+                 "**Báo cáo → Năm ra mắt** — một bản tổng kết trọn vẹn cho một năm cụ thể, gồm số liệu "
+                 "nổi bật, Biểu đồ lịch trải dài cả năm, và mục Đọc sách/Gundam trong năm.",
+                 "**Trang Tìm kiếm ra đời** — tra từ khoá cùng lúc trên ghi chú, lịch Work, và sách/"
+                 "Gundam đã đọc hoặc xem qua, gộp kết quả theo từng ngày.",
+                 "**Chế độ tối chính thức có mặt** — toàn bộ giao diện, từ nút bấm đến biểu đồ và ô "
+                 "ghi chú, tự động đổi theo cài đặt hệ thống của thiết bị.",
+                 "**Phím tắt bàn phím đầu tiên ra mắt** — các phím số 1 tới 7 để nhảy nhanh giữa các "
+                 "trang, phím N mở Ghi chú ngày, phím / vào ô Tìm kiếm, và phím Esc để bỏ focus.",
              ]),
     ]
     render_help_changelog(HELP_CHANGELOG)
