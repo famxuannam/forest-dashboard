@@ -5223,13 +5223,13 @@ def render_month_week_bars(df_m):
 
 
 def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
-    """Chương "Điểm nhấn" (Báo cáo -> Tháng, mockup): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong
-    tháng" (ngày dài nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính
-    RIÊNG trong tháng đang chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng
-    trước" (4 dòng delta: tổng giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt
-    động). Đã xác nhận với người dùng: giữ đủ như mockup dù 1 vài dòng lặp lại thông tin đã có ở
-    billboard/chương Tổng quan (Ngày dài nhất, 3 delta tổng) -- đây là chương "tóm tắt nhanh"
-    riêng, không bắt buộc tránh lặp hoàn toàn như đã làm với billboard Dự án."""
+    """"Điểm nhấn" (Báo cáo -> Tháng): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong tháng" (ngày dài
+    nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính RIÊNG trong tháng đang
+    chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng trước" (4 dòng delta: tổng
+    giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt động). Không còn là chương riêng
+    (đã gộp vào cuối chương "Tổng quan", xác nhận lại với người dùng) -- chấp nhận vài dòng lặp
+    lại thông tin đã có ở billboard/hero (Ngày dài nhất, 3 delta tổng) vì đây là 1 khối "tóm tắt
+    nhanh" bổ sung, không bắt buộc tránh lặp hoàn toàn như billboard Dự án."""
     if df_m.empty:
         st.caption("Chưa có dữ liệu.")
         return
@@ -8520,16 +8520,16 @@ elif nav == "Báo cáo":
                     f"{_active_days_m} ngày hoạt động · {len(df_m)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_m}</div><div class='pbill-sub'>{_pbill_sub_m}</div>",
                     [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Lịch tháng"),
-                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Theo tuần trong tháng"),
-                     ("bc-thang-ch5", "5 · Điểm nhấn"), ("bc-thang-ch6", "6 · Nhật ký"),
-                     ("bc-thang-ch7", "7 · Xu hướng theo thời gian"),
-                     ("bc-thang-ch8", "8 · Xu hướng tập trung theo khung giờ"),
-                     ("bc-thang-ch9", "9 · Bảng số liệu")])
+                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Xu hướng"),
+                     ("bc-thang-ch5", "5 · Nhật ký"), ("bc-thang-ch6", "6 · Bảng số liệu")])
                 _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
-                                              "Ngày nổi bật trong tháng", show_top3=True,
+                                              "Ngày nổi bật trong tháng", show_top3=False,
                                               anchor_prefix="bc-thang", top3_suffix=" Tháng",
                                               show_footer=False)
+                # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
+                # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
+                render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
 
                 sec_chapter("bc-thang-ch2", 2, None, "Lịch tháng")
                 # Truyền CÙNG df_m cho cả 2 tham số -- đúng pattern lịch năm đã có
@@ -8540,18 +8540,20 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-thang-ch3", 3, None, "Phân bổ danh mục")
                 frag_category_bars(df_m, "rad_tab3", "Danh mục")
 
-                sec_chapter("bc-thang-ch4", 4, None, "Theo tuần trong tháng")
-                render_month_week_bars(df_m)
-                sec_chapter("bc-thang-ch5", 5, None, "Điểm nhấn")
-                render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
+                sec_chapter("bc-thang-ch4", 4, None, "Xu hướng")
+                _thang_trend_view = st.segmented_control(
+                    "Xem theo", ["Theo tuần", "Theo ngày", "Theo khung giờ"], default="Theo tuần",
+                    key="bc_thang_trend_view", label_visibility="collapsed") or "Theo tuần"
+                if _thang_trend_view == "Theo tuần":
+                    render_month_week_bars(df_m)
+                elif _thang_trend_view == "Theo ngày":
+                    frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
+                else:
+                    frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
 
-                sec_chapter("bc-thang-ch6", 6, None, "Nhật ký")
+                sec_chapter("bc-thang-ch5", 5, None, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
-                sec_chapter("bc-thang-ch7", 7, None, "Xu hướng theo thời gian")
-                frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
-                sec_chapter("bc-thang-ch8", 8, None, "Xu hướng tập trung theo khung giờ")
-                frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
-                sec_chapter("bc-thang-ch9", 9, None, "Bảng số liệu")
+                sec_chapter("bc-thang-ch6", 6, None, "Bảng số liệu")
                 render_detail_table(df_m)
     elif bc_sub == "Năm":
         if not df.empty:
