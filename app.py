@@ -7588,8 +7588,16 @@ st.markdown(
         color: var(--accent) !important;
     }
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
-       hàng highlight cha phía trên. */
-    [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
+       hàng highlight cha phía trên. Streamlit gán width CỐ ĐỊNH (px, không phải auto) cho khối
+       container này -- margin-left ở đây CHỈ dịch khối sang phải, KHÔNG tự co width lại tương
+       ứng, nên cụm nút Yêu thích/Sửa/Xoá bị tràn phải đúng 20px so với hàng cha phía trên (bug
+       thật, phát hiện qua ảnh chụp người dùng gửi + đo bounding box bằng Playwright: right edge
+       hàng ghi chú 1221px trong khi hàng cha chỉ 1201px). width: calc(100% - 20px) trừ lại đúng
+       bằng margin-left để 2 hàng thẳng right edge với nhau. */
+    [class*="st-key-kqreply_"] {
+        margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip);
+        width: calc(100% - 20px) !important;
+    }
     /* Riêng sub-tab "Trích dẫn" (kqreply_fav_, xem _render_kindle_quotes_tab()): thêm kẻ đứt phân
        cách phía trên ghi chú -- vì giờ ghi chú nằm CHUNG 1 card với highlight cha (xem
        kqgroup_fav_ ngay dưới) thay vì đứng trần độc lập như "2. Nhật ký đọc" (không có kẻ này),
