@@ -433,8 +433,8 @@ BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
 def _teal_shades(n, l_lo=None, l_hi=None):
     """Sinh n sắc độ (cùng hue với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại từ thời accent
     mặc định là Xanh ngọc #00a3ad, nay chỉ còn là tên gọi lịch sử) từ nhạt (l_lo) đến đậm (l_hi)
-    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, thanh Phân bổ độ dài phiên) để đồng bộ một
-    họ màu thay vì mỗi nơi một tông riêng.
+    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, thẻ "Theo buổi"/"Độ dài phiên" của
+    render_project_rhythm()) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
     Mặc định (không truyền l_lo/l_hi) ĐẢO CHIỀU ramp khi dark: trên nền tối, teal L thấp
     (đậm ở light) gần như tàng hình còn L cao (nhạt ở light) nổi bật nhất -- nếu giữ nguyên
     chiều, "nhiều giờ" sẽ trông như "ít giờ". Dark dùng dải sáng hơn hẳn (0.22->0.72, mờ tối
@@ -2479,39 +2479,6 @@ def _avg_session_min(df):
     n = len(df)
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
-def render_session_bar(df):
-    """Thanh phân bố độ dài phiên theo 4 nhóm (mốc 25/50/90) — gọn cho phần Tổng quan. Có nhãn nhỏ
-    "Phân bổ độ dài phiên" riêng (đồng bộ với nhãn "Dòng thời gian trong ngày" của
-    render_day_timeline) -- thiếu nhãn khiến khối này trông trống trải, không rõ đang xem gì nếu
-    tách rời khỏi ngữ cảnh xung quanh (áp dụng chung cho MỌI nơi gọi hàm này, không riêng Hôm nay)."""
-    n = len(df)
-    if n == 0:
-        return
-    d = df['Thời lượng (Phút)']
-    counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
-    seg = ""
-    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-        if not c:
-            continue
-        pct = c / n * 100
-        lbl = f"{pct:.0f}%" if pct >= 9 else ""
-        fg = _readable_text(col)
-        seg += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};color:{fg};"
-                f"font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;'>{lbl}</div>")
-    legend = ""
-    for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-        legend += (f"<span style='display:inline-flex;align-items:center;gap:5px;margin:0 14px 4px 0;font-size:13px;color:var(--text);'>"
-                   f"<span style='display:inline-block;width:11px;height:11px;border-radius:3px;background:{col};'></span>"
-                   f"{name} <span style='color:var(--text-2);'>{rng}</span> · <b>{c}</b></span>")
-    st.markdown(
-        "<div class='glass-card' style='padding:14px 18px;margin-top:14px;'>"
-        "<span class='rl-book'>Phân bổ độ dài phiên</span>"
-        f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg}</div>"
-        f"<div style='margin-top:12px;'>{legend}</div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
 BUOI_BANDS = [
     ("Khuya", 0, 5, "rgba(88,86,214,0.05)"),
@@ -2919,41 +2886,66 @@ def _render_gundam_series_override(gundam_sessions, rl_gundam, gundam_df, gundam
             st.rerun()
 
 
-def _render_kindle_favorites_tab():
-    """Sub-tab "Yêu thích" (trang Sách, không có ở Gundam -- xem show_favorites ở render_reading_log()):
-    duyệt lại mọi trích dẫn/ghi chú Kindle đã đánh dấu ⭐, gộp theo cuốn sách. Đây thuần là 1 cách
-    LỌC khác của cùng bảng kindle_highlights (Yêu thích == True), không phải dữ liệu riêng -- tái
-    dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh dấu được
-    thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
+def _render_kindle_quotes_tab():
+    """Sub-tab "Trích dẫn" (trang Sách, không có ở Gundam -- xem show_favorites ở
+    render_reading_log()): duyệt lại MỌI trích dẫn/ghi chú Kindle đã lưu, gộp theo cuốn sách --
+    trước đây tab này (tên "Yêu thích") CHỈ hiện phần đã đánh dấu ⭐, đổi theo yêu cầu người dùng
+    để xem lại được toàn bộ trích dẫn, kèm chip lọc "Yêu thích" cho ai chỉ muốn xem đúng phần đã
+    đánh dấu. Đây thuần là 1 cách LỌC khác của cùng bảng kindle_highlights, không phải dữ liệu
+    riêng -- tái dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh
+    dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
 
-    Thêm 3 bộ lọc/sắp xếp (theo mockup): ô tìm theo nội dung trích dẫn, sắp xếp Mới lưu nhất/Cũ
-    nhất (theo "Ngày thêm" -- mốc lưu vào Yêu thích, DÙNG CHUNG với show_added_date ở
-    _render_kindle_quote_row(), KHÔNG phải "Vị trí" Kindle như "2. Nhật ký đọc"), và chip lọc theo
-    cuốn sách (st.segmented_control, đếm số trích dẫn không đổi theo ô tìm để nhãn chip ổn định
-    giữa các lần rerun). Sách nhiều hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng thứ tự sắp xếp
-    đang chọn), có nút "Hiện thêm" mở hết -- trạng thái mở lưu ở session_state, KHÔNG reset khi đổi
-    tìm/sắp xếp/lọc để tránh giật khi người dùng đang duyệt."""
+    Thêm bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
+    sắp xếp Mới lưu nhất/Cũ nhất (theo "Ngày thêm" -- mốc lưu vào Kindle, DÙNG CHUNG với
+    show_added_date ở _render_kindle_quote_row(), KHÔNG phải "Vị trí" Kindle như "2. Nhật ký
+    đọc"), và 1 hàng chip: "Yêu thích" đứng ĐẦU hàng, CÙNG style pill với các chip "Lọc theo sách"
+    phía sau -- xác nhận với người dùng: st.toggle (dạng công tắc, thử trước đó) trông không gọn
+    bằng, đổi sang st.segmented_control RIÊNG (selection_mode="multi", chỉ 1 lựa chọn) đặt NGAY
+    TRƯỚC segmented_control "Lọc theo sách" trong CÙNG 1 st.container(horizontal=True) -- 2 widget
+    tách biệt (không lồng vào lựa chọn 1-trong-N của "Lọc theo sách") nên bật/tắt được ĐỘC LẬP với
+    chip sách đang chọn, nhưng nhờ đặt cùng hàng ngang + cùng gap nên trông liền mạch như 1 dải
+    chip duy nhất. Icon ":material/star:" (KHÔNG phải emoji ⭐ thô như bản đầu) -- an toàn dùng
+    Material ở đây dù font Material Symbols của Streamlit không phân biệt được star đặc/rỗng (xem
+    chú thích ở nút ⭐/☆ hàng trích dẫn, _render_kindle_quote_row() dùng ký tự thật vì lý do đó):
+    chip này chỉ cần 1 icon TĨNH, trạng thái bật/tắt đã thể hiện qua nền pill được chọn, không cần
+    phân biệt hình dạng sao đặc/rỗng như nút toggle từng trích dẫn. Đếm số trích dẫn ở chip "Lọc
+    theo sách" không đổi theo ô tìm để nhãn chip ổn định giữa các lần rerun -- NHƯNG đổi theo
+    toggle Yêu thích, vì đó là đổi tập dữ liệu nền chứ không phải lọc mềm như ô tìm. Sách nhiều
+    hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng thứ tự sắp xếp đang chọn), có nút "Hiện thêm" mở
+    hết -- trạng thái mở lưu ở session_state, KHÔNG reset khi đổi tìm/sắp xếp/lọc để tránh giật
+    khi người dùng đang duyệt."""
     kh = load_kindle_highlights()
-    favs = kh[kh['Yêu thích']] if not kh.empty else kh
-    if favs.empty:
+    if kh.empty:
+        st.info("Chưa có trích dẫn/ghi chú Kindle nào. Tải file My Clippings.txt ở mục \"Tải "
+                "trích dẫn Kindle\" (tab Tuỳ biến) để bắt đầu.")
+        return
+
+    fcol1, fcol2 = st.columns([2, 1])
+    with fcol1:
+        search = st.text_input("**Tìm trong trích dẫn đã lưu**", key="fav_search",
+                                placeholder="Tìm theo nội dung trích dẫn...")
+    with fcol2:
+        sort_label = st.selectbox("**Sắp xếp**", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
+
+    with st.container(horizontal=True, gap="small"):
+        fav_sel = st.segmented_control("Yêu thích", [":material/star: Yêu thích"], selection_mode="multi",
+                                        key="fav_only_filter", label_visibility="collapsed")
+        fav_only = bool(fav_sel)
+        quotes = kh[kh['Yêu thích']] if fav_only else kh
+        chip_pick = None
+        if not quotes.empty:
+            book_counts = quotes.groupby('Cuốn sách').size()
+            chip_opts = [f"Tất cả · {len(quotes)}"] + [f"{b} · {n}" for b, n in book_counts.items()]
+            chip_pick = st.segmented_control("Lọc theo sách", chip_opts, default=chip_opts[0],
+                                              key="fav_book_filter", label_visibility="collapsed")
+
+    if quotes.empty:
         st.info("Chưa có trích dẫn nào được đánh dấu Yêu thích. Bấm ⭐ trên một trích dẫn ở mục "
                 "\"2. Nhật ký đọc\" (tab Chi tiết), hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
                 "nay, để lưu lại đây và đọc lại khi cần.")
         return
 
-    fcol1, fcol2 = st.columns([2, 1])
-    with fcol1:
-        search = st.text_input("Tìm trong trích dẫn đã lưu", key="fav_search",
-                                placeholder="Tìm theo nội dung trích dẫn...")
-    with fcol2:
-        sort_label = st.selectbox("Sắp xếp", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
-
-    book_counts = favs.groupby('Cuốn sách').size()
-    chip_opts = [f"Tất cả · {len(favs)}"] + [f"{b} · {n}" for b, n in book_counts.items()]
-    chip_pick = st.segmented_control("Lọc theo sách", chip_opts, default=chip_opts[0],
-                                      key="fav_book_filter", label_visibility="collapsed")
-
-    view = favs
+    view = quotes
     if search.strip():
         view = view[view['Nội dung'].str.contains(search.strip(), case=False, na=False)]
     if chip_pick and not chip_pick.startswith("Tất cả · "):
@@ -3005,9 +2997,9 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     (labels=GUNDAM_LABELS) -- chỉ khác CHỮ hiển thị, tên cột nội bộ (vd 'Cuốn sách', 'Trạng
     thái') giữ nguyên bất kể labels nào đang dùng.
 
-    show_favorites=False ở trang Gundam (xem nơi gọi) -- sub-tab "Yêu thích" duyệt lại trích dẫn
-    Kindle đã đánh dấu ⭐, chỉ có ý nghĩa cho SÁCH (trích dẫn gắn với nội dung sách, không áp dụng
-    cho việc xem Gundam).
+    show_favorites=False ở trang Gundam (xem nơi gọi) -- sub-tab "Trích dẫn" duyệt lại trích dẫn/
+    ghi chú Kindle (mọi trích dẫn, không chỉ phần đã đánh dấu ⭐ -- xem _render_kindle_quotes_tab()),
+    chỉ có ý nghĩa cho SÁCH (trích dẫn gắn với nội dung sách, không áp dụng cho việc xem Gundam).
 
     extra_overview: callable tuỳ chọn, gọi thêm SAU nội dung chính của sub-tab "Tổng quan" (bên
     trong đúng `with _tab_overview:`) -- dùng cho "Sửa gán series tự động" ở trang Gundam, mục này
@@ -3107,22 +3099,25 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
 
     # Key riêng theo show_favorites (không dùng chung 1 key cho Sách/Gundam như trước) -- Sách có
     # 3 tab, Gundam chỉ 2, dùng chung key cho 2 bộ tab khác số lượng dễ vỡ trạng thái tab đang chọn
-    # khi chuyển qua lại giữa 2 trang. Thứ tự Tổng quan -> Yêu thích -> Chi tiết (Yêu thích đứng
-    # trước Chi tiết theo yêu cầu -- tab hay ghé lại (Yêu thích) gần đầu hơn tab tra cứu sâu 1 cuốn
-    # cụ thể (Chi tiết), chỉ Sách mới có Yêu thích nên Gundam không đổi thứ tự 2 tab của mình).
+    # khi chuyển qua lại giữa 2 trang. Thứ tự Tổng quan -> Trích dẫn -> Chi tiết (Trích dẫn đứng
+    # trước Chi tiết theo yêu cầu -- tab hay ghé lại (Trích dẫn) gần đầu hơn tab tra cứu sâu 1 cuốn
+    # cụ thể (Chi tiết), chỉ Sách mới có tab này nên Gundam không đổi thứ tự 2 tab của mình). Tab
+    # trước đây tên "Yêu thích" (chỉ hiện trích dẫn đã đánh dấu ⭐) -- đổi tên "Trích dẫn" theo yêu
+    # cầu người dùng, giờ hiện MỌI trích dẫn kèm chip lọc riêng "Yêu thích" (xem
+    # _render_kindle_quotes_tab()), không còn giới hạn chỉ phần đã đánh dấu như tên cũ.
     _tab_labels = [":material/bar_chart: Tổng quan"]
     if show_favorites:
-        _tab_labels.append(":material/star: Yêu thích")
+        _tab_labels.append(":material/format_quote: Trích dẫn")
     _tab_labels.append(":material/search: Chi tiết")
     _tabs = st.tabs(_tab_labels, key="rl_view_tabs" if show_favorites else "rl_view_tabs_gd")
     _tab_overview = _tabs[0]
     if show_favorites:
-        _tab_favorites, _tab_detail = _tabs[1], _tabs[2]
+        _tab_quotes, _tab_detail = _tabs[1], _tabs[2]
     else:
         _tab_detail = _tabs[1]
 
-    # Tên trang cho hero -- chỉ Sách mới có Yêu thích (show_favorites) nên dùng luôn cờ đó để suy
-    # ra thay vì thêm 1 tham số page_name riêng trùng lặp thông tin.
+    # Tên trang cho hero -- chỉ Sách mới có tab Trích dẫn (show_favorites) nên dùng luôn cờ đó để
+    # suy ra thay vì thêm 1 tham số page_name riêng trùng lặp thông tin.
     _page_name = "Sách" if show_favorites else "Gundam"
 
     with _tab_overview:
@@ -3132,8 +3127,8 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
             extra_overview()
 
     if show_favorites:
-        with _tab_favorites:
-            _render_kindle_favorites_tab()
+        with _tab_quotes:
+            _render_kindle_quotes_tab()
 
     with _tab_detail:
         _render_reading_detail(t, reading_log_df, labels, _page_name, df_books)
@@ -3358,7 +3353,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             card_style="padding:18px;margin-top:14px;",
         )
 
-        render_session_bar(df_books)
+        render_project_rhythm(df_books)
 
     def _render_stats_table(show_quotes=False):
         # Bảng số liệu: dùng cùng style (DTBL) với mục cuối "Bảng số liệu". Cột thuộc nguồn Forest
@@ -4860,15 +4855,15 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix="", show_added_date=F
     "+" (ghi chú không trả lời được ghi chú).
 
     key_suffix: cùng 1 highlight (dedupe_hash) có thể được vẽ ở HAI nơi khác nhau trong CÙNG 1
-    lần chạy trang -- vd 1 trích dẫn Yêu thích của cuốn đang mở ở "Chi tiết" cũng xuất hiện lại ở
-    sub-tab "Yêu thích" ngay bên cạnh (st.tabs() vẽ HẾT mọi tab trong 1 lần chạy, không chỉ tab
-    đang active). 2 lần gọi cùng dùng key mặc định sẽ đụng khoá (StreamlitDuplicateElementKey) --
-    nơi gọi thứ 2 (vd _render_kindle_favorites_tab()) PHẢI truyền key_suffix riêng để tách khoá.
+    lần chạy trang -- vd 1 trích dẫn của cuốn đang mở ở "Chi tiết" cũng xuất hiện lại ở sub-tab
+    "Trích dẫn" ngay bên cạnh (st.tabs() vẽ HẾT mọi tab trong 1 lần chạy, không chỉ tab đang
+    active). 2 lần gọi cùng dùng key mặc định sẽ đụng khoá (StreamlitDuplicateElementKey) -- nơi
+    gọi thứ 2 (vd _render_kindle_quotes_tab()) PHẢI truyền key_suffix riêng để tách khoá.
     Chèn NGAY TRƯỚC hash (giữa tiền tố cố định "kqrow_"/"kqreply_"/"kqnew_" và hash) thay vì đặt ở
     đầu toàn bộ key -- giữ nguyên các tiền tố này làm chuỗi con để CSS
     ([class*="st-key-kqrow_"] v.v.) vẫn khớp bất kể key_suffix là gì.
 
-    show_added_date=True (chỉ dùng ở sub-tab "Yêu thích", xem _render_kindle_favorites_tab()) --
+    show_added_date=True (chỉ dùng ở sub-tab "Trích dẫn", xem _render_kindle_quotes_tab()) --
     thêm "· lưu DD/MM/YYYY" ngay sau vị trí, dùng ĐÚNG "Ngày thêm" (mốc nhập từ Kindle, KHÔNG phải
     mốc bấm ⭐ Yêu thích thật -- cột đó không tồn tại trong schema, xác nhận với người dùng dùng
     tạm mốc thêm gốc thay vì thêm cột mới) làm proxy cho "mới lưu nhất"."""
@@ -6186,13 +6181,13 @@ def render_project_rhythm(df_g):
     teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng phạm vi df_g này, buổi chiếm nhiều nhất tô đậm
     nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không hợp để tô thanh phân bổ
     đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã có, chỉ 1 câu nhận định
-    gọn, không kèm legend chi tiết như render_session_bar()). Ban đầu chỉ dùng ở Báo cáo -> Dự án
-    (gộp vào chương "Tổng quan" theo yêu cầu người dùng), sau đó dùng chung để thay
-    render_session_bar() ở Hôm nay và Báo cáo -> Tổng quan/Tuần/Tháng/Năm (xác nhận với người
-    dùng: combo 2 thẻ có tooltip này rõ hơn thanh phân bổ đơn cũ). render_session_bar() vẫn giữ
-    lại riêng cho trang Sách/Gundam. Mỗi ô dùng `data-tip` + CSS `:hover::after` (xem
-    _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip hiện ngay khi rê chuột, không có độ trễ ~1s
-    của tooltip trình duyệt mặc định."""
+    gọn, không kèm legend chi tiết như thanh phân bổ đơn cũ). Ban đầu chỉ dùng ở Báo cáo -> Dự án
+    (gộp vào chương "Tổng quan" theo yêu cầu người dùng), sau đó dùng chung để thay thanh "Phân bổ
+    độ dài phiên" cũ ở Hôm nay, Báo cáo -> Tổng quan/Tuần/Tháng/Năm, và sau cùng ở Sách/Gundam ->
+    Tổng quan (xác nhận với người dùng: combo 2 thẻ có tooltip này rõ hơn thanh phân bổ đơn cũ, áp
+    dụng nhất quán cho MỌI trang thay vì giữ riêng 1 kiểu cho Sách/Gundam như quyết định ban đầu).
+    Mỗi ô dùng `data-tip` + CSS `:hover::after` (xem _RHYTHM_TIP_CSS) thay cho `title=` gốc --
+    tooltip hiện ngay khi rê chuột, không có độ trễ ~1s của tooltip trình duyệt mặc định."""
     if df_g.empty:
         st.caption("Chưa có dữ liệu.")
         return
@@ -7270,15 +7265,18 @@ st.markdown(
         margin-top: 4px; }
     .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
-    /* Tiêu đề mỗi cuốn sách trong sub-tab "Yêu thích" (_render_kindle_favorites_tab()) -- tái
-       dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ đứt ngăn cách + badge
-       đếm số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
-       không phải nội dung tuần tự theo chương). */
+    /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
+       dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
+       số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
+       không phải nội dung tuần tự theo chương). Kẻ đậm màu ACCENT (không phải xám mờ đứt nét như
+       bản đầu) + badge đếm tô đặc ACCENT -- phương án B trong mockup so sánh 6 kiểu (xác nhận với
+       người dùng, KHÔNG kèm kicker) -- nổi bật hơn hẳn trên nền hoạ tiết chấm bi của trang mà
+       không cần thêm hẳn 1 khối nền/card mới, chỉ đổi 2 chi tiết đã có sẵn. */
     .fav-book-head { display: flex; align-items: baseline; justify-content: space-between;
-        gap: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; margin-bottom: 14px; }
+        gap: 12px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 14px; }
     .fav-book-titles { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .fav-count-badge { font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--chip);
-        border-radius: 20px; padding: 3px 10px; white-space: nowrap; }
+    .fav-count-badge { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+        border-radius: 20px; padding: 3px 11px; white-space: nowrap; }
     /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
        card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
        (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
@@ -7542,7 +7540,7 @@ st.markdown(
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
        hàng highlight cha phía trên. */
     [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
-    /* Sub-tab "Yêu thích" (trang Sách, xem _render_kindle_favorites_tab()): mỗi trích dẫn bọc
+    /* Sub-tab "Trích dẫn" (trang Sách, xem _render_kindle_quotes_tab()): mỗi trích dẫn bọc
        trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo Ngày/Tuần/Tháng) --
        thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Chỉ khớp key_suffix="fav_" (khớp
        "kqrow_fav_", KHÔNG khớp "kqrow_" trơn của "2. Nhật ký đọc") nên không ảnh hưởng nơi khác.
