@@ -42,7 +42,16 @@ nút rồi đọc lại state).
 Regenerate scratch harness mới mỗi phiên làm việc — không giả định 1 file scratch từ phiên trước
 còn tồn tại hay còn đúng, vì nó không được commit vào repo.
 
-**3 lỗi hay gặp khi dựng/dùng harness:**
+**5 lỗi hay gặp khi dựng/dùng harness:**
+- `streamlit`/`playwright` KHÔNG có sẵn trong sandbox trần dù `python3` có sẵn -- `pip install -r
+  requirements.txt` rồi `pip install playwright` trước, đừng giả định môi trường đã cài sẵn. Có thể
+  gặp lỗi uninstall `PyJWT` do Debian quản lý (`RECORD file not found`) -- thêm cờ `--ignore-installed
+  pyjwt` vào lệnh `pip install -r requirements.txt` là qua.
+- `@st.cache_data` trên các hàm `load_*()` cache theo TIẾN TRÌNH streamlit, không theo session/
+  browser tab -- nếu sửa dữ liệu giả lập (thêm bảng mới vào `_FAKE_STORE`, sửa file fixture JSON)
+  SAU KHI đã gọi qua hàm đó ít nhất 1 lần trong tiến trình đang chạy, kết quả cũ vẫn bị trả về dù
+  mở tab mới/reload trang -- phải `pkill` + chạy lại `streamlit run` (tiến trình mới, cache trống)
+  chứ sửa fixture xong reload trang KHÔNG đủ.
 - Chạy `streamlit run` bằng `nohup ... & disown` lồng trong 1 lời gọi Bash duy nhất KHÔNG đáng tin
   — process có thể bị dọn ngay khi lời gọi đó trả về, trước cả khi server kịp sẵn sàng. Luôn chạy
   bằng tham số nền riêng của tool Bash (`run_in_background: true`) thành 1 lời gọi tách biệt, rồi

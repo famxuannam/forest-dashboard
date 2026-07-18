@@ -78,6 +78,13 @@ xác nhận với người dùng:
   thêm mức "sát ngưỡng"/cảnh báo sớm nào (đã xác nhận với người dùng 2 lần, ở cả trang Lịch sử và
   Báo cáo của Sức khoẻ): mức đó cần tự đặt 1 ngưỡng % không có cơ sở dữ liệu thật. Nếu 1 mockup
   sau này lại vẽ mức thứ 3 kiểu vậy, hỏi lại chứ không tự thêm.
+- **Thứ tự chương chuẩn cho mọi trang báo cáo** (Báo cáo mọi sub-tab, Sách/Gundam, Dự án — đã áp
+  dụng nhất quán qua đợt tái cấu trúc UX, xác nhận với người dùng): Tổng quan → Biểu đồ lịch (luôn
+  đúng vị trí 2 nếu trang có) → Phân bổ Danh mục/Dự án → Xu hướng theo thời gian → Nhật ký/ghi chú
+  định tính → Bảng số liệu (LUÔN là chương cuối cùng). Hero của chương Tổng quan KHÔNG được lặp lại
+  đúng con số billboard đã hiện phía trên (xem `hero_items=[]` hoặc hero rút gọn ở Dự án/Sách/Gundam
+  Chi tiết/Gundam Tổng quan trong `ui-components.md`) — chỉ giữ số liệu bổ sung. Đổi thứ tự này ở 1
+  trang cụ thể cần hỏi lại trước, vì mục tiêu là nhất quán xuyên suốt mọi trang cùng họ.
 
 ## 6. Tài liệu bổ sung
 
@@ -87,8 +94,9 @@ xác nhận với người dùng:
   timezone, `prep_analysis_data()`, luồng "Đồng bộ nhanh" qua Supabase Storage.
 - [`.claude/docs/theming.md`](.claude/docs/theming.md) — CSS custom properties, `IS_DARK`, cách
   màu accent lan sang biểu đồ và iframe ghi chú.
-- [`.claude/docs/ui-components.md`](.claude/docs/ui-components.md) — quy ước `st.expander` đánh
-  số, `render_stat_panel()`, bẫy `st.metric`, bộ helper `help_*` của trang Trợ giúp.
+- [`.claude/docs/ui-components.md`](.claude/docs/ui-components.md) — quy ước đánh số `sec_chapter()`,
+  thứ tự chương chuẩn của trang báo cáo, `render_stat_panel()`, bẫy `st.metric`, bộ helper `help_*`
+  của trang Trợ giúp.
 - [`.claude/docs/keyboard-shortcuts.md`](.claude/docs/keyboard-shortcuts.md) — blob JS phím tắt
   toàn cục và phím tắt riêng trong iframe ghi chú.
 - [`.claude/docs/testing.md`](.claude/docs/testing.md) — harness giả lập Supabase + Playwright để

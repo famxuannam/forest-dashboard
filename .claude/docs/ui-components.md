@@ -2,16 +2,47 @@
 
 Đối tượng đọc: AI agent cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
 
-## Quy ước đánh số `st.expander("N. Tên mục", ...)`
+## Quy ước đánh số `sec_chapter(anchor, num, kicker, title, tight_top=False, badge=None)`
 
-Các trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết Sách/Gundam) được dựng từ 1 chuỗi
-`st.expander("N. Tên mục", ...)` đánh số thứ tự. Đây là quy ước UI có chủ đích, không phải đặt tên
-tuỳ tiện. **Khi thêm hoặc xoá 1 mục giữa chuỗi, phải đánh số lại toàn bộ các mục phía sau trong
-cùng trang** — để số thứ tự luôn liên tục 1, 2, 3... không nhảy cóc.
+Các trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết Sách/Gundam, Sức khoẻ) được dựng từ 1
+chuỗi lời gọi `sec_chapter(anchor, num, ...)` đánh số thứ tự (KHÔNG phải `st.expander` — mỗi
+chương luôn mở sẵn, cuộn dọc bình thường). Đây là quy ước UI có chủ đích, không phải đặt tên tuỳ
+tiện. **Khi thêm, xoá, hoặc đổi chỗ 1 mục giữa chuỗi, phải đánh số lại toàn bộ các mục phía sau
+trong cùng trang** (cả tham số `num` truyền vào `sec_chapter` lẫn chuỗi TOC chip truyền cho
+`render_period_billboard(...)` ngay phía trên) — để số thứ tự luôn liên tục 1, 2, 3... không nhảy
+cóc, và chip mục lục luôn khớp đúng chương nó trỏ tới.
 
 Ngoại lệ: mục có điều kiện hiển thị (ví dụ mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1
-cuốn sách) KHÔNG đánh số, để giữ nguyên số của các mục cố định khác dù mục điều kiện có hiện hay
-không.
+cuốn sách) truyền `num=None`, để giữ nguyên số của các mục cố định khác dù mục điều kiện có hiện
+hay không.
+
+## Thứ tự chương chuẩn cho trang báo cáo (đã chốt qua đợt tái cấu trúc UX)
+
+Mọi trang họ Báo cáo/Sách/Gundam/Dự án theo cùng 1 thứ tự luồng, xem thêm ở CLAUDE.md mục 5:
+**Tổng quan → Biểu đồ lịch (luôn vị trí 2 nếu trang có) → Phân bổ Danh mục/Dự án → Xu hướng theo
+thời gian → Nhật ký/ghi chú → Bảng số liệu (luôn cuối cùng)**. 2 hệ quả cụ thể khi thêm/sửa 1 trang
+kiểu này:
+
+- Nếu trang đã có 1 chương "Phân bổ Danh mục/Dự án" riêng (vd `frag_category_bars`/
+  `render_year_category_bars`), chương Tổng quan **không** cần thêm Top-3 Danh mục/Dự án nữa — 2
+  nơi cùng hiện 1 dữ liệu là dư (xem `show_top3=False` ở Tuần, đã bỏ ở Tháng/Năm).
+- 2 (hoặc nhiều) chương "xu hướng theo thời gian" khác trục (vd theo tuần/theo ngày/theo khung
+  giờ) nên gộp thành 1 chương dùng `st.segmented_control` chọn góc nhìn, thay vì tách rời nhiều
+  chương liền kề (xem "Xu hướng" ở Báo cáo Tổng quan/Tháng/Dự án).
+
+## Tránh lặp hero với billboard (`render_stat_panel(hero_items=...)`)
+
+`render_period_billboard()` đã show 1 con số to (`big_num`) + vài chip số liệu ở cột phải — chương
+đầu tiên ngay dưới nó (thường dùng `render_stat_panel`) **không được lặp lại đúng chỉ số đó làm
+hero**, chỉ nên thêm chỉ số MỚI (trung bình/so sánh/chuỗi ngày...). Cách xử lý tuỳ trường hợp:
+- Bỏ hẳn item hero bị trùng, giữ `hero_items=[]` nếu billboard đã đủ (Báo cáo Dự án, Sách/Gundam
+  Chi tiết).
+- Trùng chỉ ở 1 trong 2 trang dùng chung hàm: tham số hoá theo `page_name` (Gundam Tổng quan bỏ
+  hero "Tổng giờ" vì billboard "Phòng chiếu" show tổng giờ toàn thời gian, nhưng Sách vẫn giữ vì
+  billboard Sách chỉ show giờ NĂM NAY — không trùng phạm vi).
+- Hero có deltas (so kỳ trước/so trung bình) không tính là trùng thật dù giá trị tuyệt đối giống
+  billboard — deltas là thông tin mới (xem `_render_period_overview_hero`, dùng chung cho Tuần/
+  Tháng/Năm, KHÔNG cần trim).
 
 ## `render_stat_panel(hero_items, sections, footer, groups, card_style)`
 
@@ -102,6 +133,48 @@ instantiated` (bug thật đã gặp). Cách đúng: nút bấm chỉ ghi 1 cờ
 = "Lịch sử"`) rồi `st.rerun()`; xử lý cờ đó ở ĐẦU hàm dispatch, TRƯỚC dòng gọi
 `segmented_control` (`if "_X_jump" in st.session_state: ... st.session_state["X_picker"] = ...`) --
 lúc đó là lượt chạy MỚI, set trước khi widget instantiate nên hợp lệ.
+
+## Tooltip tức thời cho thanh phân bổ HTML: `data-tip` + CSS `:hover::after`, không dùng `title=`
+
+Các thanh phân bổ tự dựng bằng `<div>` xếp cạnh nhau (vd `render_project_rhythm`, `render_session_bar`)
+trước đây dùng `title='...'` (tooltip mặc định của trình duyệt — có độ trễ ~1s, kiểu chữ theo OS,
+không theo theme app). Muốn tooltip hiện NGAY khi rê chuột và đúng theme: đặt `class='rhythm-seg'`
+(hoặc class tương tự) + `data-tip='...'` lên mỗi ô, rồi 1 CSS rule dùng chung `.rhythm-seg:hover::after
+{ content: attr(data-tip); ... }` (xem `_RHYTHM_TIP_CSS`). **Lưu ý bẫy overflow:hidden**: nếu hàng chứa các ô
+đang dùng `overflow:hidden` để bo góc cả hàng, tooltip (định vị `position:absolute` bên trong ô) sẽ
+bị cắt mất — thay bằng bo góc RIÊNG ô đầu/ô cuối (`border-radius` khác nhau theo vị trí trong loop)
+thay vì bọc `overflow:hidden` quanh cả hàng.
+
+## Phân trang bảng dài: `st.pagination(num_pages, key=...)` + clamp session_state
+
+Bảng có thể dài không giới hạn (session thô, phiên gần đây...) phân trang theo 1 khuôn chung: tính
+`PAGE_SIZE`/`num_pages`, đọc trang hiện tại từ `st.session_state.get(key, 1)` rồi **clamp** về
+`num_pages` (phòng khi dữ liệu co lại sau xoá khiến trang cũ không còn tồn tại) TRƯỚC khi cắt lát
+DataFrame, vẽ `st.pagination(num_pages, key=...)` NGAY DƯỚI bảng (không phải trên), rồi 1 dòng
+caption "Hiển thị X–Y / N" căn giữa. Xem 2 nơi đã áp dụng: `db_page` (bảng "Dữ liệu làm việc hiện
+tại", Tuỳ biến, 100 dòng/trang) và `duan_rs_page` (bảng "Phiên gần đây", Báo cáo → Dự án, 10
+dòng/trang). CSS bắt buộc đi kèm mỗi key mới (thiếu sẽ đè sát bảng phía trên, không căn giữa):
+```css
+.st-key-<key>_pag [data-testid="stPagination"] { justify-content: center !important; }
+.st-key-<key>_pag { margin-top: 14px; }
+```
+
+## Ép 2+ thẻ ngang cao bằng nhau: class đánh dấu + `:has()` + `align-items:stretch`
+
+Rule chung `[data-testid="stHorizontalBlock"] { align-items: flex-start !important; }` (khối CSS
+chính) khiến MỌI hàng `st.columns()` mặc định co mỗi cột theo đúng chiều cao nội dung riêng — 2 thẻ
+cạnh nhau có số dòng nội dung khác nhau sẽ lệch cao. Cách ép cao bằng nhau mà không cần bọc thêm
+`st.container(key=...)` ngoài mỗi cột: gắn 1 class dùng chung (vd `month-hl-card`, `year-hl-card`,
+hoặc dùng key riêng như `tb_backup_card`) lên chính div bên trong mỗi cột, rồi:
+```css
+[data-testid="stHorizontalBlock"]:has(.month-hl-card) { align-items: stretch !important; }
+.month-hl-card { height: 100%; }
+```
+Lưu ý: `align-items:stretch` chỉ ép KHUNG thẻ cao bằng nhau, không tự lấp nội dung ngắn hơn — nếu 2
+thẻ lệch hẳn SỐ DÒNG nội dung (vd 1 thẻ 3 dòng, 1 thẻ 4 dòng), khung vẫn bằng cao nhưng nhìn lệch
+khoảng trắng cuối thẻ ngắn. Xử lý đúng là thêm/bớt 1 dòng nội dung thật cho khớp số dòng (xem "Ngày
+nhiều phiên nhất" thêm vào thẻ "Kỷ lục trong tháng" để khớp 4 dòng với thẻ "So với tháng trước" bên
+cạnh), không chỉ dựa vào CSS.
 
 ## Bảng số liệu dạng heat table (`DTBL_CSS`)
 
