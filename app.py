@@ -9488,17 +9488,17 @@ elif nav == "Tuỳ biến":
                         st.rerun()
 
     sec_chapter("tb-ch2", 2, None, "Phân loại")
-    # key="tb_phanloai_tabs" -- CSS ở khối .st-key-rl_view_tabs (chương "Sách/Gundam -> Chi tiết")
-    # dùng chung rule ẩn vạch xám full-width dưới hàng tab cho cả key này -- cùng style gạch chân,
-    # nhưng CĂN LỀ TRÁI (không căn giữa như rl_view_tabs) -- xác nhận với người dùng. Tabs đặt
-    # NGOÀI card màu (mỗi tab tự có card riêng bên trong, xem tb_mapping_card/tb_book_mapping_card)
-    # thay vì lồng trong 1 card chung bọc cả 2 tab như trước -- nhãn tab không còn bị "kẹt" bên
-    # trong khung card nữa. Nhãn "Danh mục"/"Sách" (KHÔNG dùng ký hiệu "↔" -- xác nhận với người
-    # dùng không thích ký hiệu này) -- ngắn gọn, đã đủ rõ nghĩa nhờ tiêu đề "2. Phân loại" ngay
-    # phía trên, không cần lặp lại chữ "Dự án".
-    _tab_cat_map, _tab_book_map = st.tabs(["Danh mục", "Sách"], key="tb_phanloai_tabs")
-    with _tab_cat_map:
-        with st.container(border=True, key="tb_mapping_card"):
+    with st.container(border=True, key="tb_mapping_card"):
+        # key="tb_phanloai_tabs" -- CSS ở khối .st-key-rl_view_tabs (chương "Sách/Gundam -> Chi
+        # tiết") dùng chung rule ẩn vạch xám full-width dưới hàng tab cho cả key này -- cùng style
+        # gạch chân, nhưng CĂN LỀ TRÁI (không căn giữa như rl_view_tabs) -- xác nhận với người
+        # dùng. Nhãn tab đặt LẠI vào trong card màu (thử tách ra ngoài trước đó, phản hồi thực tế
+        # là để trong card nhìn hợp hơn) -- 1 card CHUNG bọc cả 2 tab thay vì mỗi tab 1 card riêng.
+        # Nhãn "Danh mục"/"Sách" (KHÔNG dùng ký hiệu "↔" -- xác nhận với người dùng không thích ký
+        # hiệu này) -- ngắn gọn, đã đủ rõ nghĩa nhờ tiêu đề "2. Phân loại" ngay phía trên, không
+        # cần lặp lại chữ "Dự án".
+        _tab_cat_map, _tab_book_map = st.tabs(["Danh mục", "Sách"], key="tb_phanloai_tabs")
+        with _tab_cat_map:
             db_current = load_db()
             mapping_df = load_mapping()
             all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
@@ -9568,8 +9568,7 @@ elif nav == "Tuỳ biến":
                             save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                             st.rerun()
 
-    with _tab_book_map:
-        with st.container(border=True, key="tb_book_mapping_card"):
+        with _tab_book_map:
             # Gán tay Dự án Forest -> Cuốn sách -- CÙNG khuôn bảng tĩnh .maptbl/.maprow + form
             # "Sửa" bên dưới như tab "Danh mục" ở trên (xác nhận với người dùng), nhưng
             # KHÁC 2 điểm vì bản chất khác: (1) KHÔNG có banner "còn N dự án chưa gán" -- gán Sách
