@@ -6781,8 +6781,11 @@ st.markdown(
     [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
-       flex-start -> đẩy hàng nút vào giữa */
-    .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
+       flex-start -> đẩy hàng nút vào giữa. margin-top tách khỏi bảng/dtbl-wrap phía trên --
+       thiếu margin này, hàng số trang đứng sát ngay dưới viền bảng, nhìn như đè lên nhau. */
+    .st-key-db_pag [data-testid="stPagination"],
+    .st-key-duan_rs_pag [data-testid="stPagination"] { justify-content: center !important; }
+    .st-key-db_pag, .st-key-duan_rs_pag { margin-top: 14px; }
 
     /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
        hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
