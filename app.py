@@ -7640,9 +7640,17 @@ st.markdown(
     /* Nút tròn nổi "về đầu trang" (tạo bằng JS ở _inject_scroll_to_top_button(), không phải
        st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
        class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
-       che nhau nếu cùng hiện 1 lúc. */
+       che nhau nếu cùng hiện 1 lúc.
+       Vị trí: .block-container tối đa 1200px và tự canh giữa màn hình (xem rule phía trên) -- màn
+       hình rộng hơn 1200px+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ trôi ra xa hẳn cột nội
+       dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right: max(22px, calc(50vw - 600px +
+       22px)) để nút luôn bám đúng mép phải của cột 1200px đó khi màn hình đủ rộng, còn màn hình hẹp
+       hơn 1200px (calc ra âm) thì max() tự chọn lại 22px sát mép trình duyệt như bình thường.
+       Mobile đổi hẳn sang mép TRÁI (không còn cùng phía bên phải) -- bên phải dưới cùng trên
+       Streamlit Cloud là chỗ huy hiệu "Hosted with Streamlit" tự chèn, nút bên phải sẽ bị che mất
+       một phần bởi huy hiệu đó (lỗi thật đã gặp, xem ảnh chụp), sang trái tránh hẳn xung đột này. */
     #app-scroll-top-btn {
-        position: fixed; right: 22px; bottom: 22px; z-index: 99980;
+        position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 22px; z-index: 99980;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -7654,7 +7662,7 @@ st.markdown(
     #app-scroll-top-btn:hover { opacity: 0.9; transform: scale(1.05); }
     #app-scroll-top-btn svg { width: 20px; height: 20px; }
     @media (max-width: 640px) {
-        #app-scroll-top-btn { right: 14px; bottom: 14px; width: 40px; height: 40px; }
+        #app-scroll-top-btn { right: auto; left: 14px; bottom: 14px; width: 40px; height: 40px; }
     }
     </style>
     """,
@@ -8027,8 +8035,10 @@ _inject_keyboard_shortcuts()
 
 
 def _inject_scroll_to_top_button():
-    """Nút tròn nổi góc dưới-phải "về đầu trang" -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện,
-    bấm cuộn mượt về đầu. Tạo bằng JS (components.html) y hệt bảng phím tắt ở
+    """Nút tròn nổi "về đầu trang" (góc dưới-phải trên desktop, bám mép cột nội dung 1200px thay
+    vì mép trình duyệt; góc dưới-trái trên mobile để tránh huy hiệu Streamlit -- xem CSS
+    `#app-scroll-top-btn`) -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện, bấm cuộn mượt về đầu.
+    Tạo bằng JS (components.html) y hệt bảng phím tắt ở
     _inject_keyboard_shortcuts(): gắn thẳng vào window.parent.document để nút không bị Streamlit
     xoá/tạo lại mỗi lần rerun (iframe của components.html có bị dựng lại cũng không sao, nút đã
     sống sẵn trong document cha) -- canh cờ w.__scrollTopBtnInstalled để không tạo trùng nút sau
