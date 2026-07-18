@@ -8317,8 +8317,7 @@ elif nav == "Báo cáo":
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>",
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
-                 ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
-                 ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+                 ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
             s_stat = _streak_stats(df)
@@ -8348,7 +8347,6 @@ elif nav == "Báo cáo":
 
             render_stat_panel(
                 hero_items=[
-                    {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
@@ -8364,11 +8362,15 @@ elif nav == "Báo cáo":
 
             sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
             frag_calendar(df, "range_cal")
-            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng theo thời gian")
-            frag_trend(df, "trend_main", "Danh mục")
-            sec_chapter("bc-tq-ch4", 4, None, "Xu hướng tập trung theo khung giờ")
-            frag_hourly(df, "hour_main", "Danh mục")
-            sec_chapter("bc-tq-ch5", 5, None, "Bảng số liệu")
+            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng")
+            _tq_trend_view = st.segmented_control(
+                "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
+                key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
+            if _tq_trend_view == "Theo thời gian":
+                frag_trend(df, "trend_main", "Danh mục")
+            else:
+                frag_hourly(df, "hour_main", "Danh mục")
+            sec_chapter("bc-tq-ch4", 4, None, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
