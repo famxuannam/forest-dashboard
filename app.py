@@ -7266,14 +7266,17 @@ st.markdown(
     .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
     /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
-       dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ đứt ngăn cách + badge
-       đếm số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
-       không phải nội dung tuần tự theo chương). */
+       dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
+       số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
+       không phải nội dung tuần tự theo chương). Kẻ đậm màu ACCENT (không phải xám mờ đứt nét như
+       bản đầu) + badge đếm tô đặc ACCENT -- phương án B trong mockup so sánh 6 kiểu (xác nhận với
+       người dùng, KHÔNG kèm kicker) -- nổi bật hơn hẳn trên nền hoạ tiết chấm bi của trang mà
+       không cần thêm hẳn 1 khối nền/card mới, chỉ đổi 2 chi tiết đã có sẵn. */
     .fav-book-head { display: flex; align-items: baseline; justify-content: space-between;
-        gap: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; margin-bottom: 14px; }
+        gap: 12px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 14px; }
     .fav-book-titles { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .fav-count-badge { font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--chip);
-        border-radius: 20px; padding: 3px 10px; white-space: nowrap; }
+    .fav-count-badge { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+        border-radius: 20px; padding: 3px 11px; white-space: nowrap; }
     /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
        card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
        (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
