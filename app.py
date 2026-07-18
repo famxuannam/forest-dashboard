@@ -4273,14 +4273,15 @@ def _render_health_input(df_health):
         # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
         # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
         # đọc lẫn với khuôn "tờ lịch hôm nay" của billboard Hôm nay (cùng CSS .tbill-date/.pbill-num
-        # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi thêm ngày tuyệt đối + số ngày đã
-        # trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác format_relative() dùng cho mốc giờ
-        # thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu NGÀY lấy mẫu, không có giờ, nên
-        # hiển thị "X giờ" ở đây là số liệu giả tạo không có thật.
+        # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi tháng/năm CHỮ ĐẦY ĐỦ (không chỉ số
+        # to + thứ ở trên) + số ngày đã trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác
+        # format_relative() dùng cho mốc giờ thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu
+        # NGÀY lấy mẫu, không có giờ, nên hiển thị "X giờ" ở đây là số liệu giả tạo không có thật.
         _tab_label = "Lần khám gần nhất"
+        _month_word = f"{VN_MONTHS_WORD[_latest_date.month - 1]} {_latest_date.year}"
         _days_ago = (_today_vn() - _latest_date.date()).days
         _rel = "Hôm nay" if _days_ago == 0 else "Hôm qua" if _days_ago == 1 else f"{_days_ago} ngày trước"
-        _meta = f"{_latest_date:%d/%m/%Y} · {_rel}"
+        _meta = f"{_month_word} · {_rel}"
         render_period_billboard(_tab_label, str(_latest_date.day), _vn_dow, _meta, _right_html, _toc)
         _bc1, _bc2 = st.columns([5, 1])
         with _bc2:
