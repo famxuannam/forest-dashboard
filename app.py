@@ -2893,7 +2893,12 @@ def _render_kindle_quotes_tab():
     để xem lại được toàn bộ trích dẫn, kèm chip lọc "Yêu thích" cho ai chỉ muốn xem đúng phần đã
     đánh dấu. Đây thuần là 1 cách LỌC khác của cùng bảng kindle_highlights, không phải dữ liệu
     riêng -- tái dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh
-    dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
+    dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó. Ghi chú được LỒNG
+    xuống dưới đúng highlight cha (cùng thuật toán parent_hash/"Vị trí" với _render_kindle_day_quotes()
+    ở "2. Nhật ký đọc", khoanh vùng theo CUỐN SÁCH thay vì theo NGÀY) -- ghi chú KHÔNG khớp được
+    highlight nào bị ẨN HẲN (không hiện đứng riêng như ở "2. Nhật ký đọc") vì xác nhận với người
+    dùng: 1 ghi chú không gắn với trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách
+    TRÍCH DẪN (khác "2. Nhật ký đọc" là nhật ký theo ngày, không được phép "mất" dữ liệu).
 
     Thêm bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
     sắp xếp Mới lưu nhất/Cũ nhất (theo "Ngày thêm" -- mốc lưu vào Kindle, DÙNG CHUNG với
@@ -2963,18 +2968,63 @@ def _render_kindle_quotes_tab():
     visible_books = book_order if show_all else book_order[:3]
     hidden_books = [] if show_all else book_order[3:]
 
-    for i, book in enumerate(visible_books):
+    _rendered_i = 0
+    for book in visible_books:
         grp = view[view['Cuốn sách'] == book]
+        # Lồng ghi chú xuống dưới đúng highlight nó thuộc về -- CÙNG thuật toán với "2. Nhật ký
+        # đọc" (_render_kindle_day_quotes()), nhưng khoanh vùng theo CUỐN SÁCH (grp) thay vì theo
+        # NGÀY: (a) parent_hash trỏ thẳng (ghi chú tự thêm trong app, quan hệ CHẮC CHẮN lưu DB),
+        # (b) SUY LUẬN qua "Vị trí" trùng với 1 highlight cùng cuốn (ghi chú gốc từ Kindle,
+        # parent_hash luôn NULL). KHÁC "2. Nhật ký đọc": ghi chú KHÔNG khớp được highlight nào bị
+        # ẨN HẲN ở đây thay vì hiện đứng riêng -- xác nhận với người dùng, 1 ghi chú không gắn với
+        # trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách TRÍCH DẪN (khác "2. Nhật
+        # ký đọc" là nhật ký theo NGÀY nên vẫn cần hiện đủ, không được phép "mất" dữ liệu).
+        by_hash = {r['dedupe_hash']: r for _, r in grp.iterrows()}
+        children = {}
+        is_child = set()
+        for _, r in grp.iterrows():
+            if r['Loại'] != 'note':
+                continue
+            ph = r.get('parent_hash')
+            if pd.notna(ph) and ph in by_hash:
+                children.setdefault(ph, []).append(r)
+                is_child.add(r['dedupe_hash'])
+            else:
+                loc = r['Vị trí']
+                if pd.notna(loc):
+                    _match = grp[(grp['Loại'] == 'highlight') & (grp['Vị trí'] == loc)]
+                    if not _match.empty:
+                        ph2 = _match.iloc[0]['dedupe_hash']
+                        children.setdefault(ph2, []).append(r)
+                        is_child.add(r['dedupe_hash'])
+        orphan_notes = set(
+            grp[(grp['Loại'] == 'note') & (~grp['dedupe_hash'].isin(is_child))]['dedupe_hash'])
+        visible_n = len(grp) - len(orphan_notes)
+        if visible_n == 0:
+            continue
+
         author = _reading_author_of(kh, book)
-        _mt = "0" if i == 0 else "26px"
+        _mt = "0" if _rendered_i == 0 else "26px"
         st.markdown(
             f"<div class='fav-book-head' style='margin-top:{_mt}'>"
             f"<div class='fav-book-titles'><span class='pbill-booktitle'>{html_escape(str(book))}</span>"
             + (f"<span class='pbill-author'>{html_escape(str(author))}</span>" if author else "")
-            + f"</div><span class='fav-count-badge'>{len(grp)}</span></div>",
+            + f"</div><span class='fav-count-badge'>{visible_n}</span></div>",
             unsafe_allow_html=True)
         for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
-            _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+            if r['dedupe_hash'] in is_child or r['dedupe_hash'] in orphan_notes:
+                continue
+            # Trích dẫn + ghi chú lồng của nó BỌC CHUNG 1 container (key "kqgroup_fav_<hash>")
+            # để card nền/viền (CSS [class*="st-key-kqgroup_fav_"]) áp cho CẢ CỤM -- trước đó mỗi
+            # dòng (kqrow_fav_/kqreply_fav_) tự có card riêng, khiến ghi chú lồng "trần" tách hẳn
+            # khỏi card highlight cha (không khớp selector "kqrow_fav_"). Xác nhận với người
+            # dùng: phương án A trong mockup so sánh 4 kiểu (kẻ đứt + thụt lề, KHÔNG kèm nhãn
+            # kicker "Ghi chú của bạn").
+            with st.container(key=f"kqgroup_fav_{r['dedupe_hash']}"):
+                _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+                for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
+                    _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
+        _rendered_i += 1
 
     if hidden_books:
         hidden_n = sum(len(view[view['Cuốn sách'] == b]) for b in hidden_books)
@@ -7538,18 +7588,37 @@ st.markdown(
         color: var(--accent) !important;
     }
     /* Ghi chú lồng dưới highlight (is_reply=True) -- thụt lề + vạch trái mảnh, phân biệt rõ với
-       hàng highlight cha phía trên. */
-    [class*="st-key-kqreply_"] { margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip); }
-    /* Sub-tab "Trích dẫn" (trang Sách, xem _render_kindle_quotes_tab()): mỗi trích dẫn bọc
-       trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo Ngày/Tuần/Tháng) --
-       thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Chỉ khớp key_suffix="fav_" (khớp
-       "kqrow_fav_", KHÔNG khớp "kqrow_" trơn của "2. Nhật ký đọc") nên không ảnh hưởng nơi khác.
+       hàng highlight cha phía trên. Streamlit gán width CỐ ĐỊNH (px, không phải auto) cho khối
+       container này -- margin-left ở đây CHỈ dịch khối sang phải, KHÔNG tự co width lại tương
+       ứng, nên cụm nút Yêu thích/Sửa/Xoá bị tràn phải đúng 20px so với hàng cha phía trên (bug
+       thật, phát hiện qua ảnh chụp người dùng gửi + đo bounding box bằng Playwright: right edge
+       hàng ghi chú 1221px trong khi hàng cha chỉ 1201px). width: calc(100% - 20px) trừ lại đúng
+       bằng margin-left để 2 hàng thẳng right edge với nhau. */
+    [class*="st-key-kqreply_"] {
+        margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--chip);
+        width: calc(100% - 20px) !important;
+    }
+    /* Riêng sub-tab "Trích dẫn" (kqreply_fav_, xem _render_kindle_quotes_tab()): thêm kẻ đứt phân
+       cách phía trên ghi chú -- vì giờ ghi chú nằm CHUNG 1 card với highlight cha (xem
+       kqgroup_fav_ ngay dưới) thay vì đứng trần độc lập như "2. Nhật ký đọc" (không có kẻ này),
+       cần 1 ranh giới rõ để không dính liền vào chữ trích dẫn phía trên trong cùng khối nền.
+       KHÔNG kèm nhãn kicker "Ghi chú của bạn" -- phương án A trong mockup, xác nhận với người
+       dùng bỏ hẳn nhãn đó, chỉ cần kẻ + thụt lề + icon "✎" đã có sẵn là đủ phân biệt. */
+    [class*="st-key-kqreply_fav_"] {
+        margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--divider);
+    }
+    /* Sub-tab "Trích dẫn" (trang Sách, xem _render_kindle_quotes_tab()): mỗi CỤM trích dẫn + ghi
+       chú lồng của nó bọc trong 1 thẻ nền riêng -- giống .dtl-card (thẻ dòng thời gian ở Báo cáo
+       Ngày/Tuần/Tháng) -- thay vì chỉ là hàng chữ trần như ở "2. Nhật ký đọc". Card gán ở
+       CONTAINER BỌC NGOÀI "kqgroup_fav_<hash>" (không phải từng dòng kqrow_fav_/kqreply_fav_ như
+       trước) -- ghi chú lồng trước đây tự đứng ngoài card cha vì key "kqreply_fav_" không khớp
+       chuỗi con "kqrow_fav_" của rule cũ, phản hồi thực tế xác nhận trông rất tách rời/"trần".
        Đặt SAU rule margin-bottom:2px chung ở trên để thắng theo thứ tự (cùng độ đặc hiệu). */
-    [class*="st-key-kqrow_fav_"] {
+    [class*="st-key-kqgroup_fav_"] {
         background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         box-shadow: 0 1px 1px rgba(0,0,0,0.02); padding: 16px 18px; margin-bottom: 10px !important;
     }
-    [class*="st-key-kqrow_fav_"]:last-child { margin-bottom: 0 !important; }
+    [class*="st-key-kqgroup_fav_"]:last-child { margin-bottom: 0 !important; }
     /* Trích dẫn nhiều dòng (thường gặp -- trích dẫn dài hơn 1 dòng ở bề rộng cột chữ ~83%): cột
        chữ (rc1) là 1 flex item lồng nhiều lớp bên trong hàng cột (rc1/rc2 icon) -- đã xác minh qua
        DevTools rằng khi chữ tự xuống dòng, Chromium tính sai chiều cao "auto" của các lớp bọc
@@ -7561,7 +7630,7 @@ st.markdown(
        toàn nhất, không đụng cấu trúc layout đang hoạt động ổn định ở mọi nơi khác. Không tuyệt đối
        hoàn hảo cho trích dẫn dài 3+ dòng, nhưng đã kiểm tra: cải thiện rõ rệt cho ca 1-2 dòng phổ
        biến, không làm ca 1 dòng (không có bug) trông mất cân đối rõ rệt. */
-    [class*="st-key-kqrow_fav_"] { padding-bottom: 30px; }
+    [class*="st-key-kqgroup_fav_"] { padding-bottom: 30px; }
     /* Mỗi ngày trong "2. Nhật ký đọc" (Sách/Gundam -> Chi tiết) là 1 st.container(key="jkq_row_N")
        THẬT (không phải .jrows/.jrow HTML tĩnh -- xem _render_reading_kindle_days()), nên không tự
        có padding/đường kẻ phân tách như .jrows .jrow ở nơi khác -- chỉ dựa vào gap mặc định giữa
