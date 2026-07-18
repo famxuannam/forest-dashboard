@@ -4111,29 +4111,93 @@ def _render_health_report(df_health):
 
 
 def _render_health_history(df_health):
-    """Sub-tab "Lịch sử": danh sách từng lần xét nghiệm đã nhập theo năm, sửa/xoá từng lần.
-    Không đánh số expander (khác các sub-tab khác) vì đây là NỘI DUNG DUY NHẤT của tab -- quy
-    ước đánh số N. chỉ áp dụng khi có nhiều mục cùng cấp cần phân biệt thứ tự.
+    """Sub-tab "Lịch sử": dòng thời gian các lần khám theo năm, 1 thẻ/NGÀY (gộp mọi Nhóm khám
+    cùng ngày -- khớp mockup "1 lần khám = 1 thẻ", dữ liệu thật lưu theo (Ngày, Nhóm) riêng nên
+    1 ngày có thể có nhiều Nhóm, vd "Huyết học" + "Sinh hóa" cùng ngày). Mỗi Nhóm trong thẻ hiện
+    hàng chip chỉ số (đỏ + mũi tên lên/xuống nếu ngoài khoảng tham chiếu, xem _health_is_abnormal).
+    Sửa/xoá dữ liệu thật vẫn theo TỪNG Nhóm (khớp khoá test_date+category của
+    save_health_metrics_bulk()/delete_health_metric_panel(), gộp sẽ lẫn 2 Nhóm khi lưu) -- gom
+    CHUNG vào 1 expander DUY NHẤT ở cuối (chọn lần xét nghiệm cần sửa qua selectbox) thay vì 1
+    expander riêng dưới MỖI thẻ như bản đầu: thao tác này ít dùng, mà 1 expander/Nhóm chen giữa
+    timeline (kèm đường kẻ ngang phân cách của st.expander) làm vỡ mạch dòng thời gian liên tục,
+    lại không đồng bộ hình khối với các thẻ HTML xung quanh.
 
-    Cột "Bất thường" (chỉ đọc, dùng _health_is_abnormal() -- xem hàm đó) thêm vào bảng sửa để
-    nhất quán với "Báo cáo": trước đây chỉ "Báo cáo" đánh dấu được chỉ số ngoài khoảng tham
-    chiếu, "Lịch sử" hoàn toàn không có tín hiệu này dù cùng hiển thị đúng những chỉ số đó."""
+    Mockup còn có dòng phụ đề "Cơ sở y tế · Gói khám" và ghi chú tự do của bác sĩ, cùng 1 mức
+    cảnh báo cam "sát ngưỡng" cạnh mức đỏ "cao" -- CẢ 3 đều không có trong dữ liệu hiện tại (chỉ
+    có Ngày/Nhóm/Chỉ số/Giá trị/Đơn vị/Khoảng tham chiếu, không có cơ sở/gói khám/ghi chú, và
+    _health_is_abnormal() chỉ nhị phân trong/ngoài khoảng) nên bỏ hẳn, không bịa dữ liệu (đã xác
+    nhận với người dùng)."""
     if df_health.empty:
         st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
         return
     _years = sorted(df_health['Ngày lấy mẫu'].dt.year.unique(), reverse=True)
     year_sel = st.selectbox("Năm", _years, key="hm_hist_year")
     panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
-    _groups = sorted(panels.groupby(['Ngày lấy mẫu', 'Nhóm']), key=lambda kv: kv[0][0], reverse=True)
-    for (pdate, pcat), grp in _groups:
-        _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
-        _abn = _health_is_abnormal(grp)
-        _n_abn = int(_abn.sum())
-        _hdr = f"{pdate:%d/%m/%Y} · {pcat} ({len(grp)} chỉ số"
-        _hdr += f", {_n_abn} bất thường)" if _n_abn else ")"
-        grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
-        grp_disp.insert(1, "Bất thường", ['⚠️' if a else '' for a in _abn])
-        with st.expander(_hdr, expanded=False):
+    _dates = sorted(panels['Ngày lấy mẫu'].unique(), reverse=True)
+
+    _panel_keys = []  # [(pdate, pcat, grp), ...] tất cả (Ngày, Nhóm) của năm đang chọn -- gom
+                       # 1 lần duy nhất ở đây để dùng lại cho cả timeline lẫn expander sửa/xoá
+                       # gộp ở cuối, không lặp lại groupby 2 nơi.
+    for pdate in _dates:
+        day_df = panels[panels['Ngày lấy mẫu'] == pdate]
+        for pcat, grp in sorted(day_df.groupby('Nhóm'), key=lambda kv: kv[0]):
+            _panel_keys.append((pd.Timestamp(pdate), pcat, grp))
+
+    for _i, pdate in enumerate(_dates):
+        pdate = pd.Timestamp(pdate)
+        day_df = panels[panels['Ngày lấy mẫu'] == pdate]
+        # Đường nối chỉ vẽ khi CHƯA phải thẻ cuối -- mỗi thẻ render riêng 1 lệnh st.markdown nên
+        # ":last-child" trong CSS luôn đúng với chính nó (là con duy nhất trong khối markdown của
+        # nó) và sẽ ẨN đường nối ở MỌI thẻ nếu dựa vào CSS -- phải quyết định ở Python theo vị trí
+        # trong _dates.
+        line_html = "<div class='hmtl-line'></div>" if _i < len(_dates) - 1 else ""
+        _day_groups = [(pcat, grp) for pd_, pcat, grp in _panel_keys if pd_ == pdate]
+        _n_abn_day = int(_health_is_abnormal(day_df).sum())
+        if _n_abn_day:
+            dot_cls, badge_html = "hmtl-dot warn", f"<span class='hmtl-badge bad'>{_n_abn_day} chỉ số bất thường</span>"
+        else:
+            dot_cls, badge_html = "hmtl-dot", "<span class='hmtl-badge ok'>Trong khoảng tham chiếu</span>"
+
+        grp_html = ''
+        for pcat, grp in _day_groups:
+            _abn = _health_is_abnormal(grp)
+            chips = ''
+            for (_, r), a in zip(grp.iterrows(), _abn):
+                val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
+                unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
+                arrow = ''
+                if a and pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
+                    arrow = _mi('arrow_upward', 11)
+                elif a and pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
+                    arrow = _mi('arrow_downward', 11)
+                title = f" title='Tham chiếu {html_escape(str(r['Khoảng tham chiếu']))}'" if pd.notna(r['Khoảng tham chiếu']) else ""
+                chips += (f"<span class='jchip{' abn' if a else ''}'{title}>"
+                          f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
+                          f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
+            grp_html += f"<div class='hmtl-grp'><span class='rl-book'>{html_escape(str(pcat))}</span>{chips}</div>"
+
+        st.markdown(
+            "<div class='hmtl-item'>"
+            f"<div class='{dot_cls}'></div>{line_html}"
+            "<div class='hmtl-card'>"
+            f"<div class='hmtl-head'><span class='hmtl-date'>{pdate:%d/%m/%Y}</span>{badge_html}</div>"
+            f"{grp_html}</div></div>", unsafe_allow_html=True)
+
+    # 1 expander DUY NHẤT cho sửa/xoá, đặt SAU cả timeline (không chen giữa từng thẻ) -- chọn
+    # đúng 1 lần xét nghiệm (Ngày + Nhóm) qua selectbox rồi mới hiện bảng sửa, xem docstring. Style
+    # riêng (container key="hm_hist_edit", xem CSS .st-key-hm_hist_edit) để trông như 1 thẻ hộp
+    # khớp .hmtl-card phía trên, thay vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của mọi
+    # st.expander khác, xem rule [data-testid="stExpander"]) -- lạc tông với timeline card ngay
+    # trên nó. Cùng khuôn với FAQ (Trợ giúp, xem CSS .st-key-help_faq), đã có tiền lệ trong app.
+    with st.container(key="hm_hist_edit"):
+        with st.expander("Sửa / xoá xét nghiệm đã nhập", icon=":material/edit_note:", expanded=False):
+            _opts = [f"{pdate:%d/%m/%Y} · {pcat}" for pdate, pcat, _ in _panel_keys]
+            _pick = st.selectbox("Chọn lần xét nghiệm", _opts, key="hm_hist_edit_pick")
+            pdate, pcat, grp = _panel_keys[_opts.index(_pick)]
+            _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
+            _abn = _health_is_abnormal(grp)
+            grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
+            grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
             edited = st.data_editor(
                 grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
                 column_config={"Bất thường": st.column_config.TextColumn(
@@ -6054,7 +6118,8 @@ st.markdown(
     [data-testid="stMarkdownContainer"]:has(> .dtl-card),
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
     [data-testid="stMarkdownContainer"]:has(> .catbars-card),
-    [data-testid="stMarkdownContainer"]:has(> .quotes-card) {
+    [data-testid="stMarkdownContainer"]:has(> .quotes-card),
+    [data-testid="stMarkdownContainer"]:has(> .hmtl-item) {
         margin-bottom: 0 !important;
     }
 
@@ -6097,6 +6162,49 @@ st.markdown(
        mockup vẽ dạng danh sách dòng trần, không phải chip. */
     .hlt-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .hlt-item { font-size: 13.5px; color: var(--text); line-height: 1.5; }
+
+    /* Sub-tab "Lịch sử" (Sức khoẻ, _render_health_history()) -- dòng thời gian các lần khám:
+       chấm + đường nối bên trái. Mỗi .hmtl-item tự vẽ đoạn đường của riêng nó, kéo dài quá
+       margin-bottom để nối liền sang chấm kế tiếp -- không dùng 1 đường kẻ chung xuyên suốt vì
+       giữa các thẻ còn chèn expander sửa/xoá là widget Streamlit thật, không nằm trong cùng khối
+       HTML để vẽ đường kẻ liên tục qua được. */
+    .hmtl-item { position: relative; padding-left: 26px; margin-bottom: 16px; }
+    .hmtl-item:last-child { margin-bottom: 0; }
+    .hmtl-dot { position: absolute; left: 2px; top: 5px; width: 11px; height: 11px; border-radius: 50%;
+        background: var(--accent); box-shadow: 0 0 0 3px var(--card); z-index: 1; }
+    .hmtl-dot.warn { background: #ff3b30; }
+    .hmtl-line { position: absolute; left: 7px; top: 16px; bottom: -16px; width: 2px; background: var(--divider); }
+    .hmtl-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 14px 16px; box-shadow: 0 1px 1px rgba(0,0,0,0.02); }
+    .hmtl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        flex-wrap: wrap; margin-bottom: 8px; }
+    .hmtl-date { font-size: 15px; font-weight: 700; color: var(--text); }
+    .hmtl-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 9px; white-space: nowrap; }
+    .hmtl-badge.bad { background: rgba(255,59,48,0.12); color: #ff3b30; }
+    .hmtl-badge.ok { background: rgba(52,199,89,0.12); color: #34c759; }
+    .hmtl-grp { margin-top: 10px; }
+    .hmtl-grp:first-of-type { margin-top: 0; }
+    /* Chip chỉ số bất thường (ngoài khoảng tham chiếu) -- tô đỏ, dùng CHUNG khuôn .jchip (đã có
+       ck/cv) thêm 1 mũi tên Material lên/xuống tuỳ Giá trị vượt Ref cao hay dưới Ref thấp. */
+    .jchip.abn { background: rgba(255,59,48,0.10); }
+    .jchip.abn .cv { color: #ff3b30; }
+    /* Expander "Sửa / xoá xét nghiệm đã nhập" (_render_health_history()) -- ghi đè riêng trong
+       phạm vi container key="hm_hist_edit" để trông như 1 thẻ hộp khớp .hmtl-card phía trên, thay
+       vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của [data-testid="stExpander"], xem rule
+       phía dưới) sẽ lạc tông với timeline card ngay trên nó. CÙNG khuôn với FAQ (Trợ giúp, key=
+       "help_faq") -- tái dùng đúng pattern đã có, không phát sinh style mới. */
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details {
+        background: var(--card) !important; border: 1px solid var(--border) !important;
+        border-radius: 10px !important; box-shadow: 0 1px 1px rgba(0,0,0,0.02) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary {
+        padding: 12px 16px !important; border-bottom: none !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary p {
+        font-size: 14px !important; font-weight: 600 !important; color: var(--text-2) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details[open] > summary {
+        border-bottom: 1px solid var(--divider) !important; }
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+        padding: 10px 16px 14px !important; }
 
     .glass-card {
         background: var(--card);
