@@ -2442,7 +2442,6 @@ SESSION_BUCKETS = [
     ("Dài",       "50–<90′",50,  90,    _SESSION_COLORS[3]),
     ("Rất Dài",   "≥ 90′",  90,  10**9, _SESSION_COLORS[4]),
 ]
-LEN_THRESHOLDS = (25, 50, 90)  # mốc tham chiếu trên histogram
 
 def _avg_session_min(df):
     """Độ dài bình quân mỗi phiên (phút); 0 nếu chưa có phiên."""
@@ -2481,49 +2480,6 @@ def render_session_bar(df):
         "</div>",
         unsafe_allow_html=True,
     )
-
-def render_session_histogram(df):
-    """Histogram độ dài phiên (bin 5 phút, từ 10′) + đường mốc 25/50/90 và đường trung bình."""
-    n = len(df)
-    if n == 0:
-        st.info("Chưa có phiên nào trong phạm vi này.")
-        return
-    d = df['Thời lượng (Phút)'].astype(float)
-    start, top, step = 10, 60, 5
-    edges = list(range(start, top + 1, step))
-    counts = [int(((d >= edges[i]) & (d < edges[i + 1])).sum()) for i in range(len(edges) - 1)]
-    counts[0] += int((d < start).sum())  # gộp phiên ngắn bất thường (nếu có) vào bin đầu
-    counts.append(int((d >= top).sum()))
-    centers = [edges[i] + step / 2 for i in range(len(edges) - 1)] + [top + step / 2]
-    labels = [f"{edges[i]}–{edges[i + 1]}′" for i in range(len(edges) - 1)] + [f"≥ {top}′"]
-
-    fig = go.Figure(go.Bar(
-        x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
-        marker_cornerradius=6, cliponaxis=False,  # bo góc trên + bóng (CSS) không bị cắt — đồng bộ các cột khác
-        customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
-    ))
-    _threshold_col = "#6ea8ff" if IS_DARK else "#0a52c4"
-    _avg_col = PLOT_TEXT
-    for t in LEN_THRESHOLDS:
-        if start < t <= top:
-            fig.add_vline(x=t, line=dict(color=_threshold_col, width=1.5, dash='dot'))
-    avg = d.mean()
-    if start <= avg <= top + step:
-        fig.add_vline(x=avg, line=dict(color=_avg_col, width=2, dash='dash'),
-                      annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
-                      annotation_font=dict(size=12, color=_avg_col))
-    fig.update_layout(
-        height=300, margin=dict(l=10, r=10, t=24, b=10), bargap=0.06, showlegend=False,
-        xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
-                   tickvals=[10, 20, 30, 40, 50, 60],
-                   ticktext=['10', '20', '30', '40', '50', '60+'],
-                   tickfont=dict(size=12), showgrid=False),
-        yaxis=dict(title='Số phiên', tickfont=dict(size=12),
-                   gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-    )
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
 
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
 BUOI_BANDS = [
@@ -3335,13 +3291,18 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
     lặp. "Nhật ký xem" tái dùng nguyên _reading_rows_html() (cùng cơ chế "Nhật ký đọc" của Sách,
     lọc theo reading_log_df đã là rl_gundam sẵn -- không cần lọc lại theo _is_gundam_list)."""
     def _render_stats_cards():
-        # Thẻ 1: hero + Tổng kết (theo đầu cuốn)
+        # Thẻ 1: hero + Tổng kết (theo đầu cuốn). "Tổng giờ" CHỈ hiện ở Sách -- billboard Sách chỉ
+        # show giờ đọc NĂM NAY (không trùng hero toàn thời gian ở đây), còn billboard Gundam
+        # "Phòng chiếu" show thẳng giờ xem TOÀN THỜI GIAN (hrs_all) -- trùng đúng số với hero này
+        # nếu giữ, nên bỏ ở Gundam (xác nhận với người dùng, cùng cách đã xử lý ở Chi tiết).
+        _hero_items = [
+            {"label": labels['count_label'], "value": f"{len(t)}"},
+            {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
+        ]
+        if page_name == "Sách":
+            _hero_items.insert(1, {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"})
         render_stat_panel(
-            hero_items=[
-                {"label": labels['count_label'], "value": f"{len(t)}"},
-                {"label": "Tổng giờ", "value": f"{_fmt_hours_short(t['Tổng giờ'].sum())}"},
-                {"label": labels['parts_label'], "value": f"{int(t['Số phần đã đọc'].fillna(0).sum())}"},
-            ],
+            hero_items=_hero_items,
             sections=_grp_summary,
         )
 
@@ -3451,12 +3412,13 @@ _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn 
 
 def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện billboard + 4
-    chương đánh số -- 1. Số liệu (hero chip, tái dùng render_stat_panel), 2. Nhật ký đọc
-    (_render_reading_kindle_days, có thêm chip "Thời gian"/ghi chú ngày -- xem docstring hàm đó),
-    3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
-    ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels. Đã xác
-    nhận với người dùng GIỮ NGUYÊN cả 4 chương này (mockup billboard mới chỉ gợi ý 2 chương, không
-    áp dụng -- xem AskUserQuestion trong lịch sử phiên).
+    chương đánh số -- 1. Số liệu (render_stat_panel, KHÔNG có hero vì Tổng giờ/số phần đã hiện ở
+    chip billboard ngay trên), 2. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ --
+    dời lên vị trí 2 để khớp vị trí chuẩn của "Biểu đồ lịch" ở mọi trang khác trong app), 3. Nhật
+    ký đọc/xem (_render_reading_kindle_days, có thêm chip "Thời gian"/ghi chú ngày -- xem docstring
+    hàm đó), 4. Bảng số liệu (từng ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách
+    lẫn Gundam qua labels. Đã xác nhận với người dùng GIỮ NGUYÊN đủ 4 chương này (mockup billboard
+    mới chỉ gợi ý 2 chương, không áp dụng -- xem AskUserQuestion trong lịch sử phiên).
 
     Billboard (render_period_billboard()) render SAU khi đã chọn 1 cuốn/series (không phải ngay
     khi vào tab) -- tránh chip mục lục trỏ tới chương chưa tồn tại lúc ô chọn còn để trống, đúng
@@ -3532,8 +3494,8 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         f"bắt đầu {pd.Timestamp(_row['Bắt đầu']):%d/%m} · lần {labels['verb']} gần nhất "
         f"{_rel_day_label(_row['Gần nhất'], _today_vn())}",
         _right_ct,
-        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", f"2 · {_journal_label}"),
-         (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
+        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Biểu đồ lịch"),
+         (f"{_anchor_ns}-ch3", f"3 · {_journal_label}"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
         key="bc_billboard_detail")
 
     sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu", tight_top=True)
@@ -3554,15 +3516,20 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
     _secs.append({"label": "Trạng thái", "chips": _tt})
 
+    # hero_items=[] -- "Tổng giờ"/labels['parts_label'] đã hiện ở chip billboard ngay phía trên
+    # (xem _chips_ct), lặp lại làm hero ở đây là thừa. Chỉ giữ các sections (số liệu MỚI).
     render_stat_panel(
-        hero_items=[
-            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
-            {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
-        ],
+        hero_items=[],
         sections=_secs,
     )
 
-    sec_chapter(f"{_anchor_ns}-ch2", 2, None, _journal_label)
+    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Biểu đồ lịch")
+    if not _rl_detail.empty:
+        render_reading_calendar_grid(_rl_detail, labels)
+    else:
+        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+
+    sec_chapter(f"{_anchor_ns}-ch3", 3, None, _journal_label)
     # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
     # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
@@ -3572,12 +3539,6 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
             _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books)
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
-
-    sec_chapter(f"{_anchor_ns}-ch3", 3, None, "Biểu đồ lịch")
-    if not _rl_detail.empty:
-        render_reading_calendar_grid(_rl_detail, labels)
-    else:
-        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
 
     sec_chapter(f"{_anchor_ns}-ch4", 4, None, "Bảng số liệu")
     if not _rl_detail.empty:
@@ -4081,12 +4042,10 @@ def _render_health_report(df_health):
             ("hm-bc-ch3", "3 · Bảng xét nghiệm đầy đủ")]
     _ok_score, _total_score = _health_score(df_health)
     if not _abn_latest.empty:
-        _abn_chips = ''
-        for _, r in _abn_latest.iterrows():
-            arrow = _mi('arrow_upward', 11) if r['Giá trị'] > r['Ref cao'] else _mi('arrow_downward', 11)
-            _abn_chips += (f"<span class='jchip abn'><span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
-                           f"<span class='cv'>{r['Giá trị']:g}{arrow}</span></span>")
-        _right_html = f"<div class='pbill-kicker'>Cần chú ý</div><div class='pbill-chips'>{_abn_chips}</div>"
+        # Chỉ hiện SỐ LƯỢNG, không liệt kê từng chỉ số bằng chip -- danh sách chi tiết (tên/giá
+        # trị/mũi tên) đã có ngay dưới ở chương 1 "Chỉ số bất thường", lặp lại ở billboard là dư.
+        _right_html = (f"<div class='pbill-kicker'>Cần chú ý</div>"
+                        f"<div class='pbill-title'>{len(_abn_latest)} chỉ số ngoài ngưỡng</div>")
     else:
         _right_html = "<div class='pbill-title'>Tất cả chỉ số trong ngưỡng</div>"
     render_period_billboard("Số sức khoẻ", f"{_ok_score}/{_total_score}", "chỉ số trong ngưỡng",
@@ -5137,14 +5096,20 @@ def _longest_streak_range(scope_df):
 
 
 def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
-    """Chương "Kỷ lục năm" (Báo cáo -> Năm, mockup): 2 thẻ -- "Kỷ lục {năm}" (ngày dài nhất/chuỗi
-    liên tiếp dài nhất kèm khoảng ngày/tuần cao nhất, tất cả tính RIÊNG trong năm đang chọn qua
-    df_y, KHÔNG phải kỷ lục toàn thời gian) và "Nhịp cả năm" (ngày hoạt động/elapsed, TB giờ mỗi
-    ngày hoạt động + mỗi tuần, thứ năng suất nhất). active_days_y/elapsed_days_y nhận từ billboard
+    """"Kỷ lục năm" (Báo cáo -> Năm): 2 thẻ -- "Kỷ lục {năm}" (ngày dài nhất/chuỗi liên tiếp dài
+    nhất kèm khoảng ngày/tuần cao nhất, tất cả tính RIÊNG trong năm đang chọn qua df_y, KHÔNG phải
+    kỷ lục toàn thời gian) và "Nhịp cả năm" (ngày hoạt động/elapsed, TB giờ mỗi ngày hoạt động +
+    mỗi tuần, thứ năng suất nhất). Không còn là chương riêng -- gộp vào cuối chương "Tổng quan"
+    (cùng cách xử lý "Điểm nhấn" ở nhánh Tháng). active_days_y/elapsed_days_y nhận từ billboard
     (đã tính sẵn ở đó, tránh tính lại)."""
     if df_y.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    # Cùng pattern ép 2 thẻ cao bằng nhau đã dùng ở "Điểm nhấn" (Báo cáo -> Tháng, xem
+    # month-hl-card) -- rule chung align-items:flex-start khiến 2 cột co theo nội dung riêng.
+    st.markdown(
+        "<style>[data-testid=\"stHorizontalBlock\"]:has(.year-hl-card) "
+        "{ align-items: stretch !important; }</style>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -5163,7 +5128,7 @@ def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
                            f"{_fmt_hours_short(_wk_hrs_y.max()/60)}")
         _items_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card year-hl-card' style='padding:14px 18px;height:100%;'>"
             f"<span class='rl-book'>Kỷ lục {selected_year}</span>"
             f"<div class='hlt-list'>{_items_html}</div></div>", unsafe_allow_html=True)
 
@@ -5179,7 +5144,7 @@ def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
             _items2.append(f"Thứ năng suất nhất <b>{wd_y.idxmax()}</b> (TB {_fmt_hours_short(wd_y.max())})")
         _items2_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items2)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card year-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Nhịp cả năm</span>"
             f"<div class='hlt-list'>{_items2_html}</div></div>", unsafe_allow_html=True)
 
@@ -5223,16 +5188,23 @@ def render_month_week_bars(df_m):
 
 
 def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
-    """Chương "Điểm nhấn" (Báo cáo -> Tháng, mockup): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong
-    tháng" (ngày dài nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính
-    RIÊNG trong tháng đang chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng
-    trước" (4 dòng delta: tổng giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt
-    động). Đã xác nhận với người dùng: giữ đủ như mockup dù 1 vài dòng lặp lại thông tin đã có ở
-    billboard/chương Tổng quan (Ngày dài nhất, 3 delta tổng) -- đây là chương "tóm tắt nhanh"
-    riêng, không bắt buộc tránh lặp hoàn toàn như đã làm với billboard Dự án."""
+    """"Điểm nhấn" (Báo cáo -> Tháng): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong tháng" (ngày dài
+    nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính RIÊNG trong tháng đang
+    chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng trước" (4 dòng delta: tổng
+    giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt động). Không còn là chương riêng
+    (đã gộp vào cuối chương "Tổng quan", xác nhận lại với người dùng) -- chấp nhận vài dòng lặp
+    lại thông tin đã có ở billboard/hero (Ngày dài nhất, 3 delta tổng) vì đây là 1 khối "tóm tắt
+    nhanh" bổ sung, không bắt buộc tránh lặp hoàn toàn như billboard Dự án."""
     if df_m.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    # 2 thẻ cao KHÔNG bằng nhau mặc định (rule chung [data-testid="stHorizontalBlock"]
+    # { align-items: flex-start !important; } khiến mỗi cột co theo đúng chiều cao nội dung riêng)
+    # -- :has(.month-hl-card) chọn đúng hàng này rồi ép stretch, cùng pattern đã dùng cho 3 thẻ
+    # Sao lưu/Khôi phục/Tài khoản ở Tuỳ biến (xem .st-key-tb_backup_card).
+    st.markdown(
+        "<style>[data-testid=\"stHorizontalBlock\"]:has(.month-hl-card) "
+        "{ align-items: stretch !important; }</style>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -5242,12 +5214,20 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
         _longest_sess = df_m.loc[df_m['Thời lượng (Phút)'].idxmax()]
         _longest_sess_ts = pd.Timestamp(_longest_sess['Thời gian bắt đầu'])
         _longest_streak = _streak_stats(df_m)['longest']
+        # 4 dòng, khớp số dòng thẻ "So với tháng trước" bên cạnh (cùng hàng, height:100% chỉ ép
+        # cao bằng nhau ở KHUNG thẻ, không tự căn giữa nội dung ngắn hơn -- xem yêu cầu người
+        # dùng) -- "Ngày nhiều phiên nhất" là kỷ lục THẬT, khác trục với "Ngày dài nhất" (theo số
+        # phiên thay vì tổng thời lượng), không phải số lặp lại cho đủ dòng.
+        _by_day_cnt_m = df_m.groupby('Ngày').size()
+        _busiest_cnt_date = _by_day_cnt_m.idxmax()
+        _busiest_cnt = int(_by_day_cnt_m.max())
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card month-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Kỷ lục trong tháng</span><div class='hlt-list'>"
             f"<div class='hlt-item'>{_mi('emoji_events')} Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
             f"<div class='hlt-item'>{_mi('timer')} Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
             f"{int(_longest_sess['Thời lượng (Phút)'])}′ ({html_escape(str(_longest_sess['Dự án']))})</div>"
+            f"<div class='hlt-item'>{_mi('bolt')} Ngày nhiều phiên nhất · {_busiest_cnt_date:%d/%m} · {_busiest_cnt} phiên</div>"
             f"<div class='hlt-item'>{_mi('local_fire_department')} Chuỗi trong tháng · {_longest_streak} ngày liên tiếp</div>"
             "</div></div>", unsafe_allow_html=True)
 
@@ -5285,7 +5265,7 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
 
         _lines_html = "".join(f"<div class='hlt-item'>{ln}</div>" for ln in _lines)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card month-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>So với tháng trước</span>"
             f"<div class='hlt-list'>{_lines_html}</div></div>", unsafe_allow_html=True)
 
@@ -5960,11 +5940,12 @@ def render_project_week_trend(df_g, n_weeks=12):
 
 def render_project_recent_sessions(df_g, days=30):
     """Chương "Phiên gần đây" (Báo cáo -> Dự án, mockup): MỌI phiên trong N ngày gần nhất (mặc
-    định 30, KHÔNG giới hạn số dòng) của dự án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi
-    (buổi tra qua _buoi_of() dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số
-    phiên trong cửa sổ) -- khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng)
-    vì đây là danh sách PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở
-    "Biểu đồ lịch" hay đổi bộ lọc kỳ."""
+    định 30) của dự án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi (buổi tra qua _buoi_of()
+    dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số phiên trong cửa sổ) --
+    khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng) vì đây là danh sách
+    PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở "Biểu đồ lịch" hay đổi bộ
+    lọc kỳ. Phân trang 10 phiên/trang (theo yêu cầu) -- cùng pattern clamp/`st.pagination` đã
+    dùng cho bảng "Dữ liệu làm việc hiện tại" ở Tuỳ biến (xem db_page), key riêng "duan_rs_page"."""
     if df_g.empty:
         st.caption("Chưa có phiên nào.")
         return
@@ -5974,8 +5955,22 @@ def render_project_recent_sessions(df_g, days=30):
     if recent.empty:
         st.caption(f"Chưa có phiên nào trong {days} ngày gần nhất.")
         return
+
+    PAGE_SIZE = 10
+    n = len(recent)
+    paged = n > PAGE_SIZE
+    _start = 0
+    if paged:
+        num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
+        page = min(st.session_state.get("duan_rs_page", 1), num_pages)
+        st.session_state["duan_rs_page"] = page
+        _start = (page - 1) * PAGE_SIZE
+        page_df = recent.iloc[_start:_start + PAGE_SIZE]
+    else:
+        page_df = recent
+
     rows_html = ""
-    for _, r in recent.iterrows():
+    for _, r in page_df.iterrows():
         ts = pd.Timestamp(r['Thời gian bắt đầu'])
         rows_html += (f"<tr><td class='txt lbl'>{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}</td>"
                       f"<td>{ts:%H:%M}</td><td>{int(r['Thời lượng (Phút)'])}′</td>"
@@ -5989,18 +5984,42 @@ def render_project_recent_sessions(df_g, days=30):
         f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
         unsafe_allow_html=True)
 
+    if paged:
+        with st.container(key="duan_rs_pag"):
+            st.pagination(num_pages, key="duan_rs_page")
+        st.markdown(
+            f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
+            f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
+            unsafe_allow_html=True)
+
+
+_RHYTHM_TIP_CSS = """
+<style>
+.rhythm-seg { position: relative; }
+.rhythm-seg:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    margin-bottom: 7px; background: var(--text); color: var(--card);
+    font-size: 12px; font-weight: 600; padding: 5px 9px; border-radius: 6px;
+    white-space: nowrap; z-index: 20; pointer-events: none;
+}
+</style>
+"""
+
 
 def render_project_rhythm(df_g):
-    """Chương "Nhịp làm việc" (Báo cáo -> Dự án, mockup): 2 thẻ ngang -- "Theo buổi" (tỉ trọng
+    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" (Báo cáo -> Dự án) -- "Theo buổi" (tỉ trọng
     Sáng/Chiều/Tối/Khuya, tô teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng dự án/nhóm này, buổi
     chiếm nhiều nhất tô đậm nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không
     hợp để tô thanh phân bổ đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã
-    có, KHÔNG kèm legend chi tiết như render_session_bar() ở chương "Tổng quan" -- ở đây chỉ cần
-    1 câu nhận định gọn, nhãn chi tiết từng khoảng đã có sẵn ở chương "Phân bố độ dài phiên" phía
-    dưới, tránh lặp thông tin)."""
+    có, chỉ 1 câu nhận định gọn, không kèm legend chi tiết như render_session_bar()). Không còn
+    là chương riêng "Nhịp làm việc" -- gộp vào chương "Tổng quan" (theo yêu cầu người dùng). Mỗi
+    ô dùng `data-tip` + CSS `:hover::after` (xem _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip
+    hiện ngay khi rê chuột, không có độ trễ ~1s của tooltip trình duyệt mặc định."""
     if df_g.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    st.markdown(_RHYTHM_TIP_CSS, unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -6011,10 +6030,15 @@ def render_project_rhythm(df_g):
         _n_b = len(buoi_min)
         shades_b = _teal_shades(max(_n_b, 2))[::-1][:_n_b]
         seg1 = ""
-        for (b, m), col in zip(buoi_min.items(), shades_b):
+        for i, ((b, m), col) in enumerate(zip(buoi_min.items(), shades_b)):
             pct = m / total_min * 100
             lbl = f"{b} {pct:.0f}%" if pct >= 9 else ""
-            seg1 += (f"<div title='{b}: {_fmt_hours_long(m/60)}' style='width:{pct:.4f}%;background:{col};"
+            # Bo góc riêng ô ĐẦU/CUỐI (thay vì overflow:hidden trên cả hàng) -- overflow:hidden sẽ
+            # cắt luôn tooltip data-tip (::after) của các ô đè lên mép hàng, xem _RHYTHM_TIP_CSS.
+            _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
+                    "border-radius:0 6px 6px 0;" if i == _n_b - 1 else "")
+            seg1 += (f"<div class='rhythm-seg' data-tip='{b}: {_fmt_hours_long(m/60)}' "
+                     f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
                      f"align-items:center;justify-content:center;'>{lbl}</div>")
         _dom_buoi, _dom_min = buoi_min.index[0], buoi_min.iloc[0]
@@ -6024,7 +6048,7 @@ def render_project_rhythm(df_g):
         st.markdown(
             "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Theo buổi</span>"
-            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg1}</div>"
+            f"<div style='display:flex;height:26px;'>{seg1}</div>"
             f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight1}</div>"
             "</div>", unsafe_allow_html=True)
 
@@ -6032,13 +6056,16 @@ def render_project_rhythm(df_g):
         d = df_g['Thời lượng (Phút)']
         n = len(df_g)
         counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
+        _present = [(name, rng, col, c) for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts) if c]
         seg2 = ""
-        for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-            if not c:
-                continue
+        for i, (name, rng, col, c) in enumerate(_present):
             pct = c / n * 100
             lbl = f"{pct:.0f}%" if pct >= 9 else ""
-            seg2 += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};"
+            # Cùng lý do bo góc riêng ô đầu/cuối như "Theo buổi" ở trên -- giữ tooltip không bị cắt.
+            _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
+                    "border-radius:0 6px 6px 0;" if i == len(_present) - 1 else "")
+            seg2 += (f"<div class='rhythm-seg' data-tip='{name} ({rng}): {c} phiên' "
+                     f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
                      f"align-items:center;justify-content:center;'>{lbl}</div>")
         _best_i = counts.index(max(counts))
@@ -6047,7 +6074,7 @@ def render_project_rhythm(df_g):
         st.markdown(
             "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Độ dài phiên</span>"
-            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg2}</div>"
+            f"<div style='display:flex;height:26px;'>{seg2}</div>"
             f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight2}</div>"
             "</div>", unsafe_allow_html=True)
 
@@ -6757,8 +6784,11 @@ st.markdown(
     [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
 
     /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
-       flex-start -> đẩy hàng nút vào giữa */
-    .st-key-db_pag [data-testid="stPagination"] { justify-content: center !important; }
+       flex-start -> đẩy hàng nút vào giữa. margin-top tách khỏi bảng/dtbl-wrap phía trên --
+       thiếu margin này, hàng số trang đứng sát ngay dưới viền bảng, nhìn như đè lên nhau. */
+    .st-key-db_pag [data-testid="stPagination"],
+    .st-key-duan_rs_pag [data-testid="stPagination"] { justify-content: center !important; }
+    .st-key-db_pag, .st-key-duan_rs_pag { margin-top: 14px; }
 
     /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
        hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
@@ -8184,8 +8214,8 @@ def render_day_report(df):
     # triển), giờ chỉ còn là mục tham khảo phụ đọc thêm cuối trang, không còn ở đầu.
     _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
                    if day_df.empty else
-                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
-                    ("today-ch3", "3 · Phân bổ thời gian"), ("today-ch4", "4 · Danh sách phiên"),
+                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
+                    ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này năm trước")])
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
@@ -8249,11 +8279,11 @@ def render_day_report(df):
 
         render_session_bar(day_df)
 
-        sec_chapter("today-ch2", 2, None, "Ghi chú ngày")
-        render_note_editor(sel, sel_day_badges)
-
-        sec_chapter("today-ch3", 3, None, "Phân bổ thời gian")
+        sec_chapter("today-ch2", 2, None, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
+
+        sec_chapter("today-ch3", 3, None, "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
 
         sec_chapter("today-ch4", 4, None, "Danh sách phiên")
         rows_html = ''
@@ -8317,8 +8347,7 @@ elif nav == "Báo cáo":
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>",
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
-                 ("bc-tq-ch3", "3 · Xu hướng theo thời gian"),
-                 ("bc-tq-ch4", "4 · Xu hướng theo khung giờ"), ("bc-tq-ch5", "5 · Bảng số liệu")])
+                 ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
             s_stat = _streak_stats(df)
@@ -8348,7 +8377,6 @@ elif nav == "Báo cáo":
 
             render_stat_panel(
                 hero_items=[
-                    {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(total_hrs)}"},
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
@@ -8364,11 +8392,15 @@ elif nav == "Báo cáo":
 
             sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
             frag_calendar(df, "range_cal")
-            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng theo thời gian")
-            frag_trend(df, "trend_main", "Danh mục")
-            sec_chapter("bc-tq-ch4", 4, None, "Xu hướng tập trung theo khung giờ")
-            frag_hourly(df, "hour_main", "Danh mục")
-            sec_chapter("bc-tq-ch5", 5, None, "Bảng số liệu")
+            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng")
+            _tq_trend_view = st.segmented_control(
+                "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
+                key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
+            if _tq_trend_view == "Theo thời gian":
+                frag_trend(df, "trend_main", "Danh mục")
+            else:
+                frag_hourly(df, "hour_main", "Danh mục")
+            sec_chapter("bc-tq-ch4", 4, None, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
@@ -8436,8 +8468,8 @@ elif nav == "Báo cáo":
                     f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
                     f"{_week_start:%d/%m} – {_week_end:%d/%m} · hoạt động {_active_days_w}/7 ngày",
                     f"<div class='pbill-title'>{_pbill_title_w}</div><div class='pbill-sub'>{_pbill_sub_w}</div>",
-                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhật ký"),
-                     ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Danh mục & dự án"),
+                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Danh mục & dự án"),
+                     ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Nhật ký"),
                      ("bc-tuan-ch5", "5 · Bảng số liệu")])
                 # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
                 # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Danh mục &
@@ -8446,12 +8478,12 @@ elif nav == "Báo cáo":
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
                                               anchor_prefix="bc-tuan", show_footer=False)
-                sec_chapter("bc-tuan-ch2", 2, None, "Nhật ký")
-                render_notes_journal(selected_week, 'week', df)
+                sec_chapter("bc-tuan-ch2", 2, None, "Danh mục & dự án")
+                frag_category_bars(df_w, "rad_tab4", "Danh mục")
                 sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
                 frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-                sec_chapter("bc-tuan-ch4", 4, None, "Danh mục & dự án")
-                frag_category_bars(df_w, "rad_tab4", "Danh mục")
+                sec_chapter("bc-tuan-ch4", 4, None, "Nhật ký")
+                render_notes_journal(selected_week, 'week', df)
                 sec_chapter("bc-tuan-ch5", 5, None, "Bảng số liệu")
                 render_period_day_table(df_w, all_days=[_week_start + timedelta(days=i) for i in range(7)])
     elif bc_sub == "Tháng":
@@ -8518,16 +8550,16 @@ elif nav == "Báo cáo":
                     f"{_active_days_m} ngày hoạt động · {len(df_m)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_m}</div><div class='pbill-sub'>{_pbill_sub_m}</div>",
                     [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Lịch tháng"),
-                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Theo tuần trong tháng"),
-                     ("bc-thang-ch5", "5 · Điểm nhấn"), ("bc-thang-ch6", "6 · Nhật ký"),
-                     ("bc-thang-ch7", "7 · Xu hướng theo thời gian"),
-                     ("bc-thang-ch8", "8 · Xu hướng tập trung theo khung giờ"),
-                     ("bc-thang-ch9", "9 · Bảng số liệu")])
+                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Xu hướng"),
+                     ("bc-thang-ch5", "5 · Nhật ký"), ("bc-thang-ch6", "6 · Bảng số liệu")])
                 _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
-                                              "Ngày nổi bật trong tháng", show_top3=True,
+                                              "Ngày nổi bật trong tháng", show_top3=False,
                                               anchor_prefix="bc-thang", top3_suffix=" Tháng",
                                               show_footer=False)
+                # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
+                # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
+                render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
 
                 sec_chapter("bc-thang-ch2", 2, None, "Lịch tháng")
                 # Truyền CÙNG df_m cho cả 2 tham số -- đúng pattern lịch năm đã có
@@ -8538,18 +8570,20 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-thang-ch3", 3, None, "Phân bổ danh mục")
                 frag_category_bars(df_m, "rad_tab3", "Danh mục")
 
-                sec_chapter("bc-thang-ch4", 4, None, "Theo tuần trong tháng")
-                render_month_week_bars(df_m)
-                sec_chapter("bc-thang-ch5", 5, None, "Điểm nhấn")
-                render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
+                sec_chapter("bc-thang-ch4", 4, None, "Xu hướng")
+                _thang_trend_view = st.segmented_control(
+                    "Xem theo", ["Theo tuần", "Theo ngày", "Theo khung giờ"], default="Theo tuần",
+                    key="bc_thang_trend_view", label_visibility="collapsed") or "Theo tuần"
+                if _thang_trend_view == "Theo tuần":
+                    render_month_week_bars(df_m)
+                elif _thang_trend_view == "Theo ngày":
+                    frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
+                else:
+                    frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
 
-                sec_chapter("bc-thang-ch6", 6, None, "Nhật ký")
+                sec_chapter("bc-thang-ch5", 5, None, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
-                sec_chapter("bc-thang-ch7", 7, None, "Xu hướng theo thời gian")
-                frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
-                sec_chapter("bc-thang-ch8", 8, None, "Xu hướng tập trung theo khung giờ")
-                frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
-                sec_chapter("bc-thang-ch9", 9, None, "Bảng số liệu")
+                sec_chapter("bc-thang-ch6", 6, None, "Bảng số liệu")
                 render_detail_table(df_m)
     elif bc_sub == "Năm":
         if not df.empty:
@@ -8608,18 +8642,20 @@ elif nav == "Báo cáo":
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
                     [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
-                     ("bc-nam-ch3", "3 · Theo tháng"), ("bc-nam-ch4", "4 · Danh mục cả năm"),
-                     ("bc-nam-ch5", "5 · Kỷ lục năm"), ("bc-nam-ch6", "6 · Sách & Gundam"),
-                     ("bc-nam-ch7", "7 · Bảng số liệu")])
+                     ("bc-nam-ch3", "3 · Danh mục cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
+                     ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
-                                              "Ngày nổi bật trong năm", show_top3=True,
+                                              "Ngày nổi bật trong năm", show_top3=False,
                                               anchor_prefix="bc-nam", top3_suffix=" Năm",
                                               show_footer=False)
+                # "Kỷ lục năm" gộp vào chương Tổng quan (không còn là chương riêng) -- cùng cách
+                # xử lý "Điểm nhấn" ở nhánh Tháng, xác nhận với người dùng.
+                render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
 
-                # Nhánh Năm có bộ mục 2-7 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch/Theo tháng/Danh
-                # mục cả năm/Kỷ lục năm + Đọc sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung
-                # giờ/Độ dài phiên) -- không đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
+                # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Danh mục cả năm/Theo
+                # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
+                # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
@@ -8627,30 +8663,13 @@ elif nav == "Báo cáo":
                 # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
                 render_calendar_grid(df_y, df_y)
 
-                sec_chapter("bc-nam-ch3", 3, None, "Theo tháng")
-                render_year_month_bars(df_y)
-
-                sec_chapter("bc-nam-ch4", 4, None, "Danh mục cả năm")
+                sec_chapter("bc-nam-ch3", 3, None, "Danh mục cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
 
-                sec_chapter("bc-nam-ch5", 5, None, "Kỷ lục năm")
-                render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
+                sec_chapter("bc-nam-ch4", 4, None, "Theo tháng")
+                render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch6", 6, None, "Đọc sách & Gundam trong năm")
-                # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
-                # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
-                # phức tạp để tách ra cho 1 mục tổng kết năm.
-                rl_y = load_reading_log()
-                rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
-                if rl_y.empty:
-                    st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
-                else:
-                    render_stat_panel(hero_items=[
-                        {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
-                        {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
-                    ])
-
-                sec_chapter("bc-nam-ch7", 7, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
                 render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
@@ -8763,10 +8782,8 @@ elif nav == "Báo cáo":
                     _right_html_g,
                     [("bc-duan-ch1", "1 · Tổng quan")]
                     + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
-                    + [("bc-duan-ch2", "2 · Xu hướng theo tuần"), ("bc-duan-ch3", "3 · Nhịp làm việc"),
-                       ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Biểu đồ lịch"),
-                       ("bc-duan-ch6", "6 · Xu hướng theo thời gian"), ("bc-duan-ch7", "7 · Phân bố độ dài phiên"),
-                       ("bc-duan-ch8", "8 · Bảng số liệu")])
+                    + [("bc-duan-ch2", "2 · Biểu đồ lịch"), ("bc-duan-ch3", "3 · Xu hướng"),
+                       ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Bảng số liệu")])
 
                 sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 wd_g = _weekday_avg(df_g)
@@ -8817,12 +8834,13 @@ elif nav == "Báo cáo":
 
                 render_stat_panel(
                     hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
                 )
-                render_session_bar(df_g)
+                # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
+                # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
+                render_project_rhythm(df_g)
 
                 if not _rl_book.empty:
                     sec_chapter("bc-duan-chrl", None, None, "Nhật ký đọc")
@@ -8830,19 +8848,21 @@ elif nav == "Báo cáo":
                         st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
                                     unsafe_allow_html=True)
 
-                sec_chapter("bc-duan-ch2", 2, "12 tuần gần nhất", "Xu hướng theo tuần")
-                render_project_week_trend(df_g)
-                sec_chapter("bc-duan-ch3", 3, None, "Nhịp làm việc")
-                render_project_rhythm(df_g)
+                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
+                frag_calendar(df_g, "range_grp_cal")
+
+                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng")
+                _duan_trend_view = st.segmented_control(
+                    "Xem theo", ["12 tuần gần nhất", "Toàn thời gian"], default="12 tuần gần nhất",
+                    key="bc_duan_trend_view", label_visibility="collapsed") or "12 tuần gần nhất"
+                if _duan_trend_view == "12 tuần gần nhất":
+                    render_project_week_trend(df_g)
+                else:
+                    frag_trend(df_g, "trend_grp", "Dự án")
+
                 sec_chapter("bc-duan-ch4", 4, "30 ngày gần nhất", "Phiên gần đây")
                 render_project_recent_sessions(df_g)
-                sec_chapter("bc-duan-ch5", 5, None, "Biểu đồ lịch")
-                frag_calendar(df_g, "range_grp_cal")
-                sec_chapter("bc-duan-ch6", 6, None, "Xu hướng theo thời gian")
-                frag_trend(df_g, "trend_grp", "Dự án")
-                sec_chapter("bc-duan-ch7", 7, None, "Phân bố độ dài phiên")
-                render_session_histogram(df_g)
-                sec_chapter("bc-duan-ch8", 8, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
@@ -10065,8 +10085,8 @@ elif nav == "Hướng dẫn":
             "4 phiên tập trung sâu, mỗi phiên kéo dài 90 phút liền mạch; còn ngày kia lại là 20 phiên vụn vặt "
             "chỉ 15 phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau tuyệt đối, nhưng chất lượng tập "
             "trung thì khác xa nhau — đây chính là lý do vì sao chỉ nhìn mỗi con số tổng thôi là chưa đủ. Muốn "
-            "đào sâu hơn nữa thì có thêm biểu đồ **Phân bố độ dài phiên** (ở Báo cáo → Dự án), chia nhỏ theo "
-            "từng khoảng 5 phút một cho chi tiết.")
+            "đào sâu hơn nữa thì xem thẻ **Độ dài phiên** trong chương Tổng quan (ở Báo cáo → Dự án), rê chuột "
+            "vào từng khoảng để xem số phiên chi tiết.")
         help_faq_item(
             "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của app là ngày nào?",
             "Luôn luôn là giờ Việt Nam, không có ngoại lệ nào cả — mọi phép tính liên quan tới ngày tháng trong "
