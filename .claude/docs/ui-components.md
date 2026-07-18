@@ -71,12 +71,17 @@ Helpers (đều nằm cạnh nhau trong `app.py`, CSS namespace `help-` trong kh
   string HTML để nhúng vào `help_block()`.
 - `help_faq_item(question, answer_md)` — 1 câu hỏi FAQ dạng `st.expander` (không đánh số).
 - `render_help_changelog(entries)` — timeline "Nhật ký phát triển", `entries` là list dict
-  `HELP_CHANGELOG` khai báo ngay trong nhánh dispatch. Thêm 1 mục mới (lên đầu list) khi thay đổi
-  có ảnh hưởng thấy được tới người dùng — `pr` phải khớp đúng số PR thật trên GitHub sau khi merge
-  (không đoán số trước khi PR tồn tại). 2 khoá số liệu tuỳ chọn hiện thành chip, tra tay tại thời
-  điểm viết mục — KHÔNG tự tính lại lúc runtime: `total_lines` = tổng số dòng `app.py` tại commit
-  merge PR mới nhất trong cụm (`git show <commit>:app.py | wc -l`), `pr_lines` = số dòng đổi
-  (additions+deletions, tra qua GitHub API) của riêng PR mới nhất đó.
+  `HELP_CHANGELOG` khai báo ngay trong nhánh dispatch. **Quy ước 1 ngày = 1 mục** (xác nhận với
+  người dùng): mọi PR có ảnh hưởng thấy được tới người dùng merge trong CÙNG 1 ngày dương lịch phải
+  gộp chung vào đúng 1 dict, dù các PR đó thuộc nhiều đợt việc khác nhau — không tách nhiều mục cho
+  cùng 1 ngày. Nếu ngày đang viết mục đã có 1 mục tồn tại (mục đầu `entries`, vì list xếp mới nhất
+  lên đầu), SỬA mục đó (nối thêm `pr`, viết lại `title`/`bullets` cho gọn, không chỉ nối câu) thay
+  vì thêm dict mới; chỉ thêm dict mới khi sang ngày khác. `pr` liệt kê ĐỦ mọi số PR thật của ngày đó
+  (dạng `"223,224"`/`"185-192"`) — không đoán số trước khi PR tồn tại. 2 khoá số liệu tuỳ chọn hiện
+  thành chip, tra tay tại thời điểm viết mục — KHÔNG tự tính lại lúc runtime: `total_lines` = tổng
+  số dòng `app.py` tại commit merge PR **sau cùng trong ngày** (`git show <commit>:app.py | wc -l`),
+  `pr_lines` = số dòng đổi (additions+deletions, tra qua GitHub API) của riêng PR sau cùng đó —
+  không cộng dồn qua nhiều PR trong ngày.
 
 Nội dung trang Trợ giúp là tài liệu người dùng cuối, không phải code phụ trợ — chỉ sửa khi thay
 đổi thực sự ảnh hưởng tới trải nghiệm người dùng, không sửa như tác dụng phụ của 1 việc khác. Khi
