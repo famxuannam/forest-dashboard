@@ -5137,14 +5137,20 @@ def _longest_streak_range(scope_df):
 
 
 def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
-    """Chương "Kỷ lục năm" (Báo cáo -> Năm, mockup): 2 thẻ -- "Kỷ lục {năm}" (ngày dài nhất/chuỗi
-    liên tiếp dài nhất kèm khoảng ngày/tuần cao nhất, tất cả tính RIÊNG trong năm đang chọn qua
-    df_y, KHÔNG phải kỷ lục toàn thời gian) và "Nhịp cả năm" (ngày hoạt động/elapsed, TB giờ mỗi
-    ngày hoạt động + mỗi tuần, thứ năng suất nhất). active_days_y/elapsed_days_y nhận từ billboard
+    """"Kỷ lục năm" (Báo cáo -> Năm): 2 thẻ -- "Kỷ lục {năm}" (ngày dài nhất/chuỗi liên tiếp dài
+    nhất kèm khoảng ngày/tuần cao nhất, tất cả tính RIÊNG trong năm đang chọn qua df_y, KHÔNG phải
+    kỷ lục toàn thời gian) và "Nhịp cả năm" (ngày hoạt động/elapsed, TB giờ mỗi ngày hoạt động +
+    mỗi tuần, thứ năng suất nhất). Không còn là chương riêng -- gộp vào cuối chương "Tổng quan"
+    (cùng cách xử lý "Điểm nhấn" ở nhánh Tháng). active_days_y/elapsed_days_y nhận từ billboard
     (đã tính sẵn ở đó, tránh tính lại)."""
     if df_y.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    # Cùng pattern ép 2 thẻ cao bằng nhau đã dùng ở "Điểm nhấn" (Báo cáo -> Tháng, xem
+    # month-hl-card) -- rule chung align-items:flex-start khiến 2 cột co theo nội dung riêng.
+    st.markdown(
+        "<style>[data-testid=\"stHorizontalBlock\"]:has(.year-hl-card) "
+        "{ align-items: stretch !important; }</style>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -5163,7 +5169,7 @@ def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
                            f"{_fmt_hours_short(_wk_hrs_y.max()/60)}")
         _items_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card year-hl-card' style='padding:14px 18px;height:100%;'>"
             f"<span class='rl-book'>Kỷ lục {selected_year}</span>"
             f"<div class='hlt-list'>{_items_html}</div></div>", unsafe_allow_html=True)
 
@@ -5179,7 +5185,7 @@ def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
             _items2.append(f"Thứ năng suất nhất <b>{wd_y.idxmax()}</b> (TB {_fmt_hours_short(wd_y.max())})")
         _items2_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items2)
         st.markdown(
-            "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
+            "<div class='glass-card year-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Nhịp cả năm</span>"
             f"<div class='hlt-list'>{_items2_html}</div></div>", unsafe_allow_html=True)
 
@@ -8627,18 +8633,20 @@ elif nav == "Báo cáo":
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
                     [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
-                     ("bc-nam-ch3", "3 · Theo tháng"), ("bc-nam-ch4", "4 · Danh mục cả năm"),
-                     ("bc-nam-ch5", "5 · Kỷ lục năm"), ("bc-nam-ch6", "6 · Sách & Gundam"),
-                     ("bc-nam-ch7", "7 · Bảng số liệu")])
+                     ("bc-nam-ch3", "3 · Danh mục cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
+                     ("bc-nam-ch5", "5 · Sách & Gundam"), ("bc-nam-ch6", "6 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
-                                              "Ngày nổi bật trong năm", show_top3=True,
+                                              "Ngày nổi bật trong năm", show_top3=False,
                                               anchor_prefix="bc-nam", top3_suffix=" Năm",
                                               show_footer=False)
+                # "Kỷ lục năm" gộp vào chương Tổng quan (không còn là chương riêng) -- cùng cách
+                # xử lý "Điểm nhấn" ở nhánh Tháng, xác nhận với người dùng.
+                render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
 
-                # Nhánh Năm có bộ mục 2-7 hoàn toàn khác Tuần/Tháng (Biểu đồ lịch/Theo tháng/Danh
-                # mục cả năm/Kỷ lục năm + Đọc sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung
-                # giờ/Độ dài phiên) -- không đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
+                # Nhánh Năm có bộ mục 2-6 khác Tuần/Tháng (Biểu đồ lịch/Danh mục cả năm/Theo tháng
+                # + Sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không
+                # đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
@@ -8646,16 +8654,13 @@ elif nav == "Báo cáo":
                 # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
                 render_calendar_grid(df_y, df_y)
 
-                sec_chapter("bc-nam-ch3", 3, None, "Theo tháng")
-                render_year_month_bars(df_y)
-
-                sec_chapter("bc-nam-ch4", 4, None, "Danh mục cả năm")
+                sec_chapter("bc-nam-ch3", 3, None, "Danh mục cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
 
-                sec_chapter("bc-nam-ch5", 5, None, "Kỷ lục năm")
-                render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
+                sec_chapter("bc-nam-ch4", 4, None, "Theo tháng")
+                render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch6", 6, None, "Đọc sách & Gundam trong năm")
+                sec_chapter("bc-nam-ch5", 5, None, "Đọc sách & Gundam trong năm")
                 # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
                 # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
                 # phức tạp để tách ra cho 1 mục tổng kết năm.
@@ -8669,7 +8674,7 @@ elif nav == "Báo cáo":
                         {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
                     ])
 
-                sec_chapter("bc-nam-ch7", 7, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch6", 6, None, "Bảng số liệu")
                 render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
