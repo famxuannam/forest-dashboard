@@ -74,6 +74,10 @@ xác nhận với người dùng:
   nhánh làm việc được giao rồi dừng lại chờ xác nhận.
 - **Tab "Hướng dẫn" là nội dung cho người dùng cuối, không phải code phụ trợ** — không viết lại nội
   dung tab này như tác dụng phụ của 1 thay đổi không liên quan tới trải nghiệm người dùng.
+- **Chỉ số sức khoẻ (`_health_is_abnormal`) chỉ nhị phân trong/ngoài khoảng tham chiếu** — KHÔNG
+  thêm mức "sát ngưỡng"/cảnh báo sớm nào (đã xác nhận với người dùng 2 lần, ở cả trang Lịch sử và
+  Báo cáo của Sức khoẻ): mức đó cần tự đặt 1 ngưỡng % không có cơ sở dữ liệu thật. Nếu 1 mockup
+  sau này lại vẽ mức thứ 3 kiểu vậy, hỏi lại chứ không tự thêm.
 
 ## 6. Tài liệu bổ sung
 

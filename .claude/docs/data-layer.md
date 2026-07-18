@@ -57,6 +57,20 @@ khác cần nhớ khi sửa:
   toàn bộ** (xoá sạch rồi chèn lại), CHỈ dùng trong luồng Khôi phục từ bản sao lưu ở tab Tuỳ biến.
 - Có mặt trong cả 3 thao tác ở tab Tuỳ biến (Sao lưu/Khôi phục/Làm mới) -- thêm bảng Supabase mới
   nào có ý nghĩa tồn tại lâu dài cũng nên soát lại 3 chỗ này, không chỉ viết `load_*`/`save_*`.
+- **`_health_is_abnormal(df)` chỉ nhị phân** (trong/ngoài `Ref thấp`/`Ref cao`) -- KHÔNG có mức
+  "sát ngưỡng" nào, dù mockup thiết kế có vẽ mức cảnh báo cam thứ 3 (đã xác nhận với người dùng 2
+  lần khác nhau, ở cả trang Lịch sử và Báo cáo). Thêm mức đó cần tự đặt 1 ngưỡng % không có cơ sở
+  dữ liệu thật -- hỏi lại chứ không tự thêm nếu gặp lại yêu cầu tương tự.
+- **`_health_score(df_health)`** -- điểm "X/Y chỉ số trong ngưỡng" ở billboard trang Báo cáo: tính
+  theo giá trị GẦN NHẤT của MỖI Chỉ số từng theo dõi (không phải chỉ đúng lần khám gần nhất, vì 1
+  lần khám thường chỉ đo 1 phần các chỉ số). Chỉ số không có giá trị số hoặc không có khoảng tham
+  chiếu nào bị loại khỏi cả tử số lẫn mẫu số.
+- **`_health_trend_candidates(df_health, n=4)`** -- chọn tối đa n cặp (Nhóm, Chỉ số) để vẽ mini-
+  card xu hướng (chương "Diễn biến chỉ số"): ưu tiên Chỉ số ĐANG bất thường ở lần khám gần nhất,
+  sau đó xếp theo số lần đo giảm dần; chỉ xét Chỉ số có ≥2 giá trị số. `_health_trend_caption(...)`
+  sinh 1 câu tóm tắt xu hướng từ chênh lệch điểm đầu/cuối (không hồi quy/trung bình trượt) -- có
+  nhánh riêng cho trường hợp KHÔNG tăng/giảm đều (báo "dao động" + chiều đổi của kỳ mới nhất, thay
+  vì so đầu-cuối đơn thuần dễ đọc lầm hướng đang cải thiện/xấu đi).
 
 ## `kindle_highlights`/`kindle_book_map`/`deleted_kindle_highlights`: khoá theo băm nội dung, sửa/xoá được trong app
 

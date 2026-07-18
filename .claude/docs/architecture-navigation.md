@@ -26,12 +26,16 @@ xem `keyboard-shortcuts.md`) đi theo hướng khác: tự bấm (`.click()`) đ
 DOM qua `clickNavByLabel()`, tận dụng lại toàn bộ cơ chế session_state/query_params này thay vì tự
 set trực tiếp từ phía JS.
 
-## Cấp điều hướng thứ 2: `BAOCAO_SUBS` và `day_picker()`
+## Cấp điều hướng thứ 2: `BAOCAO_SUBS`/`SUCKHOE_SUBS` và `day_picker()`
 
 - Trang "Báo cáo" có sub-nav riêng: list `BAOCAO_SUBS = [Tổng quan, Tuần, Tháng, Năm, Dự án]`,
   seed/ghi lại qua `?sub=` — **cùng 1 pattern hệt `NAV`/`?nav=`**, kể cả nếu bạn không đọc lại code
-  chi tiết, áp y hệt cách suy luận.
+  chi tiết, áp y hệt cách suy luận. Trang "Sức khoẻ" có `SUCKHOE_SUBS = [Báo cáo, Lịch sử, Dữ liệu
+  đầu vào]` qua `?hsub=`, cùng khuôn.
 - `day_picker()` (dùng ở trang "Hôm nay") làm điều tương tự với `?day=` cho việc chọn ngày cụ thể.
+- Muốn nhảy sang 1 sub-tab khác BẰNG CODE (không phải người dùng tự click) — vd 1 nút ở sub-tab A
+  chuyển sang sub-tab B — xem gotcha `StreamlitAPIException` + cách fix đúng (cờ chờ xử lý, set
+  TRƯỚC khi widget `segmented_control` instantiate) ở `ui-components.md`.
 
 ## Việc cần làm khi thêm 1 trang/sub-tab mới
 
