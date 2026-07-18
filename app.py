@@ -6226,6 +6226,18 @@ _RHYTHM_TIP_CSS = """
 """
 
 
+def _seg_label(text, pct):
+    """Nhãn hiện GIỮA 1 ô thanh phân bổ (render_project_rhythm(), 2 thẻ "Theo buổi"/"Độ dài
+    phiên") -- ẨN HẲN nếu ô quá hẹp so với ĐỘ DÀI CHỮ thật của nhãn, thay vì mốc % cố định như
+    trước (bug thật đã gặp: nhãn dài như "Khuya 10%" vỡ xuống 2 dòng ở đúng mốc % mà nhãn ngắn
+    hơn như "Tối 10%" vẫn vừa 1 dòng -- cùng 1 ngưỡng % cho mọi nhãn dài ngắn khác nhau là sai).
+    Hệ số 1.3%/ký tự ước lượng từ đúng ca lỗi thật (9 ký tự "Khuya 10%" vỡ dòng ở 10%, 7 ký tự
+    "Tối 10%" vẫn vừa ở 10%) -- sàn 9% giữ nguyên cho nhãn cực ngắn (vd "3%"). Hàm dùng chung cho
+    CẢ 2 thẻ nên áp dụng nhất quán ở MỌI trang gọi render_project_rhythm() (Hôm nay, Báo cáo,
+    Sách/Gundam...), không cần sửa riêng từng nơi."""
+    return text if pct >= max(9, len(text) * 1.3) else ""
+
+
 def render_project_rhythm(df_g):
     """2 thẻ ngang "Theo buổi"/"Độ dài phiên" -- "Theo buổi" (tỉ trọng Sáng/Chiều/Tối/Khuya, tô
     teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng phạm vi df_g này, buổi chiếm nhiều nhất tô đậm
@@ -6254,7 +6266,7 @@ def render_project_rhythm(df_g):
         seg1 = ""
         for i, ((b, m), col) in enumerate(zip(buoi_min.items(), shades_b)):
             pct = m / total_min * 100
-            lbl = f"{b} {pct:.0f}%" if pct >= 9 else ""
+            lbl = _seg_label(f"{b} {pct:.0f}%", pct)
             # Bo góc riêng ô ĐẦU/CUỐI (thay vì overflow:hidden trên cả hàng) -- overflow:hidden sẽ
             # cắt luôn tooltip data-tip (::after) của các ô đè lên mép hàng, xem _RHYTHM_TIP_CSS.
             _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
@@ -6262,7 +6274,7 @@ def render_project_rhythm(df_g):
             seg1 += (f"<div class='rhythm-seg' data-tip='{b}: {_fmt_hours_long(m/60)}' "
                      f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
-                     f"align-items:center;justify-content:center;'>{lbl}</div>")
+                     f"align-items:center;justify-content:center;white-space:nowrap;'>{lbl}</div>")
         _dom_buoi, _dom_min = buoi_min.index[0], buoi_min.iloc[0]
         _dom_pct = _dom_min / total_min * 100
         _insight1 = (f"Dự án \"{_dom_buoi.lower()}\" rõ rệt — {_dom_pct:.0f}% thời gian rơi vào buổi này."
@@ -6282,14 +6294,14 @@ def render_project_rhythm(df_g):
         seg2 = ""
         for i, (name, rng, col, c) in enumerate(_present):
             pct = c / n * 100
-            lbl = f"{pct:.0f}%" if pct >= 9 else ""
+            lbl = _seg_label(f"{pct:.0f}%", pct)
             # Cùng lý do bo góc riêng ô đầu/cuối như "Theo buổi" ở trên -- giữ tooltip không bị cắt.
             _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
                     "border-radius:0 6px 6px 0;" if i == len(_present) - 1 else "")
             seg2 += (f"<div class='rhythm-seg' data-tip='{name} ({rng}): {c} phiên' "
                      f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
-                     f"align-items:center;justify-content:center;'>{lbl}</div>")
+                     f"align-items:center;justify-content:center;white-space:nowrap;'>{lbl}</div>")
         _best_i = counts.index(max(counts))
         _typical_rng = SESSION_BUCKETS[_best_i][1].replace('–<', '–')
         _insight2 = f"Phiên điển hình {_typical_rng} · TB {_avg_session_min(df_g):.0f}′/phiên"
@@ -7642,6 +7654,18 @@ st.markdown(
        cả 2 phía lên 16px thay vì đoán riêng 1 phía, để chắc chắn phần đệm NGAY TRÊN đường kẻ
        (giữa nội dung hàng và đường kẻ đáy của chính hàng đó) cũng nới ra rõ rệt. */
     [class*="st-key-jkq_row_"] { padding: 16px 0; border-bottom: 1px solid var(--divider); }
+    /* Khoảng cách giữa 1 trích dẫn/ghi chú (kqrow_) và ghi chú lồng của nó (kqreply_) trong
+       "2. Nhật ký đọc" quá sát (chỉ 2px margin-bottom mặc định dùng chung mọi nơi) -- nới riêng
+       trong đúng ngữ cảnh jkq_row_ (KHÔNG đụng sub-tab "Trích dẫn", nơi 2px đã vừa mắt nhờ khung
+       card kqgroup_fav_ bao ngoài đã tách bạch rõ, phản hồi thực tế xác nhận). */
+    [class*="st-key-jkq_row_"] [class*="st-key-kqreply_"] { margin-top: 8px; }
+    /* Ngày trong "2. Nhật ký đọc" có ít nhất 1 trích dẫn/ghi chú (kqrow_) dính CÙNG lỗi Chromium
+       tính sai chiều cao "auto" khi chữ 2+ dòng (đã gặp và sửa riêng ở kqgroup_fav_ phía trên) --
+       khoảng đệm dưới trước kẻ ngang phân tách bị lẹm, không cân đối so với ngày CHỈ có chip số
+       liệu (không kqrow_ nào, không dính lỗi này, phản hồi thực tế xác nhận). :has() nhắm đúng
+       trường hợp có trích dẫn/ghi chú, tăng riêng padding-bottom (16->30px), giữ nguyên padding-
+       top (16px, đã đúng cho mọi ngày, kể cả ngày chỉ có chip). */
+    [class*="st-key-jkq_row_"]:has([class*="st-key-kqrow_"]) { padding-bottom: 30px; }
     /* :last-child đặt ngay trên chính div key KHÔNG có tác dụng -- Streamlit bọc mỗi container
        trong 1 lớp [data-testid="stLayoutWrapper"] riêng, nên div key luôn là con DUY NHẤT (và do
        đó luôn là last-child) của chính wrapper của nó, khiến rule khớp với MỌI hàng chứ không chỉ
