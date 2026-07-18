@@ -6462,6 +6462,13 @@ st.markdown(
        _health_is_abnormal, quyết định giữ nhị phân đã xác nhận với người dùng). */
     .dtbl .heval-bad { color: #ff3b30; font-weight: 600; }
     .dtbl .heval-ok { color: #34c759; font-weight: 600; }
+    /* Nhãn widget (Nhóm/Chỉ số/Ngày lấy mẫu/Năm...) trong trang Sức khoẻ -- mặc định Streamlit
+       mảnh + nhạt màu, dễ lướt qua khi nhãn chính là nội dung cần đọc trước (chọn ĐÚNG Nhóm/Chỉ
+       số muốn xem, không phải phụ chú). Đậm + rõ hơn, chỉ áp dụng trong phạm vi trang Sức khoẻ
+       (mọi widget ở đây đặt key tiền tố "hm_") -- không đổi nhãn widget ở các trang khác. */
+    [class*="st-key-hm_"] [data-testid="stWidgetLabel"] p {
+        font-weight: 700 !important; color: var(--text) !important; font-size: 13.5px !important;
+    }
     /* Expander "Sửa / xoá xét nghiệm đã nhập" (_render_health_history()) -- ghi đè riêng trong
        phạm vi container key="hm_hist_edit" để trông như 1 thẻ hộp khớp .hmtl-card phía trên, thay
        vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của [data-testid="stExpander"], xem rule
