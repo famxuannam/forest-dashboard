@@ -2091,7 +2091,7 @@ def _period_elapsed_context(selected_key, current_key, pos_series, today_pos, no
     lbl_prev, lbl_avg = f"vs {noun} trước", "vs Trung bình"
     if selected_key != current_key:
         return None, lbl_prev, lbl_avg, None
-    clip_note = f"So sánh chỉ tính {today_pos} ngày đầu của {noun} trước/các {noun.lower()} khác cho công bằng."
+    clip_note = f"So sánh chỉ tính {today_pos} ngày đầu của {noun} trước và các {noun.lower()} khác, để công bằng với {noun.lower()} đang xem chưa trọn."
     return pos_series <= today_pos, lbl_prev, lbl_avg, clip_note
 
 
@@ -2128,89 +2128,89 @@ def _period_comparison(df, period_col, selected_key, prev_key, elapsed_mask=None
 
 # Kho câu cho _smart_digest() -- mỗi tình huống 2-3 biến thể, chọn ổn định theo md5(kỳ|tình
 # huống) để rerun không đổi câu nhưng 2 kỳ khác nhau cùng tình huống không lặp y hệt một câu.
-# Giọng văn: nhận xét tinh tế + một chút hài hước kiểu "người làm vườn", KHÔNG lặp lại số liệu
-# đã có ở hero deltas ngay phía trên trừ khi con số là nhân vật chính của câu.
+# Giọng văn: điềm đạm, mang chút chiêm nghiệm, giữ ẩn dụ cây/rừng của Forest ở mức vừa phải --
+# KHÔNG lặp lại số liệu đã có ở hero deltas ngay phía trên trừ khi con số là nhân vật chính của câu.
 _DIGEST_TEMPLATES = {
     "first": [
-        "{kwx_cap} đầu tiên có dữ liệu: <b>{hrs}</b>, <b>{trees} cây</b>. Mọi khu rừng đều bắt đầu từ vài hạt mầm.",
-        "Chưa có gì để so sánh — nhưng <b>{hrs}</b> đầu tiên thì đã nằm trong sổ. Khởi đầu được ghi nhận.",
-        "Trang đầu tiên của cuốn sổ: <b>{hrs}</b>, <b>{trees} cây</b>. Các {kwx} sau sẽ có thứ để ganh đua.",
+        "{kwx_cap} đầu tiên có dữ liệu: <b>{hrs}</b>, <b>{trees} cây</b>. Mọi khu rừng đều bắt đầu từ một hạt mầm.",
+        "Chưa có gì để so sánh, nhưng <b>{hrs}</b> đầu tiên đã được ghi vào sổ. Một khởi đầu đáng được ghi nhận.",
+        "Trang đầu tiên của cuốn sổ này: <b>{hrs}</b>, <b>{trees} cây</b>. Những {kwx} sau sẽ có một mốc để soi lại.",
     ],
     "record": [
-        "Kỷ lục mới: <b>{hrs}</b> — {kwx} năng suất nhất từ trước tới nay. Đỉnh cũ ({best_hrs}) xin phép lùi về nhì.",
-        "<b>{hrs}</b> — chưa {kwx} nào chạm tới con số này. Trần cũ ({best_hrs}) vừa được nâng thêm một tầng.",
-        "{kw_cap} đi vào lịch sử: <b>{hrs}</b>, vượt mọi {kwx} trước đó. Bảng vàng đã được cập nhật.",
+        "Một kỷ lục mới: <b>{hrs}</b> — {kwx} có kết quả cao nhất từ trước đến nay, vượt qua mức cũ là {best_hrs}.",
+        "<b>{hrs}</b> — chưa {kwx} nào từng đạt tới con số này. Mức cao nhất trước đó ({best_hrs}) giờ đã được vượt qua.",
+        "{kw_cap} đạt <b>{hrs}</b>, vượt mọi {kwx} trước đó. Đây là mốc cao nhất được ghi nhận.",
     ],
     "record_progress": [
-        "Chưa hết {kwx} mà đã <b>{hrs}</b> — vượt mọi {kwx} trước đó. Phần còn lại chỉ là nới rộng kỷ lục.",
-        "Kỷ lục cũ ({best_hrs}) đã bị vượt từ giữa chừng: <b>{hrs}</b> và {kwx} vẫn còn chưa kết thúc.",
-        "<b>{hrs}</b> khi {kwx} còn dang dở — các {kwx} cũ nhìn nhau, chưa hiểu chuyện gì vừa xảy ra.",
+        "Chưa hết {kwx} mà đã đạt <b>{hrs}</b>, vượt mọi {kwx} trước đó. Những ngày còn lại chỉ còn là nới rộng thêm mốc này.",
+        "Kỷ lục cũ ({best_hrs}) đã bị vượt qua từ giữa chừng: hiện đã <b>{hrs}</b>, trong khi {kwx} vẫn còn tiếp diễn.",
+        "<b>{hrs}</b> khi {kwx} còn chưa kết thúc — một kết quả vượt xa những {kwx} trước, dù chưa đi hết chặng đường.",
     ],
     "near_record": [
-        "<b>{hrs}</b> — thiếu đúng {gap} nữa là chạm kỷ lục ({best_hrs}). Gần tới mức nghe được tiếng gõ cửa.",
-        "Suýt thì lịch sử: <b>{hrs}</b>, kém đỉnh cũ vỏn vẹn {gap}. Lần sau nhớ mang thêm một phiên.",
-        "Á quân mọi thời đại: <b>{hrs}</b>, chỉ sau mức {best_hrs}. Ngôi vương bắt đầu thấy không yên.",
+        "<b>{hrs}</b> — chỉ còn thiếu {gap} nữa là chạm tới kỷ lục ({best_hrs}). Một khoảng cách không còn xa.",
+        "Gần chạm một mốc cũ: <b>{hrs}</b>, kém đỉnh cao nhất trước đó vỏn vẹn {gap}.",
+        "Đứng thứ hai mọi thời: <b>{hrs}</b>, chỉ sau mức {best_hrs}. Một kết quả đáng được nhìn lại.",
     ],
     "comeback": [
-        "Sự trở lại: từ <b>{prev_hrs}</b> {prevw} lên <b>{hrs}</b>. Khu rừng xanh lại rồi.",
-        "{prevw_cap} gần như im ắng, giờ là <b>{hrs}</b> — hoá ra chỉ là nghỉ giữa hiệp.",
-        "Từ <b>{prev_hrs}</b> bật lên <b>{hrs}</b>. Ai bảo nghỉ là mất đà thì xem lại giúp.",
+        "Một sự trở lại rõ rệt: từ <b>{prev_hrs}</b> {prevw}, nay đã lên <b>{hrs}</b>.",
+        "{prevw_cap} gần như im ắng, nay là <b>{hrs}</b> — hoá ra chỉ là một khoảng nghỉ giữa chừng.",
+        "Từ <b>{prev_hrs}</b> đã trở lại mức <b>{hrs}</b>. Đôi khi một khoảng lặng chỉ là để lấy lại sức.",
     ],
     "big_up": [
-        "Tăng tốc rõ rệt: <b>{hrs}</b>, hơn {prevw} <b>{d}</b>. Đầu tàu {kw}: <b>{proj}</b>.",
-        "Vườn {kw} rậm hơn hẳn: <b>+{d}</b> so với {prevw}, phần lớn đổ vào <b>{proj}</b>.",
-        "<b>{hrs}</b> — bỏ xa {prevw} {d}. Đà này thì kỷ lục cũng nên bắt đầu lo.",
+        "Nhịp độ tăng rõ rệt: <b>{hrs}</b>, hơn {prevw} <b>{d}</b>. Phần lớn thời gian dồn vào <b>{proj}</b>.",
+        "So với {prevw}, {kw} đã tăng thêm <b>{d}</b>, phần lớn nhờ <b>{proj}</b>.",
+        "<b>{hrs}</b> — vượt xa {prevw} tới {d}. Một sự chuyển biến đáng để ý.",
     ],
     "big_down": [
-        "{kw_cap} chậm lại: <b>{hrs}</b>, kém {prevw} {d}. Đất cũng cần nghỉ giữa hai vụ.",
-        "Nhịp {kw} nhẹ hơn: <b>{hrs}</b> (−{d} so với {prevw}). Rừng thưa vẫn là rừng.",
-        "<b>{hrs}</b>, hụt {d} so với {prevw}. Coi như chương nghỉ giữa truyện — miễn là có chương sau.",
+        "{kw_cap} chậm lại: <b>{hrs}</b>, kém {prevw} {d}. Có những lúc cần chậm lại để bền lâu hơn.",
+        "Nhịp {kw} nhẹ hơn trước: <b>{hrs}</b> (kém {prevw} {d}). Một khoảng lùi không hẳn là điều đáng lo.",
+        "<b>{hrs}</b>, hụt {d} so với {prevw}. Coi như một khoảng nghỉ giữa hai chặng, miễn là chặng sau còn tiếp.",
     ],
     "one_day_carry": [
-        "Một mình <b>{day}</b> ({day_hrs}) gánh <b>{pct}%</b> cả {kwx}. Đề nghị tuyên dương trước toàn trường.",
-        "<b>{day}</b> cân cả {kwx}: <b>{day_hrs}</b> trên tổng {hrs}. Các ngày còn lại có mặt chủ yếu để cổ vũ.",
-        "{pct}% thời lượng cả {kwx} dồn vào đúng <b>{day}</b>. Một ngày ra trận, những ngày còn lại dưỡng quân.",
+        "Riêng <b>{day}</b> ({day_hrs}) đã gánh <b>{pct}%</b> của cả {kwx}. Một ngày làm việc đáng được ghi nhận.",
+        "<b>{day}</b> chiếm phần lớn cả {kwx}: <b>{day_hrs}</b> trên tổng {hrs}. Những ngày còn lại nhẹ nhàng hơn hẳn.",
+        "{pct}% thời lượng cả {kwx} dồn vào đúng <b>{day}</b>. Một sự phân bổ khá lệch, nên để tâm mà cân lại.",
     ],
     "proj_dominates": [
-        "<b>{proj}</b> chiếm <b>{pct}%</b> thời gian {kw} — không còn là ưu tiên nữa, mà là mối quan hệ nghiêm túc.",
-        "{kw_cap} gần như chỉ có một cái tên: <b>{proj}</b> ({pct}%). Tập trung kiểu này khó chê.",
-        "Sân khấu {kw} thuộc về <b>{proj}</b> ({pct}%). Các dự án khác vui lòng giữ trật tự ở hàng ghế khán giả.",
+        "<b>{proj}</b> chiếm <b>{pct}%</b> thời gian {kw} — không còn là một mối quan tâm, mà đã thành trọng tâm chính.",
+        "{kw_cap} gần như chỉ tập trung vào một việc: <b>{proj}</b> ({pct}%). Một sự chuyên tâm đáng ghi nhận.",
+        "Phần lớn thời gian {kw} thuộc về <b>{proj}</b> ({pct}%), các việc khác chỉ chiếm phần nhỏ còn lại.",
     ],
     "weekend": [
-        "<b>{pct}%</b> thời gian {kw} rơi vào cuối tuần ({wk_hrs}). Thứ 7 – Chủ Nhật gửi lời chào tới khái niệm 'nghỉ ngơi'.",
-        "Chiến binh cuối tuần: <b>{wk_hrs}</b> trên tổng {hrs} nằm gọn trong Thứ 7 và Chủ Nhật. Ngày thường chỉ là phần khởi động.",
+        "<b>{pct}%</b> thời gian {kw} rơi vào cuối tuần ({wk_hrs}). Những ngày nghỉ hoá ra lại là lúc làm việc nhiều nhất.",
+        "<b>{wk_hrs}</b> trên tổng {hrs} nằm trong Thứ Bảy và Chủ Nhật. Những ngày thường nhẹ nhàng hơn hẳn.",
     ],
     "deep_sessions": [
-        "Phiên trung bình <b>{sess} phút</b> — dài hơn nếp quen ({avg_sess} phút) thấy rõ. Rễ đang cắm sâu hơn.",
-        "{kw_cap} bạn ngồi lì hơn hẳn: <b>{sess} phút/phiên</b> so với nếp cũ {avg_sess}. Chiếc ghế chắc cũng bất ngờ.",
-        "Ít mà chất: mỗi phiên {kw} kéo dài <b>{sess} phút</b>, vượt xa nhịp quen {avg_sess} phút.",
+        "Phiên trung bình <b>{sess} phút</b> — dài hơn nếp quen ({avg_sess} phút) khá rõ. Sự tập trung đang sâu hơn trước.",
+        "{kw_cap} này ngồi làm lâu hơn hẳn: <b>{sess} phút mỗi phiên</b>, so với nếp cũ là {avg_sess} phút.",
+        "Số phiên không nhiều, nhưng mỗi phiên {kw} kéo dài <b>{sess} phút</b>, vượt xa nhịp quen {avg_sess} phút.",
     ],
     "shallow_sessions": [
-        "Phiên {kw} hơi vụn: <b>{sess} phút/phiên</b>, nếp quen là {avg_sess}. Gom củi nhỏ lại thành đống lửa lớn nhé.",
-        "Nhiều phiên ngắn ({sess} phút/phiên so với nếp {avg_sess}). Bonsai cũng là cây — nhưng thử vài phiên dài xem sao.",
+        "Phiên {kw} có phần vụn: <b>{sess} phút mỗi phiên</b>, so với nếp quen là {avg_sess} phút. Có thể gộp lại thành những phiên dài hơn.",
+        "Nhiều phiên ngắn hơn nếp quen ({sess} phút mỗi phiên, so với {avg_sess} phút). Vài phiên dài hơn có thể mang lại kết quả tốt hơn.",
     ],
     "iron": [
-        "<b>{n_days}/{total_days} ngày</b> đều có mặt — chuyên cần kiểu này thời đi học là có giấy khen.",
-        "Gần như không sót ngày nào ({n_days}/{total_days}). Sự đều đặn nhàm chán một cách đáng ngưỡng mộ.",
-        "Điểm danh {n_days}/{total_days} ngày. Cái cây nào được tưới đều thế này thì muốn còi cũng khó.",
+        "<b>{n_days}/{total_days} ngày</b> đều có mặt — một sự đều đặn đáng ngưỡng mộ.",
+        "Gần như không sót ngày nào ({n_days}/{total_days}). Sự bền bỉ thường ít được để ý, nhưng lại là điều quý giá nhất.",
+        "Có mặt {n_days}/{total_days} ngày. Điều gì được chăm đều đặn như vậy khó mà không lớn lên.",
     ],
     "diverse": [
-        "<b>{n_proj} dự án</b> chia đều sân khấu, không ai vượt {pct}%. Một khu vườn đa canh đúng nghĩa.",
-        "Thời gian {kw} rải đều cho {n_proj} dự án — đội hình đồng đều, không ngôi sao độc diễn.",
+        "<b>{n_proj} dự án</b> chia đều thời gian, không việc nào vượt quá {pct}%. Một sự cân đối đáng nói.",
+        "Thời gian {kw} được chia đều cho {n_proj} việc khác nhau — không có việc nào lấn hết phần còn lại.",
     ],
     "milestone": [
-        "Lần đầu tiên một {kwx} vượt mốc <b>{mile}h</b>: {hrs}. Chỗ này mà là cây thật thì đủ gọi là một cánh rừng.",
-        "Cột mốc <b>{mile}h</b>/{kwx} lần đầu bị bỏ lại sau lưng ({hrs}). Số giờ này quy ra cây là cả một quả đồi.",
+        "Lần đầu tiên một {kwx} vượt mốc <b>{mile} giờ</b>: {hrs}. Một cột mốc đáng được ghi lại.",
+        "Mốc <b>{mile} giờ</b> mỗi {kwx} lần đầu tiên bị vượt qua ({hrs}). Một chặng đường mới bắt đầu từ đây.",
     ],
     "steady": [
-        "<b>{hrs}</b> — sát trung bình như đo bằng thước. Ổn định cũng là một loại năng lực.",
-        "Không đột biến, không tụt dốc: <b>{hrs}</b>, đúng nhịp quen thuộc. Rừng lâu năm mọc kiểu này đấy.",
-        "{kw_cap}: <b>{hrs}</b>, đều tăm tắp so với mọi khi. Biểu đồ nhìn hơi buồn ngủ — chủ vườn thì đáng nể.",
+        "<b>{hrs}</b> — sát mức trung bình, không lệch bao nhiêu. Sự ổn định cũng là một loại năng lực.",
+        "Không đột biến, không sa sút: <b>{hrs}</b>, đúng nhịp quen thuộc. Điều bền vững thường lặng lẽ như vậy.",
+        "{kw_cap}: <b>{hrs}</b>, đều đặn như mọi khi. Một nhịp sống ổn định, dù không có gì nổi bật để kể.",
     ],
     "generic": [
-        "<b>{hrs}</b> và <b>{trees} cây</b> {kw}. Không có gì giật gân — khu rừng vẫn lặng lẽ mọc thêm.",
-        "Sổ {kw} ghi {hrs}, {trees} cây. Bình thường, mà chắc chắn.",
-        "{hrs}, {trees} cây, không drama. Có những {kwx} chỉ cần thế là đủ.",
+        "<b>{hrs}</b> và <b>{trees} cây</b> {kw}. Không có gì nổi bật, chỉ là một {kwx} bình thường tiếp diễn.",
+        "Sổ {kw} ghi lại <b>{hrs}</b>, <b>{trees} cây</b>. Bình thường, nhưng chắc chắn.",
+        "<b>{hrs}</b>, {trees} cây, không có gì đặc biệt. Có những {kwx} chỉ cần như vậy là đủ.",
     ],
 }
 
@@ -2587,12 +2587,12 @@ def _streak_nudge(s):
         return None
     gap, cur, lon = s["gap"], s["current"], s["longest"]
     if gap == 0 and cur >= lon:
-        return (f"Bạn đang giữ chuỗi {cur} ngày — dài nhất từ trước tới nay. Giữ vững nhé!", "good")
+        return (f"Bạn đang giữ chuỗi {cur} ngày, dài nhất từ trước đến nay. Cứ tiếp tục giữ nhịp này.", "good")
     if gap == 0:
-        return (f"Đang có chuỗi {cur} ngày. Còn {lon - cur + 1} ngày nữa là chạm kỷ lục {lon} ngày.", "good")
+        return (f"Đang có chuỗi {cur} ngày. Còn {lon - cur + 1} ngày nữa là chạm tới kỷ lục {lon} ngày.", "good")
     if gap == 1:
-        return (f"Chuỗi {cur} ngày đang treo — hôm nay chưa có hoạt động. Trồng một cây để giữ mạch!", "warn")
-    return (f"Chuỗi gần nhất đã dừng {gap} ngày. Hôm nay là lúc tốt để bắt đầu lại.", "neutral")
+        return (f"Chuỗi {cur} ngày đang có nguy cơ đứt, vì hôm nay chưa có phiên nào. Một phiên ngắn cũng đủ để giữ mạch.", "warn")
+    return (f"Chuỗi gần nhất đã dừng lại {gap} ngày trước. Hôm nay là một dịp tốt để bắt đầu lại.", "neutral")
 
 
 def _weekday_avg(scope_df, min_count=3):
@@ -2694,7 +2694,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None)
-    render_session_bar(df_period)
+    render_project_rhythm(df_period)
     if show_top3:
         st.write("")
         c_top1, c_top2 = st.columns(2)
@@ -2905,9 +2905,9 @@ def _render_kindle_favorites_tab():
     kh = load_kindle_highlights()
     favs = kh[kh['Yêu thích']] if not kh.empty else kh
     if favs.empty:
-        st.info("Chưa có trích dẫn nào được đánh dấu Yêu thích — bấm ⭐ trên 1 trích dẫn ở mục "
-                "\"2. Nhật ký đọc\" (tab Chi tiết) hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
-                "nay để lưu lại đây, thỉnh thoảng mở ra đọc lại cho vui.")
+        st.info("Chưa có trích dẫn nào được đánh dấu Yêu thích. Bấm ⭐ trên một trích dẫn ở mục "
+                "\"2. Nhật ký đọc\" (tab Chi tiết), hoặc trên thẻ \"Trích dẫn hôm nay\" ở trang Hôm "
+                "nay, để lưu lại đây và đọc lại khi cần.")
         return
 
     fcol1, fcol2 = st.columns([2, 1])
@@ -6008,14 +6008,17 @@ _RHYTHM_TIP_CSS = """
 
 
 def render_project_rhythm(df_g):
-    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" (Báo cáo -> Dự án) -- "Theo buổi" (tỉ trọng
-    Sáng/Chiều/Tối/Khuya, tô teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng dự án/nhóm này, buổi
-    chiếm nhiều nhất tô đậm nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không
-    hợp để tô thanh phân bổ đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã
-    có, chỉ 1 câu nhận định gọn, không kèm legend chi tiết như render_session_bar()). Không còn
-    là chương riêng "Nhịp làm việc" -- gộp vào chương "Tổng quan" (theo yêu cầu người dùng). Mỗi
-    ô dùng `data-tip` + CSS `:hover::after` (xem _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip
-    hiện ngay khi rê chuột, không có độ trễ ~1s của tooltip trình duyệt mặc định."""
+    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" -- "Theo buổi" (tỉ trọng Sáng/Chiều/Tối/Khuya, tô
+    teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng phạm vi df_g này, buổi chiếm nhiều nhất tô đậm
+    nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không hợp để tô thanh phân bổ
+    đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã có, chỉ 1 câu nhận định
+    gọn, không kèm legend chi tiết như render_session_bar()). Ban đầu chỉ dùng ở Báo cáo -> Dự án
+    (gộp vào chương "Tổng quan" theo yêu cầu người dùng), sau đó dùng chung để thay
+    render_session_bar() ở Hôm nay và Báo cáo -> Tổng quan/Tuần/Tháng/Năm (xác nhận với người
+    dùng: combo 2 thẻ có tooltip này rõ hơn thanh phân bổ đơn cũ). render_session_bar() vẫn giữ
+    lại riêng cho trang Sách/Gundam. Mỗi ô dùng `data-tip` + CSS `:hover::after` (xem
+    _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip hiện ngay khi rê chuột, không có độ trễ ~1s
+    của tooltip trình duyệt mặc định."""
     if df_g.empty:
         st.caption("Chưa có dữ liệu.")
         return
@@ -6193,7 +6196,7 @@ if _auth_configured:
     if not st.secrets.get("ALLOWED_EMAIL"):
         st.error(
             "**Cấu hình đăng nhập chưa đầy đủ.** Đã có mục `[auth]` nhưng thiếu `ALLOWED_EMAIL` "
-            "trong secrets -- không xác định được ai được phép vào app. Xem README.")
+            "trong secrets, nên chưa xác định được ai được phép vào ứng dụng. Xem README.")
         st.stop()
     if not st.user.is_logged_in:
         # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
@@ -6211,7 +6214,7 @@ if _auth_configured:
                        use_container_width=True, on_click=st.login)
         st.stop()
     if st.user.email != st.secrets["ALLOWED_EMAIL"]:
-        st.error(f"Tài khoản **{st.user.email}** không có quyền truy cập app này.")
+        st.error(f"Tài khoản **{st.user.email}** không có quyền truy cập ứng dụng này.")
         st.button("Đăng xuất", icon=":material/logout:", on_click=st.logout)
         st.stop()
 
@@ -6221,8 +6224,8 @@ except Exception:
     _has_supabase_secrets = False
 if not _has_supabase_secrets:
     st.error(
-        "**Chưa cấu hình Supabase.** App cần `SUPABASE_URL` và `SUPABASE_KEY` trong "
-        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`) để đọc/ghi dữ liệu.")
+        "**Chưa cấu hình Supabase.** Ứng dụng cần `SUPABASE_URL` và `SUPABASE_KEY` trong "
+        "`.streamlit/secrets.toml` (xem `.streamlit/secrets.toml.example`) để đọc và ghi dữ liệu.")
     st.stop()
 
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang Manrope thật
@@ -8194,7 +8197,7 @@ def render_day_report(df):
     thành hàm riêng (thay vì viết trực tiếp trong khối if nav=="Hôm nay":) vì day-jump link
     (?nav=Hôm nay&day=...) tự nhiên dẫn vào đúng nhánh này, không cần cơ chế bypass riêng nào."""
     if df.empty:
-        st.info("Chưa có dữ liệu. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
+        st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
         return
     active_days = sorted(df['Ngày'].dropna().unique())
     sel = day_picker(active_days)
@@ -8277,7 +8280,7 @@ def render_day_report(df):
         # lại thông tin.
         render_day_timeline(day_df)
 
-        render_session_bar(day_df)
+        render_project_rhythm(day_df)
 
         sec_chapter("today-ch2", 2, None, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
@@ -8341,16 +8344,27 @@ elif nav == "Báo cáo":
             n_cats = df['Danh mục'].nunique()
             n_projs = df['Dự án'].nunique()
 
+            # Câu nhận định chuỗi chuyển lên cột phải billboard (không còn làm footer của panel
+            # "Tổng quan" bên dưới) -- cùng cách xử lý đã áp dụng ở billboard Báo cáo → Dự án,
+            # billboard là nơi hợp lý hơn cho 1 câu ngắn mang tính nhận định, tránh 2 nơi cùng nói
+            # về chuỗi (panel vẫn giữ số liệu thô: Tổng cộng/Dài nhất/Hiện tại).
+            s_stat = _streak_stats(df)
+            _nud = _streak_nudge(s_stat)
+            _nudge_html = ""
+            if _nud:
+                _nud_bg, _nud_fg = NUDGE_TONES[_nud[1]]
+                _nudge_html = f"<div class='pbill-sub' style='color:{_nud_fg};margin-top:10px;'>{_nud[0]}</div>"
+
             render_period_billboard(
                 "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
                 f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
-                "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>",
+                "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
+                + _nudge_html,
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                  ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
-            s_stat = _streak_stats(df)
             by_wd = _weekday_avg(df)
             overall_top3 = _top_days(df, 3)
             _sections = [
@@ -8372,17 +8386,14 @@ elif nav == "Báo cáo":
                 ]})
             if overall_top3:
                 _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
-            _nud = _streak_nudge(s_stat)
-            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
             render_stat_panel(
                 hero_items=[
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
-                footer=_footer,
             )
-            render_session_bar(df)
+            render_project_rhythm(df)
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
@@ -8403,7 +8414,7 @@ elif nav == "Báo cáo":
             sec_chapter("bc-tq-ch4", 4, None, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
-            st.info("Chưa có dữ liệu hệ thống. Vui lòng sang tab 'Tuỳ biến' để tải file lên.")
+            st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
 
     elif bc_sub == "Tuần":
         if not df.empty:
@@ -8453,7 +8464,7 @@ elif nav == "Báo cáo":
                 _gap_txt_w = ("không ngày nào trống" if _active_days_w >= _expected_days_w
                               else f"{_expected_days_w - _active_days_w} ngày trống")
                 _streak_txt_w = f" — chuỗi giữ mạch {_streak_cur_w} ngày" if _streak_cur_w > 0 else ""
-                _pbill_sub_w = f"{_delta_txt_w}{_busiest_dow_w} là ngày dày nhất; {_gap_txt_w}{_streak_txt_w}."
+                _pbill_sub_w = f"{_delta_txt_w}{_busiest_dow_w} là ngày nhiều giờ nhất; {_gap_txt_w}{_streak_txt_w}."
 
                 if prev_w and prev_w.get('hrs') is not None and _curr_hrs_w > prev_w['hrs']:
                     _pbill_title_w = "Một tuần tăng tốc"
@@ -8531,7 +8542,7 @@ elif nav == "Báo cáo":
                 _gap_txt_m = ("không ngày nào trống" if _active_days_m >= _elapsed_days_m
                               else f"{_elapsed_days_m - _active_days_m} ngày trống")
                 _streak_txt_m = f" — chuỗi giữ mạch {_streak_cur_m} ngày" if _streak_cur_m > 0 else ""
-                _pbill_sub_m = (f"{_delta_txt_m}Ngày {_busiest_date_m:%d/%m} là ngày dày nhất "
+                _pbill_sub_m = (f"{_delta_txt_m}Ngày {_busiest_date_m:%d/%m} là ngày nhiều giờ nhất "
                                  f"({_fmt_hours_short(_busiest_hrs_m)}); {_gap_txt_m}{_streak_txt_m}.")
 
                 if prev_m and prev_m.get('hrs') is not None and _curr_hrs_m > prev_m['hrs']:
@@ -9185,7 +9196,7 @@ elif nav == "Tuỳ biến":
                                              f"nguyên \"{_INDEP}\" nếu không (vd tạp chí)."),
                                     "Nhãn hiển thị (nếu độc lập)": st.column_config.TextColumn(
                                         "Nhãn hiển thị (nếu độc lập)",
-                                        help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong app."),
+                                        help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong ứng dụng."),
                                 },
                             )
                         else:
@@ -9251,7 +9262,7 @@ elif nav == "Tuỳ biến":
                                      f"\"{_INDEP_KMAP}\" nếu không (vd tạp chí)."),
                             "Nhãn": st.column_config.TextColumn(
                                 "Nhãn hiển thị (nếu độc lập)",
-                                help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong app."),
+                                help="Chỉ dùng khi để \"Nguồn độc lập\" — tên sẽ hiện trong ứng dụng."),
                         },
                     )
                     if st.button("Lưu thay đổi ánh xạ", key="tbtn_kindle_map_save"):
@@ -9458,7 +9469,7 @@ elif nav == "Tuỳ biến":
                 else:
                     st.caption("File .zip không chứa dữ liệu hợp lệ.")
             except Exception:
-                st.caption("Không đọc được file — cần đúng bản .zip xuất từ app.")
+                st.caption("Không đọc được file — cần đúng bản .zip xuất từ ứng dụng.")
         confirm_restore = False
         if ok_zip:
             st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
@@ -9505,7 +9516,7 @@ elif nav == "Tuỳ biến":
                 if GUNDAM_OVERRIDES_FILE in names:
                     save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
             st.cache_data.clear()
-            st.success("Khôi phục hệ thống thành công!")
+            st.success("Đã khôi phục hệ thống thành công.")
             time.sleep(1)
             st.rerun()
 
@@ -9528,7 +9539,7 @@ elif nav == "Tuỳ biến":
             _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
             _sb_delete_all("gundam_overrides", "session_date")
             st.cache_data.clear()
-            st.success("Đã xoá toàn bộ dữ liệu!")
+            st.success("Đã xoá toàn bộ dữ liệu.")
             time.sleep(1)
             st.rerun()
 
@@ -9696,15 +9707,16 @@ elif nav == "Hướng dẫn":
 
     # --- Hero + mục lục ---
     sec_hero(
-        "Trợ giúp", "Chào bạn, đây là một vòng Forest Dashboard",
-        "Nói trước cho yên tâm: app này là cái gương để soi lại, không phải "
-        "ông sếp đứng sau lưng nhắc việc — không đặt mục tiêu, không hối thúc, không có thanh "
-        "tiến độ nào réo gọi bạn cả. Nó chỉ lặng lẽ ghi lại những gì Forest đã ghi, rồi chờ bạn "
-        "quay lại nhìn khi nào rảnh. Vì vậy hướng dẫn này cũng không bắt bạn học thuộc từng trang "
-        "một cách khô khan, mà kể theo đúng nhịp một ngày bình thường của bạn: sáng liếc qua để "
-        "lên kế hoạch, cả ngày kệ app đó mà làm việc, tối dành 5 phút đóng lại ngày hôm đó — rồi "
-        "cứ thế phóng to dần ra thành tuần, tháng, năm. Đọc từ đầu tới cuối chắc mất khoảng một "
-        "tách trà; đọc lướt qua mục lục bên dưới rồi nhảy thẳng vào chỗ đang cần cũng tốt không kém.",
+        "Trợ giúp", "Xin chào, đây là một lượt dạo qua Forest Dashboard",
+        "Trước hết, xin nói để bạn an tâm: ứng dụng này chỉ là một tấm gương để nhìn lại chính "
+        "mình, không phải một người giám sát đứng sau nhắc việc — không đặt mục tiêu, không thúc "
+        "ép, cũng không có thanh tiến độ nào đòi hỏi bạn phải hoàn tất. Ứng dụng chỉ lặng lẽ ghi "
+        "lại những gì Forest đã lưu, rồi chờ bạn quay lại xem khi thuận tiện. Chính vì lẽ đó, "
+        "hướng dẫn này cũng không bắt bạn học từng trang một cách máy móc, mà kể theo đúng nhịp "
+        "một ngày bình thường: buổi sáng xem qua để định hướng, trong ngày cứ để ứng dụng đó mà "
+        "làm việc, buổi tối dành năm phút khép lại ngày hôm đó — rồi từ đó mở rộng dần ra thành "
+        "tuần, tháng, năm. Đọc trọn từ đầu đến cuối có lẽ mất chừng một khoảng trà; nếu muốn, bạn "
+        "cũng có thể chỉ lướt qua mục lục dưới đây rồi vào thẳng phần đang cần.",
         [("help-ch1", "1 · Buổi sáng"), ("help-ch2", "2 · Trong ngày"),
          ("help-ch3", "3 · Cuối ngày"), ("help-ch4", "4 · Tuần &amp; tháng"),
          ("help-ch5", "5 · Sách · Gundam · Sức khoẻ"), ("help-ch6", "6 · Dữ liệu &amp; đồng bộ"),
@@ -9715,7 +9727,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
     sec_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — lên kế hoạch bằng lịch sử",
+        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — định hướng bằng những gì đã qua",
         tight_top=True)
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
@@ -9726,111 +9738,111 @@ elif nav == "Hướng dẫn":
         "<h4>Dòng thời gian trong ngày</h4>"
         f"<div class='sec-daybar'>{_daybar}</div>"
         "<div class='sec-axis'><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>"
-        "<div class='sec-cap'>Mỗi khối màu là 1 phiên tập trung, được đặt đúng vào vị trí giờ nó "
-        "thực sự diễn ra và tô màu theo Nhóm — nhìn một cái là biết ngay buổi sáng/chiều/tối hôm đó "
-        "dồn hết vào việc gì, và có bị ngắt quãng lung tung không. Đỡ phải dò từng dòng trong bảng.</div>")
+        "<div class='sec-cap'>Mỗi khối màu ứng với một phiên tập trung, được đặt đúng vào vị trí giờ nó "
+        "thực sự diễn ra và tô màu theo Nhóm — nhìn qua một lần là biết ngay buổi sáng, chiều hay tối hôm "
+        "đó dồn vào việc gì, và có bị ngắt quãng nhiều không, khỏi phải dò từng dòng trong bảng số liệu.</div>")
     sec_block(
-        "<h4>Ngày chưa có phiên nào thì xem gì cho đỡ trống trải</h4>"
+        "<h4>Ngày chưa có phiên nào thì nên xem gì</h4>"
         "<ul>"
         "<li><b>Lịch hẹn Work</b> của ngày hôm đó vẫn hiện đầy đủ trong Ghi chú ngày dù chưa có phiên nào — "
-        "nhờ vậy bạn biết ngay còn bao nhiêu khung giờ trống để nhét việc vào trước khi bắt tay làm.</li>"
-        "<li><b>Trích dẫn hôm nay</b> — một highlight hoặc ghi chú Kindle được chọn ngẫu nhiên, nằm ngay đầu "
-        "trang cho có chút không khí văn chương buổi sáng. Câu này chọn cố định theo <b>ngày thật</b>: có "
-        "tải lại trang bao nhiêu lần, hay lùi tới/tiến lui xem ngày khác, câu vẫn y nguyên — chỉ đổi khi "
-        "sang một ngày mới mà thôi, đúng tinh thần “quote of the day”. Muốn xem câu khác ngay lúc đó thì "
-        "bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ — chỉ đổi tạm trong phiên xem hôm nay, sang ngày mới "
-        "vẫn quay lại chọn theo ngày như bình thường.</li>"
-        "<li>Và một điều nhỏ nhưng quan trọng: “hôm nay” trong toàn bộ app luôn được tính theo <b>giờ Việt "
-        "Nam</b>, bất kể server đang chạy ở múi giờ nào trên thế giới — để ngày của bạn không bao giờ tự "
-        "dưng nhảy sớm hoặc muộn mất 7 tiếng so với đồng hồ thật.</li>"
+        "nhờ vậy bạn biết ngay còn bao nhiêu khung giờ trống để sắp việc vào trước khi bắt tay làm.</li>"
+        "<li><b>Trích dẫn hôm nay</b> — một đoạn trích hoặc ghi chú Kindle được chọn ngẫu nhiên, đặt ngay "
+        "đầu trang cho buổi sáng có chút không khí văn chương. Câu này được chọn cố định theo <b>ngày "
+        "thật</b>: tải lại trang bao nhiêu lần, hay lùi tới tiến lui xem ngày khác, câu vẫn giữ nguyên — "
+        "chỉ đổi khi sang một ngày mới, đúng như một tấm lịch để bàn mỗi ngày một câu. Muốn xem câu khác "
+        "ngay lúc đó, bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ — thay đổi này chỉ tạm thời trong lượt "
+        "xem hôm nay, sang ngày mới sẽ lại chọn theo ngày như thường.</li>"
+        "<li>Và một điều nhỏ nhưng đáng nhớ: “hôm nay” trong toàn bộ ứng dụng luôn được tính theo "
+        "<b>giờ Việt Nam</b>, bất kể máy chủ đang chạy ở múi giờ nào — nhờ vậy ngày của bạn không bao giờ "
+        "lệch sớm hoặc muộn mất bảy tiếng so với đồng hồ thật.</li>"
         "</ul>")
 
     # ==========================================
     # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
     sec_chapter(
-        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để app đó, đừng mở ra")
+        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để ứng dụng đó, đừng bận tâm mở ra")
     sec_block(
-        "<h4>Ghi chú nhanh — cái hộp thư nháp sống trong túi quần</h4>"
-        "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay icon ngoài Màn hình chính, tuỳ bạn "
-        "thích kiểu nào) sẽ hỏi bạn gõ đúng 1 dòng ý tưởng, rồi lặng lẽ gửi <b>thẳng lên Supabase</b> — "
-        "không cần mở trình duyệt, không cần chạm vào app một chút nào. Mỗi dòng ghi kèm đúng giờ lúc bạn "
-        "gửi (sửa nội dung về sau không làm giờ này đổi theo) và nằm chờ sẵn trong Ghi chú ngày của đúng "
-        "hôm đó, ngay phía trên nhãn “Ghi chú chính” — như một tờ giấy nhớ dán tạm chờ bạn "
-        "xử lý. Đúng tinh thần một hộp thư nháp: ghi vội bất cứ lúc nào loé lên ý tưởng trong ngày, tối "
+        "<h4>Ghi chú nhanh — một hộp thư nháp mang theo trong túi quần</h4>"
+        "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay biểu tượng ngoài Màn hình chính, "
+        "tuỳ bạn chọn) sẽ hỏi bạn gõ đúng một dòng ý tưởng, rồi lặng lẽ gửi <b>thẳng lên Supabase</b> — "
+        "không cần mở trình duyệt, không cần chạm vào ứng dụng một chút nào. Mỗi dòng ghi kèm đúng giờ "
+        "lúc bạn gửi (sửa nội dung về sau không làm giờ này đổi theo), rồi nằm chờ sẵn trong Ghi chú ngày "
+        "của đúng hôm đó, ngay phía trên nhãn “Ghi chú chính” — như một tờ giấy nhớ dán tạm "
+        "chờ được xử lý. Đúng với tinh thần một hộp thư nháp: ghi vội bất cứ lúc nào loé lên một ý, tối "
         "về gom lại thành một đoạn hoàn chỉnh (xem chương 3 để biết cách gộp). Yên tâm là Tìm kiếm cũng "
-        "quét được cả nội dung ghi chú nhanh, phòng khi vài hôm bạn lười chưa kịp gộp vào ghi chú chính.")
+        "quét được cả nội dung ghi chú nhanh, phòng khi vài hôm bạn chưa kịp gộp vào ghi chú chính.")
     _sc_rows = [
-        [sec_kbd("1") + " … " + sec_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, đúng thứ tự trái sang phải như trên màn hình", "Toàn app"],
-        [sec_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và focus sẵn con trỏ cho bạn gõ luôn", "Toàn app"],
-        [sec_kbd("/"), "Nhảy sang trang Tìm kiếm (nếu đang ở trang khác) và focus luôn vào ô nhập từ khoá", "Toàn app"],
-        [sec_kbd("←") + " / " + sec_kbd("→"), "Lùi về hôm qua / tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
-        [sec_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột đi tìm nút Cập nhật", "Trong ô ghi chú"],
-        [sec_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá mất từ khoá đang gõ", "Theo ngữ cảnh"],
-        [sec_kbd("?"), "Bật/tắt ngay bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng này nằm ở đâu", "Toàn app"],
+        [sec_kbd("1") + " … " + sec_kbd("7"), "Nhảy thẳng tới từng mục trên thanh điều hướng, theo đúng thứ tự trái sang phải trên màn hình", "Toàn ứng dụng"],
+        [sec_kbd("N"), "Mở ngay ô soạn Ghi chú ngày của hôm nay, tự cuộn tới và đặt sẵn con trỏ để gõ", "Toàn ứng dụng"],
+        [sec_kbd("/"), "Chuyển sang trang Tìm kiếm (nếu đang ở trang khác) và đặt con trỏ vào ô nhập từ khoá", "Toàn ứng dụng"],
+        [sec_kbd("←") + " / " + sec_kbd("→"), "Lùi về hôm qua hoặc tiến tới ngày mai, khỏi cần bấm chuột chọn ngày", "Trang Hôm nay"],
+        [sec_kbd("Ctrl/Cmd", "Enter"), "Lưu ngay Ghi chú ngày đang soạn dở, không cần rê chuột tìm nút Cập nhật", "Trong ô ghi chú"],
+        [sec_kbd("Esc"), "Huỷ đang soạn ghi chú, hoặc bỏ focus ô Tìm kiếm mà không xoá từ khoá đang gõ", "Theo ngữ cảnh"],
+        [sec_kbd("?"), "Bật hoặc tắt bảng tóm tắt toàn bộ phím tắt này, phòng khi quên mất bảng nằm ở đâu", "Toàn ứng dụng"],
     ]
     sec_block(
-        "<h4>Bảng phím tắt bàn phím — dán mắt nhớ luôn cho tiện</h4>"
-        + sec_table(["Phím", "Bấm vào thì sao", "Dùng ở đâu"], _sc_rows)
-        + "<div class='sec-cap'>Một lưu ý nhỏ tránh hoang mang: mọi phím tắt tự động im lặng khi con trỏ "
-        "đang nằm trong một ô nhập liệu bất kỳ (ngoại trừ "
+        "<h4>Bảng phím tắt bàn phím</h4>"
+        + sec_table(["Phím", "Tác dụng", "Dùng ở đâu"], _sc_rows)
+        + "<div class='sec-cap'>Một điều cần nhớ: mọi phím tắt tự động im lặng khi con trỏ đang nằm "
+        "trong một ô nhập liệu bất kỳ (ngoại trừ "
         + sec_kbd("Ctrl/Cmd", "Enter") + " và " + sec_kbd("Esc")
         + " ngay trong ô ghi chú, hai phím này vẫn hoạt động bình thường), và cũng không nhận khi bạn "
-        "đang giữ Ctrl/Cmd/Alt — để khỏi vô tình nhảy trang lúc chỉ đang gõ chữ.</div>")
+        "đang giữ Ctrl/Cmd/Alt — nhờ vậy không xảy ra việc vô tình nhảy trang khi chỉ đang gõ chữ.</div>")
 
     # ==========================================
     # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
     sec_chapter(
-        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — 5 phút, thói quen đáng giá nhất cả app")
+        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — năm phút, thói quen đáng giá nhất trong ứng dụng")
     sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
         "<li><b>Đồng bộ ngay</b> (ở Tuỳ biến → 1. Dữ liệu đầu vào) — chỉ một nút bấm mà nạp cả dữ liệu "
-        "Forest, tiến độ Reminder lẫn lịch Work cùng lúc. Đây là bước nền của mọi con số khác trong app: "
-        "không đồng bộ thì chẳng có gì để mà nhìn lại cả, mọi biểu đồ sẽ trơ ra như tờ giấy trắng.</li>"
-        "<li><b>Liếc qua trang Hôm nay chừng 1 phút</b> — nhìn dòng thời gian trong ngày và chip so sánh với "
-        "đúng thứ này tuần trước. Chỉ cần tự hỏi đúng một câu: hôm nay có diễn ra như mình định không? "
-        "Không phải để tự khen hay tự trách bản thân đâu, chỉ đơn giản là ghi nhận thật thà những gì đã xảy ra.</li>"
-        "<li><b>Dành 2–3 phút viết Ghi chú ngày</b> — bước ngắn nhất nhưng lại nuôi sống cùng lúc ba tính "
-        "năng khác của app: Nhật ký tuần/tháng, Tìm kiếm, và Ngày này năm trước. Con số chỉ kể được bạn làm "
-        "<i>bao nhiêu</i> giờ, còn ghi chú mới kể được bạn làm <i>gì và vì sao</i> — một năm sau nhìn lại, "
-        "cái thứ hai mới là thứ đáng đọc, chứ không ai ngồi gặm nhấm con số cũ cả.</li>"
+        "Forest, tiến độ Reminders lẫn lịch Work cùng lúc. Đây là bước nền của mọi con số khác trong ứng "
+        "dụng: không đồng bộ thì chẳng có gì để nhìn lại, mọi biểu đồ sẽ trơ ra như tờ giấy trắng.</li>"
+        "<li><b>Xem qua trang Hôm nay chừng một phút</b> — nhìn dòng thời gian trong ngày và chip so sánh "
+        "với đúng thứ này tuần trước. Chỉ cần tự hỏi một câu: hôm nay có diễn ra như mình định không? Đây "
+        "không phải để tự khen hay tự trách, mà chỉ đơn giản là ghi nhận thật thà những gì đã xảy ra.</li>"
+        "<li><b>Dành hai đến ba phút viết Ghi chú ngày</b> — bước ngắn nhất nhưng lại nuôi sống cùng lúc "
+        "ba tính năng khác: Nhật ký tuần/tháng, Tìm kiếm, và Ngày này năm trước. Con số chỉ kể được bạn "
+        "làm <i>bao nhiêu</i> giờ, còn ghi chú mới kể được bạn làm <i>gì và vì sao</i> — một năm sau nhìn "
+        "lại, chính điều thứ hai mới là thứ đáng đọc.</li>"
         "</ol>")
     sec_block(
-        "<h4>Nút Gộp của ghi chú nhanh — bấm rồi mà vẫn hồi hộp không biết đã xoá chưa?</h4>"
+        "<h4>Nút Gộp của ghi chú nhanh — dòng cũ có mất đi ngay không?</h4>"
         "Bấm <b>Gộp</b> trên một dòng ghi chú nhanh sẽ chèn nguyên nội dung dòng đó vào cuối ô soạn Ghi chú "
-        "chính (tự mở ô soạn luôn nếu bạn chưa mở) rồi gạch mờ dòng đó đi cho biết là “đã xử lý” — nhưng yên "
-        "tâm, dòng đó chỉ <b>thực sự biến mất sau khi bạn bấm Cập nhật</b> để lưu lại Ghi chú chính. Nếu lỡ "
-        "tay bấm Gộp rồi đổi ý, cứ bấm Huỷ (hoặc Xoá ghi chú chính) là bỏ đánh dấu, ghi chú nhanh vẫn còn "
-        "nguyên xi không mất gì cả. Còn nếu bạn sửa một dòng thành trống trơn rồi bấm Cập nhật, dòng đó cũng "
-        "bị xoá luôn — giống y hệt cách Ghi chú chính hoạt động, không có gì bất ngờ ở đây.")
+        "chính (tự mở ô soạn nếu bạn chưa mở), rồi gạch mờ dòng đó để biết là “đã xử lý” — nhưng dòng đó "
+        "chỉ <b>thực sự biến mất sau khi bạn bấm Cập nhật</b> để lưu lại Ghi chú chính. Nếu lỡ tay bấm Gộp "
+        "rồi đổi ý, cứ bấm Huỷ (hoặc Xoá ghi chú chính) để bỏ đánh dấu, ghi chú nhanh vẫn còn nguyên, không "
+        "mất gì cả. Còn nếu bạn sửa một dòng thành trống rồi bấm Cập nhật, dòng đó cũng bị xoá luôn — đúng "
+        "như cách Ghi chú chính vẫn hoạt động, không có gì bất ngờ ở đây.")
     sec_block(
-        "<h4>Vì sao ghi chú lại quan trọng hơn mọi biểu đồ đẹp đẽ khác</h4>"
-        "Ghi chú là loại dữ liệu <b>duy nhất trong cả app không thể nạp lại được</b> nếu lỡ để trống: phiên "
-        "Forest, tiến độ Reminders, hay trích dẫn Kindle — tất cả đều có thể khôi phục lại từ file gốc nếu "
-        "cần. Nhưng ghi chú thì khác, nó chỉ tồn tại trong đầu bạn tại đúng khoảnh khắc đó — bỏ trống một "
-        "tháng là mất vĩnh viễn một tháng ký ức, không có bản sao lưu nào cứu được. Cho nên nếu chỉ được "
-        "chọn giữ đúng một thói quen từ toàn bộ trang hướng dẫn dài dòng này, hãy chọn: <b>viết ghi chú mỗi "
-        "tối</b>. Mọi thứ khác đều có thể bỏ qua vài hôm mà không sao, riêng cái này thì không.")
+        "<h4>Vì sao ghi chú quan trọng hơn mọi biểu đồ</h4>"
+        "Ghi chú là loại dữ liệu <b>duy nhất trong ứng dụng không thể nạp lại được</b> nếu lỡ để trống: "
+        "phiên Forest, tiến độ Reminders, hay trích dẫn Kindle đều có thể khôi phục từ file gốc khi cần. "
+        "Nhưng ghi chú thì khác, nó chỉ tồn tại trong đầu bạn tại đúng khoảnh khắc đó — bỏ trống một tháng "
+        "là mất vĩnh viễn một tháng ký ức, không bản sao lưu nào cứu được. Cho nên nếu chỉ được giữ đúng "
+        "một thói quen trong toàn bộ hướng dẫn này, xin hãy chọn: <b>viết ghi chú mỗi tối</b>. Mọi việc "
+        "khác có thể bỏ qua vài hôm mà không sao, riêng việc này thì không.")
 
     # ==========================================
     # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
     sec_chapter(
-        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — review có mang theo câu hỏi")
+        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — nhìn lại với một câu hỏi trong đầu")
     _q_rows = [
         ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (Tháng: biểu đồ tròn · Tuần: Danh mục &amp; dự án dạng thanh xếp hạng)", "Báo cáo → Tháng / Tuần"],
-        ["Mình hay tập trung sung sức nhất lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tháng"],
-        ["Nhịp độ đang lên hay đang chùng xuống?", "Xu hướng + đường trung bình động 7 ngày", "Mọi trang Báo cáo"],
-        ["Ngày hôm đó làm sâu hay chỉ vụn vặt cho có?", "Thanh phân bố độ dài phiên", "Mọi trang Báo cáo · Sách · Gundam"],
-        ["Có việc nào đang âm thầm bị bỏ rơi không?", "Bảng số liệu — nhìn kỹ dấu ▾ đỏ", "Báo cáo → Tháng"],
-        ["Ngày nào đỉnh nhất từ trước tới giờ?", "Bảng vàng: Ngày nổi bật &amp; Kỷ lục", "Bảng số liệu của từng trang"],
-        ["Một việc cụ thể đang tiến triển ra sao?", "Báo cáo → Dự án (lọc riêng đúng 1 Nhóm/Dự án)", "Báo cáo → Dự án"],
+        ["Mình thường tập trung tốt nhất vào lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tháng"],
+        ["Nhịp độ đang tăng lên hay đang chùng xuống?", "Xu hướng và đường trung bình động 7 ngày", "Mọi trang Báo cáo"],
+        ["Ngày hôm đó tập trung sâu hay chỉ vụn vặt?", "Thanh phân bố độ dài phiên", "Mọi trang Báo cáo · Sách · Gundam"],
+        ["Có việc nào đang bị bỏ quên không?", "Bảng số liệu — chú ý dấu ▾ đỏ", "Báo cáo → Tháng"],
+        ["Ngày nào từng đạt kết quả cao nhất?", "Bảng vàng: Ngày nổi bật &amp; Kỷ lục", "Bảng số liệu của từng trang"],
+        ["Một việc cụ thể đang tiến triển ra sao?", "Báo cáo → Dự án (lọc riêng một Nhóm hoặc Dự án)", "Báo cáo → Dự án"],
     ]
     sec_block(
-        "<h4>Đang thắc mắc điều gì — thì nên nhìn vào biểu đồ nào</h4>"
-        + sec_table(["Câu hỏi trong đầu bạn", "Mở biểu đồ này lên", "Tìm ở đâu"], _q_rows))
+        "<h4>Có câu hỏi gì trong đầu, nên mở biểu đồ nào</h4>"
+        + sec_table(["Câu hỏi", "Xem biểu đồ", "Tìm ở đâu"], _q_rows))
     _heat_lv = [0, 1, 3, 2, 0, 4, 6, 2, 1, 0, 5, 7, 3, 1,
                 2, 0, 1, 4, 5, 2, 0, 3, 6, 1, 2, 4, 0, 2,
                 1, 3, 0, 2, 6, 1, 4, 0, 2, 5, 1, 3, 7, 0,
@@ -9840,54 +9852,54 @@ elif nav == "Hướng dẫn":
     _bars = "".join(f"<i style='height:{h}%'></i>" for h in _bar_h)
     st.markdown(
         "<div class='sec-grid'>"
-        "<div class='sec-card'><h4>Biểu đồ lịch — thang màu tuyệt đối, không nói dối</h4>"
+        "<div class='sec-card'><h4>Biểu đồ lịch — một thang màu cố định, không tự nói dối</h4>"
         f"<div class='sec-heat'>{_heat}</div>"
-        "<div class='sec-cap'>8 bậc màu được neo cứng theo mốc giờ cố định, không hề co giãn theo đúng dữ "
-        "liệu đang xem trên màn hình — nên “đậm bằng nhau” luôn có nghĩa là “số giờ bằng "
-        "nhau” thật, so sánh được thoải mái giữa tháng này với tháng khác mà không sợ một ngày "
-        "bất thường làm lệch cả thang đo, kiểu như hồi bạn cày liền 10 tiếng vì deadline dí.</div></div>"
-        "<div class='sec-card'><h4>Xu hướng — đường trung bình thẳng thắn, không tô hồng</h4>"
+        "<div class='sec-cap'>Tám bậc màu được neo theo mốc giờ cố định, không co giãn theo dữ liệu đang "
+        "xem trên màn hình — nên hai ô “đậm bằng nhau” luôn có nghĩa là hai ngày có số giờ bằng nhau "
+        "thật, so sánh được thoải mái giữa tháng này với tháng khác mà không sợ một ngày bất thường "
+        "(chẳng hạn một hôm làm liền mười tiếng vì gấp việc) làm lệch cả thang đo.</div></div>"
+        "<div class='sec-card'><h4>Xu hướng — đường trung bình ghi nhận thẳng thắn</h4>"
         f"<div class='sec-bars'>{_bars}<span class='avg'></span></div>"
         "<div class='sec-cap'>Đường trung bình động 7 ngày này tính luôn cả những ngày 0 giờ tuyệt đối, "
-        "chứ không chỉ đếm ngày có hoạt động rồi lờ đi phần còn lại — nên nghỉ liền vài hôm sẽ thấy đường "
-        "đi xuống rõ ràng ngay, không có chuyện bị làm mượt cho đẹp mắt.</div></div>"
+        "chứ không chỉ đếm ngày có hoạt động rồi bỏ qua phần còn lại — nên nghỉ liền vài hôm sẽ thấy "
+        "đường đi xuống rõ ràng ngay, không bị làm mượt đi cho đẹp mắt.</div></div>"
         "</div>", unsafe_allow_html=True)
     sec_block(
-        "<h4>Đọc số cho đúng cách — bốn luật ngầm nên biết trước khi hoảng</h4>"
+        "<h4>Đọc số cho đúng cách — bốn điều nên biết trước</h4>"
         "<ul>"
-        "<li><b>Kỳ dở dang luôn được cắt gọn để so sánh công bằng</b> — nếu kỳ đang xem chưa đi hết (ví dụ "
-        "mới qua 3 ngày đầu tháng mà đã tò mò mở Báo cáo), cả 2 mốc so sánh “vs kỳ trước” "
-        "và “vs Trung bình” đều tự động bị cắt xuống đúng cùng số ngày đã trôi qua, công bằng "
-        "cho cả hai bên; một dòng caption nhỏ phía trên Bảng số liệu sẽ nói rõ khi nào việc cắt này đang "
-        "diễn ra, để bạn khỏi nghi ngờ có gì đó sai sai. Không có bước này thì 3 ngày đầu tháng đem so với "
-        "nguyên cả tháng trước sẽ luôn trông như một cú sụt giảm thảm hại, dù thực ra chẳng có gì đáng lo cả.</li>"
-        "<li><b>Chênh lệch trong khoảng ±20% là chuyện đời thường</b>, đừng vội hoảng — chỉ nên thực sự hành "
-        "động khi độ lệch lớn <i>và</i> bạn đã biết rõ lý do đằng sau nó là gì.</li>"
-        "<li><b>Dấu ▾ đỏ trong Bảng số liệu</b> nghĩa là kỳ đó tụt xuống còn ≤40% so với kỳ ngay trước đó — "
-        "một tín hiệu đáng dừng lại vài giây để tự hỏi tại sao. Việc tô đậm ô trong bảng là so sánh trong "
-        "<i>toàn bộ bảng</i> chứ không phải riêng từng hàng một; còn cột Tổng thì cố tình để trắng không tô "
-        "gì cả, vì nó luôn là số lớn nhất nên tô đậm cũng chẳng nói thêm được điều gì mới.</li>"
-        "<li><b>Kỷ lục và Ngày nổi bật là hai khái niệm khác nhau</b>, đừng nhầm — Ngày nổi bật là top ngày "
-        "chỉ trong đúng kỳ đang xem thôi (nên tuần nào cũng có), còn Kỷ lục là top <i>toàn thời gian</i> "
-        "(tính chung, và tính riêng cho từng Nhóm/Dự án đã có từ 5 ngày dữ liệu trở lên). Chỉ Kỷ lục mới "
-        "được vinh dự gắn chip huy chương lên Timeline — vì nếu gắn cả Ngày nổi bật (thứ gần như tuần nào "
-        "cũng có) thì cảm giác hiếm có sẽ mất sạch, huy chương phát tràn lan thì còn gì là huy chương nữa.</li>"
+        "<li><b>Kỳ dở dang luôn được cắt gọn để so sánh công bằng</b> — nếu kỳ đang xem chưa trôi hết (ví "
+        "dụ mới qua ba ngày đầu tháng mà đã mở Báo cáo), cả hai mốc so sánh “so với kỳ trước” "
+        "và “so với trung bình” đều tự động bị cắt xuống đúng số ngày đã trôi qua, để công bằng "
+        "cho cả hai phía; một dòng caption nhỏ phía trên Bảng số liệu sẽ nói rõ khi việc cắt này đang diễn "
+        "ra, để bạn khỏi nghi ngờ có điều gì sai lệch. Thiếu bước này, ba ngày đầu tháng đem so với nguyên "
+        "cả tháng trước sẽ luôn trông như một cú sụt giảm đáng ngại, dù thực ra không có gì đáng lo.</li>"
+        "<li><b>Chênh lệch trong khoảng ±20% là điều bình thường</b>, chưa cần vội lo — chỉ nên thật sự "
+        "để tâm khi độ lệch lớn <i>và</i> bạn đã biết rõ nguyên do đằng sau nó.</li>"
+        "<li><b>Dấu ▾ đỏ trong Bảng số liệu</b> nghĩa là kỳ đó tụt xuống còn không quá 40% so với kỳ ngay "
+        "trước đó — một dấu hiệu đáng dừng lại đôi chút để tự hỏi vì sao. Việc tô đậm ô trong bảng là so "
+        "sánh trong <i>toàn bộ bảng</i>, không phải riêng từng hàng; cột Tổng cố tình để trắng, vì đó luôn "
+        "là số lớn nhất nên việc tô đậm cũng không nói thêm được điều gì mới.</li>"
+        "<li><b>Kỷ lục và Ngày nổi bật là hai khái niệm khác nhau</b> — Ngày nổi bật là những ngày đứng "
+        "đầu trong đúng kỳ đang xem (nên kỳ nào cũng có), còn Kỷ lục là những ngày đứng đầu <i>trong toàn "
+        "bộ thời gian</i> (tính chung, và tính riêng cho từng Nhóm/Dự án đã có từ năm ngày dữ liệu trở "
+        "lên). Chỉ Kỷ lục mới được gắn chip huy chương lên Timeline — vì nếu gắn cả Ngày nổi bật, thứ gần "
+        "như kỳ nào cũng có, thì huy chương sẽ mất đi ý nghĩa hiếm có của nó.</li>"
         "</ul>")
     sec_block(
-        "<h4>Ba cái bẫy dễ sa vào nhất — cẩn thận kẻo dính</h4>"
+        "<h4>Ba điều nên tránh khi nhìn lại</h4>"
         "<ol>"
-        "<li><b>Tối ưu con số thay vì tối ưu công việc thật</b> — bấm trồng cây cho một phiên đọc tin vặt lan "
-        "man chỉ để đủ chỉ tiêu giờ trong ngày là đang tự lừa chính mình, bằng chính cái công cụ vốn sinh ra "
-        "để chống tự lừa — nghe hài hước nhưng lại rất dễ mắc phải. Số giờ chỉ là một thước đo gián tiếp, "
-        "không phải là mục tiêu tự thân, đừng để nó cầm nhầm vai trò.</li>"
-        "<li><b>Để chuỗi ngày liên tục biến thành cái gông đeo cổ</b> — đứt chuỗi sau một ngày ốm thật hay "
-        "một ngày nghỉ đúng nghĩa là chuyện hoàn toàn bình thường, không có gì phải dằn vặt. Lời nhắc khi "
-        "chuỗi đứt được app cố tình viết theo tông động viên nhẹ nhàng, chứ không phải lời trách móc — hãy "
-        "đọc đúng với tinh thần đó, đừng tự biến nó thành áp lực.</li>"
-        "<li><b>Review mà trong đầu chẳng có câu hỏi nào cả</b> — mỗi lần mở app nên có sẵn ít nhất một câu "
-        "hỏi để trả lời: hôm nay diễn ra thế nào? tuần này có gì lệch khỏi dự tính? tháng này tỉ trọng ưu "
-        "tiên đã đúng chưa? Không có câu hỏi thì chỉ đang lướt số liệu cho vui mắt thôi, chứ không phải "
-        "đang thực sự nhìn lại.</li>"
+        "<li><b>Tối ưu con số thay vì tối ưu công việc thật</b> — bấm trồng cây cho một phiên đọc tin vặt "
+        "lan man chỉ để đủ chỉ tiêu giờ trong ngày là đang tự lừa chính mình, bằng chính công cụ vốn sinh "
+        "ra để soi lại chính mình. Số giờ chỉ là một thước đo gián tiếp, không phải là mục tiêu tự thân, "
+        "đừng để nó thay chỗ mục tiêu thật.</li>"
+        "<li><b>Để chuỗi ngày liên tục trở thành một gánh nặng</b> — đứt chuỗi sau một ngày ốm thật hay "
+        "một ngày nghỉ đúng nghĩa là điều hoàn toàn bình thường, không có gì phải dằn vặt. Lời nhắc khi "
+        "chuỗi đứt được viết theo tông động viên nhẹ nhàng, chứ không phải lời trách móc — xin đọc đúng "
+        "với tinh thần đó.</li>"
+        "<li><b>Nhìn lại mà trong đầu không có câu hỏi nào</b> — mỗi lần mở ứng dụng nên có sẵn ít nhất "
+        "một câu hỏi để trả lời: hôm nay diễn ra thế nào? tuần này có gì lệch khỏi dự tính? tháng này tỉ "
+        "trọng ưu tiên đã hợp lý chưa? Không có câu hỏi thì chỉ đang lướt qua số liệu cho vui mắt, chứ "
+        "chưa phải đang thực sự nhìn lại.</li>"
         "</ol>")
 
     # ==========================================
@@ -9896,63 +9908,62 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ")
     sec_block(
-        "<h4>Quy ước đặt tên trong Apple Reminders — nhớ đặt đúng kẻo app đoán sai</h4>"
-        "Mỗi <b>Reminder List</b> trên điện thoại tương ứng với 1 cuốn sách hoặc 1 series, đặt tên theo "
-        "khuôn “Tác giả - Tên sách”; còn mỗi reminder đã được tick hoàn thành là 1 "
-        "phần/chương/tập bạn đã đọc/xem xong. App sẽ cắt tên hiển thị theo dấu <b>“-” đầu "
-        "tiên</b> gặp được trong tên list (ưu tiên dạng có khoảng trắng bao quanh “ - ” cho chắc "
-        "ăn): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ đi. Còn nếu tên list "
-        "bắt đầu bằng chữ “gundam” (viết hoa hay thường đều được, app không khó tính), nó sẽ tự "
-        "động được xếp sang trang Gundam thay vì trang Sách.")
+        "<h4>Quy ước đặt tên trong Apple Reminders</h4>"
+        "Mỗi <b>Reminder List</b> trên điện thoại ứng với một cuốn sách hoặc một series, đặt tên theo "
+        "khuôn “Tác giả - Tên sách”; mỗi reminder đã được tick hoàn thành là một "
+        "phần, chương, hay tập bạn đã đọc hoặc xem xong. Ứng dụng cắt tên hiển thị theo dấu <b>gạch "
+        "ngang đầu tiên</b> gặp trong tên list (ưu tiên dạng có khoảng trắng bao quanh “ - ” "
+        "cho chắc): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ. Nếu tên "
+        "list bắt đầu bằng chữ “gundam” (không phân biệt hoa thường), nó sẽ tự động được "
+        "xếp sang trang Gundam thay vì trang Sách.")
     sec_block(
-        "<h4>“Số ngày” được tính kiểu gì khi có tận 2 nguồn dữ liệu cùng lúc</h4>"
-        "Mỗi cuốn sách hay series được ghép lại từ tối đa 2 nguồn: phiên Forest (khi tên Dự án trùng khớp "
-        "với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” sẽ lấy <b>hợp</b> "
-        "của cả 2 nguồn — tức từ ngày bắt đầu sớm nhất cho tới ngày kết thúc muộn nhất, gộp cả hai bên lại "
-        "— nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang chỉ tick Reminders "
-        "cho tiện) thì khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn một nguồn sẽ "
-        "hiện dấu gạch ngang “—” cho biết là thiếu dữ liệu, thay vì để trống trơn khiến bạn tưởng lỗi.")
+        "<h4>“Số ngày” được tính ra sao khi có hai nguồn dữ liệu cùng lúc</h4>"
+        "Mỗi cuốn sách hay series được ghép lại từ tối đa hai nguồn: phiên Forest (khi tên Dự án trùng "
+        "khớp với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” lấy "
+        "<b>hợp</b> của cả hai nguồn — tính từ ngày bắt đầu sớm nhất cho tới ngày kết thúc muộn nhất, gộp "
+        "cả hai bên lại — nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang "
+        "chỉ tick Reminders), khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn "
+        "một nguồn sẽ hiện dấu gạch ngang “—” để báo là thiếu dữ liệu, thay vì để trống khiến "
+        "bạn tưởng nhầm là lỗi.")
     sec_block(
-        "<h4>Gundam: vì sao app phải “đoán mò” xem bạn đang xem series nào</h4>"
-        "Vì Forest chỉ có đúng 1 tag chung chung là “Gundam” cho mọi series, chứ không tách "
-        "riêng từng bộ như Sách. Cho nên với mỗi ngày có phiên gắn tag đó, app sẽ đi tìm lần tick Reminder "
-        "gần nhất (ở bất kỳ series Gundam nào, trước hoặc sau ngày đó đều tính, miễn là gần về mặt thời "
-        "gian) rồi gán cả ngày hôm đó cho đúng series của lần tick ấy — kiểu như một thám tử nhỏ suy luận "
-        "dựa trên dấu vết gần nhất. Nếu bạn chỉ xem đúng 1 series tại 1 thời điểm (trường hợp phổ biến "
-        "nhất) thì suy luận này gần như luôn đúng; còn nếu bạn có thói quen xem xen kẽ nhiều series cùng "
-        "lúc thì ngày nằm giữa 2 lần tick sẽ được gán về phía gần hơn, và đôi khi đoán sai cũng là chuyện "
-        "bình thường. Đoán sai thì cũng đừng lo, cứ vào expander <b>“Sửa gán series tự động”</b> ở cuối "
-        "trang Gundam mà sửa lại tay — ngày nào đã sửa tay sẽ mang dấu “Gán tay” cho dễ phân "
-        "biệt, còn nếu sau này bạn sửa lại trùng đúng với kết quả suy luận tự động thì dấu đó tự động biến "
-        "mất, coi như huề cả làng.")
+        "<h4>Gundam: vì sao ứng dụng phải suy luận series đang xem</h4>"
+        "Vì Forest chỉ có đúng một thẻ chung là “Gundam” cho mọi series, không tách riêng "
+        "từng bộ như Sách. Bởi vậy, với mỗi ngày có phiên gắn thẻ đó, ứng dụng sẽ tìm lần tick Reminder "
+        "gần nhất (ở bất kỳ series Gundam nào, trước hoặc sau ngày đó đều được tính, miễn là gần về mặt "
+        "thời gian) rồi gán cả ngày hôm đó cho đúng series của lần tick ấy — một cách suy luận dựa trên "
+        "dấu vết gần nhất. Nếu bạn chỉ theo dõi đúng một series tại một thời điểm, trường hợp phổ biến "
+        "nhất, suy luận này hầu như luôn đúng; còn nếu bạn có thói quen xem xen kẽ nhiều series, ngày nằm "
+        "giữa hai lần tick sẽ được gán về phía gần hơn, và đôi khi đoán sai cũng là điều khó tránh. Gặp "
+        "trường hợp đó, cứ vào mục <b>“Sửa gán series tự động”</b> ở cuối trang Gundam để sửa "
+        "lại tay — ngày nào đã sửa tay sẽ mang nhãn “Gán tay” để dễ phân biệt, còn nếu sau "
+        "này bạn sửa lại đúng trùng với kết quả suy luận tự động, nhãn đó sẽ tự biến mất.")
     sec_block(
-        "<h4>Trích dẫn Kindle — sửa một lần là ăn chắc, không sợ mất lại</h4>"
-        "Mọi thao tác bạn làm trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú "
-        "riêng của mình) đều được lưu hẳn vào Supabase một cách nghiêm túc: có nạp lại file "
-        "<code>My Clippings.txt</code> cũ bao nhiêu lần đi nữa — vì Kindle luôn xuất cộng dồn toàn bộ lịch "
-        "sử từ đầu chứ không chỉ phần mới — thì nội dung bạn đã sửa vẫn <b>không bị ghi đè</b> và trích dẫn "
-        "đã xoá cũng <b>không tự nhiên sống lại</b> làm bạn giật mình. Nếu bạn hay tô highlight bằng bút "
-        "cảm ứng, Kindle thường sinh ra khá nhiều “bản nháp” trùng lặp (cùng một câu, cách "
-        "nhau chưa tới 2 phút, câu sau chỉ dài hơn câu trước một chút vì tay bạn kéo thêm) — app tự nhận ra "
-        "và gộp lại, chỉ giữ đúng bản đầy đủ nhất, không làm phiền bạn bằng cả đống bản nháp. Trong Nhật ký "
-        "đọc, các trích dẫn tự sắp xếp theo <b>Vị trí</b> trong sách — đúng thứ tự bạn đọc thật, không cần "
-        "tự tay gán từng câu vào đúng chương nào cả.")
+        "<h4>Trích dẫn Kindle — sửa một lần, giữ nguyên mãi</h4>"
+        "Mọi thao tác trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú riêng) "
+        "đều được lưu vào Supabase một cách bền vững: dù nạp lại file <code>My Clippings.txt</code> "
+        "cũ bao nhiêu lần — vì Kindle luôn xuất cộng dồn toàn bộ lịch sử từ đầu, không chỉ phần mới — nội "
+        "dung bạn đã sửa vẫn <b>không bị ghi đè</b>, và trích dẫn đã xoá cũng <b>không tự sống lại</b>. "
+        "Nếu bạn hay tô highlight bằng bút cảm ứng, Kindle thường sinh ra nhiều “bản nháp” "
+        "trùng lặp (cùng một câu, cách nhau chưa tới hai phút, câu sau chỉ dài hơn câu trước một chút vì "
+        "tay kéo thêm) — ứng dụng tự nhận ra và gộp lại, chỉ giữ đúng bản đầy đủ nhất. Trong Nhật ký đọc, "
+        "các trích dẫn tự sắp xếp theo <b>Vị trí</b> trong sách — đúng thứ tự bạn đã đọc, không "
+        "cần tự tay gán từng câu vào chương nào cả.")
     sec_block(
-        "<h4>Sức khoẻ — nhập liệu bằng ảnh chụp phiếu, nhờ Claude làm hộ phần khó</h4>"
-        "Quy trình gợi ý cho đỡ mất công gõ tay: chụp lại 2 phiếu xét nghiệm (Huyết học và Sinh hóa) mỗi lần "
-        "đi khám, đưa ảnh vào Claude và nhờ đọc rồi xuất đúng khuôn JSON như bên dưới, sau đó dán thẳng vào "
-        "mục <b>Import hàng loạt</b> (Sức khoẻ → Dữ liệu đầu vào) — có hẳn một bước Xem trước để soát lại "
-        "trước khi bấm Xác nhận lưu, tránh nhập nhầm mà không hay biết. Mỗi lần mở trang Báo cáo là thấy "
-        "ngay expander <b>“Chỉ số bất thường”</b> của lần khám gần nhất hiện sẵn ra, không cần "
-        "phải chọn gì trước cả — tiện cho việc liếc nhanh xem có gì đáng lo không. Khoảng tham chiếu "
-        "(<code>ref_raw</code>) chấp nhận khá nhiều dạng viết thường gặp trên phiếu xét nghiệm: khoảng đủ "
+        "<h4>Sức khoẻ — nhập liệu từ ảnh chụp phiếu xét nghiệm</h4>"
+        "Quy trình gợi ý để đỡ mất công gõ tay: chụp lại hai phiếu xét nghiệm (Huyết học và Sinh hoá) mỗi "
+        "lần đi khám, đưa ảnh cho Claude đọc và xuất đúng khuôn JSON như bên dưới, rồi dán thẳng vào mục "
+        "<b>Import hàng loạt</b> (Sức khoẻ → Dữ liệu đầu vào) — có sẵn một bước Xem trước để "
+        "soát lại trước khi bấm Xác nhận lưu, tránh nhập nhầm mà không hay biết. Mỗi lần mở trang Báo cáo "
+        "sẽ thấy ngay mục <b>“Chỉ số bất thường”</b> của lần khám gần nhất hiện sẵn, không "
+        "cần chọn gì trước — tiện cho việc xem nhanh có điều gì đáng lưu tâm không. Khoảng tham chiếu "
+        "(<code>ref_raw</code>) chấp nhận nhiều dạng viết thường gặp trên phiếu xét nghiệm: khoảng đủ "
         "kiểu “4.2 - 5.4”, chỉ có trần trên như “&lt; 5”, hay chỉ có sàn dưới như "
-        "“&gt; 10” — còn dạng khác (ví dụ kết quả định tính như “Âm tính”) vẫn "
-        "lưu được bình thường, chỉ là không vẽ lên biểu đồ xu hướng được thôi.")
+        "“&gt; 10” — dạng khác (chẳng hạn kết quả định tính như “Âm tính”) vẫn lưu "
+        "được bình thường, chỉ không vẽ lên biểu đồ xu hướng được.")
     with st.expander("Xem định dạng JSON mẫu để nhờ Claude xuất từ ảnh"):
         st.markdown(
-            "Mỗi phần tử trong list là 1 phiếu (1 nhóm chỉ số) của 1 lần khám — 1 lần khám có 2 phiếu "
-            "Huyết học + Sinh hóa thì ra 2 phần tử cùng `test_date` khác `category`:")
+            "Mỗi phần tử trong danh sách là một phiếu (một nhóm chỉ số) của một lần khám — một lần khám "
+            "có hai phiếu Huyết học và Sinh hoá thì ra hai phần tử cùng `test_date` khác `category`:")
         st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
 
     # ==========================================
@@ -9972,42 +9983,42 @@ elif nav == "Hướng dẫn":
         "<span class='sec-flow-arr'></span>"
         "<span class='sec-flow-node sec-flow-hub'>Đồng bộ ngay</span>"
         "<span class='sec-flow-arr'></span>"
-        "<span class='sec-flow-node'>Dashboard</span>"
+        "<span class='sec-flow-node'>Bảng điều khiển</span>"
         "</div>"
-        "<div class='sec-cap'>Cái Shortcut này chạy ngay từ share sheet mỗi khi bạn Export CSV từ app "
-        "Forest: nó tiện tay lấy luôn file backup Reminder rồi tải cả 2 file lên chung một bucket Supabase "
-        "Storage (tên file luôn bắt đầu bằng <code>forest</code> hoặc <code>reminder</code>, "
-        "kiểu như <code>forest_2026-07-06.csv</code>). Về phía app, nút Đồng bộ ngay sẽ tự tìm file mới "
-        "nhất của mỗi loại, nạp vào theo đúng luật ở bảng dưới đây, kéo luôn thể cả lịch Work qua CalDAV "
-        "trong cùng một cú bấm cho đỡ phải làm nhiều bước, rồi dọn dẹp bớt file cũ còn sót lại trong bucket. "
-        "Riêng file <code>My Clippings.txt</code> của Kindle thì phải tải tay, không đi qua đường bucket "
-        "này — vì Kindle chưa có Shortcut nào tự động xuất file được.</div>")
+        "<div class='sec-cap'>Shortcut này chạy ngay từ trình chia sẻ mỗi khi bạn xuất CSV từ ứng dụng "
+        "Forest: nó tiện tay lấy luôn file sao lưu Reminders rồi tải cả hai file lên chung một bucket "
+        "Supabase Storage (tên file luôn bắt đầu bằng <code>forest</code> hoặc "
+        "<code>reminder</code>, chẳng hạn <code>forest_2026-07-06.csv</code>). Về phía "
+        "ứng dụng, nút Đồng bộ ngay sẽ tự tìm file mới nhất của mỗi loại, nạp vào theo đúng luật ở bảng "
+        "dưới đây, đồng thời kéo luôn lịch Work qua CalDAV trong cùng một lượt, rồi dọn dẹp bớt file cũ "
+        "còn sót lại trong bucket. Riêng file <code>My Clippings.txt</code> của Kindle vẫn phải tải tay, "
+        "không đi qua đường bucket này — vì Kindle chưa có Shortcut nào tự xuất file được.</div>")
     _sync_rows = [
-        ["Forest CSV", "Cộng thêm", "Tự động bỏ qua phiên bị trùng (so theo giờ bắt đầu/kết thúc) và cả phiên "
-         "đã từng bị bạn xoá trước đó — nạp lại đúng 1 file bao nhiêu lần cũng không lo bị nhân đôi dữ liệu"],
+        ["Forest CSV", "Cộng thêm", "Tự động bỏ qua phiên bị trùng (so theo giờ bắt đầu và kết thúc) và cả "
+         "phiên đã từng bị xoá trước đó — nạp lại đúng một file bao nhiêu lần cũng không lo bị nhân đôi"],
         ["Reminders", "<b>Thay thế toàn bộ</b>", "File này phản ánh đúng trạng thái hiện tại của mọi list, "
-         "chứ không phải một lát cắt thời gian như CSV — nên app ghi đè sạch sẽ thay vì cộng dồn, để tránh "
-         "dữ liệu cũ còn sót lại làm sai lệch"],
+         "không phải một lát cắt thời gian như CSV — nên ứng dụng ghi đè sạch sẽ thay vì cộng dồn, để "
+         "tránh dữ liệu cũ còn sót lại gây sai lệch"],
         ["Kindle My Clippings", "Cộng thêm", "Trích dẫn trùng lặp tự động bị bỏ qua; các bản nháp do bút "
-         "cảm ứng sinh ra cũng tự gộp lại; mọi thứ bạn đã sửa/xoá/đánh dấu ⭐ ngay trong app đều không bị "
-         "ghi đè hay hồi sinh trở lại"],
-        ["Lịch Work (CalDAV)", "Thay theo khoảng ngày", "Có sẵn các preset ±30/±90/±180 ngày quanh hôm nay "
-         "cho tiện, hoặc tự chọn 2 mốc ngày riêng — dùng khoảng rộng hơn khi cần lấp đầy dữ liệu lịch cũ "
+         "cảm ứng sinh ra cũng tự gộp lại; mọi thứ đã sửa, xoá, hay đánh dấu ⭐ ngay trong ứng dụng đều "
+         "không bị ghi đè hay hồi sinh trở lại"],
+        ["Lịch Work (CalDAV)", "Thay theo khoảng ngày", "Có sẵn các mốc ±30/±90/±180 ngày quanh hôm nay "
+         "cho tiện, hoặc tự chọn hai mốc ngày riêng — dùng khoảng rộng hơn khi cần lấp đầy dữ liệu lịch cũ "
          "cho tính năng Ngày này năm trước"],
     ]
     sec_block(
-        "<h4>Cộng thêm hay thay thế hoàn toàn — mỗi nguồn một kiểu, đừng nhầm lẫn</h4>"
+        "<h4>Cộng thêm hay thay thế hoàn toàn — mỗi nguồn một kiểu</h4>"
         + sec_table(["Nguồn dữ liệu", "Kiểu nạp", "Cách chống trùng &amp; lưu ý cần nhớ"], _sync_rows))
     sec_block(
-        "<h4>Xoá phiên là một kiểu xoá có trí nhớ dai, không phải xoá xong là quên luôn</h4>"
-        "Khi bạn xoá phiên ở mục <b>3. Dữ liệu làm việc hiện tại</b> (nút màu đỏ, bấm là xoá ngay không hỏi "
-        "lại lần nào), phiên đó được app âm thầm ghi nhớ riêng vào một bảng tên là "
-        "<code>deleted_sessions</code> — nên về sau nếu bạn lỡ nạp lại đúng file CSV cũ có chứa phiên đó, "
-        "nó <b>sẽ không tự nhiên sống dậy</b> làm bạn hoang mang không hiểu sao dữ liệu đã xoá lại xuất hiện "
-        "trở lại. Còn với những cuốn sách hoặc nguồn Kindle mới gặp lần đầu tiên, app sẽ hỏi bạn có muốn "
-        "ghép nó với 1 Dự án đã có sẵn không (gợi ý sẵn theo tên gần giống nhất cho đỡ phải gõ) hoặc để nó "
-        "đứng riêng thành “Nguồn độc lập” — chỉ cần xác nhận đúng 1 lần duy nhất, những lần tải "
-        "file sau đó app sẽ tự nhớ và không hỏi lại nữa.")
+        "<h4>Xoá phiên là một thao tác được ghi nhớ, không phải xoá xong là quên hẳn</h4>"
+        "Khi bạn xoá phiên ở mục <b>3. Dữ liệu làm việc hiện tại</b> (nút màu đỏ, bấm là xoá ngay không "
+        "hỏi lại), phiên đó được ứng dụng âm thầm ghi nhớ riêng vào một bảng tên là "
+        "<code>deleted_sessions</code> — nên về sau nếu bạn nạp lại đúng file CSV cũ có chứa "
+        "phiên đó, nó <b>sẽ không tự sống lại</b>, tránh gây hoang mang vì dữ liệu tưởng đã xoá lại xuất "
+        "hiện trở lại. Với những cuốn sách hoặc nguồn Kindle gặp lần đầu, ứng dụng sẽ hỏi bạn có muốn "
+        "ghép nó với một Dự án đã có sẵn không (gợi ý theo tên gần giống nhất cho đỡ phải gõ) hoặc để nó "
+        "đứng riêng thành “Nguồn độc lập” — chỉ cần xác nhận đúng một lần, những lần tải "
+        "file sau đó ứng dụng sẽ tự nhớ và không hỏi lại.")
 
     # ==========================================
     # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
@@ -10015,42 +10026,42 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện")
     sec_block(
-        "<h4>Một màu accent duy nhất, lan ra ba nơi khác nhau, bằng ba cơ chế khác nhau</h4>"
+        "<h4>Một màu accent duy nhất, lan ra ba nơi bằng ba cơ chế khác nhau</h4>"
         "<ul>"
-        "<li><b>Nút bấm / khung viền / chip</b> — đi qua biến CSS <code>--accent</code>, toàn bộ stylesheet "
-        "của app đều tham chiếu tới biến này thay vì gõ cứng một mã màu cố định vào từng chỗ.</li>"
-        "<li><b>Biểu đồ đơn sắc và bảng nhiệt</b> — chỗ này không đi qua CSS mà đi qua tận Python: màu accent "
-        "được quy đổi thành một giá trị <b>hue</b> (sắc độ), rồi mọi dải màu từ nhạt tới đậm đều tự động "
-        "xoay theo hue đó — nên đổi màu accent một cái là đổi luôn tất cả biểu đồ cùng lúc, không sót chỗ nào.</li>"
-        "<li><b>Ô ghi chú (trình soạn thảo Quill)</b> — chỗ này hơi đặc biệt vì nó chạy trong một iframe "
-        "riêng biệt, CSS của trang chính không thể chạm tới được. Nên app phải tự tiêm một đoạn style riêng "
-        "vào bên trong iframe đó, và lặp lại việc tiêm này định kỳ để không bị mất màu mỗi khi Streamlit "
-        "dựng lại iframe (chuyện này xảy ra thường xuyên hơn bạn nghĩ).</li>"
+        "<li><b>Nút bấm, khung viền, chip</b> — đi qua biến CSS <code>--accent</code>, toàn bộ "
+        "stylesheet của ứng dụng đều tham chiếu tới biến này thay vì gán cứng một mã màu cố định vào "
+        "từng chỗ.</li>"
+        "<li><b>Biểu đồ đơn sắc và bảng nhiệt</b> — chỗ này không đi qua CSS mà đi qua Python: màu accent "
+        "được quy đổi thành một giá trị <b>sắc độ (hue)</b>, rồi mọi dải màu từ nhạt tới đậm đều tự động "
+        "xoay theo sắc độ đó — nên đổi màu accent một lần là đổi luôn mọi biểu đồ, không sót chỗ nào.</li>"
+        "<li><b>Ô ghi chú (trình soạn thảo Quill)</b> — chỗ này đặc biệt hơn vì chạy trong một iframe "
+        "riêng, CSS của trang chính không chạm tới được. Ứng dụng phải tự tiêm một đoạn kiểu dáng riêng "
+        "vào bên trong iframe đó, và lặp lại việc tiêm này định kỳ để không mất màu mỗi khi Streamlit "
+        "dựng lại iframe.</li>"
         "</ul>"
         "Chọn một màu là áp dụng ngay lập tức, không cần bấm thêm nút Lưu nào cả — giá trị được ghi thẳng "
         "vào bảng <code>settings</code> trên Supabase. Nếu chẳng may bảng đó chưa được tạo, hoặc giá trị "
-        "lưu trong đó bị hỏng vì lý do gì đó, app sẽ lặng lẽ rơi về màu “Chàm biển” mặc định "
-        "thay vì báo lỗi đỏ lòm hay sập luôn — một cách xử lý khá lịch sự.")
+        "lưu trong đó bị hỏng, ứng dụng sẽ lặng lẽ trở về màu “Chàm biển” mặc định thay vì báo "
+        "lỗi hay ngừng hoạt động.")
     sec_block(
-        "<h4>Dark mode — vì sao lại không có mỗi cái nút bật/tắt cho tiện</h4>"
-        "App tự động đổi giữa tối và sáng theo đúng cài đặt hệ thống của thiết bị bạn đang dùng (hoặc theo "
-        "lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu bạn muốn tự chọn khác với "
-        "hệ thống). Lý do không có nút riêng trong app khá đơn giản: Streamlit hiện chưa cho phép code tự "
-        "đổi theme ngay lúc đang chạy, app chỉ đọc được theme hiện tại là gì rồi tô đúng bộ màu tương ứng "
-        "theo đó thôi — kể cả biểu đồ, bảng nhiệt lẫn ô ghi chú đều được lo liệu đầy đủ, không sợ bị "
-        "lệch tông giữa các phần.")
+        "<h4>Chế độ tối — vì sao không có riêng một nút bật/tắt</h4>"
+        "Ứng dụng tự động đổi giữa tối và sáng theo đúng cài đặt hệ thống của thiết bị bạn đang dùng (hoặc "
+        "theo lựa chọn thủ công trong menu ⋮ ở góc phải trên cùng của Streamlit, nếu bạn muốn chọn khác "
+        "với hệ thống). Lý do không có nút riêng khá đơn giản: Streamlit hiện chưa cho phép mã nguồn tự "
+        "đổi kiểu giao diện ngay lúc đang chạy, ứng dụng chỉ đọc được kiểu giao diện hiện tại rồi tô đúng "
+        "bộ màu tương ứng — kể cả biểu đồ, bảng nhiệt lẫn ô ghi chú đều được lo liệu đầy đủ, không lệch "
+        "tông giữa các phần.")
     sec_block(
-        "<h4>Sao lưu — lớp an toàn thứ hai, phòng khi lớp thứ nhất cũng có ngày trở chứng</h4>"
-        "Dữ liệu vốn đã khá bền vững trên Supabase rồi (không hề mất khi app khởi động lại hay redeploy), "
-        "nhưng nút <b>Sao lưu</b> vẫn đóng gói toàn bộ mọi bảng dữ liệu thành 1 file .zip để bạn tải về máy, "
-        "coi như một lớp an toàn thứ hai phòng hờ — app sẽ tự nhắc nhở nhẹ nhàng khi lần sao lưu gần nhất "
-        "đã quá 30 ngày rồi, đừng lơ là lời nhắc đó. Hai nút <b>Khôi phục</b> và <b>Làm mới</b> đều là những "
-        "thao tác ghi đè hoặc xoá sạch không thể hoàn tác được, nên bắt buộc bạn phải tick vào ô xác nhận "
-        "trước thì nút mới chịu bật sáng lên cho bấm — cả 3 nút này đều cố tình tô màu đỏ để nổi bật hẳn "
-        "lên, khác hẳn tông màu trung tính của mọi nút khác trong app, như một lời cảnh báo ngầm rằng "
-        "“bấm là không quay đầu được đâu nhé”. Riêng việc gán Dự án vào Nhóm (mục "
-        "<b>2. Phân loại</b>) thì nhẹ nhàng hơn nhiều — hoàn toàn tuỳ chọn, chỉ để báo cáo gọn gàng dễ nhìn "
-        "hơn thôi, Dự án nào chưa được gán Nhóm vẫn hoạt động bình thường không thiếu sót gì cả.")
+        "<h4>Sao lưu — một lớp an toàn dự phòng</h4>"
+        "Dữ liệu vốn đã khá bền vững trên Supabase (không mất khi ứng dụng khởi động lại hay triển khai "
+        "phiên bản mới), nhưng nút <b>Sao lưu</b> vẫn đóng gói toàn bộ các bảng dữ liệu thành một file "
+        ".zip để bạn tải về máy, xem như một lớp an toàn dự phòng — ứng dụng sẽ nhắc nhẹ khi lần sao lưu "
+        "gần nhất đã quá 30 ngày. Hai nút <b>Khôi phục</b> và <b>Làm mới</b> đều là thao tác ghi đè hoặc "
+        "xoá sạch không thể hoàn tác, nên bắt buộc bạn phải tick vào ô xác nhận trước thì nút mới bật lên "
+        "để bấm — cả ba nút này đều tô màu đỏ để nổi bật, khác hẳn tông trung tính của mọi nút khác trong "
+        "ứng dụng, như một lời nhắc rằng thao tác này không thể quay lại. Riêng việc gán Dự án vào Nhóm "
+        "(mục <b>2. Phân loại</b>) thì nhẹ nhàng hơn — hoàn toàn tuỳ chọn, chỉ để báo cáo gọn "
+        "gàng dễ nhìn hơn, Dự án chưa được gán Nhóm vẫn hoạt động bình thường.")
 
     # ==========================================
     # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
@@ -10060,97 +10071,93 @@ elif nav == "Hướng dẫn":
     with st.container(key="help_faq"):
         help_faq_item(
             "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
-            "Không đâu, cứ yên tâm nạp lại thoải mái. Forest CSV được nạp theo kiểu **cộng thêm có chống trùng "
-            "sẵn**: phiên nào trùng khớp giờ bắt đầu và giờ kết thúc với phiên đã có rồi thì app tự động bỏ qua, "
-            "không thêm lần thứ hai. Có nạp cùng 1 file này mười lần đi nữa, kết quả cuối cùng vẫn y nguyên như "
-            "chỉ nạp đúng 1 lần.")
+            "Không, cứ an tâm nạp lại. Forest CSV được nạp theo kiểu **cộng thêm có chống trùng sẵn**: phiên "
+            "nào trùng khớp giờ bắt đầu và giờ kết thúc với phiên đã có thì ứng dụng tự động bỏ qua, không "
+            "thêm lần thứ hai. Có nạp cùng một file này mười lần, kết quả cuối cùng vẫn y nguyên như chỉ nạp "
+            "đúng một lần.")
         help_faq_item(
-            "Tôi đã lỡ xoá 1 phiên rồi — giờ nạp lại CSV thì nó có \"sống lại\" làm phiền tôi không?",
-            "Không, nó sẽ không hồi sinh đâu. Mỗi phiên bị xoá đều được app ghi nhớ cẩn thận trong một bảng "
-            "riêng tên là `deleted_sessions` — có thể gọi đây là kiểu \"xoá có trí nhớ dai\". Vậy nên mọi lần "
-            "nạp CSV về sau, kể cả khi file gốc vẫn còn chứa đúng phiên đó, app cũng sẽ tự động bỏ qua nó, "
-            "không để nó lén quay lại làm số liệu của bạn sai lệch.")
+            "Tôi đã lỡ xoá một phiên rồi — nạp lại CSV thì nó có sống lại không?",
+            "Không, phiên đó sẽ không sống lại. Mỗi phiên bị xoá đều được ứng dụng ghi nhớ cẩn thận trong một "
+            "bảng riêng tên là `deleted_sessions`. Vậy nên mọi lần nạp CSV về sau, kể cả khi file gốc vẫn còn "
+            "chứa đúng phiên đó, ứng dụng cũng sẽ tự động bỏ qua, không để nó quay lại làm sai lệch số liệu.")
         help_faq_item(
             "Vì sao tháng này nhìn vào thấy sụt giảm mạnh so với tháng trước, có phải tôi đang lười đi không?",
-            "Trước khi hoảng, hãy kiểm tra một điều đơn giản: tháng này **đã đi hết chưa**, hay mới chỉ vừa bắt "
-            "đầu được vài ngày? Với một kỳ chưa kết thúc, app sẽ tự động cắt bớt cả hai mốc so sánh (baseline) "
+            "Trước khi lo lắng, hãy kiểm tra một điều đơn giản: tháng này **đã trôi hết chưa**, hay mới vừa "
+            "bắt đầu được vài ngày? Với một kỳ chưa kết thúc, ứng dụng sẽ tự động cắt bớt cả hai mốc so sánh "
             "xuống cho khớp đúng số ngày đã trôi qua, và ghi rõ điều này bằng một dòng caption nhỏ ngay phía "
-            "trên Bảng số liệu — nếu thấy dòng caption đó xuất hiện, nghĩa là con số so sánh bạn đang xem đã "
-            "được làm công bằng rồi, không phải bạn đang tệ đi đâu. Còn nếu kỳ đã trọn vẹn hoàn toàn mà vẫn "
-            "thấy lệch, thì nhớ là chênh lệch trong khoảng ±20% vẫn được xem là dao động rất bình thường của "
-            "cuộc sống — chỉ thực sự đáng bận tâm khi độ lệch lớn hẳn và bạn đã biết rõ lý do vì sao.")
+            "trên Bảng số liệu — nếu thấy dòng caption đó, nghĩa là con số so sánh đã được làm công bằng, "
+            "không phải bạn đang tệ đi. Còn nếu kỳ đã trọn vẹn mà vẫn thấy lệch, xin nhớ rằng chênh lệch "
+            "trong khoảng ±20% vẫn được xem là dao động bình thường — chỉ thực sự đáng bận tâm khi độ lệch "
+            "lớn hẳn và bạn đã biết rõ nguyên do.")
         help_faq_item(
-            "Hai ngày có cùng tổng số giờ y hệt nhau, vì sao \"cảm giác\" về chúng lại khác nhau một trời một vực?",
-            "Câu trả lời nằm ở **Thanh phân bố độ dài phiên**: cùng là 6 tiếng đồng hồ, nhưng một ngày có thể là "
-            "4 phiên tập trung sâu, mỗi phiên kéo dài 90 phút liền mạch; còn ngày kia lại là 20 phiên vụn vặt "
-            "chỉ 15 phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau tuyệt đối, nhưng chất lượng tập "
-            "trung thì khác xa nhau — đây chính là lý do vì sao chỉ nhìn mỗi con số tổng thôi là chưa đủ. Muốn "
-            "đào sâu hơn nữa thì xem thẻ **Độ dài phiên** trong chương Tổng quan (ở Báo cáo → Dự án), rê chuột "
-            "vào từng khoảng để xem số phiên chi tiết.")
+            "Hai ngày có cùng tổng số giờ, vì sao cảm giác về chúng lại khác nhau nhiều đến vậy?",
+            "Câu trả lời nằm ở **Thanh phân bố độ dài phiên**: cùng là sáu giờ đồng hồ, nhưng một ngày có thể "
+            "là bốn phiên tập trung sâu, mỗi phiên kéo dài chín mươi phút liền mạch; ngày kia lại là hai mươi "
+            "phiên vụn vặt chỉ mười lăm phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau, nhưng chất "
+            "lượng tập trung khác xa nhau — đó là lý do vì sao chỉ nhìn con số tổng là chưa đủ. Muốn đào sâu "
+            "hơn, hãy xem thẻ **Độ dài phiên** trong chương Tổng quan (ở Báo cáo → Dự án), rê chuột vào từng "
+            "khoảng để xem số phiên chi tiết.")
         help_faq_item(
-            "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của app là ngày nào?",
-            "Luôn luôn là giờ Việt Nam, không có ngoại lệ nào cả — mọi phép tính liên quan tới ngày tháng trong "
-            "toàn bộ app đều đi qua đúng một hàm lấy giờ Việt Nam duy nhất. Nên dù server chạy ở múi giờ UTC "
-            "hay bất kỳ múi giờ nào khác trên thế giới, ngày của bạn cũng sẽ không bao giờ tự dưng bị lệch sớm "
-            "hoặc muộn mất 7 tiếng đồng hồ so với đồng hồ thật bạn đang đeo trên tay.")
+            "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của ứng dụng?",
+            "Luôn luôn là giờ Việt Nam, không có ngoại lệ — mọi phép tính liên quan tới ngày tháng trong toàn "
+            "bộ ứng dụng đều đi qua đúng một hàm lấy giờ Việt Nam duy nhất. Dù máy chủ chạy ở múi giờ UTC hay "
+            "bất kỳ múi giờ nào khác, ngày của bạn cũng sẽ không bao giờ lệch sớm hoặc muộn mất bảy giờ so "
+            "với đồng hồ thật.")
         help_faq_item(
-            "Trích dẫn hôm nay đổi câu mới vào lúc nào vậy, sao thấy nó cứ y nguyên hoài?",
-            "Đúng 1 lần mỗi ngày thôi, và đổi theo **ngày thật** hôm nay chứ không phải theo ngày bạn đang xem "
-            "trên trang (hai cái này có thể khác nhau nếu bạn đang lùi về xem ngày cũ). Có tải lại trang bao "
-            "nhiêu lần, hay lùi tới/tiến lui xem các ngày khác nhau đi nữa, câu trích dẫn vẫn giữ nguyên y hệt "
-            "— chỉ khi thực sự sang một ngày mới thì mới có câu mới xuất hiện, giữ đúng cảm giác \"quote of the "
-            "day\" như một cuốn lịch để bàn. Câu được chọn hoàn toàn ngẫu nhiên từ toàn bộ kho trích dẫn Kindle "
-            "bạn đã nạp vào app.\n\n"
-            "Muốn xem câu khác ngay lập tức thì bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ Yêu thích — chỉ "
-            "đổi tạm trong lúc đang xem, sang ngày mới thì lại quay về chọn theo ngày như bình thường, không "
-            "giữ lại lựa chọn xáo tay của hôm trước.")
+            "Trích dẫn hôm nay đổi câu mới vào lúc nào, sao thấy nó cứ y nguyên?",
+            "Đúng một lần mỗi ngày, và đổi theo **ngày thật** hôm nay chứ không phải theo ngày bạn đang xem "
+            "trên trang (hai điều này có thể khác nhau nếu bạn đang lùi về xem ngày cũ). Tải lại trang bao "
+            "nhiêu lần, hay lùi tới tiến lui xem các ngày khác, câu trích dẫn vẫn giữ nguyên — chỉ khi thực "
+            "sự sang một ngày mới mới có câu mới xuất hiện, như một tấm lịch để bàn. Câu được chọn hoàn toàn "
+            "ngẫu nhiên từ toàn bộ kho trích dẫn Kindle bạn đã nạp vào ứng dụng.\n\n"
+            "Muốn xem câu khác ngay, bấm nút xáo (biểu tượng trộn bài) cạnh nút ⭐ Yêu thích — thay đổi này "
+            "chỉ tạm thời trong lúc đang xem, sang ngày mới sẽ lại quay về chọn theo ngày như bình thường.")
         help_faq_item(
-            "Vừa nạp trích dẫn từ 1 cuốn sách hoàn toàn mới, chưa từng theo dõi tiến độ đọc — nó có hiện lên "
-            "Trích dẫn hôm nay không, hay phải đợi ghép với Dự án trước đã?",
-            "Hiện được ngay, không cần đợi gì cả. Lúc nạp *My Clippings.txt* ở Tuỳ biến → \"Tải trích dẫn "
-            "Kindle\", nếu app gặp 1 cuốn/nguồn hoàn toàn mới, nó sẽ bắt bạn xác nhận ghép với 1 Dự án đang "
-            "theo dõi, hoặc để nguyên \"Nguồn độc lập\" kèm 1 cái tên tự đặt (hợp cho tạp chí, hay sách bạn "
-            "chưa track qua Reminders) — nhưng bước xác nhận này và bước lưu trích dẫn thật sự diễn ra CÙNG "
-            "một lúc, chỉ sau đúng 1 lần bấm nút. Trích dẫn hôm nay chọn ngẫu nhiên trên toàn bộ kho, không "
-            "quan tâm cuốn đó đã ghép Dự án hay còn để độc lập — nên ngay từ lần import đầu tiên, trích dẫn "
-            "của cuốn sách mới đã có cơ hội xuất hiện y hệt mọi trích dẫn khác.\n\n"
-            "Có 1 điều cần nhớ: bước xác nhận ghép Dự án/đặt tên đó **chỉ hỏi đúng 1 lần** cho mỗi tên sách — "
-            "nếu lỡ chọn nhầm, hoặc sau này mới thật sự bắt đầu theo dõi tiến độ đọc cuốn từng để \"độc lập\" "
-            "qua Reminders, vào lại đúng tab \"Tải trích dẫn Kindle\" đó — ngay dưới ô tải file luôn có sẵn "
-            "1 bảng **\"Ánh xạ đã lưu\"** liệt kê mọi cuốn/nguồn đã từng ghép, sửa lại Dự án hoặc tên hiển thị "
-            "ngay tại đó rồi bấm Lưu, không cần nạp lại file gốc.")
+            "Vừa nạp trích dẫn từ một cuốn sách hoàn toàn mới, chưa từng theo dõi tiến độ đọc — nó có hiện "
+            "lên Trích dẫn hôm nay không, hay phải đợi ghép với Dự án trước?",
+            "Hiện được ngay, không cần đợi. Khi nạp *My Clippings.txt* ở Tuỳ biến → \"Tải trích dẫn "
+            "Kindle\", nếu gặp một cuốn hoặc nguồn hoàn toàn mới, ứng dụng sẽ hỏi bạn xác nhận ghép với một "
+            "Dự án đang theo dõi, hoặc để nguyên \"Nguồn độc lập\" kèm một tên tự đặt (hợp cho tạp chí, hay "
+            "sách bạn chưa theo dõi qua Reminders) — bước xác nhận này và bước lưu trích dẫn diễn ra cùng "
+            "một lúc, chỉ sau đúng một lần bấm nút. Trích dẫn hôm nay chọn ngẫu nhiên trên toàn bộ kho, "
+            "không phân biệt cuốn đó đã ghép Dự án hay còn để độc lập — nên ngay từ lần nhập đầu tiên, trích "
+            "dẫn của cuốn sách mới đã có cơ hội xuất hiện như mọi trích dẫn khác.\n\n"
+            "Một điều cần nhớ: bước xác nhận ghép Dự án hoặc đặt tên đó **chỉ hỏi đúng một lần** cho mỗi tên "
+            "sách — nếu lỡ chọn nhầm, hoặc sau này mới bắt đầu theo dõi tiến độ đọc cuốn từng để \"độc "
+            "lập\" qua Reminders, hãy vào lại tab \"Tải trích dẫn Kindle\" — ngay dưới ô tải file có sẵn "
+            "một bảng **\"Ánh xạ đã lưu\"** liệt kê mọi cuốn hoặc nguồn đã từng ghép, sửa lại Dự án hoặc "
+            "tên hiển thị ngay tại đó rồi bấm Lưu, không cần nạp lại file gốc.")
         help_faq_item(
-            "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu cho đúng?",
-            "Cứ tìm tới expander **\"Sửa gán series tự động\"** nằm ở tít cuối trang Gundam (mục này chỉ xuất "
-            "hiện khi bạn có từ 2 series trở lên, vì có 1 series thì chẳng cần đoán làm gì): chọn lại đúng "
-            "series cho từng ngày bị gán sai rồi bấm nút Lưu gán series là xong. Ngày nào bạn đã sửa tay sẽ "
-            "được đánh dấu bằng nhãn \"Gán tay\" cho dễ phân biệt với phần app tự đoán — còn nếu "
-            "sau này bạn sửa lại đúng trùng khớp với kết quả suy luận tự động ban đầu, cái nhãn đó sẽ tự động "
-            "biến mất, coi như quay về trạng thái tự động như chưa từng có chuyện gì xảy ra.")
+            "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu?",
+            "Hãy tìm tới mục **\"Sửa gán series tự động\"** ở cuối trang Gundam (mục này chỉ xuất hiện khi "
+            "có từ hai series trở lên, vì một series thì không cần đoán): chọn lại đúng series cho từng "
+            "ngày bị gán sai rồi bấm Lưu gán series là xong. Ngày đã sửa tay sẽ được đánh dấu bằng nhãn "
+            "\"Gán tay\" để dễ phân biệt với phần ứng dụng tự đoán — còn nếu sau này bạn sửa lại "
+            "đúng trùng với kết quả suy luận tự động ban đầu, nhãn đó sẽ tự biến mất.")
         help_faq_item(
-            "Đổi màu accent xong, mấy cái biểu đồ có tự đổi màu theo không hay phải làm gì thêm?",
-            "Có chứ, và đổi ngay lập tức không cần bạn làm gì thêm cả — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu "
-            "chữ trong ô ghi chú cũng đổi theo luôn một lượt. Lý do là vì màu accent bạn chọn được quy đổi ngay "
-            "thành một giá trị hue duy nhất, rồi mọi dải màu đơn sắc trong toàn bộ app đều tự động xoay theo "
-            "đúng hue đó — nên sẽ không có chuyện một biểu đồ nào đó bị \"bỏ sót\" vẫn giữ màu cũ trong khi chỗ "
-            "khác đã đổi hết rồi.")
+            "Đổi màu accent xong, các biểu đồ có tự đổi màu theo không?",
+            "Có, và đổi ngay lập tức không cần làm gì thêm — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu chữ "
+            "trong ô ghi chú cũng đổi theo cùng lúc. Lý do là màu accent bạn chọn được quy đổi ngay thành "
+            "một giá trị sắc độ duy nhất, rồi mọi dải màu đơn sắc trong toàn bộ ứng dụng đều tự động xoay "
+            "theo đúng sắc độ đó — nên không có biểu đồ nào bị bỏ sót, vẫn giữ màu cũ trong khi chỗ khác đã "
+            "đổi hết.")
         help_faq_item(
-            "Sao bấm phím tắt hoài mà không thấy chạy gì cả, app có bị lỗi không?",
-            "Nhiều khả năng không phải lỗi đâu, mà gần như chắc chắn là con trỏ chuột của bạn đang nằm sẵn "
-            "trong một ô nhập liệu nào đó (như ô ghi chú, ô tìm kiếm...) — mọi phím tắt sẽ tự động im lặng khi "
-            "rơi vào tình huống này, để tránh việc bạn gõ chữ bình thường mà app lại tưởng nhầm là đang bấm "
-            "phím tắt rồi nhảy lung tung trang. Ngoại lệ duy nhất là Ctrl/Cmd+Enter và Esc ngay trong ô ghi "
-            "chú, hai phím này vẫn hoạt động dù đang gõ. Cứ bấm `Esc` hoặc click chuột ra khoảng trống bên "
-            "ngoài rồi thử lại là được; còn nếu đang giữ sẵn phím Ctrl/Cmd/Alt thì phím tắt cũng sẽ không nhận, "
-            "vì lúc đó app nghĩ bạn đang định làm một tổ hợp phím khác của trình duyệt.")
+            "Bấm phím tắt hoài mà không thấy chạy gì cả, ứng dụng có bị lỗi không?",
+            "Nhiều khả năng không phải lỗi, mà gần như chắc chắn là con trỏ chuột đang nằm sẵn trong một ô "
+            "nhập liệu nào đó (như ô ghi chú, ô tìm kiếm...) — mọi phím tắt sẽ tự động im lặng trong tình "
+            "huống này, để tránh việc bạn gõ chữ bình thường mà ứng dụng lại hiểu nhầm là đang bấm phím "
+            "tắt. Ngoại lệ duy nhất là Ctrl/Cmd+Enter và Esc ngay trong ô ghi chú, hai phím này vẫn hoạt "
+            "động dù đang gõ. Cứ bấm `Esc` hoặc nhấp chuột ra khoảng trống bên ngoài rồi thử lại; còn nếu "
+            "đang giữ sẵn phím Ctrl/Cmd/Alt, phím tắt cũng sẽ không nhận, vì lúc đó ứng dụng hiểu là bạn "
+            "đang dùng một tổ hợp phím khác của trình duyệt.")
         help_faq_item(
-            "Ghi chú của tôi có bị mất khi app khởi động lại hoặc được redeploy lên phiên bản mới không?",
-            "Không mất đâu, cứ an tâm — toàn bộ dữ liệu đều nằm trên Supabase chứ không nằm trong bộ nhớ tạm "
-            "của app, nên nó hoàn toàn không phụ thuộc vào vòng đời sống chết của app cả. Tuy vậy, cần nhớ rằng "
-            "ghi chú là loại dữ liệu **duy nhất trong cả app không thể nạp lại được từ bất kỳ nguồn ngoài nào** "
-            "nếu chẳng may có sự cố gì đó thực sự nghiêm trọng xảy ra với Supabase — nên vẫn nên duy trì thói "
-            "quen bấm Sao lưu định kỳ (app sẽ tự nhắc bạn sau mỗi 30 ngày nếu quên) để có thêm một lớp an toàn "
-            "thứ hai, phòng xa cho chắc.")
+            "Ghi chú của tôi có bị mất khi ứng dụng khởi động lại hoặc lên phiên bản mới không?",
+            "Không mất, cứ an tâm — toàn bộ dữ liệu đều nằm trên Supabase, không nằm trong bộ nhớ tạm của "
+            "ứng dụng, nên hoàn toàn không phụ thuộc vào việc ứng dụng khởi động lại hay không. Tuy vậy, "
+            "cần nhớ rằng ghi chú là loại dữ liệu **duy nhất trong ứng dụng không thể nạp lại được từ bất "
+            "kỳ nguồn nào khác** nếu chẳng may có sự cố nghiêm trọng xảy ra với Supabase — nên vẫn nên duy "
+            "trì thói quen bấm Sao lưu định kỳ (ứng dụng sẽ tự nhắc sau mỗi 30 ngày nếu quên) để có thêm "
+            "một lớp an toàn dự phòng.")
 
     # ==========================================
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
@@ -10158,173 +10165,189 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
-        dict(pr="192", date="16/07/2026", pr_lines=1784, total_lines=8004,
-             title="Billboard đầu trang cho Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ + một loạt sửa lỗi vặt",
+        dict(pr="223", date="18/07/2026", pr_lines=962, total_lines=10324,
+             title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, thuần Việt",
              bullets=[
-                 "**Trang Hôm nay có một tấm billboard mới** — gộp thẻ “Ngày đang xem”, thẻ trích dẫn "
-                 "hôm nay và hàng chip mục lục thành một khối duy nhất, kiểu tờ lịch xé hằng ngày: số "
-                 "ngày to bên trái, trích dẫn Kindle bên phải, có gạch dọc ngăn ở giữa và dòng “Cập nhật "
-                 "gần nhất” tự nhích theo thời gian thực.",
-                 "**Bố cục “chương cuộn dọc” của trang Trợ giúp giờ lan sang cả app** — Báo cáo (Tổng "
+                 "**Trang Trợ giúp được viết lại toàn bộ** — cả 9 chương, phần Câu hỏi thường gặp, "
+                 "và mọi mục Nhật ký phát triển cũ đều đổi sang giọng điềm đạm, mạch lạc hơn, không "
+                 "đổi cấu trúc chương hay số liệu.",
+                 "**Câu “điểm nhấn” ở Báo cáo Tuần/Tháng/Năm đổi giọng** — trước đây viết theo kiểu "
+                 "đùa vui “người làm vườn” (ví dụ ví ổn định là “chủ vườn đáng nể”), giờ chuyển sang "
+                 "những nhận xét điềm đạm hơn, vẫn giữ ẩn dụ cây và rừng của Forest nhưng ở mức vừa "
+                 "phải, không còn đùa cợt.",
+                 "**Thuần Việt hoá một số từ mượn** — “app” đổi thành “ứng dụng” ở mọi nơi hiển thị "
+                 "cho người dùng, “billboard” đổi thành “khung tóm lược”, “wordmark” đổi thành “dòng "
+                 "chữ hiệu”.",
+                 "Cùng với đó là một loạt thông báo trạng thái (rỗng, lỗi, thành công) ở Sách, "
+                 "Gundam, Sức khoẻ, Tuỳ biến và màn hình đăng nhập được viết lại cho nhất quán, bỏ "
+                 "dấu chấm than và câu mệnh lệnh suồng sã. Không có gì đổi về mặt tính năng hay số "
+                 "liệu — đây thuần là một đợt chỉnh lại lời văn.",
+             ]),
+        dict(pr="192", date="16/07/2026", pr_lines=1784, total_lines=8004,
+             title="Khung tóm lược đầu trang cho Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ và một loạt sửa lỗi nhỏ",
+             bullets=[
+                 "**Trang Hôm nay có một khung tóm lược mới** — gộp thẻ “Ngày đang xem”, thẻ trích dẫn "
+                 "hôm nay và hàng chip mục lục thành một khối duy nhất, như một tờ lịch xé hằng ngày: số "
+                 "ngày lớn bên trái, trích dẫn Kindle bên phải, có gạch dọc ngăn ở giữa và dòng “Cập "
+                 "nhật gần nhất” tự cập nhật theo thời gian thực.",
+                 "**Bố cục chương cuộn dọc của trang Trợ giúp giờ lan sang cả ứng dụng** — Báo cáo (Tổng "
                  "quan/Tuần/Tháng/Năm/Dự án), Sách/Gundam (Chi tiết) và Sức khoẻ (Báo cáo) đều đổi từ "
-                 "các mục gập (expander) đánh số sang billboard + chip mục lục nhảy nhanh, chương nào "
-                 "cũng hiện sẵn khi cuộn thay vì phải bấm mở từng mục.",
-                 "**Tinh chỉnh lại billboard sau vài vòng xem thử** — bỏ dòng kicker in hoa và câu mô "
-                 "tả thừa ở mọi billboard (trừ đúng trang Trợ giúp), nới khoảng cách xuống nội dung bên "
-                 "dưới, và bỏ hẳn billboard ở những sub-tab chỉ có một khối nội dung, không có gì để "
-                 "mục lục chip trỏ tới (Sách/Gundam → Tổng quan). Sức khoẻ có thêm dòng “Cập nhật lần "
-                 "cuối X trước”.",
-                 "**Sửa một bug mất nội dung khá khó chịu** — bấm “Gộp” một ghi chú nhanh vào ô soạn "
-                 "đang mở sẵn trước đó không đưa được nội dung thật vào ô soạn (component soạn thảo "
-                 "không tự vẽ lại), giờ đã remount đúng lúc để nội dung gộp hiện ra thật sự.",
+                 "các mục gập đánh số sang khung tóm lược cùng chip mục lục nhảy nhanh, chương nào cũng "
+                 "hiện sẵn khi cuộn thay vì phải bấm mở từng mục.",
+                 "**Tinh chỉnh lại khung tóm lược sau vài vòng xem thử** — bỏ dòng kicker in hoa và câu "
+                 "mô tả thừa ở mọi khung tóm lược (trừ đúng trang Trợ giúp), nới khoảng cách xuống nội "
+                 "dung bên dưới, và bỏ hẳn khung tóm lược ở những sub-tab chỉ có một khối nội dung, "
+                 "không có gì để mục lục chip trỏ tới (Sách/Gundam → Tổng quan). Sức khoẻ có thêm dòng "
+                 "“Cập nhật lần cuối X trước”.",
+                 "**Sửa một lỗi mất nội dung khá khó chịu** — bấm “Gộp” một ghi chú nhanh vào ô soạn "
+                 "đang mở sẵn trước đó không đưa được nội dung thật vào ô soạn (khung soạn thảo không "
+                 "tự vẽ lại), giờ đã dựng lại đúng lúc để nội dung gộp hiện ra thật sự.",
                  "**Một loạt tinh chỉnh nhỏ khác** — nút Gộp/Sửa/Xoá ở ghi chú nhanh không còn vỡ xuống "
-                 "dòng, popup chọn ngày dịch hẳn sang tiếng Việt, dòng thời gian trong ngày đổi sang "
-                 "style minh hoạ có chú giải theo Nhóm, Báo cáo Tuần/Tháng ẩn heading “Ghi chú chính” "
-                 "khi không còn ghi chú nhanh đi kèm, tab Sách đổi thứ tự Tổng quan/Yêu thích/Chi tiết, "
-                 "và thêm 2 màu accent mới (Cam đất, Ô liu).",
+                 "dòng, khung chọn ngày dịch hẳn sang tiếng Việt, dòng thời gian trong ngày đổi sang "
+                 "kiểu minh hoạ có chú giải theo Nhóm, Báo cáo Tuần/Tháng ẩn tiêu đề “Ghi chú chính” khi "
+                 "không còn ghi chú nhanh đi kèm, tab Sách đổi thứ tự Tổng quan/Yêu thích/Chi tiết, và "
+                 "thêm hai màu accent mới (Cam đất, Ô liu).",
              ]),
         dict(pr="185-190", date="16/07/2026", pr_lines=1606, total_lines=7820,
-             title="Dọn dẹp bloat, sửa lỗi vặt, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
+             title="Dọn bớt phần thừa, sửa lỗi nhỏ, và làm lại toàn bộ trang Trợ giúp bạn đang đọc",
              bullets=[
-                 "**Sửa một lỗi khá xấu hổ** — tab “Cập nhật” của trang Trợ giúp (phiên bản cũ) "
-                 "từng bị trống trơn mỗi khi mở lên, vì nội dung lỡ bị đặt nhầm vào đúng chỉ số của tab "
-                 "“Tuỳ biến” phía trên thay vì tab “Cập nhật” thật sự — coi như suốt một "
-                 "thời gian, những dòng nhật ký này đã âm thầm nằm sai chỗ mà không ai nhận ra. Nhân tiện "
-                 "sửa luôn, cũng đổi font cho thẻ Trích dẫn hôm nay sang Cormorant Garamond tự host, đọc có "
-                 "không khí sách vở hơn hẳn.",
+                 "**Sửa một lỗi khá đáng tiếc** — tab “Cập nhật” của trang Trợ giúp (phiên bản cũ) "
+                 "từng trống trơn mỗi khi mở lên, vì nội dung lỡ bị đặt nhầm vào chỉ số của tab "
+                 "“Tuỳ biến” phía trên thay vì tab “Cập nhật” thật sự — suốt một thời gian, "
+                 "những dòng nhật ký này đã âm thầm nằm sai chỗ mà không ai nhận ra. Nhân đó cũng đổi "
+                 "kiểu chữ cho thẻ Trích dẫn hôm nay sang Cormorant Garamond, đọc có không khí sách vở "
+                 "hơn.",
                  "**Một đợt dọn dẹp diện rộng** — dời mục “Ngày này năm trước” lên ngay sau Ghi "
-                 "chú ngày cho hợp lý luồng đọc, bớt vài số liệu và biểu đồ ít ai thực sự dùng tới ở trang "
-                 "Báo cáo, lọc bớt tên sách ra khỏi danh sách chọn Dự án (vì nó đã có chỗ riêng ở trang "
-                 "Sách rồi), sửa lỗi trùng lặp chỉ số trong thẻ “Ngoài khoảng tham chiếu” của "
-                 "Sức khoẻ, và để trang Tuỳ biến mặc định chỉ mở đúng mục 1 thay vì mở tung hết cả 5 mục "
-                 "gây rối mắt.",
+                 "chú ngày cho hợp lý luồng đọc, bớt vài số liệu và biểu đồ ít được dùng tới ở trang Báo "
+                 "cáo, lọc bớt tên sách khỏi danh sách chọn Dự án (vì đã có chỗ riêng ở trang Sách), sửa "
+                 "lỗi trùng lặp chỉ số trong thẻ “Ngoài khoảng tham chiếu” của Sức khoẻ, và để "
+                 "trang Tuỳ biến mặc định chỉ mở đúng mục 1 thay vì mở tung cả năm mục gây rối mắt.",
                  "**Vài lượt sửa lỗi giao diện nhỏ khác** — nhãn buổi trong biểu đồ khung giờ tập trung "
                  "không còn đè lên chú giải, khử trùng lặp chỉ số Bilirubin ở Sức khoẻ, khoảng tham chiếu "
-                 "tự điền sẵn cho đỡ gõ tay, và thẻ trích dẫn ở tab Yêu thích không còn bị chữ dòng cuối ăn "
-                 "lẹm vào lề dưới.",
-                 "**Dọn mã nguồn phía sau hậu trường** — gộp hai khối logic gần như giống hệt nhau (cách "
-                 "tính phần trăm thời gian đã trôi qua trong kỳ, và cách nạp vài bảng dữ liệu dạng phẳng) "
-                 "thành 2 hàm dùng chung, giúp mã nguồn gọn hơn một chút mà không đổi bất kỳ tính năng nào "
-                 "người dùng nhìn thấy. Kèm theo là một đợt rà soát để sửa vài chỗ tài liệu nội bộ đã lỡ "
-                 "ghi sai lệch so với code thật.",
-                 "**Và đây, chính là trang Trợ giúp bạn đang đọc** — được làm lại hoàn toàn từ đầu, bỏ hẳn "
-                 "58 tấm screenshot cồng kềnh, đổi từ 8 tab ngang sang một trang cuộn dọc kể chuyện theo "
-                 "đúng nhịp một ngày sử dụng thật, thêm mấy hình minh hoạ vẽ tay thuần CSS, một mục cheat-"
-                 "sheet tra nhanh, và cả phần Câu hỏi thường gặp này nữa — hy vọng đọc vào thấy dễ chịu hơn "
-                 "hẳn bản cũ.",
+                 "tự điền sẵn cho đỡ gõ tay, và thẻ trích dẫn ở tab Yêu thích không còn bị chữ dòng cuối "
+                 "lấn vào lề dưới.",
+                 "**Dọn mã nguồn phía sau** — gộp hai khối logic gần giống nhau (cách tính phần trăm "
+                 "thời gian đã trôi qua trong kỳ, và cách nạp vài bảng dữ liệu dạng phẳng) thành hai hàm "
+                 "dùng chung, giúp mã nguồn gọn hơn mà không đổi bất kỳ tính năng nào người dùng nhìn "
+                 "thấy. Kèm theo là một đợt rà soát để sửa vài chỗ tài liệu nội bộ ghi sai lệch so với "
+                 "mã nguồn thật.",
+                 "**Và đây, chính là trang Trợ giúp bạn đang đọc** — được làm lại hoàn toàn từ đầu, bỏ "
+                 "hẳn 58 tấm ảnh chụp màn hình cồng kềnh, đổi từ tám tab ngang sang một trang cuộn dọc kể "
+                 "chuyện theo đúng nhịp một ngày sử dụng thật, thêm mấy hình minh hoạ vẽ tay thuần CSS, "
+                 "một mục tra cứu nhanh, và cả phần Câu hỏi thường gặp này — hy vọng đọc vào thấy dễ "
+                 "chịu hơn bản cũ.",
              ]),
         dict(pr="182-184", date="15/07/2026", pr_lines=69, total_lines=7690,
-             title="Trích dẫn Kindle: thẻ nổi bật + Yêu thích + gộp bản nháp bút cảm ứng",
+             title="Trích dẫn Kindle: thẻ nổi bật, tính năng Yêu thích, và gộp bản nháp bút cảm ứng",
              bullets=[
-                 "**Trích dẫn hôm nay được lên đời** — thẻ trích dẫn này được chuyển hẳn lên đầu trang Hôm "
-                 "nay, nằm ngay dưới thẻ “Ngày đang xem” cho dễ thấy ngay khi vừa mở app, đổi "
-                 "sang nền màu accent đậm đà, chữ trích dẫn được phóng cỡ lớn theo kiểu chữ sách cho có "
-                 "không khí văn chương hơn, và có thêm tên tác giả đứng cạnh tên sách để biết ngay câu này "
-                 "trích từ đâu.",
+                 "**Trích dẫn hôm nay được nâng cấp** — thẻ trích dẫn này chuyển hẳn lên đầu trang Hôm "
+                 "nay, nằm ngay dưới thẻ “Ngày đang xem” để dễ thấy ngay khi vừa mở ứng dụng, "
+                 "đổi sang nền màu accent đậm, chữ trích dẫn được phóng cỡ lớn theo kiểu chữ sách để có "
+                 "không khí văn chương hơn, và có thêm tên tác giả đứng cạnh tên sách để biết ngay câu "
+                 "này trích từ đâu.",
                  "**Tính năng Yêu thích ra mắt** — giờ đây bạn có thể bấm dấu ★ trên bất kỳ trích dẫn hay "
                  "ghi chú Kindle nào để đánh dấu lưu lại, rồi xem gộp toàn bộ những gì đã đánh dấu ở một "
                  "sub-tab riêng tên là “Yêu thích” (nằm trong trang Sách) — mỗi trích dẫn được đặt "
                  "trong một thẻ nền riêng biệt cho dễ đọc và dễ phân biệt, thay vì trước đây chỉ là những "
-                 "hàng chữ trần trụi xếp chồng lên nhau.",
-                 "**Việc import Kindle trở nên thông minh hơn hẳn** — app giờ tự nhận diện và gộp lại các "
-                 "“bản nháp” sinh ra do thói quen tô highlight bằng bút cảm ứng (những dòng gần "
-                 "giống hệt nhau, cách nhau chỉ vài giây, câu sau luôn dài hơn câu trước một chút do tay "
-                 "kéo thêm), rồi chỉ giữ lại đúng bản đầy đủ nhất — thay vì trước kia mỗi lần tô một "
-                 "highlight lại vô tình sinh ra cả chục trích dẫn trùng lặp gây rối mắt.",
-                 "Ngoài ra còn kèm theo một số việc dọn dẹp nhỏ: sửa lỗi giao diện khiến tab Gundam bị mất "
-                 "kiểu dáng, sửa nút ★ bị chồng đè lên chữ trông rối mắt, dọn bớt các dòng heading dư thừa "
-                 "ở nhiều bảng số liệu cho gọn gàng hơn, và đổi cách hiển thị Thứ trong Nhật ký từ dạng số "
-                 "sang chữ đầy đủ (ghi “Thứ Tư” thay vì chỉ “Thứ 4” cộc lốc, đọc tự nhiên hơn hẳn).",
+                 "hàng chữ trần xếp chồng lên nhau.",
+                 "**Việc nhập trích dẫn Kindle trở nên thông minh hơn** — ứng dụng giờ tự nhận diện và "
+                 "gộp lại các “bản nháp” sinh ra do thói quen tô highlight bằng bút cảm ứng "
+                 "(những dòng gần giống nhau, cách nhau chỉ vài giây, câu sau luôn dài hơn câu trước một "
+                 "chút do tay kéo thêm), rồi chỉ giữ lại đúng bản đầy đủ nhất — thay vì trước kia mỗi lần "
+                 "tô một highlight lại vô tình sinh ra cả chục trích dẫn trùng lặp gây rối mắt.",
+                 "Ngoài ra còn kèm theo một số việc dọn dẹp nhỏ: sửa lỗi giao diện khiến tab Gundam mất "
+                 "kiểu dáng, sửa nút ★ bị chồng đè lên chữ, dọn bớt các dòng tiêu đề dư thừa ở nhiều bảng "
+                 "số liệu cho gọn gàng hơn, và đổi cách hiển thị Thứ trong Nhật ký từ dạng số sang chữ "
+                 "đầy đủ (ghi “Thứ Tư” thay vì chỉ “Thứ 4”, đọc tự nhiên hơn).",
              ]),
         dict(pr="181", date="15/07/2026", pr_lines=960, total_lines=7448,
-             title="Rà soát & đơn giản hoá theo phản hồi thực tế",
+             title="Rà soát và đơn giản hoá theo phản hồi thực tế",
              bullets=[
-                 "Sau một thời gian dùng thật, một số tính năng hoá ra không đáng công sức bằng ban đầu "
-                 "tưởng nên đã được cắt bỏ để app gọn nhẹ hơn: khối Top 3 Danh mục/Dự án ở trang Hôm nay và "
-                 "Báo cáo → Tuần, biểu đồ Gantt tự vẽ ở trang Sách/Gundam → Tổng quan (đẹp nhưng ít ai nhìn "
-                 "tới), và vài phím tắt ít khi được dùng đến (Shift+1 tới 5, dấu ngoặc vuông, các phím "
-                 "f/r/l).",
-                 "Đổi lại, có khá nhiều thứ hữu ích được thêm vào: nút “Gộp” để chuyển thẳng "
-                 "ghi chú nhanh vào ghi chú chính chỉ với một cú bấm, khả năng sửa tay khi việc gán series "
-                 "Gundam tự động lỡ đoán sai, một view mới tên “Chỉ số bất thường” hiện ngay ở lần "
-                 "khám Sức khoẻ gần nhất, phạm vi tìm kiếm của trang Tìm kiếm được mở rộng sang cả Ghi chú "
-                 "nhanh, thêm ô checkbox xác nhận bắt buộc trước khi bấm “Khôi phục” cho an toàn "
-                 "hơn, và gộp hai giao diện đồng bộ CalDAV vốn tách rời nhau thành một chỗ duy nhất cho đỡ "
+                 "Sau một thời gian sử dụng thật, một số tính năng hoá ra không đáng công sức như ban "
+                 "đầu tưởng nên đã được cắt bỏ để ứng dụng gọn nhẹ hơn: khối Top 3 Danh mục/Dự án ở "
+                 "trang Hôm nay và Báo cáo → Tuần, biểu đồ dòng thời gian tự vẽ ở trang Sách/Gundam → "
+                 "Tổng quan (đẹp nhưng ít được xem tới), và vài phím tắt ít khi dùng đến (Shift+1 tới 5, "
+                 "dấu ngoặc vuông, các phím f/r/l).",
+                 "Đổi lại, có khá nhiều điều hữu ích được thêm vào: nút “Gộp” để chuyển thẳng "
+                 "ghi chú nhanh vào ghi chú chính chỉ với một lần bấm, khả năng sửa tay khi việc gán "
+                 "series Gundam tự động lỡ đoán sai, một mục mới tên “Chỉ số bất thường” hiện ngay "
+                 "ở lần khám Sức khoẻ gần nhất, phạm vi tìm kiếm của trang Tìm kiếm được mở rộng sang cả "
+                 "Ghi chú nhanh, thêm ô xác nhận bắt buộc trước khi bấm “Khôi phục” cho an toàn hơn, "
+                 "và gộp hai giao diện đồng bộ CalDAV vốn tách rời nhau thành một chỗ duy nhất cho đỡ "
                  "rối.",
              ]),
         dict(pr="158-165", date="06/07/2026", pr_lines=46, total_lines=6115,
-             title="Bảng vàng (Ngày nổi bật & Kỷ lục) + Ghi chú nhanh từ iOS",
+             title="Bảng vàng (Ngày nổi bật và Kỷ lục), Ghi chú nhanh từ iOS",
              bullets=[
                  "**Bảng vàng ra đời** — Bảng số liệu ở mỗi trang Báo cáo giờ có thêm mục “Ngày nổi "
-                 "bật” (hiện top những ngày có nhiều giờ tập trung nhất trong đúng kỳ đang xem), cộng "
+                 "bật” (hiện những ngày có nhiều giờ tập trung nhất trong đúng kỳ đang xem), cộng "
                  "thêm khái niệm **Kỷ lục** tính trên toàn bộ thời gian (cả tính chung lẫn tính riêng theo "
-                 "từng Nhóm/Dự án), được gắn hẳn thành một chip hình huy chương nổi bật trên Timeline mỗi "
-                 "khi ngày đó xứng đáng.",
+                 "từng Nhóm/Dự án), được gắn thành một chip hình huy chương nổi bật trên Timeline mỗi khi "
+                 "ngày đó xứng đáng.",
                  "**Ghi chú nhanh chính thức có mặt** — giờ có một Shortcut ngay trên iPhone cho phép gửi "
-                 "thẳng một dòng ý tưởng thoáng qua lên app, không cần mở trình duyệt hay chạm vào máy "
-                 "tính chút nào; mỗi dòng ghi chú như vậy có thể sửa hoặc xoá riêng lẻ, hoàn toàn tách biệt "
+                 "thẳng một dòng ý tưởng thoáng qua lên ứng dụng, không cần mở trình duyệt hay chạm vào "
+                 "máy tính; mỗi dòng ghi chú như vậy có thể sửa hoặc xoá riêng lẻ, hoàn toàn tách biệt "
                  "khỏi Ghi chú chính để khỏi lẫn lộn.",
                  "Kèm theo đó là một số việc nhỏ: gọn lại bố cục hiển thị trên điện thoại di động, và sửa "
                  "lỗi chip trong Bảng số liệu bị tràn ra ngoài khung khi giá trị hiển thị quá dài.",
              ]),
         dict(pr="166-167", date="06/07/2026", pr_lines=79, total_lines=6162,
-             title="Logo mới, đồng bộ phong cách nút gọn toàn app",
+             title="Logo mới, đồng bộ phong cách nút gọn cho toàn ứng dụng",
              bullets=[
-                 "Đổi sang một bộ logo thiết kế hoàn toàn mới, và điểm hay ho là nó tự động đổi màu theo "
-                 "đúng màu accent bạn đang chọn, thay vì bị khoá cứng vào một màu cố định như trước.",
-                 "Đồng bộ lại phong cách nút bấm cho gọn gàng hơn (ôm sát theo chữ bên trong, không còn cao "
-                 "lêu nghêu quá khổ như trước) cho toàn bộ các nút nằm trong tab Tuỳ biến, nhìn nhất quán "
-                 "hơn hẳn.",
+                 "Đổi sang một bộ logo thiết kế hoàn toàn mới, tự động đổi màu theo đúng màu accent bạn "
+                 "đang chọn, thay vì bị khoá cứng vào một màu cố định như trước.",
+                 "Đồng bộ lại phong cách nút bấm cho gọn gàng hơn (ôm sát theo chữ bên trong, không còn "
+                 "cao quá khổ như trước) cho toàn bộ các nút nằm trong tab Tuỳ biến, nhìn nhất quán hơn.",
              ]),
         dict(pr="155,157", date="06/07/2026", pr_lines=338, total_lines=5654,
-             title="Đồng bộ nhanh làm phương án mặc định",
+             title="Đồng bộ nhanh trở thành phương án mặc định",
              bullets=[
                  "Tab “1. Dữ liệu đầu vào” giờ ưu tiên đưa **Đồng bộ nhanh** lên hàng đầu — chỉ "
-                 "cần một nút bấm duy nhất là nạp được cả Forest, Reminder và lịch Work cùng một lúc, thẳng "
-                 "từ file mà Shortcut đã tải lên sẵn, thay vì trước đây phải làm tay từng bước một trong 3 "
-                 "lượt riêng lẻ khá mất công.",
-                 "Ba cách tải tay kiểu cũ vẫn còn nguyên đó, không bị bỏ đi đâu cả, chỉ là được gộp gọn vào "
-                 "trong một khối có thể thu lại tên là “Dự phòng” — dùng tới khi nào thực sự cần "
-                 "thao tác riêng lẻ từng nguồn một thôi.",
+                 "cần một nút bấm duy nhất là nạp được cả Forest, Reminders và lịch Work cùng một lúc, "
+                 "thẳng từ file mà Shortcut đã tải lên sẵn, thay vì trước đây phải làm tay từng bước trong "
+                 "ba lượt riêng lẻ khá mất công.",
+                 "Ba cách tải tay kiểu cũ vẫn còn nguyên, không bị bỏ đi, chỉ được gộp gọn vào trong một "
+                 "khối có thể thu lại tên là “Dự phòng” — dùng tới khi thực sự cần thao tác riêng "
+                 "lẻ từng nguồn.",
              ]),
         dict(pr="132,133,136,137", date="04/07/2026", pr_lines=79, total_lines=5089,
              title="Báo cáo Năm, Tìm kiếm, chế độ tối, Nhịp làm việc",
              bullets=[
-                 "**Báo cáo → Năm ra mắt** — một bản tổng kết trọn vẹn cho 1 năm cụ thể, gồm khối hero số "
-                 "liệu nổi bật, Biểu đồ lịch trải dài cả năm, mục Đọc sách & Gundam trong năm, và Bảng số "
-                 "liệu chi tiết.",
+                 "**Báo cáo → Năm ra mắt** — một bản tổng kết trọn vẹn cho một năm cụ thể, gồm khối số "
+                 "liệu nổi bật, Biểu đồ lịch trải dài cả năm, mục Đọc sách và Gundam trong năm, và Bảng "
+                 "số liệu chi tiết.",
                  "**Trang Tìm kiếm ra đời** — một trang hoàn toàn riêng để tra từ khoá cùng lúc trên ghi "
                  "chú, lịch hẹn Work, và cả sách/Gundam đã đọc hoặc xem qua, rồi gộp toàn bộ kết quả lại "
                  "theo từng ngày cho dễ theo dõi ngữ cảnh.",
-                 "**Chế độ tối chính thức có mặt** — toàn bộ giao diện, từ nút bấm, biểu đồ, bảng nhiệt, cho "
-                 "tới ô ghi chú, đều được thiết kế thêm một phiên bản màu riêng dành cho chế độ tối, tự "
-                 "động chọn theo đúng cài đặt hệ thống của thiết bị bạn đang dùng.",
-                 "**Nhịp làm việc trở thành mục mới trong Hướng dẫn** — nội dung tập trung dạy cách dùng app "
-                 "theo đúng nhịp ngày/tuần/tháng thực tế, thay vì chỉ đơn thuần liệt kê mô tả từng tính năng "
-                 "một cách rời rạc như trước.",
+                 "**Chế độ tối chính thức có mặt** — toàn bộ giao diện, từ nút bấm, biểu đồ, bảng nhiệt, "
+                 "cho tới ô ghi chú, đều được thiết kế thêm một phiên bản màu riêng dành cho chế độ tối, "
+                 "tự động chọn theo đúng cài đặt hệ thống của thiết bị bạn đang dùng.",
+                 "**Nhịp làm việc trở thành mục mới trong Trợ giúp** — nội dung tập trung dạy cách dùng "
+                 "ứng dụng theo đúng nhịp ngày/tuần/tháng thực tế, thay vì chỉ đơn thuần liệt kê mô tả "
+                 "từng tính năng rời rạc như trước.",
              ]),
         dict(pr="141-146", date="04/07/2026", pr_lines=15, total_lines=5139,
-             title="Thêm phím tắt bàn phím cho toàn app",
+             title="Thêm phím tắt bàn phím cho toàn ứng dụng",
              bullets=[
-                 "Bộ phím tắt đầu tiên của app chính thức ra mắt: các phím số 1 tới 7 để nhảy nhanh giữa "
-                 "các trang, phím N để mở nhanh Ghi chú ngày của hôm nay và focus thẳng vào ô soạn cho gõ "
-                 "luôn, phím / để focus vào ô Tìm kiếm, và phím Esc để bỏ focus khỏi ô đang gõ mà không làm "
-                 "mất từ khoá đã nhập.",
+                 "Bộ phím tắt đầu tiên của ứng dụng chính thức ra mắt: các phím số 1 tới 7 để nhảy nhanh "
+                 "giữa các trang, phím N để mở nhanh Ghi chú ngày của hôm nay và đặt con trỏ vào ô soạn "
+                 "cho gõ luôn, phím / để đặt con trỏ vào ô Tìm kiếm, và phím Esc để bỏ focus khỏi ô đang "
+                 "gõ mà không làm mất từ khoá đã nhập.",
                  "Muốn xem đầy đủ toàn bộ danh sách phím tắt hiện có, cứ ghé qua chương “Trong "
                  "ngày” ngay phía trên trong trang Trợ giúp này.",
              ]),
         dict(pr="125,126,139,140", date="04/07/2026", pr_lines=6, total_lines=5089,
-             title="Trang Hôm nay, 14 màu accent, logo & wordmark",
+             title="Trang Hôm nay, 14 màu accent, logo và dòng chữ hiệu",
              bullets=[
-                 "**Trang Hôm nay chính thức ra đời** — được tách riêng ra từ lát cắt “Ngày” vốn "
+                 "**Trang Hôm nay chính thức ra đời** — được tách riêng từ lát cắt “Ngày” vốn "
                  "từng nằm bên trong Báo cáo, trở thành mục đầu tiên và cũng là mục mặc định trên thanh "
                  "điều hướng, vì xét cho cùng đây chính là trang được mở nhiều nhất mỗi ngày, xứng đáng có "
                  "một vị trí trang trọng riêng.",
-                 "Bảng màu accent được mở rộng hẳn lên thành **14 màu** để chọn, xem trước trực tiếp qua một "
-                 "bản xem trước tương tác ngay khi rê chuột qua, và áp dụng ngay lập tức cho toàn bộ nút "
-                 "bấm, biểu đồ và bảng nhiệt trên khắp app.",
-                 "Thêm một logo và dòng chữ wordmark “Forest Dashboard” hẳn hoi, thay cho cái "
-                 "tiêu đề chữ trơn khô khan hồi trước.",
+                 "Bảng màu accent được mở rộng thành **14 màu** để chọn, xem trước trực tiếp qua một bản "
+                 "xem trước tương tác ngay khi rê chuột qua, và áp dụng ngay lập tức cho toàn bộ nút bấm, "
+                 "biểu đồ và bảng nhiệt trên khắp ứng dụng.",
+                 "Thêm một logo và dòng chữ hiệu “Forest Dashboard” hẳn hoi, thay cho tiêu đề "
+                 "chữ trơn khô khan hồi trước.",
              ]),
     ]
     render_help_changelog(HELP_CHANGELOG)
