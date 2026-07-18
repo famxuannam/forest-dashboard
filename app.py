@@ -2442,7 +2442,6 @@ SESSION_BUCKETS = [
     ("Dài",       "50–<90′",50,  90,    _SESSION_COLORS[3]),
     ("Rất Dài",   "≥ 90′",  90,  10**9, _SESSION_COLORS[4]),
 ]
-LEN_THRESHOLDS = (25, 50, 90)  # mốc tham chiếu trên histogram
 
 def _avg_session_min(df):
     """Độ dài bình quân mỗi phiên (phút); 0 nếu chưa có phiên."""
@@ -2481,49 +2480,6 @@ def render_session_bar(df):
         "</div>",
         unsafe_allow_html=True,
     )
-
-def render_session_histogram(df):
-    """Histogram độ dài phiên (bin 5 phút, từ 10′) + đường mốc 25/50/90 và đường trung bình."""
-    n = len(df)
-    if n == 0:
-        st.info("Chưa có phiên nào trong phạm vi này.")
-        return
-    d = df['Thời lượng (Phút)'].astype(float)
-    start, top, step = 10, 60, 5
-    edges = list(range(start, top + 1, step))
-    counts = [int(((d >= edges[i]) & (d < edges[i + 1])).sum()) for i in range(len(edges) - 1)]
-    counts[0] += int((d < start).sum())  # gộp phiên ngắn bất thường (nếu có) vào bin đầu
-    counts.append(int((d >= top).sum()))
-    centers = [edges[i] + step / 2 for i in range(len(edges) - 1)] + [top + step / 2]
-    labels = [f"{edges[i]}–{edges[i + 1]}′" for i in range(len(edges) - 1)] + [f"≥ {top}′"]
-
-    fig = go.Figure(go.Bar(
-        x=centers, y=counts, width=step * 0.88, marker_color='#7fb5ff',
-        marker_cornerradius=6, cliponaxis=False,  # bo góc trên + bóng (CSS) không bị cắt — đồng bộ các cột khác
-        customdata=labels, hovertemplate='%{customdata}: %{y} phiên<extra></extra>',
-    ))
-    _threshold_col = "#6ea8ff" if IS_DARK else "#0a52c4"
-    _avg_col = PLOT_TEXT
-    for t in LEN_THRESHOLDS:
-        if start < t <= top:
-            fig.add_vline(x=t, line=dict(color=_threshold_col, width=1.5, dash='dot'))
-    avg = d.mean()
-    if start <= avg <= top + step:
-        fig.add_vline(x=avg, line=dict(color=_avg_col, width=2, dash='dash'),
-                      annotation_text=f"TB {avg:.0f}′", annotation_position="top right",
-                      annotation_font=dict(size=12, color=_avg_col))
-    fig.update_layout(
-        height=300, margin=dict(l=10, r=10, t=24, b=10), bargap=0.06, showlegend=False,
-        xaxis=dict(title='Độ dài phiên (phút)', range=[start - 2, top + step],
-                   tickvals=[10, 20, 30, 40, 50, 60],
-                   ticktext=['10', '20', '30', '40', '50', '60+'],
-                   tickfont=dict(size=12), showgrid=False),
-        yaxis=dict(title='Số phiên', tickfont=dict(size=12),
-                   gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-    )
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
 
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
 BUOI_BANDS = [
@@ -5981,11 +5937,12 @@ def render_project_week_trend(df_g, n_weeks=12):
 
 def render_project_recent_sessions(df_g, days=30):
     """Chương "Phiên gần đây" (Báo cáo -> Dự án, mockup): MỌI phiên trong N ngày gần nhất (mặc
-    định 30, KHÔNG giới hạn số dòng) của dự án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi
-    (buổi tra qua _buoi_of() dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số
-    phiên trong cửa sổ) -- khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng)
-    vì đây là danh sách PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở
-    "Biểu đồ lịch" hay đổi bộ lọc kỳ."""
+    định 30) của dự án/nhóm đang xem, mỗi dòng Ngày/Bắt đầu/Độ dài/Buổi (buổi tra qua _buoi_of()
+    dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số phiên trong cửa sổ) --
+    khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng) vì đây là danh sách
+    PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở "Biểu đồ lịch" hay đổi bộ
+    lọc kỳ. Phân trang 10 phiên/trang (theo yêu cầu) -- cùng pattern clamp/`st.pagination` đã
+    dùng cho bảng "Dữ liệu làm việc hiện tại" ở Tuỳ biến (xem db_page), key riêng "duan_rs_page"."""
     if df_g.empty:
         st.caption("Chưa có phiên nào.")
         return
@@ -5995,8 +5952,22 @@ def render_project_recent_sessions(df_g, days=30):
     if recent.empty:
         st.caption(f"Chưa có phiên nào trong {days} ngày gần nhất.")
         return
+
+    PAGE_SIZE = 10
+    n = len(recent)
+    paged = n > PAGE_SIZE
+    _start = 0
+    if paged:
+        num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
+        page = min(st.session_state.get("duan_rs_page", 1), num_pages)
+        st.session_state["duan_rs_page"] = page
+        _start = (page - 1) * PAGE_SIZE
+        page_df = recent.iloc[_start:_start + PAGE_SIZE]
+    else:
+        page_df = recent
+
     rows_html = ""
-    for _, r in recent.iterrows():
+    for _, r in page_df.iterrows():
         ts = pd.Timestamp(r['Thời gian bắt đầu'])
         rows_html += (f"<tr><td class='txt lbl'>{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}</td>"
                       f"<td>{ts:%H:%M}</td><td>{int(r['Thời lượng (Phút)'])}′</td>"
@@ -6010,18 +5981,42 @@ def render_project_recent_sessions(df_g, days=30):
         f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
         unsafe_allow_html=True)
 
+    if paged:
+        with st.container(key="duan_rs_pag"):
+            st.pagination(num_pages, key="duan_rs_page")
+        st.markdown(
+            f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
+            f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
+            unsafe_allow_html=True)
+
+
+_RHYTHM_TIP_CSS = """
+<style>
+.rhythm-seg { position: relative; }
+.rhythm-seg:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    margin-bottom: 7px; background: var(--text); color: var(--card);
+    font-size: 12px; font-weight: 600; padding: 5px 9px; border-radius: 6px;
+    white-space: nowrap; z-index: 20; pointer-events: none;
+}
+</style>
+"""
+
 
 def render_project_rhythm(df_g):
-    """Chương "Nhịp làm việc" (Báo cáo -> Dự án, mockup): 2 thẻ ngang -- "Theo buổi" (tỉ trọng
+    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" (Báo cáo -> Dự án) -- "Theo buổi" (tỉ trọng
     Sáng/Chiều/Tối/Khuya, tô teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng dự án/nhóm này, buổi
     chiếm nhiều nhất tô đậm nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không
     hợp để tô thanh phân bổ đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã
-    có, KHÔNG kèm legend chi tiết như render_session_bar() ở chương "Tổng quan" -- ở đây chỉ cần
-    1 câu nhận định gọn, nhãn chi tiết từng khoảng đã có sẵn ở chương "Phân bố độ dài phiên" phía
-    dưới, tránh lặp thông tin)."""
+    có, chỉ 1 câu nhận định gọn, không kèm legend chi tiết như render_session_bar()). Không còn
+    là chương riêng "Nhịp làm việc" -- gộp vào chương "Tổng quan" (theo yêu cầu người dùng). Mỗi
+    ô dùng `data-tip` + CSS `:hover::after` (xem _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip
+    hiện ngay khi rê chuột, không có độ trễ ~1s của tooltip trình duyệt mặc định."""
     if df_g.empty:
         st.caption("Chưa có dữ liệu.")
         return
+    st.markdown(_RHYTHM_TIP_CSS, unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
@@ -6032,10 +6027,15 @@ def render_project_rhythm(df_g):
         _n_b = len(buoi_min)
         shades_b = _teal_shades(max(_n_b, 2))[::-1][:_n_b]
         seg1 = ""
-        for (b, m), col in zip(buoi_min.items(), shades_b):
+        for i, ((b, m), col) in enumerate(zip(buoi_min.items(), shades_b)):
             pct = m / total_min * 100
             lbl = f"{b} {pct:.0f}%" if pct >= 9 else ""
-            seg1 += (f"<div title='{b}: {_fmt_hours_long(m/60)}' style='width:{pct:.4f}%;background:{col};"
+            # Bo góc riêng ô ĐẦU/CUỐI (thay vì overflow:hidden trên cả hàng) -- overflow:hidden sẽ
+            # cắt luôn tooltip data-tip (::after) của các ô đè lên mép hàng, xem _RHYTHM_TIP_CSS.
+            _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
+                    "border-radius:0 6px 6px 0;" if i == _n_b - 1 else "")
+            seg1 += (f"<div class='rhythm-seg' data-tip='{b}: {_fmt_hours_long(m/60)}' "
+                     f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
                      f"align-items:center;justify-content:center;'>{lbl}</div>")
         _dom_buoi, _dom_min = buoi_min.index[0], buoi_min.iloc[0]
@@ -6045,7 +6045,7 @@ def render_project_rhythm(df_g):
         st.markdown(
             "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Theo buổi</span>"
-            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg1}</div>"
+            f"<div style='display:flex;height:26px;'>{seg1}</div>"
             f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight1}</div>"
             "</div>", unsafe_allow_html=True)
 
@@ -6053,13 +6053,16 @@ def render_project_rhythm(df_g):
         d = df_g['Thời lượng (Phút)']
         n = len(df_g)
         counts = [int(((d >= lo) & (d < hi)).sum()) for _, _, lo, hi, _ in SESSION_BUCKETS]
+        _present = [(name, rng, col, c) for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts) if c]
         seg2 = ""
-        for (name, rng, lo, hi, col), c in zip(SESSION_BUCKETS, counts):
-            if not c:
-                continue
+        for i, (name, rng, col, c) in enumerate(_present):
             pct = c / n * 100
             lbl = f"{pct:.0f}%" if pct >= 9 else ""
-            seg2 += (f"<div title='{name} ({rng}): {c} phiên' style='width:{pct:.4f}%;background:{col};"
+            # Cùng lý do bo góc riêng ô đầu/cuối như "Theo buổi" ở trên -- giữ tooltip không bị cắt.
+            _rad = ("border-radius:6px 0 0 6px;" if i == 0 else
+                    "border-radius:0 6px 6px 0;" if i == len(_present) - 1 else "")
+            seg2 += (f"<div class='rhythm-seg' data-tip='{name} ({rng}): {c} phiên' "
+                     f"style='width:{pct:.4f}%;background:{col};{_rad}"
                      f"color:{_readable_text(col)};font-size:12px;font-weight:600;display:flex;"
                      f"align-items:center;justify-content:center;'>{lbl}</div>")
         _best_i = counts.index(max(counts))
@@ -6068,7 +6071,7 @@ def render_project_rhythm(df_g):
         st.markdown(
             "<div class='glass-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Độ dài phiên</span>"
-            f"<div style='display:flex;height:26px;border-radius:6px;overflow:hidden;'>{seg2}</div>"
+            f"<div style='display:flex;height:26px;'>{seg2}</div>"
             f"<div style='margin-top:10px;font-size:13px;color:var(--text-2);'>{_insight2}</div>"
             "</div>", unsafe_allow_html=True)
 
@@ -8774,8 +8777,7 @@ elif nav == "Báo cáo":
                     [("bc-duan-ch1", "1 · Tổng quan")]
                     + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
                     + [("bc-duan-ch2", "2 · Biểu đồ lịch"), ("bc-duan-ch3", "3 · Xu hướng"),
-                       ("bc-duan-ch4", "4 · Nhịp làm việc"), ("bc-duan-ch5", "5 · Phiên gần đây"),
-                       ("bc-duan-ch6", "6 · Phân bố độ dài phiên"), ("bc-duan-ch7", "7 · Bảng số liệu")])
+                       ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Bảng số liệu")])
 
                 sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 wd_g = _weekday_avg(df_g)
@@ -8830,7 +8832,9 @@ elif nav == "Báo cáo":
                     ],
                     sections=_grp_sections,
                 )
-                render_session_bar(df_g)
+                # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
+                # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
+                render_project_rhythm(df_g)
 
                 if not _rl_book.empty:
                     sec_chapter("bc-duan-chrl", None, None, "Nhật ký đọc")
@@ -8850,13 +8854,9 @@ elif nav == "Báo cáo":
                 else:
                     frag_trend(df_g, "trend_grp", "Dự án")
 
-                sec_chapter("bc-duan-ch4", 4, None, "Nhịp làm việc")
-                render_project_rhythm(df_g)
-                sec_chapter("bc-duan-ch5", 5, "30 ngày gần nhất", "Phiên gần đây")
+                sec_chapter("bc-duan-ch4", 4, "30 ngày gần nhất", "Phiên gần đây")
                 render_project_recent_sessions(df_g)
-                sec_chapter("bc-duan-ch6", 6, None, "Phân bố độ dài phiên")
-                render_session_histogram(df_g)
-                sec_chapter("bc-duan-ch7", 7, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
@@ -10079,8 +10079,8 @@ elif nav == "Hướng dẫn":
             "4 phiên tập trung sâu, mỗi phiên kéo dài 90 phút liền mạch; còn ngày kia lại là 20 phiên vụn vặt "
             "chỉ 15 phút rồi bị ngắt quãng liên tục. Tổng số giờ bằng nhau tuyệt đối, nhưng chất lượng tập "
             "trung thì khác xa nhau — đây chính là lý do vì sao chỉ nhìn mỗi con số tổng thôi là chưa đủ. Muốn "
-            "đào sâu hơn nữa thì có thêm biểu đồ **Phân bố độ dài phiên** (ở Báo cáo → Dự án), chia nhỏ theo "
-            "từng khoảng 5 phút một cho chi tiết.")
+            "đào sâu hơn nữa thì xem thẻ **Độ dài phiên** trong chương Tổng quan (ở Báo cáo → Dự án), rê chuột "
+            "vào từng khoảng để xem số phiên chi tiết.")
         help_faq_item(
             "Rốt cuộc thì múi giờ nào quyết định \"hôm nay\" của app là ngày nào?",
             "Luôn luôn là giờ Việt Nam, không có ngoại lệ nào cả — mọi phép tính liên quan tới ngày tháng trong "
