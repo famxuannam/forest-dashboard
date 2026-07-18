@@ -4225,7 +4225,55 @@ def _render_health_history(df_health):
 
 def _render_health_input(df_health):
     """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ Claude
-    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi)."""
+    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi).
+
+    Header + card "Lần khám gần nhất" (mockup) thêm phía trên 2 mục nhập liệu -- card CHỈ ĐỌC, xác
+    nhận trực quan lần nhập gần nhất đúng chưa, dùng lại đúng khuôn .hmtl-card/.jchip của sub-tab
+    Lịch sử cho đồng bộ. Nút "Sửa" KHÔNG tự xây thêm 1 bộ sửa/xoá ở đây (trùng lặp) mà nhảy sang
+    sub-tab Lịch sử -- nơi đã có UI sửa/xoá đầy đủ. Card này KHÔNG đánh số (đúng quy ước "mục có
+    điều kiện hiển thị" -- chỉ hiện khi đã có dữ liệu -- không đánh số để giữ nguyên số của 2 mục
+    nhập liệu cố định bên dưới, xem ui-components.md).
+
+    Mockup còn có nút "Tải lên PDF" (trích số liệu từ file kết quả) -- app không có khả năng đọc
+    PDF (luồng chính là dán JSON do Claude đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
+    (đã xác nhận với người dùng). Mục "Ngưỡng tham chiếu" (tự đặt ngưỡng cảnh báo riêng, chặt hơn
+    mức lab in trên phiếu) cũng bỏ qua -- là tính năng nghiệp vụ MỚI ngoài phạm vi "chỉ sửa giao
+    diện" của yêu cầu này, chưa có nơi lưu/logic nào tương ứng."""
+    st.markdown(
+        "<div class='section-hd' style='margin-top:0;'>Thêm lần khám mới</div>"
+        "<p style='color:var(--text-2);font-size:13.5px;margin:-4px 0 14px;'>Nhập tay từng chỉ số, "
+        "hoặc dán JSON do Claude đọc ảnh phiếu xét nghiệm hộ.</p>",
+        unsafe_allow_html=True)
+
+    if not df_health.empty:
+        _latest_date = df_health['Ngày lấy mẫu'].max()
+        _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
+        _abn = _health_is_abnormal(_latest_panel)
+        chips = ''
+        for (_, r), a in zip(_latest_panel.iterrows(), _abn):
+            val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
+            unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
+            arrow = ''
+            if a and pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
+                arrow = _mi('arrow_upward', 11)
+            elif a and pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
+                arrow = _mi('arrow_downward', 11)
+            chips += (f"<span class='jchip{' abn' if a else ''}'>"
+                      f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
+                      f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
+        _lc1, _lc2 = st.columns([6, 1])
+        with _lc1:
+            st.markdown(
+                "<div class='hmtl-card' style='margin-top:0;'><div class='hmtl-head'>"
+                f"<span class='hmtl-date'>Lần khám {_latest_date:%d/%m/%Y}</span>"
+                "<span class='hmtl-badge info'>Mới nhất</span></div>"
+                f"<div class='hmtl-grp' style='margin-top:0;'>{chips}</div></div>",
+                unsafe_allow_html=True)
+        with _lc2:
+            if st.button("Sửa", key="hm_input_latest_edit"):
+                st.session_state["_hm_sub_jump"] = "Lịch sử"
+                st.rerun()
+
     # ==========================================
     # 1. IMPORT HÀNG LOẠT
     # ==========================================
@@ -4321,6 +4369,17 @@ def render_health_page():
     khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
     SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
     df_health = load_health_metrics()
+
+    # Nút "Sửa" ở card "Lần khám gần nhất" (_render_health_input()) nhảy sang sub-tab Lịch sử qua
+    # cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["hm_sub_picker"] tại nút bấm, vì
+    # lúc đó widget segmented_control DƯỚI ĐÂY đã instantiate rồi trong CÙNG lượt chạy (bug thật
+    # đã gặp: StreamlitAPIException "cannot be modified after the widget... is instantiated") --
+    # phải set key của widget TRƯỚC khi nó được gọi, nên phải xử lý ở đây, đầu trang, trước dòng
+    # segmented_control, rồi mới rerun sang lượt chạy mới áp dụng được.
+    if "_hm_sub_jump" in st.session_state:
+        _jump = st.session_state.pop("_hm_sub_jump")
+        st.session_state["hm_sub_picker"] = _jump
+        st.session_state["hm_sub"] = _jump
 
     _sub_pick = st.segmented_control(
         "Xem theo", SUCKHOE_SUBS,
@@ -6182,6 +6241,9 @@ st.markdown(
     .hmtl-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 9px; white-space: nowrap; }
     .hmtl-badge.bad { background: rgba(255,59,48,0.12); color: #ff3b30; }
     .hmtl-badge.ok { background: rgba(52,199,89,0.12); color: #34c759; }
+    /* Badge "Mới nhất" (_render_health_input(), card tóm tắt lần khám gần nhất) -- trung tính
+       theo accent, khác 2 màu đỏ/xanh (.bad/.ok) vì đây không phải cảnh báo, chỉ là mốc thời gian. */
+    .hmtl-badge.info { background: rgba(var(--accent-rgb),0.12); color: var(--accent-dark); }
     .hmtl-grp { margin-top: 10px; }
     .hmtl-grp:first-of-type { margin-top: 0; }
     /* Chip chỉ số bất thường (ngoài khoảng tham chiếu) -- tô đỏ, dùng CHUNG khuôn .jchip (đã có
