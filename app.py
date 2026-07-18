@@ -4116,9 +4116,11 @@ def _render_health_history(df_health):
     1 ngày có thể có nhiều Nhóm, vd "Huyết học" + "Sinh hóa" cùng ngày). Mỗi Nhóm trong thẻ hiện
     hàng chip chỉ số (đỏ + mũi tên lên/xuống nếu ngoài khoảng tham chiếu, xem _health_is_abnormal).
     Sửa/xoá dữ liệu thật vẫn theo TỪNG Nhóm (khớp khoá test_date+category của
-    save_health_metrics_bulk()/delete_health_metric_panel(), gộp sẽ lẫn 2 Nhóm khi lưu) --
-    đặt trong expander riêng ngay dưới mỗi thẻ, không đánh số expander (khác các sub-tab khác)
-    vì đây là NỘI DUNG DUY NHẤT của tab.
+    save_health_metrics_bulk()/delete_health_metric_panel(), gộp sẽ lẫn 2 Nhóm khi lưu) -- gom
+    CHUNG vào 1 expander DUY NHẤT ở cuối (chọn lần xét nghiệm cần sửa qua selectbox) thay vì 1
+    expander riêng dưới MỖI thẻ như bản đầu: thao tác này ít dùng, mà 1 expander/Nhóm chen giữa
+    timeline (kèm đường kẻ ngang phân cách của st.expander) làm vỡ mạch dòng thời gian liên tục,
+    lại không đồng bộ hình khối với các thẻ HTML xung quanh.
 
     Mockup còn có dòng phụ đề "Cơ sở y tế · Gói khám" và ghi chú tự do của bác sĩ, cùng 1 mức
     cảnh báo cam "sát ngưỡng" cạnh mức đỏ "cao" -- CẢ 3 đều không có trong dữ liệu hiện tại (chỉ
@@ -4133,15 +4135,23 @@ def _render_health_history(df_health):
     panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
     _dates = sorted(panels['Ngày lấy mẫu'].unique(), reverse=True)
 
+    _panel_keys = []  # [(pdate, pcat, grp), ...] tất cả (Ngày, Nhóm) của năm đang chọn -- gom
+                       # 1 lần duy nhất ở đây để dùng lại cho cả timeline lẫn expander sửa/xoá
+                       # gộp ở cuối, không lặp lại groupby 2 nơi.
+    for pdate in _dates:
+        day_df = panels[panels['Ngày lấy mẫu'] == pdate]
+        for pcat, grp in sorted(day_df.groupby('Nhóm'), key=lambda kv: kv[0]):
+            _panel_keys.append((pd.Timestamp(pdate), pcat, grp))
+
     for _i, pdate in enumerate(_dates):
         pdate = pd.Timestamp(pdate)
         day_df = panels[panels['Ngày lấy mẫu'] == pdate]
-        # Đường nối chỉ vẽ khi CHƯA phải thẻ cuối -- mỗi thẻ render riêng 1 lệnh st.markdown (ngăn
-        # cách bởi expander sửa/xoá là widget Streamlit thật ở giữa), nên ":last-child" trong CSS
-        # luôn đúng với chính nó (là con duy nhất trong khối markdown của nó) và sẽ ẨN đường nối ở
-        # MỌI thẻ nếu dựa vào CSS -- phải quyết định ở Python theo vị trí trong _dates.
+        # Đường nối chỉ vẽ khi CHƯA phải thẻ cuối -- mỗi thẻ render riêng 1 lệnh st.markdown nên
+        # ":last-child" trong CSS luôn đúng với chính nó (là con duy nhất trong khối markdown của
+        # nó) và sẽ ẨN đường nối ở MỌI thẻ nếu dựa vào CSS -- phải quyết định ở Python theo vị trí
+        # trong _dates.
         line_html = "<div class='hmtl-line'></div>" if _i < len(_dates) - 1 else ""
-        _day_groups = sorted(day_df.groupby('Nhóm'), key=lambda kv: kv[0])
+        _day_groups = [(pcat, grp) for pd_, pcat, grp in _panel_keys if pd_ == pdate]
         _n_abn_day = int(_health_is_abnormal(day_df).sum())
         if _n_abn_day:
             dot_cls, badge_html = "hmtl-dot warn", f"<span class='hmtl-badge bad'>{_n_abn_day} chỉ số bất thường</span>"
@@ -4173,38 +4183,39 @@ def _render_health_history(df_health):
             f"<div class='hmtl-head'><span class='hmtl-date'>{pdate:%d/%m/%Y}</span>{badge_html}</div>"
             f"{grp_html}</div></div>", unsafe_allow_html=True)
 
-        for pcat, grp in _day_groups:
-            _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
-            _abn = _health_is_abnormal(grp)
-            _n_abn = int(_abn.sum())
-            _hdr = f"Sửa / xoá · {pcat} ({len(grp)} chỉ số"
-            _hdr += f", {_n_abn} bất thường)" if _n_abn else ")"
-            grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
-            grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
-            with st.expander(_hdr, expanded=False):
-                edited = st.data_editor(
-                    grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
-                    column_config={"Bất thường": st.column_config.TextColumn(
-                        "Bất thường", disabled=True, width="small",
-                        help="Tự tính từ Giá trị (gốc)/Khoảng tham chiếu đã lưu, không sửa trực tiếp được ở đây.")})
-                ec1, ec2 = st.columns(2)
-                if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
-                    delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                    _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
-                    if _rows:
-                        save_health_metrics_bulk([{
-                            "test_date": pdate.date().isoformat(), "category": pcat,
-                            "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
-                                            "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                           for r in _rows]}])
-                    st.success("Đã lưu thay đổi.")
-                    time.sleep(1)
-                    st.rerun()
-                if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
-                    delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                    st.success("Đã xoá.")
-                    time.sleep(1)
-                    st.rerun()
+    # 1 expander DUY NHẤT cho sửa/xoá, đặt SAU cả timeline (không chen giữa từng thẻ) -- chọn
+    # đúng 1 lần xét nghiệm (Ngày + Nhóm) qua selectbox rồi mới hiện bảng sửa, xem docstring.
+    with st.expander("Sửa / xoá xét nghiệm đã nhập", expanded=False):
+        _opts = [f"{pdate:%d/%m/%Y} · {pcat}" for pdate, pcat, _ in _panel_keys]
+        _pick = st.selectbox("Chọn lần xét nghiệm", _opts, key="hm_hist_edit_pick")
+        pdate, pcat, grp = _panel_keys[_opts.index(_pick)]
+        _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
+        _abn = _health_is_abnormal(grp)
+        grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
+        grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
+        edited = st.data_editor(
+            grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
+            column_config={"Bất thường": st.column_config.TextColumn(
+                "Bất thường", disabled=True, width="small",
+                help="Tự tính từ Giá trị (gốc)/Khoảng tham chiếu đã lưu, không sửa trực tiếp được ở đây.")})
+        ec1, ec2 = st.columns(2)
+        if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
+            delete_health_metric_panel(pdate.date().isoformat(), pcat)
+            _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
+            if _rows:
+                save_health_metrics_bulk([{
+                    "test_date": pdate.date().isoformat(), "category": pcat,
+                    "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
+                                    "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
+                                   for r in _rows]}])
+            st.success("Đã lưu thay đổi.")
+            time.sleep(1)
+            st.rerun()
+        if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
+            delete_health_metric_panel(pdate.date().isoformat(), pcat)
+            st.success("Đã xoá.")
+            time.sleep(1)
+            st.rerun()
 
 
 def _render_health_input(df_health):
