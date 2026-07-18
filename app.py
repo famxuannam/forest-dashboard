@@ -10154,6 +10154,24 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch9", 9, "Changelog", "Nhật ký phát triển")
     HELP_CHANGELOG = [
+        dict(pr="223", date="18/07/2026", pr_lines=962, total_lines=10324,
+             title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, thuần Việt",
+             bullets=[
+                 "**Trang Trợ giúp được viết lại toàn bộ** — cả 9 chương, phần Câu hỏi thường gặp, "
+                 "và mọi mục Nhật ký phát triển cũ đều đổi sang giọng điềm đạm, mạch lạc hơn, không "
+                 "đổi cấu trúc chương hay số liệu.",
+                 "**Câu “điểm nhấn” ở Báo cáo Tuần/Tháng/Năm đổi giọng** — trước đây viết theo kiểu "
+                 "đùa vui “người làm vườn” (ví dụ ví ổn định là “chủ vườn đáng nể”), giờ chuyển sang "
+                 "những nhận xét điềm đạm hơn, vẫn giữ ẩn dụ cây và rừng của Forest nhưng ở mức vừa "
+                 "phải, không còn đùa cợt.",
+                 "**Thuần Việt hoá một số từ mượn** — “app” đổi thành “ứng dụng” ở mọi nơi hiển thị "
+                 "cho người dùng, “billboard” đổi thành “khung tóm lược”, “wordmark” đổi thành “dòng "
+                 "chữ hiệu”.",
+                 "Cùng với đó là một loạt thông báo trạng thái (rỗng, lỗi, thành công) ở Sách, "
+                 "Gundam, Sức khoẻ, Tuỳ biến và màn hình đăng nhập được viết lại cho nhất quán, bỏ "
+                 "dấu chấm than và câu mệnh lệnh suồng sã. Không có gì đổi về mặt tính năng hay số "
+                 "liệu — đây thuần là một đợt chỉnh lại lời văn.",
+             ]),
         dict(pr="192", date="16/07/2026", pr_lines=1784, total_lines=8004,
              title="Khung tóm lược đầu trang cho Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ và một loạt sửa lỗi nhỏ",
              bullets=[
