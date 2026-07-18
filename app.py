@@ -3342,6 +3342,12 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
 
         kh_all = load_kindle_highlights() if show_quotes else None
         vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
+
+        _pg_key = "stats_tbl_page_sach" if page_name == "Sách" else "stats_tbl_page_gundam"
+        _n = len(t)
+        _start, _end, _num_pages, _paged = _table_page_slice(_n, _pg_key)
+        t = t.iloc[_start:_end]
+
         rows_html = ''
         for _, r in t.iterrows():
             s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
@@ -3370,6 +3376,9 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+        if _paged:
+            _render_table_pagination(_num_pages, _pg_key,
+                                       f"Hiển thị {labels['item_col'].lower()} {_start + 1}–{_end} / {_n}")
 
     if page_name == "Gundam":
         _render_gundam_billboard(t, df_books, reading_log_df, _today)
@@ -3545,8 +3554,10 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         _day_tbl = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
                     .groupby('_d').size().reset_index(name='n').sort_values('_d', ascending=False))
         _vmax = float(_day_tbl['n'].max()) if not _day_tbl.empty else 0.0
+        _pg_key = "rl_ct_tbl_sach_page" if page_name == "Sách" else "rl_ct_tbl_gundam_page"
+        _start, _end, _num_pages, _paged = _table_page_slice(len(_day_tbl), _pg_key)
         _rows = ''
-        for _, r in _day_tbl.iterrows():
+        for _, r in _day_tbl.iloc[_start:_end].iterrows():
             _wd = VN_DAYS.get(pd.Timestamp(r['_d']).day_name(), '')
             _rows += '<tr class="prow">'
             _rows += f'<td class="lbl">{r["_d"]:%d/%m/%Y}</td><td class="txt">{_wd}</td>'
@@ -3559,6 +3570,9 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
 <tbody>{_rows}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+        if _paged:
+            _render_table_pagination(_num_pages, _pg_key,
+                                       f"Hiển thị ngày {_start + 1}–{_end} / {len(_day_tbl)}")
     else:
         st.caption("Chưa có dữ liệu để hiện bảng.")
 
@@ -4002,8 +4016,10 @@ HEALTH_METRICS_JSON_EXAMPLE = [
 
 def _render_health_report(df_health):
     """Sub-tab "Báo cáo": billboard "Số sức khoẻ" (điểm X/Y chỉ số đang trong ngưỡng, xem
-    _health_score()) rồi 3 chương đánh số: 1· Chỉ số bất thường (card chi tiết + chip "trong
-    ngưỡng" của ĐÚNG lần khám gần nhất) · 2· Diễn biến chỉ số (lưới mini-card xu hướng auto-chọn,
+    _health_score()) rồi 3 chương đánh số: 1· Chỉ số bất thường (card chi tiết của ĐÚNG lần khám
+    gần nhất; KHÔNG còn liệt kê chip "trong ngưỡng" -- 1 lần khám có thể có vài chục chỉ số, liệt
+    kê hết làm rối giao diện, đã xác nhận với người dùng bỏ hẳn, xem bảng đầy đủ ở chương 3 nếu
+    cần) · 2· Diễn biến chỉ số (lưới mini-card xu hướng auto-chọn,
     xem _health_trend_candidates(), CỘNG với bộ chọn Nhóm/Chỉ số + biểu đồ đường đầy đủ giữ nguyên
     từ bản cũ -- xác nhận với người dùng: lưới mini-card là tổng quan nhanh THÊM VÀO, không thay
     thế bộ chọn/biểu đồ chi tiết) · 3· Bảng xét nghiệm đầy đủ (mọi Chỉ số của lần khám gần nhất).
@@ -4036,7 +4052,6 @@ def _render_health_report(df_health):
             .sort_values('_namelen')
             .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
             .drop(columns='_namelen'))
-    _ok_latest = _latest_num.drop(_abn_latest.index)
 
     _toc = [("hm-bc-ch1", "1 · Chỉ số bất thường"), ("hm-bc-ch2", "2 · Diễn biến chỉ số"),
             ("hm-bc-ch3", "3 · Bảng xét nghiệm đầy đủ")]
@@ -4070,12 +4085,6 @@ def _render_health_report(df_health):
                 f"<div class='hbn-value'>{r['Giá trị']:g}<span class='hbn-unit'>{unit}</span></div>"
                 f"<div class='hbn-delta'>{arrow} {_ref_txt}</div></div>")
         st.markdown(f"<div class='hbn-grid'>{_cards}</div>", unsafe_allow_html=True)
-        if not _ok_latest.empty:
-            _ok_chips = ''.join(
-                f"<span class='jchip'><span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
-                f"<span class='cv'>{r['Giá trị']:g}</span></span>" for _, r in _ok_latest.iterrows())
-            st.markdown(f"<div class='hmtl-grp' style='margin-top:16px;'>"
-                        f"<span class='rl-book'>Trong ngưỡng</span>{_ok_chips}</div>", unsafe_allow_html=True)
 
     sec_chapter("hm-bc-ch2", 2, None, "Diễn biến chỉ số")
     _trend_keys = _health_trend_candidates(df_health, n=4)
@@ -4322,11 +4331,14 @@ def _render_health_input(df_health):
     Billboard "Lần khám gần nhất" dùng render_period_billboard() -- CÙNG key mặc định "bc_billboard"
     với Báo cáo/Sách/Gundam/Dự án/Tuỳ biến (an toàn vì mỗi nav/sub-tab render độc quyền 1 khối
     if/elif, không có 2 billboard nào cùng vẽ trong 1 lượt chạy ở đây) -- tái dùng thẳng CSS kính
-    mờ có sẵn, không cần thêm rule mới. Cột phải dùng lại đúng .pbill-title (câu nhận định) +
-    .pbill-chips (chip .jchip/.jchip.abn -- mượn nguyên khuôn từ sub-tab Lịch sử) cho chỉ số. Nút
-    "Sửa lần khám này" KHÔNG tự xây bộ sửa/xoá riêng (trùng lặp) mà nhảy sang sub-tab Lịch sử --
-    nơi đã có UI sửa/xoá đầy đủ, qua cờ chờ xử lý `_hm_sub_jump` (xem đầu render_health_page(),
-    không set trực tiếp session_state của widget segmented_control sau khi nó đã instantiate).
+    mờ có sẵn, không cần thêm rule mới. Cột phải CHỈ liệt kê chip các chỉ số BẤT THƯỜNG (cùng khuôn
+    _right_html của billboard "Số sức khoẻ" ở _render_health_report()) -- 1 lần khám có thể có tới
+    vài chục chỉ số, liệt kê hết (bản cũ) làm billboard tràn dài bất thường, chỉ nên tóm tắt (lỗi
+    thật đã gặp, xem ảnh chụp); danh sách đầy đủ mọi chỉ số đã có sẵn ở chương "2. Nhập kết quả xét
+    nghiệm" phía dưới rồi. Nút "Sửa lần khám này" KHÔNG tự xây bộ sửa/xoá riêng (trùng lặp) mà nhảy
+    sang sub-tab Lịch sử -- nơi đã có UI sửa/xoá đầy đủ, qua cờ chờ xử lý `_hm_sub_jump` (xem đầu
+    render_health_page(), không set trực tiếp session_state của widget segmented_control sau khi nó
+    đã instantiate).
 
     Mockup còn có nút "Tải lên PDF" (trích số liệu từ file kết quả) -- app không có khả năng đọc
     PDF (luồng chính là dán JSON do Claude đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
@@ -4338,24 +4350,30 @@ def _render_health_input(df_health):
     if not df_health.empty:
         _latest_date = pd.Timestamp(df_health['Ngày lấy mẫu'].max())
         _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
-        _abn = _health_is_abnormal(_latest_panel)
-        _n_abn = int(_abn.sum())
+        _abn_mask = _health_is_abnormal(_latest_panel)
+        _abn_rows = _latest_panel[_abn_mask]
+        _n_abn = len(_abn_rows)
+        # Chỉ liệt kê chip các chỉ số BẤT THƯỜNG -- 1 lần khám có thể có vài chục chỉ số, liệt kê
+        # hết (bản cũ) làm billboard tràn dài, cùng cách xử lý đã áp dụng ở billboard "Số sức khoẻ"
+        # của _render_health_report().
         chips = ''
-        for (_, r), a in zip(_latest_panel.iterrows(), _abn):
+        for _, r in _abn_rows.iterrows():
             val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
             unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
             arrow = ''
-            if a and pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
+            if pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
                 arrow = _mi('arrow_upward', 11)
-            elif a and pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
+            elif pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
                 arrow = _mi('arrow_downward', 11)
-            chips += (f"<span class='jchip{' abn' if a else ''}'>"
+            chips += (f"<span class='jchip abn'>"
                       f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
                       f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
-        _status_line = (f"{_n_abn} chỉ số ngoài khoảng tham chiếu" if _n_abn
-                         else "Tất cả chỉ số trong khoảng tham chiếu")
-        _right_html = (f"<div class='pbill-title'>{_status_line}</div>"
-                        f"<div class='pbill-chips'>{chips}</div>")
+        if _n_abn:
+            _right_html = (f"<div class='pbill-kicker'>Cần chú ý</div>"
+                            f"<div class='pbill-title'>{_n_abn} chỉ số ngoài khoảng tham chiếu</div>"
+                            f"<div class='pbill-chips'>{chips}</div>")
+        else:
+            _right_html = "<div class='pbill-title'>Tất cả chỉ số trong khoảng tham chiếu</div>"
         _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
         # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
         # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
@@ -5318,7 +5336,58 @@ def _heat_cell(v, ref, extra_cls="", drop=False, as_hours=True):
     return f'<td{cls_attr}{title} style="{bg}">{mark}{val_txt}</td>'
 
 
-def render_data_table(df, time_col):
+# Số dòng dữ liệu tối đa mỗi trang cho MỌI bảng .dtbl trong app (xác nhận với người dùng) --
+# bảng nào vượt ngưỡng này phải phân trang, không hiện hết 1 lần. Không tính dòng đề mục/tiêu đề.
+TABLE_PAGE_SIZE = 15
+
+
+def _table_page_slice(n, key, page_size=TABLE_PAGE_SIZE):
+    """Trả (start, end, num_pages, paged) cho 1 trang bảng PHẲNG (mỗi dòng dữ liệu độc lập, không
+    nhóm cha/con) -- dùng chung cho mọi bảng .dtbl chỉ cần cắt lát theo dòng (khác
+    _paginate_row_blocks() dùng cho bảng có nhóm Danh mục/Dự án lồng nhau). Tự clamp
+    session_state[key] về num_pages hợp lệ (phòng khi dữ liệu co lại sau xoá). paged=False (n <=
+    page_size) -> start=0, end=n, không cần vẽ pagination."""
+    if n <= page_size:
+        return 0, n, 1, False
+    num_pages = (n + page_size - 1) // page_size
+    page = min(st.session_state.get(key, 1), num_pages)
+    st.session_state[key] = page
+    start = (page - 1) * page_size
+    return start, min(start + page_size, n), num_pages, True
+
+
+def _paginate_row_blocks(blocks, page_size=TABLE_PAGE_SIZE):
+    """Gom các block (html, n_rows) thành từng trang tối đa page_size dòng, KHÔNG tách 1 block ra
+    2 trang -- dùng cho bảng có nhóm cha/con (vd 1 Danh mục + các Dự án con của nó trong
+    render_data_table()/render_detail_table() phải nằm trọn trong 1 trang, không đứt giữa). Nếu 1
+    block tự nó đã vượt page_size (nhóm quá nhiều dòng con) thì vẫn để riêng 1 trang, chấp nhận
+    vượt nhẹ ngưỡng thay vì tách nhóm."""
+    pages = []
+    cur_html, cur_n = "", 0
+    for html, n in blocks:
+        if cur_n and cur_n + n > page_size:
+            pages.append(cur_html)
+            cur_html, cur_n = "", 0
+        cur_html += html
+        cur_n += n
+    pages.append(cur_html)
+    return pages
+
+
+def _render_table_pagination(num_pages, key, caption):
+    """Vẽ st.pagination căn giữa + 1 dòng caption căn giữa ngay dưới -- khuôn dùng chung cho MỌI
+    bảng .dtbl có phân trang, thay code lặp lại ở từng nơi gọi trước đây (chỉ có ở db_page/
+    duan_rs_page). CSS căn giữa/margin áp dụng theo QUY ƯỚC ĐẶT TÊN: mọi key truyền vào đây phải
+    có hậu tố "_pag" (xem rule CSS `[class*="st-key-"][class*="_pag"]` trong khối CSS chính) --
+    không cần thêm rule CSS riêng mỗi lần gọi hàm này ở 1 bảng mới."""
+    with st.container(key=key + "_pag"):
+        st.pagination(num_pages, key=key)
+    st.markdown(
+        f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>{caption}</div>",
+        unsafe_allow_html=True)
+
+
+def render_data_table(df, time_col, key):
     if df.empty:
         return
     cols = sorted(df[time_col].unique())
@@ -5353,33 +5422,46 @@ def render_data_table(df, time_col):
                       f'<tr class="wk"><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>')
     else:
         thead_html = f'<tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>'
-    rows_html = ''
+    # 1 block = 1 Danh mục + các Dự án con của nó -- đơn vị phân trang, không tách rời khỏi nhau
+    # (xem _paginate_row_blocks()).
+    blocks = []
     for c in sorted(cat.index):
         c_vals = [float(cat.loc[c][col]) for col in cols]
-        rows_html += '<tr class="cat">'
-        rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
-        rows_html += heat_row(c_vals, vmax_cat)
-        rows_html += _heat_cell(sum(c_vals), 0, "tot")   # cột Tổng không tô heat cho gọn
-        rows_html += '</tr>'
+        block_html = '<tr class="cat">'
+        block_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        block_html += heat_row(c_vals, vmax_cat)
+        block_html += _heat_cell(sum(c_vals), 0, "tot")   # cột Tổng không tô heat cho gọn
+        block_html += '</tr>'
+        n_rows = 1
 
         sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
         for idx, row in sub.iterrows():
             p_vals = [float(row[col]) for col in cols]
-            rows_html += '<tr class="proj">'
-            rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
-            rows_html += heat_row(p_vals, vmax_proj)
-            rows_html += _heat_cell(sum(p_vals), 0, "tot")
-            rows_html += '</tr>'
+            block_html += '<tr class="proj">'
+            block_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            block_html += heat_row(p_vals, vmax_proj)
+            block_html += _heat_cell(sum(p_vals), 0, "tot")
+            block_html += '</tr>'
+            n_rows += 1
+        blocks.append((block_html, n_rows))
+
+    pages = _paginate_row_blocks(blocks)
+    _pg_key = f"{key}_page"
+    _num_pages = len(pages)
+    _page = min(st.session_state.get(_pg_key, 1), _num_pages) if _num_pages > 1 else 1
+    st.session_state[_pg_key] = _page
 
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead>{thead_html}</thead>
-<tbody>{rows_html}</tbody>
+<tbody>{pages[_page - 1]}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if _num_pages > 1:
+        _render_table_pagination(_num_pages, _pg_key, f"Trang {_page}/{_num_pages}")
 
 
-def render_detail_table(scope_df):
+def render_detail_table(scope_df, key):
     """Bảng chi tiết một kỳ (Tháng/Tuần): mỗi Danh mục/Dự án một số giờ tổng."""
     if scope_df.empty:
         return
@@ -5389,30 +5471,41 @@ def render_detail_table(scope_df):
     vmax_proj = float(proj.max()) if len(proj) else 0.0
     total_all = float(cat.sum()) or 1.0
 
-    rows_html = ''
+    blocks = []
     for c in sorted(cat.index):
         cv = float(cat.loc[c])
-        rows_html += '<tr class="cat">'
-        rows_html += f'<td class="lbl">{html_escape(str(c))}</td>'
-        rows_html += _heat_cell(cv, vmax_cat)
-        rows_html += f'<td class="tot">{cv/total_all*100:.0f}%</td>'
-        rows_html += '</tr>'
+        block_html = '<tr class="cat">'
+        block_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        block_html += _heat_cell(cv, vmax_cat)
+        block_html += f'<td class="tot">{cv/total_all*100:.0f}%</td>'
+        block_html += '</tr>'
+        n_rows = 1
 
         sub = proj[proj.index.get_level_values(0) == c].sort_index(level=1)
         for idx, v in sub.items():
             pv = float(v)
-            rows_html += '<tr class="proj">'
-            rows_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
-            rows_html += _heat_cell(pv, vmax_proj)
-            rows_html += f'<td class="tot">{pv/total_all*100:.0f}%</td>'
-            rows_html += '</tr>'
+            block_html += '<tr class="proj">'
+            block_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            block_html += _heat_cell(pv, vmax_proj)
+            block_html += f'<td class="tot">{pv/total_all*100:.0f}%</td>'
+            block_html += '</tr>'
+            n_rows += 1
+        blocks.append((block_html, n_rows))
+
+    pages = _paginate_row_blocks(blocks)
+    _pg_key = f"{key}_page"
+    _num_pages = len(pages)
+    _page = min(st.session_state.get(_pg_key, 1), _num_pages) if _num_pages > 1 else 1
+    st.session_state[_pg_key] = _page
 
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th><th>Tỉ trọng</th></tr></thead>
-<tbody>{rows_html}</tbody>
+<tbody>{pages[_page - 1]}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if _num_pages > 1:
+        _render_table_pagination(_num_pages, _pg_key, f"Trang {_page}/{_num_pages}")
 
 
 def render_period_day_table(df_period, all_days=None):
@@ -5421,7 +5514,8 @@ def render_period_day_table(df_period, all_days=None):
     Danh mục/Dự án) -- dùng cho Tuần vì trục Danh mục/Dự án đã có frag_category_bars riêng ở
     chương trước, bảng ở đây bổ sung trục còn thiếu (theo ngày) thay vì lặp lại cùng 1 trục lần
     thứ 2 như Tháng/Năm (những trang đó không có frag_category_bars nên vẫn giữ render_detail_table
-    theo Danh mục/Dự án).
+    theo Danh mục/Dự án). KHÔNG phân trang (khác mọi bảng .dtbl khác trong app) -- luôn đúng 7
+    dòng/tuần + 1 dòng Tổng, không bao giờ chạm ngưỡng TABLE_PAGE_SIZE.
 
     all_days: list[date] đầy đủ của kỳ (vd 7 ngày Thứ Hai->Chủ Nhật) -- truyền vào để bảng hiện ĐỦ
     cả những ngày KHÔNG có phiên nào (dòng "—"), đúng cảm giác "sổ ghi chép cả tuần" thay vì chỉ
@@ -5472,8 +5566,10 @@ def render_health_full_table(latest_panel):
         return
     _panel = latest_panel.sort_values(['Nhóm', 'Chỉ số'])
     _abn = _health_is_abnormal(_panel)
+    _start, _end, _num_pages, _paged = _table_page_slice(len(_panel), "hm_full_tbl_page")
+    _panel_pg, _abn_pg = _panel.iloc[_start:_end], _abn.iloc[_start:_end]
     rows_html = ''
-    for (_, r), a in zip(_panel.iterrows(), _abn):
+    for (_, r), a in zip(_panel_pg.iterrows(), _abn_pg):
         val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
         if a:
             _direction = "Cao" if pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao'] else "Thấp"
@@ -5497,6 +5593,9 @@ def render_health_full_table(latest_panel):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if _paged:
+        _render_table_pagination(_num_pages, "hm_full_tbl_page",
+                                   f"Hiển thị chỉ số {_start + 1}–{_end} / {len(_panel)}")
 
 
 def render_health_log_table(s_num, is_abn):
@@ -5507,6 +5606,8 @@ def render_health_log_table(s_num, is_abn):
     _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
     _tbl['Bất thường'] = list(is_abn)
     _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
+    _start, _end, _num_pages, _paged = _table_page_slice(len(_tbl), "hm_log_tbl_page")
+    _tbl = _tbl.iloc[_start:_end]
     rows_html = ''
     for _, r in _tbl.iterrows():
         _status = "<span style='color:#ff3b30;font-weight:600;'>⚠️ Bất thường</span>" if r['Bất thường'] else ''
@@ -5525,11 +5626,15 @@ def render_health_log_table(s_num, is_abn):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if _paged:
+        _render_table_pagination(_num_pages, "hm_log_tbl_page",
+                                   f"Hiển thị lần đo {_start + 1}–{_end} / {len(is_abn)}")
 
 
-def render_period_table(df, time_col):
+def render_period_table(df, time_col, key):
     """Bảng theo kỳ cho MỘT nhóm/dự án: mỗi kỳ (Tuần/Tháng) là một dòng,
-    các cột Số giờ (tô heat) / Số cây / Số ngày, kèm dòng Tổng."""
+    các cột Số giờ (tô heat) / Số cây / Số ngày, kèm dòng Tổng (LUÔN hiện, không phân trang --
+    tổng tính trên TOÀN BỘ df bất kể trang đang xem)."""
     if df.empty:
         return
     g = df.groupby(time_col)
@@ -5540,8 +5645,10 @@ def render_period_table(df, time_col):
     vmax = float(hrs.max()) if len(hrs) else 0.0
 
     _my = _periods_multiyear(periods)
+    _pg_key = f"{key}_page"
+    _start, _end, _num_pages, _paged = _table_page_slice(len(periods), _pg_key)
     rows_html = ''
-    for p in periods:
+    for p in periods[_start:_end]:
         rows_html += '<tr class="prow">'
         rows_html += f'<td class="lbl">{period_label(p, _my)}</td>'
         rows_html += _heat_cell(float(hrs[p]), vmax)
@@ -5562,6 +5669,9 @@ def render_period_table(df, time_col):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+    if _paged:
+        _render_table_pagination(_num_pages, _pg_key,
+                                   f"Hiển thị {period_name.lower()} {_start + 1}–{_end} / {len(periods)}")
 
 
 # --- Helpers trang Trợ giúp: tour cuộn dọc, mọi thẻ/minh hoạ vẽ bằng HTML thuần ---
@@ -5904,7 +6014,7 @@ def frag_data_table(scope_df, key_prefix):
                                          key=f"{key_prefix}_view_{range_label}",
                                          label_visibility="collapsed")
     view_opt = view_opt or smart_default
-    render_data_table(df_tbl, 'Tuần' if view_opt == "Tuần" else 'Tháng')
+    render_data_table(df_tbl, 'Tuần' if view_opt == "Tuần" else 'Tháng', key_prefix)
 
 
 @st.fragment
@@ -5913,7 +6023,7 @@ def frag_period_table(scope_df, key):
     grp_view = st.segmented_control("Xem theo", ["Tuần", "Tháng"], default="Tháng", key=key,
                                      label_visibility="collapsed")
     grp_view = grp_view or "Tháng"
-    render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng')
+    render_period_table(scope_df, 'Tuần' if grp_view == "Tuần" else 'Tháng', key)
 
 
 def render_project_week_trend(df_g, n_weeks=12):
@@ -5944,8 +6054,8 @@ def render_project_recent_sessions(df_g, days=30):
     dùng chung với biểu đồ khung giờ) + 1 dòng tổng cuối bảng (giờ + số phiên trong cửa sổ) --
     khác trục "Bảng số liệu" (frag_period_table, tổng hợp theo Tuần/Tháng) vì đây là danh sách
     PHIÊN THÔ mới nhất, thấy ngay nhịp làm việc gần đây mà không cần mở "Biểu đồ lịch" hay đổi bộ
-    lọc kỳ. Phân trang 10 phiên/trang (theo yêu cầu) -- cùng pattern clamp/`st.pagination` đã
-    dùng cho bảng "Dữ liệu làm việc hiện tại" ở Tuỳ biến (xem db_page), key riêng "duan_rs_page"."""
+    lọc kỳ. Phân trang TABLE_PAGE_SIZE phiên/trang qua _table_page_slice()/_render_table_pagination()
+    -- khuôn dùng chung cho MỌI bảng .dtbl trong app, key riêng "duan_rs_page"."""
     if df_g.empty:
         st.caption("Chưa có phiên nào.")
         return
@@ -5956,18 +6066,8 @@ def render_project_recent_sessions(df_g, days=30):
         st.caption(f"Chưa có phiên nào trong {days} ngày gần nhất.")
         return
 
-    PAGE_SIZE = 10
-    n = len(recent)
-    paged = n > PAGE_SIZE
-    _start = 0
-    if paged:
-        num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
-        page = min(st.session_state.get("duan_rs_page", 1), num_pages)
-        st.session_state["duan_rs_page"] = page
-        _start = (page - 1) * PAGE_SIZE
-        page_df = recent.iloc[_start:_start + PAGE_SIZE]
-    else:
-        page_df = recent
+    _start, _end, _num_pages, _paged = _table_page_slice(len(recent), "duan_rs_page")
+    page_df = recent.iloc[_start:_end]
 
     rows_html = ""
     for _, r in page_df.iterrows():
@@ -5984,13 +6084,9 @@ def render_project_recent_sessions(df_g, days=30):
         f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
         unsafe_allow_html=True)
 
-    if paged:
-        with st.container(key="duan_rs_pag"):
-            st.pagination(num_pages, key="duan_rs_page")
-        st.markdown(
-            f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
-            f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
-            unsafe_allow_html=True)
+    if _paged:
+        _render_table_pagination(_num_pages, "duan_rs_page",
+                                   f"Hiển thị phiên {_start + 1}–{_end} / {len(recent)}")
 
 
 _RHYTHM_TIP_CSS = """
@@ -6786,12 +6882,14 @@ st.markdown(
        segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. */
     [class*="st-key-rl_view_tabs"] [role="tablist"]::after { display: none !important; }
 
-    /* Pagination (bảng phiên) căn giữa: stPagination là flex full-width nhưng justify
+    /* Pagination MỌI bảng .dtbl căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa. margin-top tách khỏi bảng/dtbl-wrap phía trên --
-       thiếu margin này, hàng số trang đứng sát ngay dưới viền bảng, nhìn như đè lên nhau. */
-    .st-key-db_pag [data-testid="stPagination"],
-    .st-key-duan_rs_pag [data-testid="stPagination"] { justify-content: center !important; }
-    .st-key-db_pag, .st-key-duan_rs_pag { margin-top: 14px; }
+       thiếu margin này, hàng số trang đứng sát ngay dưới viền bảng, nhìn như đè lên nhau. Dùng
+       selector theo QUY ƯỚC ĐẶT TÊN (mọi key container pagination đều có hậu tố "_pag", xem
+       _render_table_pagination()) thay vì liệt kê từng key riêng -- bảng mới thêm phân trang
+       không cần sửa CSS này nữa. */
+    [class*="st-key-"][class*="_pag"] [data-testid="stPagination"] { justify-content: center !important; }
+    [class*="st-key-"][class*="_pag"] { margin-top: 14px; }
 
     /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
        hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
@@ -8305,8 +8403,10 @@ def render_day_report(df):
         render_note_editor(sel, sel_day_badges)
 
         sec_chapter("today-ch4", 4, None, "Danh sách phiên")
+        _day_sorted = day_df.sort_values('Thời gian bắt đầu').reset_index(drop=True)
+        _start, _end, _num_pages, _paged = _table_page_slice(len(_day_sorted), "today_sess_tbl_page")
         rows_html = ''
-        for i, (_, r) in enumerate(day_df.sort_values('Thời gian bắt đầu').iterrows(), 1):
+        for i, (_, r) in enumerate(_day_sorted.iloc[_start:_end].iterrows(), _start + 1):
             s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
             cat = r.get('Danh mục')
             cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
@@ -8324,6 +8424,9 @@ def render_day_report(df):
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
+        if _paged:
+            _render_table_pagination(_num_pages, "today_sess_tbl_page",
+                                       f"Hiển thị phiên {_start + 1}–{_end} / {len(_day_sorted)}")
 
         sec_chapter("today-ch5", 5, None, "Ngày này năm trước")
         render_on_this_day(sel, df)
@@ -8611,7 +8714,7 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-thang-ch5", 5, None, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
                 sec_chapter("bc-thang-ch6", 6, None, "Bảng số liệu")
-                render_detail_table(df_m)
+                render_detail_table(df_m, "bc_thang_tbl")
     elif bc_sub == "Năm":
         if not df.empty:
             years = sorted(df['Năm'].unique())
@@ -8697,7 +8800,7 @@ elif nav == "Báo cáo":
                 render_year_month_bars(df_y)
 
                 sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
-                render_detail_table(df_y)
+                render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
@@ -9678,21 +9781,12 @@ elif nav == "Tuỳ biến":
             disp_db['Thời gian kết thúc'] = pd.to_datetime(disp_db['Thời gian kết thúc']).dt.strftime('%Y-%m-%d %H:%M')
             if 'Note' in disp_db.columns: disp_db = disp_db.drop(columns=['Note'])
 
-            # Phân trang 100 dòng/trang khi nhiều phiên. Đọc trang từ session_state TRƯỚC để cắt
-            # bảng; render widget pagination Ở DƯỚI bảng (cùng key nên vẫn lái được lát cắt qua
-            # mỗi lần rerun). Dòng chọn để xoá là vị trí TRONG trang -> cộng _start ra chỉ số tuyệt đối.
-            PAGE_SIZE = 100
-            n = len(disp_db)
-            paged = n > PAGE_SIZE
-            _start = 0
-            if paged:
-                num_pages = (n + PAGE_SIZE - 1) // PAGE_SIZE
-                page = min(st.session_state.get("db_page", 1), num_pages)  # clamp khi co lại sau xoá
-                st.session_state["db_page"] = page
-                _start = (page - 1) * PAGE_SIZE
-                page_df = disp_db.iloc[_start:_start + PAGE_SIZE]
-            else:
-                page_df = disp_db
+            # Phân trang TABLE_PAGE_SIZE dòng/trang khi nhiều phiên. Đọc trang từ session_state
+            # TRƯỚC để cắt bảng; render widget pagination Ở DƯỚI bảng (cùng key nên vẫn lái được
+            # lát cắt qua mỗi lần rerun). Dòng chọn để xoá là vị trí TRONG trang -> cộng _start ra
+            # chỉ số tuyệt đối.
+            _start, _end, num_pages, paged = _table_page_slice(len(disp_db), "db_page")
+            page_df = disp_db.iloc[_start:_end]
 
             ev = st.dataframe(page_df, width='stretch', hide_index=True,
                               on_select="rerun", selection_mode="multi-row", key="db_view")
@@ -9704,12 +9798,8 @@ elif nav == "Tuỳ biến":
 
             # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.
             if paged:
-                with st.container(key="db_pag"):
-                    st.pagination(num_pages, key="db_page")
-                st.markdown(
-                    f"<div style='text-align:center;font-size:13px;color:var(--text-2);margin-top:2px;'>"
-                    f"Hiển thị phiên {_start + 1}–{min(_start + PAGE_SIZE, n)} / {n}</div>",
-                    unsafe_allow_html=True)
+                _render_table_pagination(num_pages, "db_page",
+                                           f"Hiển thị phiên {_start + 1}–{_end} / {len(disp_db)}")
 
 # ==========================================
 # TAB HƯỚNG DẪN

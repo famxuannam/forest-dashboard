@@ -150,19 +150,33 @@ không theo theme app). Muốn tooltip hiện NGAY khi rê chuột và đúng th
 bị cắt mất — thay bằng bo góc RIÊNG ô đầu/ô cuối (`border-radius` khác nhau theo vị trí trong loop)
 thay vì bọc `overflow:hidden` quanh cả hàng.
 
-## Phân trang bảng dài: `st.pagination(num_pages, key=...)` + clamp session_state
+## Phân trang bảng dài: `TABLE_PAGE_SIZE` + 3 helper dùng chung (`_table_page_slice`/`_paginate_row_blocks`/`_render_table_pagination`)
 
-Bảng có thể dài không giới hạn (session thô, phiên gần đây...) phân trang theo 1 khuôn chung: tính
-`PAGE_SIZE`/`num_pages`, đọc trang hiện tại từ `st.session_state.get(key, 1)` rồi **clamp** về
-`num_pages` (phòng khi dữ liệu co lại sau xoá khiến trang cũ không còn tồn tại) TRƯỚC khi cắt lát
-DataFrame, vẽ `st.pagination(num_pages, key=...)` NGAY DƯỚI bảng (không phải trên), rồi 1 dòng
-caption "Hiển thị X–Y / N" căn giữa. Xem 2 nơi đã áp dụng: `db_page` (bảng "Dữ liệu làm việc hiện
-tại", Tuỳ biến, 100 dòng/trang) và `duan_rs_page` (bảng "Phiên gần đây", Báo cáo → Dự án, 10
-dòng/trang). CSS bắt buộc đi kèm mỗi key mới (thiếu sẽ đè sát bảng phía trên, không căn giữa):
-```css
-.st-key-<key>_pag [data-testid="stPagination"] { justify-content: center !important; }
-.st-key-<key>_pag { margin-top: 14px; }
-```
+**Mọi bảng `.dtbl` trong app tối đa `TABLE_PAGE_SIZE` = 15 dòng dữ liệu/trang** (không tính dòng
+đề mục/tiêu đề/Tổng — xác nhận với người dùng, áp dụng đồng loạt cho MỌI bảng, kể cả bảng đã có
+phân trang từ trước với ngưỡng khác). Không tự viết lại code cắt lát/pagination ở nơi gọi mới — 3
+helper định nghĩa cạnh `DTBL_CSS` đã lo đủ:
+
+- `_table_page_slice(n, key, page_size=TABLE_PAGE_SIZE)` — dùng cho bảng PHẲNG (mỗi dòng dữ liệu
+  độc lập, không nhóm cha/con: `render_health_full_table`, `render_health_log_table`,
+  `render_period_table`, `render_project_recent_sessions`, bảng "Danh sách phiên" ở Hôm nay, bảng
+  "Dữ liệu làm việc hiện tại" ở Tuỳ biến...). Trả `(start, end, num_pages, paged)`, tự **clamp**
+  `st.session_state[key]` về `num_pages` hợp lệ (phòng khi dữ liệu co lại sau xoá) — gọi TRƯỚC khi
+  cắt lát DataFrame/list.
+- `_paginate_row_blocks(blocks, page_size=TABLE_PAGE_SIZE)` — dùng cho bảng có NHÓM cha/con (1
+  Danh mục + các Dự án con của nó phải nằm trọn 1 trang, không tách rời — `render_data_table`,
+  `render_detail_table`). `blocks` là `list[(html, n_rows)]` theo đúng thứ tự muốn hiển thị; trả
+  `list[str]` (mỗi phần tử là `<tbody>` HTML của 1 trang) — đơn vị phân trang là NGUYÊN 1 block, 1
+  block tự vượt `page_size` (nhóm quá nhiều dòng con) thì vẫn để riêng 1 trang, chấp nhận vượt nhẹ
+  ngưỡng thay vì tách nhóm.
+- `_render_table_pagination(num_pages, key, caption)` — vẽ `st.pagination(num_pages, key=key)`
+  trong `st.container(key=key + "_pag")` NGAY DƯỚI bảng (không phải trên) + 1 dòng `caption` căn
+  giữa ngay dưới đó. `caption` tự soạn ở nơi gọi: bảng phẳng dùng "Hiển thị <đơn vị> X–Y / N", bảng
+  theo nhóm (không có "1 dòng = 1 gì" rõ ràng) dùng "Trang X/Y".
+
+CSS căn giữa/margin áp dụng qua **quy ước đặt tên**, không cần thêm rule mỗi khi có bảng mới: mọi
+key container pagination phải có hậu tố `_pag` (đã tự đúng nếu gọi qua `_render_table_pagination`),
+khớp rule dùng chung `[class*="st-key-"][class*="_pag"]` trong khối CSS chính.
 
 ## Ép 2+ thẻ ngang cao bằng nhau: class đánh dấu + `:has()` + `align-items:stretch`
 
