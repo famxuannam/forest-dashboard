@@ -2694,7 +2694,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None)
-    render_session_bar(df_period)
+    render_project_rhythm(df_period)
     if show_top3:
         st.write("")
         c_top1, c_top2 = st.columns(2)
@@ -6008,14 +6008,17 @@ _RHYTHM_TIP_CSS = """
 
 
 def render_project_rhythm(df_g):
-    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" (Báo cáo -> Dự án) -- "Theo buổi" (tỉ trọng
-    Sáng/Chiều/Tối/Khuya, tô teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng dự án/nhóm này, buổi
-    chiếm nhiều nhất tô đậm nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không
-    hợp để tô thanh phân bổ đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã
-    có, chỉ 1 câu nhận định gọn, không kèm legend chi tiết như render_session_bar()). Không còn
-    là chương riêng "Nhịp làm việc" -- gộp vào chương "Tổng quan" (theo yêu cầu người dùng). Mỗi
-    ô dùng `data-tip` + CSS `:hover::after` (xem _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip
-    hiện ngay khi rê chuột, không có độ trễ ~1s của tooltip trình duyệt mặc định."""
+    """2 thẻ ngang "Theo buổi"/"Độ dài phiên" -- "Theo buổi" (tỉ trọng Sáng/Chiều/Tối/Khuya, tô
+    teal đậm/nhạt theo TỈ TRỌNG lớn nhỏ trong đúng phạm vi df_g này, buổi chiếm nhiều nhất tô đậm
+    nhất -- khác BUOI_BANDS (màu nền zone của biểu đồ khung giờ, không hợp để tô thanh phân bổ
+    đặc)) và "Độ dài phiên" (tái dùng SESSION_BUCKETS/_teal_shades(5) đã có, chỉ 1 câu nhận định
+    gọn, không kèm legend chi tiết như render_session_bar()). Ban đầu chỉ dùng ở Báo cáo -> Dự án
+    (gộp vào chương "Tổng quan" theo yêu cầu người dùng), sau đó dùng chung để thay
+    render_session_bar() ở Hôm nay và Báo cáo -> Tổng quan/Tuần/Tháng/Năm (xác nhận với người
+    dùng: combo 2 thẻ có tooltip này rõ hơn thanh phân bổ đơn cũ). render_session_bar() vẫn giữ
+    lại riêng cho trang Sách/Gundam. Mỗi ô dùng `data-tip` + CSS `:hover::after` (xem
+    _RHYTHM_TIP_CSS) thay cho `title=` gốc -- tooltip hiện ngay khi rê chuột, không có độ trễ ~1s
+    của tooltip trình duyệt mặc định."""
     if df_g.empty:
         st.caption("Chưa có dữ liệu.")
         return
@@ -8277,7 +8280,7 @@ def render_day_report(df):
         # lại thông tin.
         render_day_timeline(day_df)
 
-        render_session_bar(day_df)
+        render_project_rhythm(day_df)
 
         sec_chapter("today-ch2", 2, None, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
@@ -8341,16 +8344,27 @@ elif nav == "Báo cáo":
             n_cats = df['Danh mục'].nunique()
             n_projs = df['Dự án'].nunique()
 
+            # Câu nhận định chuỗi chuyển lên cột phải billboard (không còn làm footer của panel
+            # "Tổng quan" bên dưới) -- cùng cách xử lý đã áp dụng ở billboard Báo cáo → Dự án,
+            # billboard là nơi hợp lý hơn cho 1 câu ngắn mang tính nhận định, tránh 2 nơi cùng nói
+            # về chuỗi (panel vẫn giữ số liệu thô: Tổng cộng/Dài nhất/Hiện tại).
+            s_stat = _streak_stats(df)
+            _nud = _streak_nudge(s_stat)
+            _nudge_html = ""
+            if _nud:
+                _nud_bg, _nud_fg = NUDGE_TONES[_nud[1]]
+                _nudge_html = f"<div class='pbill-sub' style='color:{_nud_fg};margin-top:10px;'>{_nud[0]}</div>"
+
             render_period_billboard(
                 "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
                 f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
-                "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>",
+                "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
+                + _nudge_html,
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                  ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
 
-            s_stat = _streak_stats(df)
             by_wd = _weekday_avg(df)
             overall_top3 = _top_days(df, 3)
             _sections = [
@@ -8372,17 +8386,14 @@ elif nav == "Báo cáo":
                 ]})
             if overall_top3:
                 _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
-            _nud = _streak_nudge(s_stat)
-            _footer = (_nud[0],) + NUDGE_TONES[_nud[1]] if _nud else None
 
             render_stat_panel(
                 hero_items=[
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
-                footer=_footer,
             )
-            render_session_bar(df)
+            render_project_rhythm(df)
 
             st.write("")
             c_top1, c_top2 = st.columns(2)
