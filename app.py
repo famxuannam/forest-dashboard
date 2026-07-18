@@ -2893,7 +2893,12 @@ def _render_kindle_quotes_tab():
     để xem lại được toàn bộ trích dẫn, kèm chip lọc "Yêu thích" cho ai chỉ muốn xem đúng phần đã
     đánh dấu. Đây thuần là 1 cách LỌC khác của cùng bảng kindle_highlights, không phải dữ liệu
     riêng -- tái dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh
-    dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
+    dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó. Ghi chú được LỒNG
+    xuống dưới đúng highlight cha (cùng thuật toán parent_hash/"Vị trí" với _render_kindle_day_quotes()
+    ở "2. Nhật ký đọc", khoanh vùng theo CUỐN SÁCH thay vì theo NGÀY) -- ghi chú KHÔNG khớp được
+    highlight nào bị ẨN HẲN (không hiện đứng riêng như ở "2. Nhật ký đọc") vì xác nhận với người
+    dùng: 1 ghi chú không gắn với trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách
+    TRÍCH DẪN (khác "2. Nhật ký đọc" là nhật ký theo ngày, không được phép "mất" dữ liệu).
 
     Thêm bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
     sắp xếp Mới lưu nhất/Cũ nhất (theo "Ngày thêm" -- mốc lưu vào Kindle, DÙNG CHUNG với
@@ -2963,18 +2968,56 @@ def _render_kindle_quotes_tab():
     visible_books = book_order if show_all else book_order[:3]
     hidden_books = [] if show_all else book_order[3:]
 
-    for i, book in enumerate(visible_books):
+    _rendered_i = 0
+    for book in visible_books:
         grp = view[view['Cuốn sách'] == book]
+        # Lồng ghi chú xuống dưới đúng highlight nó thuộc về -- CÙNG thuật toán với "2. Nhật ký
+        # đọc" (_render_kindle_day_quotes()), nhưng khoanh vùng theo CUỐN SÁCH (grp) thay vì theo
+        # NGÀY: (a) parent_hash trỏ thẳng (ghi chú tự thêm trong app, quan hệ CHẮC CHẮN lưu DB),
+        # (b) SUY LUẬN qua "Vị trí" trùng với 1 highlight cùng cuốn (ghi chú gốc từ Kindle,
+        # parent_hash luôn NULL). KHÁC "2. Nhật ký đọc": ghi chú KHÔNG khớp được highlight nào bị
+        # ẨN HẲN ở đây thay vì hiện đứng riêng -- xác nhận với người dùng, 1 ghi chú không gắn với
+        # trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách TRÍCH DẪN (khác "2. Nhật
+        # ký đọc" là nhật ký theo NGÀY nên vẫn cần hiện đủ, không được phép "mất" dữ liệu).
+        by_hash = {r['dedupe_hash']: r for _, r in grp.iterrows()}
+        children = {}
+        is_child = set()
+        for _, r in grp.iterrows():
+            if r['Loại'] != 'note':
+                continue
+            ph = r.get('parent_hash')
+            if pd.notna(ph) and ph in by_hash:
+                children.setdefault(ph, []).append(r)
+                is_child.add(r['dedupe_hash'])
+            else:
+                loc = r['Vị trí']
+                if pd.notna(loc):
+                    _match = grp[(grp['Loại'] == 'highlight') & (grp['Vị trí'] == loc)]
+                    if not _match.empty:
+                        ph2 = _match.iloc[0]['dedupe_hash']
+                        children.setdefault(ph2, []).append(r)
+                        is_child.add(r['dedupe_hash'])
+        orphan_notes = set(
+            grp[(grp['Loại'] == 'note') & (~grp['dedupe_hash'].isin(is_child))]['dedupe_hash'])
+        visible_n = len(grp) - len(orphan_notes)
+        if visible_n == 0:
+            continue
+
         author = _reading_author_of(kh, book)
-        _mt = "0" if i == 0 else "26px"
+        _mt = "0" if _rendered_i == 0 else "26px"
         st.markdown(
             f"<div class='fav-book-head' style='margin-top:{_mt}'>"
             f"<div class='fav-book-titles'><span class='pbill-booktitle'>{html_escape(str(book))}</span>"
             + (f"<span class='pbill-author'>{html_escape(str(author))}</span>" if author else "")
-            + f"</div><span class='fav-count-badge'>{len(grp)}</span></div>",
+            + f"</div><span class='fav-count-badge'>{visible_n}</span></div>",
             unsafe_allow_html=True)
         for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
+            if r['dedupe_hash'] in is_child or r['dedupe_hash'] in orphan_notes:
+                continue
             _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+            for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
+                _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
+        _rendered_i += 1
 
     if hidden_books:
         hidden_n = sum(len(view[view['Cuốn sách'] == b]) for b in hidden_books)
