@@ -4270,12 +4270,18 @@ def _render_health_input(df_health):
         _right_html = (f"<div class='pbill-title'>{_status_line}</div>"
                         f"<div class='pbill-chips'>{chips}</div>")
         _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
-        _tab_label = f"{VN_MONTHS_WORD[_latest_date.month - 1]} {_latest_date.year}"
-        _epoch_ms = int(_latest_date.tz_localize(APP_TZ).timestamp() * 1000)
-        _meta = (f"Lần khám gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
-                 f"title='Lần khám {_latest_date:%d/%m/%Y}'>{format_relative(_latest_date)}</b>")
+        # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
+        # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
+        # đọc lẫn với khuôn "tờ lịch hôm nay" của billboard Hôm nay (cùng CSS .tbill-date/.pbill-num
+        # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi thêm ngày tuyệt đối + số ngày đã
+        # trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác format_relative() dùng cho mốc giờ
+        # thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu NGÀY lấy mẫu, không có giờ, nên
+        # hiển thị "X giờ" ở đây là số liệu giả tạo không có thật.
+        _tab_label = "Lần khám gần nhất"
+        _days_ago = (_today_vn() - _latest_date.date()).days
+        _rel = "Hôm nay" if _days_ago == 0 else "Hôm qua" if _days_ago == 1 else f"{_days_ago} ngày trước"
+        _meta = f"{_latest_date:%d/%m/%Y} · {_rel}"
         render_period_billboard(_tab_label, str(_latest_date.day), _vn_dow, _meta, _right_html, _toc)
-        _inject_relative_time_ticker()
         _bc1, _bc2 = st.columns([5, 1])
         with _bc2:
             if st.button("Sửa lần khám này", key="hm_input_latest_edit"):
@@ -4285,11 +4291,18 @@ def _render_health_input(df_health):
     # ==========================================
     # 1. IMPORT HÀNG LOẠT
     # ==========================================
+    @st.dialog("Định dạng JSON mẫu")
+    def _hm_json_example_dialog():
+        st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
+
     sec_chapter("hm-in-ch1", 1, None, "Import hàng loạt", tight_top=True)
     st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
                 "nhiều lần khám cũ cùng lúc.")
-    st.caption("Định dạng JSON mẫu:")
-    st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
+    # Khối JSON mẫu để trong popup (st.dialog(), cùng khuôn "Khôi phục dữ liệu"/"Xoá toàn bộ dữ
+    # liệu" ở Tuỳ biến) thay vì hiện trực tiếp -- xác nhận với người dùng: chỉ để tra cứu/copy khi
+    # cần, không nên chiếm không gian mặc định của chương.
+    if st.button("Xem định dạng JSON mẫu", key="hm_json_example_btn"):
+        _hm_json_example_dialog()
     st.text_area("Dán nội dung JSON vào đây", height=200, key="hm_import_json")
     if st.button("Xem trước", key="hm_import_preview_btn"):
         try:
