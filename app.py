@@ -3346,10 +3346,10 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
         _pg_key = "stats_tbl_page_sach" if page_name == "Sách" else "stats_tbl_page_gundam"
         _n = len(t)
         _start, _end, _num_pages, _paged = _table_page_slice(_n, _pg_key)
-        t = t.iloc[_start:_end]
+        t_page = t.iloc[_start:_end]
 
         rows_html = ''
-        for _, r in t.iterrows():
+        for _, r in t_page.iterrows():
             s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
             start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
             last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
