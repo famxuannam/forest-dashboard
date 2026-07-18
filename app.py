@@ -8438,8 +8438,8 @@ elif nav == "Báo cáo":
                     f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
                     f"{_week_start:%d/%m} – {_week_end:%d/%m} · hoạt động {_active_days_w}/7 ngày",
                     f"<div class='pbill-title'>{_pbill_title_w}</div><div class='pbill-sub'>{_pbill_sub_w}</div>",
-                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Theo ngày"),
-                     ("bc-tuan-ch3", "3 · Danh mục & dự án"), ("bc-tuan-ch4", "4 · Nhật ký"),
+                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Danh mục & dự án"),
+                     ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Nhật ký"),
                      ("bc-tuan-ch5", "5 · Bảng số liệu")])
                 # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
                 # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Danh mục &
@@ -8448,10 +8448,10 @@ elif nav == "Báo cáo":
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
                                               anchor_prefix="bc-tuan", show_footer=False)
-                sec_chapter("bc-tuan-ch2", 2, None, "Theo ngày")
-                frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-                sec_chapter("bc-tuan-ch3", 3, None, "Danh mục & dự án")
+                sec_chapter("bc-tuan-ch2", 2, None, "Danh mục & dự án")
                 frag_category_bars(df_w, "rad_tab4", "Danh mục")
+                sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
+                frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
                 sec_chapter("bc-tuan-ch4", 4, None, "Nhật ký")
                 render_notes_journal(selected_week, 'week', df)
                 sec_chapter("bc-tuan-ch5", 5, None, "Bảng số liệu")
