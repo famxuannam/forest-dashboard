@@ -52,6 +52,57 @@ Nội dung trang Trợ giúp là tài liệu người dùng cuối, không phả
 sửa, thêm nội dung vào đúng chương theo hành trình (buổi sáng → trong ngày → cuối ngày → review →
 nguồn phụ → đồng bộ → tuỳ biến → FAQ → changelog) thay vì mở chương mới.
 
+## Icon: `_mi(name, size=13)` thay EMOJI, không dùng cả 2 kiểu lẫn nhau
+
+Mọi nhãn/câu MỚI thêm dùng icon Material Symbols Rounded qua `_mi('material_icon_name')` (chèn
+`<span style="font-family:'Material Symbols Rounded';...">` vào chuỗi HTML tĩnh) -- KHÔNG dùng
+emoji. Font này Streamlit đã tự load sẵn cho icon `:material/x:` của chính nó nên không cần nhúng
+thêm. Áp dụng cho toàn bộ code mới, không riêng 1 trang nào.
+
+## `render_period_billboard(...)`: khi nào dùng chung key mặc định `"bc_billboard"` được
+
+Hầu hết nơi gọi (Báo cáo mọi sub-tab, Sách/Gundam Tổng quan, Dự án, Tuỳ biến, cả 3 sub-tab Sức
+khoẻ) **không cần truyền `key=` riêng** -- an toàn vì mỗi nav/sub-tab dispatch qua 1 chuỗi
+`if/elif` (xem `architecture-navigation.md`), nên tại 1 lượt chạy chỉ ĐÚNG 1 nhánh thực thi, không
+có 2 billboard nào cùng vẽ. Chỉ cần key riêng khi 2 lời gọi CÓ THỂ cùng nằm trong 1 lượt chạy --
+ca thật duy nhất là Sách/Gundam "Chi tiết" dùng `st.tabs()` (Streamlit render TOÀN BỘ nội dung mọi
+tab, không chỉ tab active), nên phải đặt `key="bc_billboard_detail"` khác `key` mặc định của
+"Tổng quan". Đặt `key` mới nào cũng phải thêm vào ĐỦ mọi rule CSS liệt kê key (`.st-key-
+today_billboard, .st-key-bc_billboard, ...` -- khớp CHÍNH XÁC chuỗi, không dùng substring chung vì
+"..._detail" không còn chứa nguyên vẹn "billboard" gốc).
+
+## Style riêng 1 khu vực bằng tiền tố `key=` chung, không cần bọc container
+
+Mọi widget đặt `key=` đều tự có class `st-key-<key>` trên chính element đó (không chỉ
+`st.container(key=...)` mới có) -- nên style riêng MỌI widget trong 1 trang/feature mà không cần
+bọc thêm container nào, chỉ cần **cùng 1 tiền tố key** rồi CSS `[class*="st-key-<tiền tố>_"]`. Ví
+dụ: mọi widget trang Sức khoẻ đặt key tiền tố `hm_` (`hm_chart_cat`, `hm_hist_year`,
+`hm_entry_date`...) → 1 rule `[class*="st-key-hm_"] [data-testid="stWidgetLabel"] p { font-weight:
+700 !important; }` áp dụng đồng bộ cho nhãn mọi widget trong đó. Đặt tên key nhất quán tiền tố
+theo trang/feature ngay từ đầu để tận dụng được trick này về sau, không cần refactor lại.
+
+## Popup xác nhận/tra cứu: `@st.dialog("Tiêu đề")`
+
+Nội dung phá huỷ dữ liệu (Tuỳ biến → Khôi phục/Xoá toàn bộ) hoặc chỉ tra cứu/copy khi cần (Sức
+khoẻ → Dữ liệu đầu vào → "Xem định dạng JSON mẫu") đặt trong hàm lồng bên trong hàm render, đánh
+dấu `@st.dialog("Tiêu đề")`; nút bên ngoài chỉ có nhiệm vụ GỌI hàm đó (`if st.button(...):
+_xxx_dialog()`), không tự vẽ nội dung — tránh nội dung phụ (ít dùng, hoặc cần xác nhận trước khi
+phá huỷ) chiếm không gian cố định trên trang.
+
+## Chuyển sub-tab bằng code (không phải người dùng click): cờ chờ xử lý, KHÔNG set trực tiếp session_state của widget
+
+`st.segmented_control(..., key="X_picker")` dùng pattern chung: đọc/ghi qua 1 key riêng
+(`st.session_state["X"]`) tách biệt khỏi key CỦA WIDGET (`"X_picker"`) -- xem `bc_sub`/`hm_sub` ở
+`architecture-navigation.md`. Muốn nhảy sang sub-tab khác từ 1 nút bấm ở NƠI KHÁC trong cùng lượt
+chạy (vd nút "Sửa lần khám này" ở Dữ liệu đầu vào nhảy sang Lịch sử) — TUYỆT ĐỐI không set
+`st.session_state["X_picker"] = "..."` ngay tại nút bấm đó: nếu widget `segmented_control` đã
+instantiate TRƯỚC nút bấm này trong CÙNG lượt chạy (thường vậy, vì nó luôn nằm ở đầu hàm dispatch
+trang), Streamlit raise `StreamlitAPIException: cannot be modified after the widget... is
+instantiated` (bug thật đã gặp). Cách đúng: nút bấm chỉ ghi 1 cờ tạm (`st.session_state["_X_jump"]
+= "Lịch sử"`) rồi `st.rerun()`; xử lý cờ đó ở ĐẦU hàm dispatch, TRƯỚC dòng gọi
+`segmented_control` (`if "_X_jump" in st.session_state: ... st.session_state["X_picker"] = ...`) --
+lúc đó là lượt chạy MỚI, set trước khi widget instantiate nên hợp lệ.
+
 ## Bảng số liệu dạng heat table (`DTBL_CSS`)
 
 Style (`DTBL_CSS`) + các hàm dựng bảng số liệu có tô màu theo giá trị (heat cell): `_heat_cell()`

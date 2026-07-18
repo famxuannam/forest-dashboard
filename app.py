@@ -1231,6 +1231,76 @@ def _health_is_abnormal(df):
             (df['Ref cao'].notna() & (df['Giá trị'] > df['Ref cao'])))
 
 
+def _health_score(df_health):
+    """(số chỉ số trong ngưỡng, tổng số chỉ số ĐÁNH GIÁ ĐƯỢC) -- mỗi Chỉ số tính theo giá trị GẦN
+    NHẤT của riêng nó (không phải theo 1 lần khám cụ thể), vì 1 lần khám thường chỉ đo 1 phần các
+    chỉ số (vd đợt này đo đường huyết, đợt trước đo mỡ máu) -- "Số sức khoẻ" ở billboard cần nhìn
+    xuyên suốt MỌI Nhóm/Chỉ số đã từng theo dõi. Chỉ số không có giá trị số hoặc không có khoảng
+    tham chiếu nào (không đánh giá được) bị loại khỏi CẢ tử số lẫn mẫu số, không tính là "bất
+    thường" oan."""
+    latest_per_ind = (df_health.sort_values('Ngày lấy mẫu')
+                      .groupby(['Nhóm', 'Chỉ số'], as_index=False).last())
+    evaluable = latest_per_ind[latest_per_ind['Giá trị'].notna() &
+                                (latest_per_ind['Ref thấp'].notna() | latest_per_ind['Ref cao'].notna())]
+    if evaluable.empty:
+        return 0, 0
+    return int((~_health_is_abnormal(evaluable)).sum()), len(evaluable)
+
+
+def _health_trend_candidates(df_health, n=4):
+    """Chọn tối đa n cặp (Nhóm, Chỉ số) để vẽ mini-card xu hướng (chương "Diễn biến chỉ số",
+    _render_health_report()) -- ưu tiên Chỉ số ĐANG bất thường ở lần khám gần nhất (đáng theo dõi
+    nhất), sau đó xếp theo số lần đo giảm dần (theo dõi đều/lâu mới đủ điểm vẽ xu hướng). Chỉ xét
+    Chỉ số có >=2 giá trị SỐ -- ít hơn thì không có gì để vẽ xu hướng (1 điểm = 1 chấm, không phải
+    đường/cột diễn biến)."""
+    num = df_health[df_health['Giá trị'].notna()]
+    counts = num.groupby(['Nhóm', 'Chỉ số']).size()
+    candidates = list(counts[counts >= 2].index)
+    if not candidates:
+        return []
+    latest_date = num['Ngày lấy mẫu'].max()
+    latest_panel = num[num['Ngày lấy mẫu'] == latest_date]
+    abn_keys = set()
+    if not latest_panel.empty:
+        abn_mask = _health_is_abnormal(latest_panel)
+        abn_keys = set(zip(latest_panel.loc[abn_mask, 'Nhóm'], latest_panel.loc[abn_mask, 'Chỉ số']))
+    candidates.sort(key=lambda k: (k not in abn_keys, -counts[k]))
+    return candidates[:n]
+
+
+def _health_trend_caption(vals, dates, ref_low, ref_high, unit):
+    """1 câu ngắn tóm tắt xu hướng của 1 chỉ số qua các lần đo đang hiện trong mini-card (vd "Ngưỡng
+    ≤ 5.2 — tăng dần 4 kỳ liên tiếp.", "Giảm đều −3.4 kg trong 21 tháng.", "dao động quanh ngưỡng,
+    tăng lại kỳ này.") -- quy tắc đơn giản, KHÔNG suy luận xu hướng phức tạp (hồi quy, trung bình
+    trượt...): vài điểm rời rạc mỗi vài tháng thì phép tính phức tạp cũng không đáng tin hơn so
+    sánh đầu-cuối, mà lại khó hiểu hơn. Riêng trường hợp KHÔNG tăng/giảm đều (n>=3) -- vd
+    462→430→418→445 -- so đầu-cuối đơn thuần sẽ ra "giảm" dù kỳ MỚI NHẤT vừa tăng lại, đọc vào dễ
+    hiểu lầm là đang cải thiện; báo "dao động" + chiều đổi của riêng kỳ mới nhất trung thực hơn."""
+    n = len(vals)
+    if n < 2:
+        return ""
+    ref_txt = f"Ngưỡng ≤ {ref_high:g} — " if pd.notna(ref_high) else (
+        f"Ngưỡng ≥ {ref_low:g} — " if pd.notna(ref_low) else "")
+    delta = vals[-1] - vals[0]
+    months = (dates[-1].year - dates[0].year) * 12 + (dates[-1].month - dates[0].month)
+    span_txt = f"{months} tháng" if months >= 1 else f"{n} kỳ"
+    increasing = all(vals[i] < vals[i + 1] for i in range(n - 1))
+    decreasing = all(vals[i] > vals[i + 1] for i in range(n - 1))
+    if abs(delta) < 1e-9:
+        return f"{ref_txt}ổn định trong {span_txt}."
+    if increasing and n >= 3:
+        return f"{ref_txt}tăng dần {n} kỳ liên tiếp."
+    if decreasing and n >= 3:
+        return f"{ref_txt}giảm đều {abs(delta):.1f} {unit} trong {span_txt}.".replace("  ", " ")
+    if n >= 3:
+        last_delta = vals[-1] - vals[-2]
+        if last_delta == 0:
+            return f"{ref_txt}dao động quanh ngưỡng."
+        return f"{ref_txt}dao động quanh ngưỡng, {'tăng' if last_delta > 0 else 'giảm'} lại kỳ này."
+    verb = "tăng" if delta > 0 else "giảm"
+    return f"{ref_txt}{verb} {abs(delta):.1f} {unit} trong {span_txt}.".replace("  ", " ")
+
+
 def save_health_metrics_bulk(panels):
     """Ghi 1 hoặc nhiều "panel" xét nghiệm vào Supabase -- dùng chung cho cả form nhập nhanh lẫn
     import JSON hàng loạt. panels: list dict {"test_date", "category", "indicators": [{"indicator",
@@ -3970,66 +4040,117 @@ HEALTH_METRICS_JSON_EXAMPLE = [
 
 
 def _render_health_report(df_health):
-    """Sub-tab "Báo cáo": mục KHÔNG đánh số "Chỉ số bất thường" (điểm vào đầu tiên -- xem NGAY
-    lần khám gần nhất có chỉ số nào ngoài khoảng tham chiếu không, không cần chọn từng Nhóm/Chỉ
-    số) rồi tới 1. Số liệu + 2. Biểu đồ theo dõi cho đúng chỉ số đang chọn. Cả 2 mục số/biểu đồ
-    dùng chung is_abn/unit tính 1 lần (tránh lặp logic)."""
+    """Sub-tab "Báo cáo": billboard "Số sức khoẻ" (điểm X/Y chỉ số đang trong ngưỡng, xem
+    _health_score()) rồi 3 chương đánh số: 1· Chỉ số bất thường (card chi tiết + chip "trong
+    ngưỡng" của ĐÚNG lần khám gần nhất) · 2· Diễn biến chỉ số (lưới mini-card xu hướng auto-chọn,
+    xem _health_trend_candidates(), CỘNG với bộ chọn Nhóm/Chỉ số + biểu đồ đường đầy đủ giữ nguyên
+    từ bản cũ -- xác nhận với người dùng: lưới mini-card là tổng quan nhanh THÊM VÀO, không thay
+    thế bộ chọn/biểu đồ chi tiết) · 3· Bảng xét nghiệm đầy đủ (mọi Chỉ số của lần khám gần nhất).
+
+    Mockup có mức đánh giá thứ 3 "Sát ngưỡng" (cam) và chip "Hẹn tái khám" -- CẢ 2 đều bỏ, đã xác
+    nhận với người dùng: mức "sát ngưỡng" cần tự đặt 1 ngưỡng % không có cơ sở dữ liệu thật (giữ
+    nhị phân trong/ngoài ngưỡng như _health_is_abnormal() đã có, đồng bộ với Lịch sử), "Hẹn tái
+    khám" không có trường dữ liệu nào tương ứng trong health_metrics."""
     if df_health.empty:
         st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
         return
 
-    # "Chỉ số bất thường" -- lấy NGUYÊN lần khám gần nhất (cùng test_date, có thể gộp nhiều Nhóm
-    # nếu khám nhiều loại cùng lúc), không phụ thuộc Nhóm/Chỉ số đang chọn bên dưới. Đây là thứ
-    # người dùng thực sự cần thấy NGAY sau khi vừa nhập kết quả khám mới -- xem docstring hàm.
-    _latest_date = df_health['Ngày lấy mẫu'].max()
-
-    # Dòng "Cập nhật lần cuối ... trước" -- cùng khuôn _upd_line của billboard Hôm nay (epoch UTC
-    # + JS ticker tự nhích mỗi 30s qua _inject_relative_time_ticker(), không cần rerun cả trang).
-    _hm_ts = pd.Timestamp(_latest_date)
-    _hm_abs_str = _hm_ts.strftime('%d/%m/%Y')
-    _hm_epoch_ms = int(_hm_ts.tz_localize(APP_TZ).timestamp() * 1000)
-    _hm_meta = (f"Cập nhật lần cuối <b id='last-update-live' data-epoch='{_hm_epoch_ms}' "
-                f"title='Lần khám {_hm_abs_str}'>{format_relative(_hm_ts)}</b>")
-
-    sec_hero(None, "Chỉ số theo thời gian", None,
-             [("hm-bc-abn", "1 · Chỉ số bất thường"), ("hm-bc-ch1", "2 · Số liệu"),
-              ("hm-bc-ch2", "3 · Biểu đồ theo dõi")], meta=_hm_meta)
-    _inject_relative_time_ticker()
-
+    _latest_date = pd.Timestamp(df_health['Ngày lấy mẫu'].max())
     _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
     _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-    sec_chapter("hm-bc-abn", 1, None, "Chỉ số bất thường",
+
+    _abn_latest = _latest_num[_health_is_abnormal(_latest_num)] if not _latest_num.empty else _latest_num
+    if not _abn_latest.empty:
+        # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd tên
+        # đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn nhập liệu
+        # ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị, Đơn vị, Ref thấp,
+        # Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù cùng 1 xét nghiệm) -- dùng
+        # Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô "Khoảng tham chiếu", vì chuỗi thô có
+        # thể lệch khoảng trắng giữa 2 dòng cùng nguồn (vd "<3.4" so với "< 3.4") khiến so sánh
+        # chuỗi trượt trùng dù cùng 1 kết quả. Chỉ giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên
+        # gọn thông dụng). Chỉ áp dụng cho billboard/chương 1 (tóm tắt nhanh) -- Lịch sử Sức khoẻ
+        # vẫn giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
+        _abn_latest = (
+            _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
+            .sort_values('_namelen')
+            .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
+            .drop(columns='_namelen'))
+    _ok_latest = _latest_num.drop(_abn_latest.index)
+
+    _toc = [("hm-bc-ch1", "1 · Chỉ số bất thường"), ("hm-bc-ch2", "2 · Diễn biến chỉ số"),
+            ("hm-bc-ch3", "3 · Bảng xét nghiệm đầy đủ")]
+    _ok_score, _total_score = _health_score(df_health)
+    if not _abn_latest.empty:
+        _abn_chips = ''
+        for _, r in _abn_latest.iterrows():
+            arrow = _mi('arrow_upward', 11) if r['Giá trị'] > r['Ref cao'] else _mi('arrow_downward', 11)
+            _abn_chips += (f"<span class='jchip abn'><span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
+                           f"<span class='cv'>{r['Giá trị']:g}{arrow}</span></span>")
+        _right_html = f"<div class='pbill-kicker'>Cần chú ý</div><div class='pbill-chips'>{_abn_chips}</div>"
+    else:
+        _right_html = "<div class='pbill-title'>Tất cả chỉ số trong ngưỡng</div>"
+    render_period_billboard("Số sức khoẻ", f"{_ok_score}/{_total_score}", "chỉ số trong ngưỡng",
+                             f"Lần khám gần nhất {_latest_date:%d/%m/%Y}", _right_html, _toc)
+
+    sec_chapter("hm-bc-ch1", 1, None, "Chỉ số bất thường",
                 badge=f"Lần khám {_latest_date:%d/%m/%Y}", tight_top=True)
     if _latest_num.empty:
         st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
+    elif _abn_latest.empty:
+        st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong ngưỡng.")
     else:
-        _abn_latest = _latest_num[_health_is_abnormal(_latest_num)]
-        if not _abn_latest.empty:
-            # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd
-            # tên đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn
-            # nhập liệu ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị,
-            # Đơn vị, Ref thấp, Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù
-            # cùng 1 xét nghiệm) -- dùng Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô
-            # "Khoảng tham chiếu", vì chuỗi thô có thể lệch khoảng trắng giữa 2 dòng cùng nguồn
-            # (vd "<3.4" so với "< 3.4") khiến so sánh chuỗi trượt trùng dù cùng 1 kết quả. Chỉ
-            # giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên gọn thông dụng, dễ đọc hơn tên đầy
-            # đủ trên phiếu). Chỉ áp dụng cho card này (tóm tắt nhanh) -- Lịch sử Sức khoẻ vẫn
-            # giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
-            _abn_latest = (
-                _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
-                .sort_values('_namelen')
-                .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
-                .drop(columns='_namelen'))
-        if _abn_latest.empty:
-            st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong khoảng tham chiếu.")
-        else:
-            st.warning(f"{len(_abn_latest)}/{len(_latest_num)} chỉ số ngoài khoảng tham chiếu:")
-            render_stat_panel(hero_items=[], sections=[{"label": "Ngoài khoảng tham chiếu", "chips": [
-                {"k": f"{r['Chỉ số']} ({r['Nhóm']})",
-                 "v": f"{r['Giá trị']:g} {r['Đơn vị'] if pd.notna(r['Đơn vị']) else ''}".strip()
-                      + (f" · TC {r['Khoảng tham chiếu']}" if pd.notna(r['Khoảng tham chiếu']) else ""),
-                 "hl": True} for _, r in _abn_latest.iterrows()]}])
+        _cards = ''
+        for _, r in _abn_latest.iterrows():
+            _above = r['Giá trị'] > r['Ref cao'] if pd.notna(r['Ref cao']) else False
+            arrow = _mi('arrow_upward', 12) if _above else _mi('arrow_downward', 12)
+            _ref_txt = f"trên ngưỡng {r['Ref cao']:g}" if _above else f"dưới ngưỡng {r['Ref thấp']:g}"
+            unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
+            _cards += (
+                "<div class='hmtl-card'>"
+                f"<span class='rl-book'>{html_escape(str(r['Chỉ số']))}</span>"
+                f"<div class='hbn-value'>{r['Giá trị']:g}<span class='hbn-unit'>{unit}</span></div>"
+                f"<div class='hbn-delta'>{arrow} {_ref_txt}</div></div>")
+        st.markdown(f"<div class='hbn-grid'>{_cards}</div>", unsafe_allow_html=True)
+        if not _ok_latest.empty:
+            _ok_chips = ''.join(
+                f"<span class='jchip'><span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
+                f"<span class='cv'>{r['Giá trị']:g}</span></span>" for _, r in _ok_latest.iterrows())
+            st.markdown(f"<div class='hmtl-grp' style='margin-top:16px;'>"
+                        f"<span class='rl-book'>Trong ngưỡng</span>{_ok_chips}</div>", unsafe_allow_html=True)
 
+    sec_chapter("hm-bc-ch2", 2, None, "Diễn biến chỉ số")
+    _trend_keys = _health_trend_candidates(df_health, n=4)
+    if not _trend_keys:
+        st.caption("Chưa có chỉ số nào đủ ít nhất 2 lần đo để vẽ xu hướng.")
+    else:
+        _trend_cards = ''
+        for _nhom, _chiso in _trend_keys:
+            _s = (df_health[(df_health['Nhóm'] == _nhom) & (df_health['Chỉ số'] == _chiso)
+                             & df_health['Giá trị'].notna()]
+                  .sort_values('Ngày lấy mẫu').tail(4).reset_index(drop=True))
+            _vals, _dates = list(_s['Giá trị']), list(_s['Ngày lấy mẫu'])
+            _abn_flags = list(_health_is_abnormal(_s))
+            _vmin, _vmax = min(_vals), max(_vals)
+            _bars = ''
+            for _v, _d, _a in zip(_vals, _dates, _abn_flags):
+                _pct = 50 if _vmax == _vmin else 15 + (_v - _vmin) / (_vmax - _vmin) * 85
+                _bars += (f"<div class='htrend-bar-col'><span class='htrend-bar-val{' abn' if _a else ''}'>"
+                          f"{_v:g}</span><div class='htrend-bar{' abn' if _a else ''}' "
+                          f"style='height:{_pct:.0f}%;'></div><span class='htrend-bar-date'>{_d:%m/%y}</span></div>")
+            _unit_vals = _s['Đơn vị'].dropna()
+            _unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
+            _last = _s.iloc[-1]
+            _caption = _health_trend_caption(_vals, _dates, _last['Ref thấp'], _last['Ref cao'], _unit)
+            _latest_style = "color:#ff3b30;" if _abn_flags[-1] else ""
+            _trend_cards += (
+                "<div class='hmtl-card htrend-card'><div class='hmtl-head'>"
+                f"<span class='htrend-title'>{html_escape(_chiso)} <span class='htrend-unit'>{_unit}</span></span>"
+                f"<span style='font-weight:700;{_latest_style}'>{_vals[-1]:g}</span></div>"
+                f"<div class='htrend-bars'>{_bars}</div>"
+                f"<div class='htrend-caption'>{_caption}</div></div>")
+        st.markdown(f"<div class='htrend-grid'>{_trend_cards}</div>", unsafe_allow_html=True)
+
+    st.write("")
     cc1, cc2 = st.columns(2)
     cats = sorted(df_health['Nhóm'].dropna().unique())
     cat_pick = cc1.selectbox("Nhóm", cats, key="hm_chart_cat")
@@ -4039,10 +4160,14 @@ def _render_health_report(df_health):
          .sort_values('Ngày lấy mẫu'))
     s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
 
+    # "Số liệu"/"Biểu đồ theo dõi" là 2 mục CON trong CÙNG chương 2 (không phải chương riêng đánh
+    # số như bản cũ) -- dùng .section-hd (tiêu đề phụ nhẹ, không có ô số) vì lưới mini-card phía
+    # trên đã là nội dung chính của chương "Diễn biến chỉ số", 2 mục này chỉ là phần "xem sâu 1
+    # chỉ số cụ thể" bổ sung, không cần đánh số ngang hàng 3 chương lớn của trang.
     if s_num.empty:
-        sec_chapter("hm-bc-ch1", 2, None, "Số liệu")
+        st.markdown("<div class='section-hd'>Số liệu</div>", unsafe_allow_html=True)
         st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
-        sec_chapter("hm-bc-ch2", 3, None, "Biểu đồ theo dõi")
+        st.markdown("<div class='section-hd'>Biểu đồ theo dõi</div>", unsafe_allow_html=True)
         st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
         return
 
@@ -4050,7 +4175,7 @@ def _render_health_report(df_health):
     unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
     is_abn = _health_is_abnormal(s_num)
 
-    sec_chapter("hm-bc-ch1", 2, None, "Số liệu")
+    st.markdown("<div class='section-hd'>Số liệu</div>", unsafe_allow_html=True)
     last = s_num.iloc[-1]
     deltas = []
     if len(s_num) > 1:
@@ -4076,7 +4201,7 @@ def _render_health_report(df_health):
     ]
     render_stat_panel(hero_items, sections=sections)
 
-    sec_chapter("hm-bc-ch2", 3, None, "Biểu đồ theo dõi")
+    st.markdown("<div class='section-hd'>Biểu đồ theo dõi</div>", unsafe_allow_html=True)
     _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
     _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
     fig = go.Figure()
@@ -4108,6 +4233,9 @@ def _render_health_report(df_health):
     if is_abn.any():
         st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
     render_health_log_table(s_num, is_abn)
+
+    sec_chapter("hm-bc-ch3", 3, None, "Bảng xét nghiệm đầy đủ", badge=f"Lần khám {_latest_date:%d/%m/%Y}")
+    render_health_full_table(_latest_panel)
 
 
 def _render_health_history(df_health):
@@ -5353,6 +5481,44 @@ def render_period_day_table(df_period, all_days=None):
 """, unsafe_allow_html=True)
 
 
+def render_health_full_table(latest_panel):
+    """Bảng đầy đủ MỌI Chỉ số của LẦN KHÁM GẦN NHẤT (mọi Nhóm), chương "Bảng xét nghiệm đầy đủ"
+    (_render_health_report()) -- khác render_health_log_table() (lịch sử NHIỀU lần đo của ĐÚNG 1
+    Chỉ số): bảng này là 1 lần khám x MỌI Chỉ số, dùng cùng khung .dtbl cho đồng bộ. Cột "Đánh
+    giá" chỉ 2 mức Cao/Thấp (đỏ) hoặc Bình thường (xanh) -- KHÔNG có mức "Sát ngưỡng" như mockup,
+    xem docstring _health_is_abnormal (đã xác nhận với người dùng giữ nhị phân)."""
+    if latest_panel.empty:
+        st.caption("Lần khám gần nhất chưa có chỉ số nào.")
+        return
+    _panel = latest_panel.sort_values(['Nhóm', 'Chỉ số'])
+    _abn = _health_is_abnormal(_panel)
+    rows_html = ''
+    for (_, r), a in zip(_panel.iterrows(), _abn):
+        val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
+        if a:
+            _direction = "Cao" if pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao'] else "Thấp"
+            eval_html = f"<span class='heval-bad'>{_direction}</span>"
+        elif pd.notna(r['Giá trị']):
+            eval_html = "<span class='heval-ok'>Bình thường</span>"
+        else:
+            eval_html = ''
+        rows_html += (
+            '<tr class="prow">'
+            f'<td class="lbl">{html_escape(str(r["Chỉ số"]))}</td>'
+            f'<td>{html_escape(val)}</td>'
+            f'<td class="txt">{html_escape(str(r["Khoảng tham chiếu"])) if pd.notna(r["Khoảng tham chiếu"]) else ""}</td>'
+            f'<td class="txt">{html_escape(str(r["Đơn vị"])) if pd.notna(r["Đơn vị"]) else ""}</td>'
+            f'<td class="txt">{eval_html}</td>'
+            '</tr>')
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="lbl">Chỉ số</th><th>Kết quả</th><th class="txt">Ngưỡng</th>
+<th class="txt">Đơn vị</th><th class="txt">Đánh giá</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+
 def render_health_log_table(s_num, is_abn):
     """Bảng từng lần đo của 1 chỉ số, dưới biểu đồ theo dõi (Sức khoẻ -> Báo cáo, mục "2. Biểu đồ
     theo dõi") -- dùng cùng khung .dtbl (viền/nền/header dính) với các bảng Báo cáo Thời gian
@@ -6269,6 +6435,40 @@ st.markdown(
        ck/cv) thêm 1 mũi tên Material lên/xuống tuỳ Giá trị vượt Ref cao hay dưới Ref thấp. */
     .jchip.abn { background: rgba(255,59,48,0.10); }
     .jchip.abn .cv { color: #ff3b30; }
+    /* Sub-tab "Báo cáo" (_render_health_report()) -- 2 khối mới theo mockup: card chi tiết chỉ
+       số bất thường (chương 1) và lưới mini-card xu hướng (chương 2), CÙNG khuôn .hmtl-card cho
+       đồng bộ với các thẻ khác của trang Sức khoẻ (Lịch sử, Dữ liệu đầu vào). */
+    .hbn-grid, .htrend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px; margin-top: 10px; }
+    .hbn-value { font-size: 28px; font-weight: 800; color: var(--text); margin-top: 4px; line-height: 1; }
+    .hbn-value .hbn-unit { font-size: 14px; font-weight: 600; color: var(--text-2); margin-left: 4px; }
+    .hbn-delta { font-size: 12.5px; font-weight: 600; color: #ff3b30; margin-top: 6px; }
+    .hbn-delta span[style] { vertical-align: -2px; margin-right: 2px; }
+    .htrend-card .hmtl-head { margin-bottom: 12px; }
+    .htrend-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+    .htrend-title .htrend-unit { font-size: 11.5px; font-weight: 500; color: var(--text-2); }
+    .htrend-bars { display: flex; align-items: flex-end; gap: 10px; height: 88px; }
+    .htrend-bar-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center;
+        justify-content: flex-end; height: 100%; }
+    .htrend-bar-val { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 4px;
+        white-space: nowrap; }
+    .htrend-bar-val.abn { color: #ff3b30; }
+    .htrend-bar { width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: var(--accent); }
+    .htrend-bar.abn { background: #ff3b30; }
+    .htrend-bar-date { font-size: 10.5px; color: var(--text-2); margin-top: 5px; }
+    .htrend-caption { font-size: 12.5px; color: var(--text-2); margin-top: 10px; }
+    /* Chương 3 "Bảng xét nghiệm đầy đủ" -- text đánh giá màu theo trạng thái, dùng CHUNG 2 màu
+       đỏ/xanh với mọi nơi khác của Sức khoẻ (không có mức "sát ngưỡng" -- xem docstring
+       _health_is_abnormal, quyết định giữ nhị phân đã xác nhận với người dùng). */
+    .dtbl .heval-bad { color: #ff3b30; font-weight: 600; }
+    .dtbl .heval-ok { color: #34c759; font-weight: 600; }
+    /* Nhãn widget (Nhóm/Chỉ số/Ngày lấy mẫu/Năm...) trong trang Sức khoẻ -- mặc định Streamlit
+       mảnh + nhạt màu, dễ lướt qua khi nhãn chính là nội dung cần đọc trước (chọn ĐÚNG Nhóm/Chỉ
+       số muốn xem, không phải phụ chú). Đậm + rõ hơn, chỉ áp dụng trong phạm vi trang Sức khoẻ
+       (mọi widget ở đây đặt key tiền tố "hm_") -- không đổi nhãn widget ở các trang khác. */
+    [class*="st-key-hm_"] [data-testid="stWidgetLabel"] p {
+        font-weight: 700 !important; color: var(--text) !important; font-size: 13.5px !important;
+    }
     /* Expander "Sửa / xoá xét nghiệm đã nhập" (_render_health_history()) -- ghi đè riêng trong
        phạm vi container key="hm_hist_edit" để trông như 1 thẻ hộp khớp .hmtl-card phía trên, thay
        vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của [data-testid="stExpander"], xem rule

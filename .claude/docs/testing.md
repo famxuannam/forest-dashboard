@@ -42,6 +42,19 @@ nút rồi đọc lại state).
 Regenerate scratch harness mới mỗi phiên làm việc — không giả định 1 file scratch từ phiên trước
 còn tồn tại hay còn đúng, vì nó không được commit vào repo.
 
+**3 lỗi hay gặp khi dựng/dùng harness:**
+- Chạy `streamlit run` bằng `nohup ... & disown` lồng trong 1 lời gọi Bash duy nhất KHÔNG đáng tin
+  — process có thể bị dọn ngay khi lời gọi đó trả về, trước cả khi server kịp sẵn sàng. Luôn chạy
+  bằng tham số nền riêng của tool Bash (`run_in_background: true`) thành 1 lời gọi tách biệt, rồi
+  `curl` kiểm tra ở 1 lời gọi SAU đó.
+- `pkill -f "streamlit run <scratch>.py"` để dọn dẹp LUÔN kèm 1 thông báo nền dạng "failed with
+  exit code 144" cho tiến trình streamlit vừa bị kill — đây là HỆ QUẢ ĐÚNG DỰ KIẾN của chính lệnh
+  pkill đó (128+16=144, SIGTERM), không phải lỗi thật, không cần điều tra thêm.
+- Screenshot `full_page=True` của 1 trang RẤT DÀI (nhiều chương) có thể bị CẮT NGANG đúng bằng
+  chiều cao viewport đã set — Streamlit render nội dung trong 1 container cuộn riêng, không phải
+  cuộn `<body>` bình thường, nên Playwright không tự "cuộn hết rồi chụp" được như trang web thường.
+  Set `viewport height` đủ lớn (vd 2600-3200px) để chứa hết nội dung thay vì dựa vào `full_page`.
+
 ## Bước 3: với logic nhiều nhánh, viết thêm 1 script Python thuần
 
 Với bất kỳ hàm nào có hơn 2-3 nhánh logic (so sánh ngày tháng, chọn template, parse CSV), viết 1
