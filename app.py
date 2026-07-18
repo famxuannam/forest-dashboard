@@ -8211,8 +8211,8 @@ def render_day_report(df):
     # triển), giờ chỉ còn là mục tham khảo phụ đọc thêm cuối trang, không còn ở đầu.
     _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
                    if day_df.empty else
-                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Ghi chú ngày"),
-                    ("today-ch3", "3 · Phân bổ thời gian"), ("today-ch4", "4 · Danh sách phiên"),
+                   [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
+                    ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này năm trước")])
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
@@ -8276,11 +8276,11 @@ def render_day_report(df):
 
         render_session_bar(day_df)
 
-        sec_chapter("today-ch2", 2, None, "Ghi chú ngày")
-        render_note_editor(sel, sel_day_badges)
-
-        sec_chapter("today-ch3", 3, None, "Phân bổ thời gian")
+        sec_chapter("today-ch2", 2, None, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
+
+        sec_chapter("today-ch3", 3, None, "Ghi chú ngày")
+        render_note_editor(sel, sel_day_badges)
 
         sec_chapter("today-ch4", 4, None, "Danh sách phiên")
         rows_html = ''
