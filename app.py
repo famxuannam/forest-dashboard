@@ -8773,10 +8773,9 @@ elif nav == "Báo cáo":
                     _right_html_g,
                     [("bc-duan-ch1", "1 · Tổng quan")]
                     + ([("bc-duan-chrl", "Nhật ký đọc")] if not _rl_book.empty else [])
-                    + [("bc-duan-ch2", "2 · Xu hướng theo tuần"), ("bc-duan-ch3", "3 · Nhịp làm việc"),
-                       ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Biểu đồ lịch"),
-                       ("bc-duan-ch6", "6 · Xu hướng theo thời gian"), ("bc-duan-ch7", "7 · Phân bố độ dài phiên"),
-                       ("bc-duan-ch8", "8 · Bảng số liệu")])
+                    + [("bc-duan-ch2", "2 · Biểu đồ lịch"), ("bc-duan-ch3", "3 · Xu hướng"),
+                       ("bc-duan-ch4", "4 · Nhịp làm việc"), ("bc-duan-ch5", "5 · Phiên gần đây"),
+                       ("bc-duan-ch6", "6 · Phân bố độ dài phiên"), ("bc-duan-ch7", "7 · Bảng số liệu")])
 
                 sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
                 wd_g = _weekday_avg(df_g)
@@ -8827,7 +8826,6 @@ elif nav == "Báo cáo":
 
                 render_stat_panel(
                     hero_items=[
-                        {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(curr_hrs_g)}"},
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
@@ -8840,19 +8838,25 @@ elif nav == "Báo cáo":
                         st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
                                     unsafe_allow_html=True)
 
-                sec_chapter("bc-duan-ch2", 2, "12 tuần gần nhất", "Xu hướng theo tuần")
-                render_project_week_trend(df_g)
-                sec_chapter("bc-duan-ch3", 3, None, "Nhịp làm việc")
-                render_project_rhythm(df_g)
-                sec_chapter("bc-duan-ch4", 4, "30 ngày gần nhất", "Phiên gần đây")
-                render_project_recent_sessions(df_g)
-                sec_chapter("bc-duan-ch5", 5, None, "Biểu đồ lịch")
+                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
                 frag_calendar(df_g, "range_grp_cal")
-                sec_chapter("bc-duan-ch6", 6, None, "Xu hướng theo thời gian")
-                frag_trend(df_g, "trend_grp", "Dự án")
-                sec_chapter("bc-duan-ch7", 7, None, "Phân bố độ dài phiên")
+
+                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng")
+                _duan_trend_view = st.segmented_control(
+                    "Xem theo", ["12 tuần gần nhất", "Toàn thời gian"], default="12 tuần gần nhất",
+                    key="bc_duan_trend_view", label_visibility="collapsed") or "12 tuần gần nhất"
+                if _duan_trend_view == "12 tuần gần nhất":
+                    render_project_week_trend(df_g)
+                else:
+                    frag_trend(df_g, "trend_grp", "Dự án")
+
+                sec_chapter("bc-duan-ch4", 4, None, "Nhịp làm việc")
+                render_project_rhythm(df_g)
+                sec_chapter("bc-duan-ch5", 5, "30 ngày gần nhất", "Phiên gần đây")
+                render_project_recent_sessions(df_g)
+                sec_chapter("bc-duan-ch6", 6, None, "Phân bố độ dài phiên")
                 render_session_histogram(df_g)
-                sec_chapter("bc-duan-ch8", 8, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch7", 7, None, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
