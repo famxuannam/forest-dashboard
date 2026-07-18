@@ -2890,7 +2890,7 @@ def _render_kindle_quotes_tab():
     """Sub-tab "Trích dẫn" (trang Sách, không có ở Gundam -- xem show_favorites ở
     render_reading_log()): duyệt lại MỌI trích dẫn/ghi chú Kindle đã lưu, gộp theo cuốn sách --
     trước đây tab này (tên "Yêu thích") CHỈ hiện phần đã đánh dấu ⭐, đổi theo yêu cầu người dùng
-    để xem lại được toàn bộ trích dẫn, kèm toggle "Chỉ Yêu thích" cho ai chỉ muốn xem đúng phần đã
+    để xem lại được toàn bộ trích dẫn, kèm chip lọc "Yêu thích" cho ai chỉ muốn xem đúng phần đã
     đánh dấu. Đây thuần là 1 cách LỌC khác của cùng bảng kindle_highlights, không phải dữ liệu
     riêng -- tái dùng NGUYÊN _render_kindle_quote_row() (cùng Sửa/Xoá/+ Ghi chú/⭐) để sửa/bỏ đánh
     dấu được thẳng tại đây, không cần quay lại "2. Nhật ký đọc" của đúng cuốn đó.
@@ -2898,17 +2898,22 @@ def _render_kindle_quotes_tab():
     Thêm bộ lọc/sắp xếp (theo mockup gốc + toggle Yêu thích mới): ô tìm theo nội dung trích dẫn,
     sắp xếp Mới lưu nhất/Cũ nhất (theo "Ngày thêm" -- mốc lưu vào Kindle, DÙNG CHUNG với
     show_added_date ở _render_kindle_quote_row(), KHÔNG phải "Vị trí" Kindle như "2. Nhật ký
-    đọc"), và 1 hàng chip: "Chỉ Yêu thích" đứng ĐẦU hàng, CÙNG style pill với các chip "Lọc theo
-    sách" phía sau -- xác nhận với người dùng: st.toggle (dạng công tắc, thử trước đó) trông không
-    gọn bằng, đổi sang st.segmented_control RIÊNG (selection_mode="multi", chỉ 1 lựa chọn) đặt
-    NGAY TRƯỚC segmented_control "Lọc theo sách" trong CÙNG 1 st.container(horizontal=True) --
-    2 widget tách biệt (không lồng vào lựa chọn 1-trong-N của "Lọc theo sách") nên bật/tắt được
-    ĐỘC LẬP với chip sách đang chọn, nhưng nhờ đặt cùng hàng ngang + cùng gap nên trông liền mạch
-    như 1 dải chip duy nhất. Đếm số trích dẫn ở chip "Lọc theo sách" không đổi theo ô tìm để nhãn
-    chip ổn định giữa các lần rerun -- NHƯNG đổi theo toggle Yêu thích, vì đó là đổi tập dữ liệu
-    nền chứ không phải lọc mềm như ô tìm. Sách nhiều hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng
-    thứ tự sắp xếp đang chọn), có nút "Hiện thêm" mở hết -- trạng thái mở lưu ở session_state,
-    KHÔNG reset khi đổi tìm/sắp xếp/lọc để tránh giật khi người dùng đang duyệt."""
+    đọc"), và 1 hàng chip: "Yêu thích" đứng ĐẦU hàng, CÙNG style pill với các chip "Lọc theo sách"
+    phía sau -- xác nhận với người dùng: st.toggle (dạng công tắc, thử trước đó) trông không gọn
+    bằng, đổi sang st.segmented_control RIÊNG (selection_mode="multi", chỉ 1 lựa chọn) đặt NGAY
+    TRƯỚC segmented_control "Lọc theo sách" trong CÙNG 1 st.container(horizontal=True) -- 2 widget
+    tách biệt (không lồng vào lựa chọn 1-trong-N của "Lọc theo sách") nên bật/tắt được ĐỘC LẬP với
+    chip sách đang chọn, nhưng nhờ đặt cùng hàng ngang + cùng gap nên trông liền mạch như 1 dải
+    chip duy nhất. Icon ":material/star:" (KHÔNG phải emoji ⭐ thô như bản đầu) -- an toàn dùng
+    Material ở đây dù font Material Symbols của Streamlit không phân biệt được star đặc/rỗng (xem
+    chú thích ở nút ⭐/☆ hàng trích dẫn, _render_kindle_quote_row() dùng ký tự thật vì lý do đó):
+    chip này chỉ cần 1 icon TĨNH, trạng thái bật/tắt đã thể hiện qua nền pill được chọn, không cần
+    phân biệt hình dạng sao đặc/rỗng như nút toggle từng trích dẫn. Đếm số trích dẫn ở chip "Lọc
+    theo sách" không đổi theo ô tìm để nhãn chip ổn định giữa các lần rerun -- NHƯNG đổi theo
+    toggle Yêu thích, vì đó là đổi tập dữ liệu nền chứ không phải lọc mềm như ô tìm. Sách nhiều
+    hơn 3 cuốn thu gọn còn 3 cuốn đầu (theo đúng thứ tự sắp xếp đang chọn), có nút "Hiện thêm" mở
+    hết -- trạng thái mở lưu ở session_state, KHÔNG reset khi đổi tìm/sắp xếp/lọc để tránh giật
+    khi người dùng đang duyệt."""
     kh = load_kindle_highlights()
     if kh.empty:
         st.info("Chưa có trích dẫn/ghi chú Kindle nào. Tải file My Clippings.txt ở mục \"Tải "
@@ -2917,13 +2922,13 @@ def _render_kindle_quotes_tab():
 
     fcol1, fcol2 = st.columns([2, 1])
     with fcol1:
-        search = st.text_input("Tìm trong trích dẫn đã lưu", key="fav_search",
+        search = st.text_input("**Tìm trong trích dẫn đã lưu**", key="fav_search",
                                 placeholder="Tìm theo nội dung trích dẫn...")
     with fcol2:
-        sort_label = st.selectbox("Sắp xếp", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
+        sort_label = st.selectbox("**Sắp xếp**", ["Mới lưu nhất", "Cũ nhất"], key="fav_sort")
 
     with st.container(horizontal=True, gap="small"):
-        fav_sel = st.segmented_control("Yêu thích", ["⭐ Chỉ Yêu thích"], selection_mode="multi",
+        fav_sel = st.segmented_control("Yêu thích", [":material/star: Yêu thích"], selection_mode="multi",
                                         key="fav_only_filter", label_visibility="collapsed")
         fav_only = bool(fav_sel)
         quotes = kh[kh['Yêu thích']] if fav_only else kh
@@ -3098,7 +3103,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     # trước Chi tiết theo yêu cầu -- tab hay ghé lại (Trích dẫn) gần đầu hơn tab tra cứu sâu 1 cuốn
     # cụ thể (Chi tiết), chỉ Sách mới có tab này nên Gundam không đổi thứ tự 2 tab của mình). Tab
     # trước đây tên "Yêu thích" (chỉ hiện trích dẫn đã đánh dấu ⭐) -- đổi tên "Trích dẫn" theo yêu
-    # cầu người dùng, giờ hiện MỌI trích dẫn kèm toggle lọc riêng "Chỉ Yêu thích" (xem
+    # cầu người dùng, giờ hiện MỌI trích dẫn kèm chip lọc riêng "Yêu thích" (xem
     # _render_kindle_quotes_tab()), không còn giới hạn chỉ phần đã đánh dấu như tên cũ.
     _tab_labels = [":material/bar_chart: Tổng quan"]
     if show_favorites:
