@@ -5249,12 +5249,20 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
         _longest_sess = df_m.loc[df_m['Thời lượng (Phút)'].idxmax()]
         _longest_sess_ts = pd.Timestamp(_longest_sess['Thời gian bắt đầu'])
         _longest_streak = _streak_stats(df_m)['longest']
+        # 4 dòng, khớp số dòng thẻ "So với tháng trước" bên cạnh (cùng hàng, height:100% chỉ ép
+        # cao bằng nhau ở KHUNG thẻ, không tự căn giữa nội dung ngắn hơn -- xem yêu cầu người
+        # dùng) -- "Ngày nhiều phiên nhất" là kỷ lục THẬT, khác trục với "Ngày dài nhất" (theo số
+        # phiên thay vì tổng thời lượng), không phải số lặp lại cho đủ dòng.
+        _by_day_cnt_m = df_m.groupby('Ngày').size()
+        _busiest_cnt_date = _by_day_cnt_m.idxmax()
+        _busiest_cnt = int(_by_day_cnt_m.max())
         st.markdown(
             "<div class='glass-card month-hl-card' style='padding:14px 18px;height:100%;'>"
             "<span class='rl-book'>Kỷ lục trong tháng</span><div class='hlt-list'>"
             f"<div class='hlt-item'>{_mi('emoji_events')} Ngày dài nhất · {_busiest_date:%d/%m} · {_fmt_hours_short(_busiest_hrs)}</div>"
             f"<div class='hlt-item'>{_mi('timer')} Phiên dài nhất · {_longest_sess_ts:%d/%m} · "
             f"{int(_longest_sess['Thời lượng (Phút)'])}′ ({html_escape(str(_longest_sess['Dự án']))})</div>"
+            f"<div class='hlt-item'>{_mi('bolt')} Ngày nhiều phiên nhất · {_busiest_cnt_date:%d/%m} · {_busiest_cnt} phiên</div>"
             f"<div class='hlt-item'>{_mi('local_fire_department')} Chuỗi trong tháng · {_longest_streak} ngày liên tiếp</div>"
             "</div></div>", unsafe_allow_html=True)
 
