@@ -8634,7 +8634,7 @@ elif nav == "Báo cáo":
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
                     [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
                      ("bc-nam-ch3", "3 · Danh mục cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
-                     ("bc-nam-ch5", "5 · Sách & Gundam"), ("bc-nam-ch6", "6 · Bảng số liệu")])
+                     ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
                                               "Ngày nổi bật trong năm", show_top3=False,
@@ -8644,9 +8644,9 @@ elif nav == "Báo cáo":
                 # xử lý "Điểm nhấn" ở nhánh Tháng, xác nhận với người dùng.
                 render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
 
-                # Nhánh Năm có bộ mục 2-6 khác Tuần/Tháng (Biểu đồ lịch/Danh mục cả năm/Theo tháng
-                # + Sách & Gundam thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không
-                # đủ giống để viết chung 1 hàm với Tháng, giữ riêng ở đây.
+                # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Danh mục cả năm/Theo
+                # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
+                # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
@@ -8660,21 +8660,7 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-nam-ch4", 4, None, "Theo tháng")
                 render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch5", 5, None, "Đọc sách & Gundam trong năm")
-                # Chỉ đếm đơn giản (số phần đã đọc, số cuốn/series có hoạt động) -- KHÔNG lặp
-                # lại logic phân loại "Đã xong/Đang đọc" sống trong render_reading_log(), quá
-                # phức tạp để tách ra cho 1 mục tổng kết năm.
-                rl_y = load_reading_log()
-                rl_y = rl_y[rl_y['Ngày hoàn thành'].dt.year == int(selected_year)] if not rl_y.empty else rl_y
-                if rl_y.empty:
-                    st.caption("Chưa có phần sách/Gundam nào hoàn thành trong năm này.")
-                else:
-                    render_stat_panel(hero_items=[
-                        {"label": "Số phần đã đọc", "value": f"{len(rl_y)}"},
-                        {"label": "Số cuốn/series có hoạt động", "value": f"{rl_y['Cuốn sách'].nunique()}"},
-                    ])
-
-                sec_chapter("bc-nam-ch6", 6, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
                 render_detail_table(df_y)
     elif bc_sub == "Dự án":
         if not df.empty:
