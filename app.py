@@ -3407,12 +3407,13 @@ _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn 
 
 def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện billboard + 4
-    chương đánh số -- 1. Số liệu (hero chip, tái dùng render_stat_panel), 2. Nhật ký đọc
-    (_render_reading_kindle_days, có thêm chip "Thời gian"/ghi chú ngày -- xem docstring hàm đó),
-    3. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ), 4. Bảng số liệu (từng
-    ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách lẫn Gundam qua labels. Đã xác
-    nhận với người dùng GIỮ NGUYÊN cả 4 chương này (mockup billboard mới chỉ gợi ý 2 chương, không
-    áp dụng -- xem AskUserQuestion trong lịch sử phiên).
+    chương đánh số -- 1. Số liệu (render_stat_panel, KHÔNG có hero vì Tổng giờ/số phần đã hiện ở
+    chip billboard ngay trên), 2. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ --
+    dời lên vị trí 2 để khớp vị trí chuẩn của "Biểu đồ lịch" ở mọi trang khác trong app), 3. Nhật
+    ký đọc/xem (_render_reading_kindle_days, có thêm chip "Thời gian"/ghi chú ngày -- xem docstring
+    hàm đó), 4. Bảng số liệu (từng ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách
+    lẫn Gundam qua labels. Đã xác nhận với người dùng GIỮ NGUYÊN đủ 4 chương này (mockup billboard
+    mới chỉ gợi ý 2 chương, không áp dụng -- xem AskUserQuestion trong lịch sử phiên).
 
     Billboard (render_period_billboard()) render SAU khi đã chọn 1 cuốn/series (không phải ngay
     khi vào tab) -- tránh chip mục lục trỏ tới chương chưa tồn tại lúc ô chọn còn để trống, đúng
@@ -3488,8 +3489,8 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         f"bắt đầu {pd.Timestamp(_row['Bắt đầu']):%d/%m} · lần {labels['verb']} gần nhất "
         f"{_rel_day_label(_row['Gần nhất'], _today_vn())}",
         _right_ct,
-        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", f"2 · {_journal_label}"),
-         (f"{_anchor_ns}-ch3", "3 · Biểu đồ lịch"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
+        [(f"{_anchor_ns}-ch1", "1 · Số liệu"), (f"{_anchor_ns}-ch2", "2 · Biểu đồ lịch"),
+         (f"{_anchor_ns}-ch3", f"3 · {_journal_label}"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
         key="bc_billboard_detail")
 
     sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu", tight_top=True)
@@ -3510,15 +3511,20 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         _tt.append({"k": labels['part_recent_label'], "v": str(_row['Phần gần nhất'])})
     _secs.append({"label": "Trạng thái", "chips": _tt})
 
+    # hero_items=[] -- "Tổng giờ"/labels['parts_label'] đã hiện ở chip billboard ngay phía trên
+    # (xem _chips_ct), lặp lại làm hero ở đây là thừa. Chỉ giữ các sections (số liệu MỚI).
     render_stat_panel(
-        hero_items=[
-            {"label": "Tổng giờ", "value": f"{_fmt_hours_short(_row['Tổng giờ'])}" if pd.notna(_row['Tổng giờ']) else "—"},
-            {"label": labels['parts_label'], "value": f"{int(_row['Số phần đã đọc'])}" if pd.notna(_row['Số phần đã đọc']) else "—"},
-        ],
+        hero_items=[],
         sections=_secs,
     )
 
-    sec_chapter(f"{_anchor_ns}-ch2", 2, None, _journal_label)
+    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Biểu đồ lịch")
+    if not _rl_detail.empty:
+        render_reading_calendar_grid(_rl_detail, labels)
+    else:
+        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
+
+    sec_chapter(f"{_anchor_ns}-ch3", 3, None, _journal_label)
     # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
     # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
@@ -3528,12 +3534,6 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
             _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books)
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
-
-    sec_chapter(f"{_anchor_ns}-ch3", 3, None, "Biểu đồ lịch")
-    if not _rl_detail.empty:
-        render_reading_calendar_grid(_rl_detail, labels)
-    else:
-        st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
 
     sec_chapter(f"{_anchor_ns}-ch4", 4, None, "Bảng số liệu")
     if not _rl_detail.empty:
