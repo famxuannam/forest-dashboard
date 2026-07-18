@@ -4042,12 +4042,10 @@ def _render_health_report(df_health):
             ("hm-bc-ch3", "3 · Bảng xét nghiệm đầy đủ")]
     _ok_score, _total_score = _health_score(df_health)
     if not _abn_latest.empty:
-        _abn_chips = ''
-        for _, r in _abn_latest.iterrows():
-            arrow = _mi('arrow_upward', 11) if r['Giá trị'] > r['Ref cao'] else _mi('arrow_downward', 11)
-            _abn_chips += (f"<span class='jchip abn'><span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
-                           f"<span class='cv'>{r['Giá trị']:g}{arrow}</span></span>")
-        _right_html = f"<div class='pbill-kicker'>Cần chú ý</div><div class='pbill-chips'>{_abn_chips}</div>"
+        # Chỉ hiện SỐ LƯỢNG, không liệt kê từng chỉ số bằng chip -- danh sách chi tiết (tên/giá
+        # trị/mũi tên) đã có ngay dưới ở chương 1 "Chỉ số bất thường", lặp lại ở billboard là dư.
+        _right_html = (f"<div class='pbill-kicker'>Cần chú ý</div>"
+                        f"<div class='pbill-title'>{len(_abn_latest)} chỉ số ngoài ngưỡng</div>")
     else:
         _right_html = "<div class='pbill-title'>Tất cả chỉ số trong ngưỡng</div>"
     render_period_billboard("Số sức khoẻ", f"{_ok_score}/{_total_score}", "chỉ số trong ngưỡng",
