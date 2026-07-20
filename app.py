@@ -10639,7 +10639,7 @@ elif nav == "Hướng dẫn":
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
     # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
     HELP_CHANGELOG = [
-        dict(pr="235-237", date="20/07/2026", pr_lines=86, total_lines=10706,
+        dict(pr="235-238", date="20/07/2026", pr_lines=168, total_lines=10760,
              title="Sách đổi sang mô hình Gundam: một thẻ chung, tự suy luận đúng cuốn theo ngày",
              bullets=[
                  "**Không cần tạo tag riêng cho từng cuốn sách nữa** — chỉ cần bấm giờ đọc dưới đúng "
