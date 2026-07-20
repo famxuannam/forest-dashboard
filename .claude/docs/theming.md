@@ -33,6 +33,60 @@ lan ra 3 nơi bằng 3 cơ chế khác nhau, phải nhớ cả 3 khi thêm 1 UI 
    trang chính (kể cả `:root` var) KHÔNG lan vào được. App tự tiêm 1 đoạn `<style>` riêng vào BÊN
    TRONG iframe đó (lặp lại theo interval để chống Streamlit dựng lại iframe làm mất style).
 
+## 3 trục cá nhân hoá nền/thẻ (tab Tuỳ biến → "4. Giao diện"), tách biệt với accent
+
+Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 3 trục CSS-variable độc lập, kết hợp tự do với
+nhau và với accent:
+
+1. **Bảng màu nền** (`BG_PALETTES`, setting `bg_palette`) — bundle ĐỦ 7 token `(light, dark)`
+   dùng để dựng `_TOK`: `bg`/`card`/`card-tl`/`border`/`divider`/`divider-2`/`chip`. Bundle đủ 7
+   token cùng lúc (không cho đổi rời) để tránh nền mới "đọ màu" với viền/chip cũ. `text`/`text-2`/
+   `text-3`/`text-4` CHỦ Ý không nằm trong bundle này — giữ cố định, tách biệt như accent.
+2. **Kiểu thẻ** (`CARD_STYLES`, setting `card_style`) — 3 token CSS `--card-radius`/
+   `--card-border-w`/`--card-shadow`, áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
+   "thẻ nội dung" (nền `var(--card)` + viền `var(--border)` + bo góc + đổ bóng nhẹ) PHẢI dùng 3
+   token này thay vì hard-code `border-radius:10px`/`border:1px solid var(--border)`/
+   `box-shadow:0 1px 1px rgba(0,0,0,0.02)` — nếu không, thẻ đó sẽ "quên" đổi khi người dùng chọn
+   kiểu thẻ khác. KHÔNG áp cho radius/border có ngôn ngữ hình khác cố ý (badge `999px`/`6-9px`,
+   avatar tròn `50%`, input/button `7px`).
+3. **Mật độ bố cục** (`CARD_DENSITY`, setting `card_density`) — 2 token `--card-pad`/`--card-gap`,
+   CHỈ áp cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (`16px 18px`/`margin 10px
+   0`, ví dụ `.sec-card`). KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
+   (`.quotes-card`, `.help-tl-item`, `.dtl-card`, `.dtl-track`...) — những nơi đó giữ nguyên giá
+   trị padding literal.
+
+Cả 3 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
+bỏ → rơi về mặc định đầu tiên, không crash) và đúng pattern UI nút-preview + `save_setting()` +
+`st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới.
+
+**Bẫy `st.container(border=True)`:** viền/bo góc/bóng MẶC ĐỊNH của Streamlit cho container này đọc
+theme TĨNH (`.streamlit/config.toml`), KHÔNG tự đổi theo `--card-radius`/`--card-border-w`/
+`--card-shadow`/`--border` dù nền `background` có thể ép qua `var(--card)` bình thường. Mọi key
+container border=True trong app (`.st-key-tb_backup_card` và tương tự, xem rule gần
+`stVerticalBlock`/`st-key-` trong khối CSS chính) phải được liệt kê tường minh trong 1 rule ép cả
+`background`/`border-color`/`border-width`/`border-radius`/`box-shadow` qua đúng 4 token trên —
+thêm 1 `st.container(border=True, key=...)` mới ở bất kỳ đâu mà quên thêm vào danh sách này sẽ
+"đứng yên" lạc tông khi người dùng đổi Bảng màu nền/Kiểu thẻ.
+
+## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
+
+`BODY_FONT`/`BODY_FONT_NAME` (chọn từ `BODY_FONTS`, setting `body_font`, mặc định "Manrope") lan ra
+đúng 2 nơi, không hơn — font bảng số liệu (`_TABLE_FONT_FACE`, IBM Plex Mono) và font trích dẫn
+(`_QUOTE_FONT_FACE`, Cormorant Garamond) CHỦ Ý đứng ngoài trục này, giữ cố định vì có vai trò nội
+dung riêng:
+
+1. **`html, body, .stApp` trong khối CSS chính** — literal `'Manrope'` bị `.replace()` thay đúng
+   font đang chọn ngay trước khi `st.markdown()` inject (khối CSS chính là string thường, xem mục
+   trên — không đổi sang f-string, chỉ `.replace()` đúng chỗ cần).
+2. **Iframe Quill (`style_quill()`)** — cùng `.replace('Manrope', ...)` trên `QUILL_CSS` trước khi
+   tiêm vào iframe, giống hệt cách `ACCENT`/màu dark-mode literal đã làm ở đó.
+
+`_body_font_b64(file_prefix)` CHỈ tải/nhúng base64 đúng 1 font đang chọn (không nhúng sẵn cả 3) để
+không đội payload trang — thêm 1 font mới vào `BODY_FONTS` cần: tải 3 file `.woff2` subset
+(latin/latin-ext/vietnamese, cùng bộ `unicode-range` trong `_BODY_FONT_RANGES` — đã xác minh Google
+Fonts dùng chung range này cho mọi font sans phổ biến) vào `assets/fonts/` theo đúng quy ước tên
+`<file_prefix>-<subset>.woff2`.
+
 ## Bẫy: `st.metric` bị ẩn toàn cục bằng CSS
 
 Có 1 rule CSS `[data-testid="stMetric"] { display: none; }` trong khối CSS chính — **mọi lời gọi
