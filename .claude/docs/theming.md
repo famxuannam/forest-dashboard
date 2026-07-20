@@ -59,14 +59,30 @@ Cả 3 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_ST
 bỏ → rơi về mặc định đầu tiên, không crash) và đúng pattern UI nút-preview + `save_setting()` +
 `st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới.
 
-**Bẫy `st.container(border=True)`:** viền/bo góc/bóng MẶC ĐỊNH của Streamlit cho container này đọc
-theme TĨNH (`.streamlit/config.toml`), KHÔNG tự đổi theo `--card-radius`/`--card-border-w`/
-`--card-shadow`/`--border` dù nền `background` có thể ép qua `var(--card)` bình thường. Mọi key
-container border=True trong app (`.st-key-tb_backup_card` và tương tự, xem rule gần
-`stVerticalBlock`/`st-key-` trong khối CSS chính) phải được liệt kê tường minh trong 1 rule ép cả
-`background`/`border-color`/`border-width`/`border-radius`/`box-shadow` qua đúng 4 token trên —
-thêm 1 `st.container(border=True, key=...)` mới ở bất kỳ đâu mà quên thêm vào danh sách này sẽ
-"đứng yên" lạc tông khi người dùng đổi Bảng màu nền/Kiểu thẻ.
+**Bẫy chung: chrome/widget NATIVE của Streamlit đọc `.streamlit/config.toml` TĨNH, không đọc được
+`--token` runtime.** `config.toml` chỉ load 1 lần lúc server khởi động, không có cách nào đọc lại
+theo `settings` trong Supabase — mọi nơi Streamlit/BaseWeb tự vẽ theo `backgroundColor`/
+`secondaryBackgroundColor`/`primaryColor`/`textColor` của file đó sẽ "đứng yên" ở đúng tông "Giấy
+ấm"/accent mặc định gốc (dù không còn khớp `ACCENT_PRESETS`/`BG_PALETTES` hiện tại) trừ khi có 1
+rule CSS `!important` ép lại bằng `var(--token)` tương ứng. Đã phát hiện + vá ở các nơi sau (agent
+sau thêm 1 `st.dialog`/`st.container(border=True)`/widget native mới PHẢI tự kiểm tra lại theo đúng
+cách này, không chỉ tin `background` chung là đủ):
+
+- `[data-testid="stHeader"]` (thanh trên cùng "Deploy"/⋮) — ép `background: var(--bg)`.
+- `st.container(border=True, key=...)` — viền/bo góc/bóng mặc định đọc theo `config.toml`, KHÔNG tự
+  đổi theo `--card-radius`/`--card-border-w`/`--card-shadow`/`--border` dù nền `background` có thể
+  ép qua `var(--card)` bình thường. Mọi key container border=True trong app (`.st-key-tb_backup_card`
+  và tương tự, xem rule gần `stVerticalBlock`/`st-key-` trong khối CSS chính) phải được liệt kê
+  tường minh trong 1 rule ép cả `background`/`border-color`/`border-width`/`border-radius`/
+  `box-shadow` qua đúng 4 token trên.
+- `[data-testid="stFileUploaderDropzone"]` (dropzone tải file CSV/zip) — ép `background-color:
+  var(--chip)`.
+- `[data-testid="stDialog"] > div` (khối bề mặt modal thật, `<section role="dialog">` bên trong nó
+  tự trong suốt) — ép `background: var(--card)`.
+- `[data-testid="stCheckbox"] label[data-selected="true"] > div:nth-child(2)` (ô vuông khi đã tick)
+  — mặc định tô `primaryColor` tĩnh, ép lại `var(--accent)`. Y hệt lỗi `st.tabs()`/segmented
+  control đã vá trước đó (`[data-testid="stTab"][aria-selected="true"]`,
+  `.react-aria-SelectionIndicator`) — cùng 1 nguyên nhân gốc.
 
 ## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
 

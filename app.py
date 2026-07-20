@@ -7132,6 +7132,26 @@ _MAIN_CSS = """
         background-color: var(--card-tl) !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
+    /* st.file_uploader (Đồng bộ nhanh -> CSV Forest/Shortcuts/Kindle) -- nền dropzone mặc định đọc
+       secondaryBackgroundColor TĨNH từ config.toml (trùng --chip gốc chỉ vì lúc thiết kế ban đầu
+       chỉ có 1 bảng màu nền khả dĩ), không tự đổi theo Bảng màu nền chọn ở Tuỳ biến -- ép lại bằng
+       var(--chip) cho khớp. */
+    [data-testid="stFileUploaderDropzone"] { background-color: var(--chip) !important; }
+    /* Hộp thoại xác nhận (st.dialog, "Khôi phục dữ liệu"/"Xoá toàn bộ dữ liệu"/"Định dạng JSON
+       mẫu") -- nền khối modal mặc định đọc backgroundColor TĨNH từ config.toml (cùng lý do trên),
+       "đứng yên" ở đúng tông "Giấy ấm" gốc dù trang phía sau đã đổi hẳn bảng màu nền. Div con đầu
+       tiên của [data-testid="stDialog"] là khối bề mặt modal thật (bọc ngoài <section role=
+       "dialog"> vốn tự trong suốt) -- ép nền qua var(--card) ở đây, không đụng bo góc/đổ bóng mặc
+       định của Streamlit (trung tính, không mang màu theme cũ nên không lạc tông). */
+    [data-testid="stDialog"] > div { background: var(--card) !important; }
+    /* st.checkbox khi tick -- ô vuông + viền mặc định tô primaryColor TĨNH từ config.toml (không
+       đổi theo Màu accent chọn ở Tuỳ biến, y hệt lỗi đã sửa ở st.tabs() phía dưới) -- ép lại bằng
+       var(--accent). Chỉ áp khi label mang data-selected="true" (đã tick) -- ô CHƯA tick không
+       tô nền đặc (chỉ viền mờ theo --text), không được ăn nhầm accent. */
+    [data-testid="stCheckbox"] label[data-selected="true"] > div:nth-child(2) {
+        background-color: var(--accent) !important;
+        border-color: var(--accent) !important;
+    }
 
     [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {
         display: flex !important;
