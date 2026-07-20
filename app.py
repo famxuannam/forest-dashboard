@@ -1711,10 +1711,10 @@ def sync_from_storage(cal_start, cal_end):
 
 def _do_quick_sync():
     """Chạy 1 lượt "Đồng bộ nhanh" (gọi sync_from_storage() + ghi last_quick_sync_at/summary) --
-    tách riêng khỏi UI để dùng chung cho CẢ nút "Đồng bộ ngay" ở Tuỳ biến LẪN chip gọn cạnh nav
-    (mọi trang, xem _render_nav_sync_chip()). KHÔNG tự set message vào session_state hay
-    st.rerun() -- trả về (message, has_error) để mỗi nơi gọi tự quyết định cách hiển thị (banner
-    trong card ở Tuỳ biến, hay st.toast() ở chip)."""
+    tách riêng khỏi UI để dùng chung cho CẢ nút "Đồng bộ ngay" ở Tuỳ biến LẪN nút tròn nổi cạnh nút
+    "Về đầu trang" (mọi trang, xem _render_nav_sync_fab()). KHÔNG tự set message vào session_state
+    hay st.rerun() -- trả về (message, has_error) để mỗi nơi gọi tự quyết định cách hiển thị
+    (banner trong card ở Tuỳ biến, hay st.toast() ở nút tròn)."""
     _qres = sync_from_storage(_today_vn() - timedelta(days=90), _today_vn() + timedelta(days=90))
     if _qres["error"]:
         return _qres["error"], True
@@ -1737,27 +1737,46 @@ def _do_quick_sync():
     return _msg, _has_err
 
 
-def _render_nav_sync_chip():
-    """Chip "Đồng bộ" gọn cạnh thanh nav chính -- gọi 1 LẦN DUY NHẤT ngay sau khi vẽ NAV, TRƯỚC
-    chuỗi if/elif nav == ... (xem nơi gọi) nên hiện xuyên suốt MỌI trang mà không cần sửa từng
-    nhánh. Mockup phương án A đã chọn với người dùng (chip cạnh nav, không phải nút nổi/banner).
-    Có file Forest/Reminder mới đang chờ trong bucket "Đồng bộ nhanh" -> chip đậm màu kèm số đếm;
-    không có gì chờ -> chip rút gọn còn icon, vẫn bấm được để đồng bộ thủ công bất cứ lúc nào.
-    Dùng chung _do_quick_sync() với nút "Đồng bộ ngay" ở Tuỳ biến -> chương 1 -- bấm ở đây chạy
-    y hệt, chỉ khác cách hiển thị kết quả (st.toast() thay vì banner cố định, vì chip không có chỗ
-    neo 1 banner 2 dòng trên mọi trang)."""
-    _qfiles = _list_sync_files()
-    _qf = _latest_sync_file(_qfiles, "forest")
-    _qr = _latest_sync_file(_qfiles, "reminder")
-    _pending = int(bool(_qf)) + int(bool(_qr))
-    _label = f"⟳ Đồng bộ ({_pending})" if _pending else "⟳"
-    _help = ("Có file Forest/Reminder mới đang chờ đồng bộ -- bấm để đồng bộ ngay"
-             if _pending else "Đồng bộ nhanh từ Forest/Reminder")
-    if st.button(_label, key="nav_sync_chip", type="primary" if _pending else "secondary", help=_help):
-        with st.spinner("Đang đồng bộ..."):
-            _msg, _has_err = _do_quick_sync()
-        st.toast(_msg, icon="⚠️" if _has_err else "✅")
-        st.rerun()
+def _render_nav_sync_fab():
+    """Nút "Đồng bộ" dạng tròn nổi -- gọi 1 LẦN DUY NHẤT (xem nơi gọi, cạnh
+    _inject_scroll_to_top_button()) nên hiện xuyên suốt MỌI trang mà không cần sửa từng nhánh nav.
+    Mockup đã xác nhận với người dùng: hình tròn 44px, CÙNG phong cách nút "Về đầu trang"
+    (#app-scroll-top-btn), xếp NGAY PHÍA TRÊN nó (bottom 76px, cách 22px+44px+10px gap của nút
+    kia) -- chỉ icon refresh, KHÔNG chữ/badge số đếm file chờ (bản trước có badge, bỏ theo yêu cầu
+    "chỉ icon refresh thôi là được").
+
+    st.button THẬT (khác nút "Về đầu trang" -- JS thuần, chỉ cuộn trang, không side-effect Python
+    nào) vì cần gọi được _do_quick_sync() bằng Python khi bấm. Canh cố định bằng CSS nhắm
+    `.st-key-nav_sync_fab` (key của st.container bọc ngoài, CÙNG khuôn `.st-key-tb_quick_sync_row`
+    đã dùng để canh nút "Đồng bộ ngay" ở Tuỳ biến) -- .st-key-* luôn là cách canh CSS cho 1 widget
+    cụ thể trong app này, không tự chế cách khác."""
+    st.markdown(
+        """<style>
+        .st-key-nav_sync_fab {
+            position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 76px;
+            z-index: 99979;
+        }
+        .st-key-nav_sync_fab div[data-testid="stButton"] button {
+            width: 44px; height: 44px; min-height: 0; border-radius: 50%; padding: 0;
+            background: var(--accent); border: none;
+            box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
+        }
+        .st-key-nav_sync_fab div[data-testid="stButton"] button:hover { opacity: 0.9; }
+        .st-key-nav_sync_fab div[data-testid="stButton"] button span[data-testid="stIconMaterial"] {
+            font-size: 20px; color: #fff;
+        }
+        @media (max-width: 640px) {
+            .st-key-nav_sync_fab { right: auto; left: 14px; bottom: 68px; }
+        }
+        </style>""",
+        unsafe_allow_html=True)
+    with st.container(key="nav_sync_fab"):
+        if st.button("", icon=":material/refresh:", key="nav_sync_fab_btn",
+                     help="Đồng bộ nhanh từ Forest/Reminder"):
+            with st.spinner("Đang đồng bộ..."):
+                _msg, _has_err = _do_quick_sync()
+            st.toast(_msg, icon="⚠️" if _has_err else "✅")
+            st.rerun()
 
 
 @st.cache_data
@@ -8095,19 +8114,12 @@ def _reset_today_on_nav_click():
     if st.session_state.get("nav") in (None, "Hôm nay") and "day_pick" in st.session_state:
         st.session_state["day_pick"] = _today_vn()
 
-# Nav + chip "Đồng bộ" (_render_nav_sync_chip()) trên CÙNG 1 hàng (mockup phương án A đã chọn với
-# người dùng) -- chip đặt Ở ĐÂY (ngoài chuỗi if/elif nav == ... bên dưới) để hiện xuyên suốt MỌI
-# trang, chỉ cần sửa 1 chỗ duy nhất thay vì thêm vào từng nhánh trang.
-_nav_col, _sync_col = st.columns([6, 1])
-with _nav_col:
-    nav = st.segmented_control(
-        "Trang", list(NAV.keys()),
-        format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
-        key="nav", label_visibility="collapsed",
-        on_change=_reset_today_on_nav_click,
-    )
-with _sync_col:
-    _render_nav_sync_chip()
+nav = st.segmented_control(
+    "Trang", list(NAV.keys()),
+    format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
+    key="nav", label_visibility="collapsed",
+    on_change=_reset_today_on_nav_click,
+)
 if not nav:
     nav = "Hôm nay"
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
@@ -8459,6 +8471,7 @@ def _inject_scroll_to_top_button():
 
 
 _inject_scroll_to_top_button()
+_render_nav_sync_fab()
 
 
 def _kindle_quote_of_day():
