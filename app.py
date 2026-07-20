@@ -2203,16 +2203,18 @@ def _delta_t(delta, label):
 
 
 def _fmt_hours_short(v):
-    """Số giờ thập phân (vd 1.5) -> dạng gọn 'XhYYp' cho chỗ hẹp (chip/badge/ô bảng/nhãn biểu
-    đồ): 1.5 -> '1h30p', 0.5 -> '30p', 2.0 -> '2h', 0 -> '0p'. Làm tròn tới phút gần nhất, bỏ
-    hẳn phần giờ/phút nếu bằng 0 thay vì hiện '0h'/'00p' thừa."""
+    """Số giờ thập phân (vd 1.5) -> dạng gọn "Xh YY′" cho chỗ hẹp (chip/badge/ô bảng/nhãn biểu
+    đồ): 1.5 -> '1h30′', 0.5 -> '30′', 2.0 -> '2h', 0 -> '0′'. Dấu phút "′" (KHÔNG phải dấu nháy
+    đơn ' thường -- xác nhận với người dùng qua mockup, chọn ký hiệu chuẩn quốc tế cho phút thay
+    vì chữ "p" tiếng Việt lẫn với "h" mượn tiếng Anh). Làm tròn tới phút gần nhất, bỏ hẳn phần
+    giờ/phút nếu bằng 0 thay vì hiện '0h'/'00′' thừa."""
     total_min = max(round(v * 60), 0)
     h, m = divmod(total_min, 60)
     if h and m:
-        return f"{h}h{m:02d}p"
+        return f"{h}h{m:02d}′"
     if h:
         return f"{h}h"
-    return f"{m}p"
+    return f"{m}′"
 
 
 def _fmt_hours_long(v):
@@ -2228,14 +2230,14 @@ def _fmt_hours_long(v):
 
 
 def _fmt_hours_delta(v):
-    """Bản có dấu +/- của _fmt_hours_short cho chênh lệch SỐ GIỜ (vd '+1h30p', '-45p') thay vì
+    """Bản có dấu +/- của _fmt_hours_short cho chênh lệch SỐ GIỜ (vd '+1h30′', '-45′') thay vì
     số thập phân '+1.5'/'−0.8'."""
     sign = "+" if v >= 0 else "-"
     return f"{sign}{_fmt_hours_short(abs(v))}"
 
 
 def _delta_t_hours(delta, label):
-    """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30p'/'-45p' thay vì số
+    """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30′'/'-45′' thay vì số
     thập phân '+1.5'/'−0.8'."""
     if delta is None:
         return None
@@ -5601,7 +5603,7 @@ DTBL_CSS = """
 def _heat_cell(v, ref, extra_cls="", drop=False, as_hours=True):
     """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền teal theo tỉ lệ v/ref.
     drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước). as_hours=True (mặc định, dùng
-    cho mọi cột "Số giờ") -> hiện dạng gọn 'XhYYp' thay vì số thập phân; as_hours=False (vd cột
+    cho mọi cột "Số giờ") -> hiện dạng gọn 'Xh YY′' thay vì số thập phân; as_hours=False (vd cột
     đếm số phần đọc/xem, luôn là số NGUYÊN) -> hiện số nguyên, không có ".0" thừa."""
     cls = extra_cls.strip()
     mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
