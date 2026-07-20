@@ -7940,11 +7940,13 @@ st.markdown(
     /* Font Cormorant Garamond (xem _QUOTE_FONT_FACE) -- chọn qua mockup ảnh gửi duyệt, cỡ chữ
        chỉnh LỚN HƠN bản Manrope cũ (mark 52->58px, text 21->23px, src 16.5->17.5px) vì đây là
        kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
-       đậm/vuông vức) nếu giữ nguyên số cũ. */
+       đậm/vuông vức) nếu giữ nguyên số cũ. text SAU ĐÓ giảm 23->20px (xác nhận qua mockup với
+       người dùng, có thói quen trích đoạn dài -- 23px chiếm quá nhiều chỗ) -- mark/src giữ nguyên,
+       chỉ đổi text. */
     .kq-daily-mark { font-size: 58px; line-height: 1; color: var(--accent);
         font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-style: italic;
         opacity: .5; margin-bottom: -14px; }
-    .kq-daily-text { font-size: 23px; line-height: 1.45; font-weight: 600; color: var(--text);
+    .kq-daily-text { font-size: 20px; line-height: 1.45; font-weight: 600; color: var(--text);
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; white-space: pre-wrap; }
     .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif; text-align: right; }
