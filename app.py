@@ -1751,7 +1751,11 @@ def _render_nav_sync_fab():
     nào) vì cần gọi được _do_quick_sync() bằng Python khi bấm. Canh cố định bằng CSS nhắm
     `.st-key-nav_sync_fab` (key của st.container bọc ngoài, CÙNG khuôn `.st-key-tb_quick_sync_row`
     đã dùng để canh nút "Đồng bộ ngay" ở Tuỳ biến) -- .st-key-* luôn là cách canh CSS cho 1 widget
-    cụ thể trong app này, không tự chế cách khác."""
+    cụ thể trong app này. Vẫn bọc 1 st.container(key=...) thay vì đặt key= thẳng trên st.button
+    (ui-components.md có ghi mọi widget đặt key= đều tự có class riêng, kể cả không bọc container)
+    -- CHƯA kiểm chứng được cấu trúc DOM thật của st.button lồng CSS nested selector
+    `div[data-testid="stButton"] button` có còn khớp hay không nếu bỏ lớp bọc, nên giữ nguyên
+    cách đã chạy đúng thay vì đổi khi chưa test trực quan được."""
     st.markdown(
         """<style>
         .st-key-nav_sync_fab {
@@ -10252,9 +10256,11 @@ elif nav == "Hướng dẫn":
     sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
-        "<li><b>Đồng bộ ngay</b> (ở Tuỳ biến → 1. Dữ liệu đầu vào) — chỉ một nút bấm mà nạp cả dữ liệu "
-        "Forest, tiến độ Reminders lẫn lịch Work cùng lúc. Đây là bước nền của mọi con số khác trong ứng "
-        "dụng: không đồng bộ thì chẳng có gì để nhìn lại, mọi biểu đồ sẽ trơ ra như tờ giấy trắng.</li>"
+        "<li><b>Đồng bộ ngay</b> (nút tròn ⟳ nổi góc dưới màn hình, bấm được từ MỌI trang — hoặc nút "
+        "\"Đồng bộ ngay\" đầy đủ ở Tuỳ biến → 1. Dữ liệu đầu vào nếu cần xem chi tiết file đang chờ) — "
+        "chỉ một nút bấm mà nạp cả dữ liệu Forest, tiến độ Reminders lẫn lịch Work cùng lúc. Đây là bước "
+        "nền của mọi con số khác trong ứng dụng: không đồng bộ thì chẳng có gì để nhìn lại, mọi biểu đồ "
+        "sẽ trơ ra như tờ giấy trắng.</li>"
         "<li><b>Xem qua trang Hôm nay chừng một phút</b> — nhìn dòng thời gian trong ngày và chip so sánh "
         "với đúng thứ này tuần trước. Chỉ cần tự hỏi một câu: hôm nay có diễn ra như mình định không? Đây "
         "không phải để tự khen hay tự trách, mà chỉ đơn giản là ghi nhận thật thà những gì đã xảy ra.</li>"
@@ -10369,28 +10375,39 @@ elif nav == "Hướng dẫn":
         "ngang đầu tiên</b> gặp trong tên list (ưu tiên dạng có khoảng trắng bao quanh “ - ” "
         "cho chắc): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ. Nếu tên "
         "list bắt đầu bằng chữ “gundam” (không phân biệt hoa thường), nó sẽ tự động được "
-        "xếp sang trang Gundam thay vì trang Sách.")
+        "xếp sang trang Gundam thay vì trang Sách. Việc này không đổi dù bấm giờ trên Forest theo cách "
+        "nào (xem mục dưới) — Reminders luôn là 1 list riêng/cuốn.")
+    sec_block(
+        "<h4>Bấm giờ trên Forest: sách mới chỉ cần 1 thẻ chung “Reading”</h4>"
+        "Trước đây mỗi cuốn sách cần 1 thẻ Forest riêng, tên trùng khớp tuyệt đối tên sách bên "
+        "Reminders. Từ nay, sách mới KHÔNG cần tạo thẻ riêng nữa — chỉ cần bấm giờ đọc dưới đúng 1 thẻ "
+        "chung <b>“Reading”</b>, giống hệt cách Gundam đã dùng 1 thẻ chung “Gundam” cho mọi series từ "
+        "trước tới giờ (xem mục suy luận bên dưới để biết ứng dụng ghép ngày đọc với đúng cuốn nào). "
+        "Cuốn nào đã có thẻ riêng từ trước khi đổi cách này thì lịch sử cũ giữ nguyên, đóng băng theo "
+        "đúng thẻ cũ đó — không cần đổi gì, chỉ áp dụng cho lần đọc MỚI trở đi.")
     sec_block(
         "<h4>“Số ngày” được tính ra sao khi có hai nguồn dữ liệu cùng lúc</h4>"
-        "Mỗi cuốn sách hay series được ghép lại từ tối đa hai nguồn: phiên Forest (khi tên Dự án trùng "
-        "khớp với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” lấy "
-        "<b>hợp</b> của cả hai nguồn — tính từ ngày bắt đầu sớm nhất cho tới ngày kết thúc muộn nhất, gộp "
-        "cả hai bên lại — nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang "
-        "chỉ tick Reminders), khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn "
-        "một nguồn sẽ hiện dấu gạch ngang “—” để báo là thiếu dữ liệu, thay vì để trống khiến "
-        "bạn tưởng nhầm là lỗi.")
+        "Mỗi cuốn sách hay series được ghép lại từ tối đa hai nguồn: phiên Forest (khớp tên thẻ cũ, "
+        "hoặc suy luận từ thẻ chung “Reading”/“Gundam” — xem mục dưới) và các phần đã tick trong "
+        "Reminders. Con số “Số ngày” lấy <b>hợp</b> của cả hai nguồn — tính từ ngày bắt đầu sớm nhất "
+        "cho tới ngày kết thúc muộn nhất, gộp cả hai bên lại — nên nếu bạn đổi cách theo dõi giữa chừng "
+        "(đang bấm giờ Forest rồi chuyển sang chỉ tick Reminders), khoảng thời gian vẫn không bị cắt cụt "
+        "mất phần trước đó. Ô nào thiếu hẳn một nguồn sẽ hiện dấu gạch ngang “—” để báo là thiếu dữ "
+        "liệu, thay vì để trống khiến bạn tưởng nhầm là lỗi.")
     sec_block(
-        "<h4>Gundam: vì sao ứng dụng phải suy luận series đang xem</h4>"
-        "Vì Forest chỉ có đúng một thẻ chung là “Gundam” cho mọi series, không tách riêng "
-        "từng bộ như Sách. Bởi vậy, với mỗi ngày có phiên gắn thẻ đó, ứng dụng sẽ tìm lần tick Reminder "
-        "gần nhất (ở bất kỳ series Gundam nào, trước hoặc sau ngày đó đều được tính, miễn là gần về mặt "
-        "thời gian) rồi gán cả ngày hôm đó cho đúng series của lần tick ấy — một cách suy luận dựa trên "
-        "dấu vết gần nhất. Nếu bạn chỉ theo dõi đúng một series tại một thời điểm, trường hợp phổ biến "
-        "nhất, suy luận này hầu như luôn đúng; còn nếu bạn có thói quen xem xen kẽ nhiều series, ngày nằm "
-        "giữa hai lần tick sẽ được gán về phía gần hơn, và đôi khi đoán sai cũng là điều khó tránh. Gặp "
-        "trường hợp đó, cứ vào mục <b>“Sửa gán series tự động”</b> ở cuối trang Gundam để sửa "
-        "lại tay — ngày nào đã sửa tay sẽ mang nhãn “Gán tay” để dễ phân biệt, còn nếu sau "
-        "này bạn sửa lại đúng trùng với kết quả suy luận tự động, nhãn đó sẽ tự biến mất.")
+        "<h4>Vì sao ứng dụng phải suy luận series/cuốn sách đang đọc</h4>"
+        "Vì Forest chỉ có đúng một thẻ chung — “Gundam” cho mọi series, “Reading” cho mọi cuốn sách "
+        "mới — không tách riêng từng bộ/cuốn. Bởi vậy, với mỗi ngày có phiên gắn 1 trong 2 thẻ đó, "
+        "ứng dụng sẽ tìm lần tick Reminder gần nhất (ở bất kỳ series/cuốn nào, trước hoặc sau ngày đó "
+        "đều được tính, miễn là gần về mặt thời gian) rồi gán cả ngày hôm đó cho đúng series/cuốn của "
+        "lần tick ấy — một cách suy luận dựa trên dấu vết gần nhất. Nếu bạn chỉ theo dõi đúng một "
+        "series/cuốn tại một thời điểm, trường hợp phổ biến nhất, suy luận này hầu như luôn đúng; còn "
+        "nếu bạn có thói quen đọc/xem xen kẽ nhiều series/cuốn, hoặc vừa chuyển sang cuốn mới nhưng "
+        "chưa tick xong phần đầu tiên, ngày nằm giữa hai lần tick sẽ được gán về phía gần hơn, và đôi "
+        "khi đoán sai cũng là điều khó tránh. Gặp trường hợp đó, cứ vào mục <b>“Sửa gán series/sách tự "
+        "động”</b> ở cuối trang Gundam/Sách để sửa lại tay — ngày nào đã sửa tay sẽ mang nhãn “Gán "
+        "tay” để dễ phân biệt, còn nếu sau này bạn sửa lại đúng trùng với kết quả suy luận tự động, "
+        "nhãn đó sẽ tự biến mất.")
     sec_block(
         "<h4>Trích dẫn Kindle — sửa một lần, giữ nguyên mãi</h4>"
         "Mọi thao tác trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú riêng) "
@@ -10582,12 +10599,12 @@ elif nav == "Hướng dẫn":
             "một bảng **\"Ánh xạ đã lưu\"** liệt kê mọi cuốn hoặc nguồn đã từng ghép, sửa lại Dự án hoặc "
             "tên hiển thị ngay tại đó rồi bấm Lưu, không cần nạp lại file gốc.")
         help_faq_item(
-            "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu?",
-            "Hãy tìm tới mục **\"Sửa gán series tự động\"** ở cuối trang Gundam (mục này chỉ xuất hiện khi "
-            "có từ hai series trở lên, vì một series thì không cần đoán): chọn lại đúng series cho từng "
-            "ngày bị gán sai rồi bấm Lưu gán series là xong. Ngày đã sửa tay sẽ được đánh dấu bằng nhãn "
-            "\"Gán tay\" để dễ phân biệt với phần ứng dụng tự đoán — còn nếu sau này bạn sửa lại "
-            "đúng trùng với kết quả suy luận tự động ban đầu, nhãn đó sẽ tự biến mất.")
+            "Gundam/Sách bị gán nhầm series/cuốn rồi, giờ sửa lại ở đâu?",
+            "Hãy tìm tới mục **\"Sửa gán series/sách tự động\"** ở cuối trang Gundam hoặc Sách (mục này "
+            "chỉ xuất hiện khi có từ hai series/cuốn trở lên, vì chỉ một thì không cần đoán): chọn lại "
+            "đúng series/cuốn cho từng ngày bị gán sai rồi bấm Lưu là xong. Ngày đã sửa tay sẽ được đánh "
+            "dấu bằng nhãn \"Gán tay\" để dễ phân biệt với phần ứng dụng tự đoán — còn nếu sau này bạn "
+            "sửa lại đúng trùng với kết quả suy luận tự động ban đầu, nhãn đó sẽ tự biến mất.")
         help_faq_item(
             "Đổi màu accent xong, các biểu đồ có tự đổi màu theo không?",
             "Có, và đổi ngay lập tức không cần làm gì thêm — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu chữ "
@@ -10622,6 +10639,28 @@ elif nav == "Hướng dẫn":
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
     # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
     HELP_CHANGELOG = [
+        dict(pr="235-237", date="20/07/2026", pr_lines=86, total_lines=10706,
+             title="Sách đổi sang mô hình Gundam: một thẻ chung, tự suy luận đúng cuốn theo ngày",
+             bullets=[
+                 "**Không cần tạo tag riêng cho từng cuốn sách nữa** — chỉ cần bấm giờ đọc dưới đúng "
+                 "1 thẻ Forest chung “Reading”, giống hệt cách Gundam đã dùng 1 thẻ chung cho mọi "
+                 "series từ trước tới giờ. Ứng dụng tự suy luận ngày nào đang đọc cuốn nào dựa theo "
+                 "lần tick Reminder gần nhất, có mục “Sửa gán sách tự động” ở trang Sách để sửa tay "
+                 "khi đoán sai. Sách cũ đã có tag riêng vẫn giữ nguyên lịch sử, không cần đổi gì.",
+                 "**Danh mục và Dự án tách bạch rõ ràng xuyên suốt ứng dụng** — chọn xem theo Danh mục "
+                 "vẫn gộp chung “Gundam”/“Reading”, nhưng chọn xem theo Dự án giờ hiện đúng tên từng "
+                 "series/cuốn sách cụ thể ở mọi nơi (Báo cáo, Bảng vàng, Top 3, biểu đồ lịch, Tìm "
+                 "kiếm...), không cần sửa riêng từng trang.",
+                 "**The Economist tách khỏi nhóm Sách** — không còn bị loại trừ ngầm, giờ xếp Danh "
+                 "mục riêng và hiện như một Dự án bình thường ở Báo cáo.",
+                 "**Bỏ hẳn tính năng “Gán Dự án Forest với Cuốn sách”** — không còn tình huống nào "
+                 "cần dùng tới sau khi chuyển sang thẻ chung.",
+                 "**Nút “Đồng bộ ngay” giờ bấm được từ mọi trang** — một nút tròn nổi cạnh nút “Về "
+                 "đầu trang”, không cần mở tab Tuỳ biến mới đồng bộ được nữa.",
+                 "Cùng vài chỉnh sửa nhỏ: cột đếm số nguyên hết cảnh “.0” thừa, chip “Ngày nổi bật” ở "
+                 "Báo cáo Tháng thêm tên Thứ, bảng màu biểu đồ Danh mục/Dự án đổi sang “Vintage bản "
+                 "đồ” rõ ràng hơn, và cách viết giờ phút đổi từ “1h30p” sang “1h30′”.",
+             ]),
         dict(pr="223,224", date="18/07/2026", pr_lines=1, total_lines=10352,
              title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, và sửa lỗi hiển thị trên mobile",
              bullets=[
