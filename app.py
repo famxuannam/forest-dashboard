@@ -162,15 +162,15 @@ def _get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # "Nhật ký đọc sách": chỉ hiện cho nhóm sách đọc tuần tự (sửa tên ở đây nếu khác).
-# BOOKS_EXCLUDE = các dự án KHÔNG PHẢI sách (vd Gundam, xem tab riêng) dù lỡ bị xếp nhầm vào Danh
-# mục Reading -- không tính như một cuốn sách. The Economist KHÔNG còn ở đây: đã chuyển sang 1 Danh
-# mục riêng (xem BOOKS_TAG), filter theo Danh mục == BOOKS_GROUP đã tự loại nó ra.
+# BOOKS_EXCLUDE = các dự án KHÔNG PHẢI sách (vd Gundam, xem tab riêng) dù lỡ bị xếp nhầm vào Nhóm
+# Reading -- không tính như một cuốn sách. The Economist KHÔNG còn ở đây: đã chuyển sang 1 Nhóm
+# riêng (xem BOOKS_TAG), filter theo Nhóm == BOOKS_GROUP đã tự loại nó ra.
 BOOKS_GROUP = "Reading"
 BOOKS_EXCLUDE = {"Gundam"}
 
 # Tag Dự án trên Forest khi bấm giờ đọc sách -- 1 tag DUY NHẤT dùng chung cho MỌI cuốn sách mới
-# (không tạo tag riêng từng cuốn nữa), trùng tên với Danh mục BOOKS_GROUP có chủ đích (Dự án
-# "Reading" là 1:1 trong đúng Danh mục "Reading"). Cuốn đang suy luận theo ngày qua
+# (không tạo tag riêng từng cuốn nữa), trùng tên với Nhóm BOOKS_GROUP có chủ đích (Dự án
+# "Reading" là 1:1 trong đúng Nhóm "Reading"). Cuốn đang suy luận theo ngày qua
 # _assign_reading_sessions() (nhóm mỗi ngày có phiên tag này với lần hoàn thành reminder gần nhất
 # -- xem hàm đó). Sách cũ đã có tag riêng TRƯỚC khi đổi sang cơ chế này giữ nguyên tag cũ của nó --
 # đó là lịch sử đã đóng băng, không cần suy luận (áp dụng khi tên tag khớp TUYỆT ĐỐI tên sách bên
@@ -225,7 +225,7 @@ VN_MONTHS_WORD = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Thá
                   "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một",
                   "Tháng Mười Hai"]
 
-# Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Danh mục/Dự án nữa (xem
+# Bảng màu phong cách Apple / Latte sáng -- KHÔNG dùng cho biểu đồ Nhóm/Dự án nữa (xem
 # CHART_COLORS bên dưới), vẫn giữ cho vài chỗ vẽ đường/marker đơn sắc cũ (vd biểu đồ xu hướng
 # Nhật ký đọc sách) không thuộc phạm vi đổi hệ màu "Sổ Tay".
 MAC_COLORS = [
@@ -247,7 +247,7 @@ MAC_COLORS = [
     "#8e8e93", # Gray
 ]
 
-# Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Danh mục/Dự án, xem build_color_map())
+# Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Nhóm/Dự án, xem build_color_map())
 # -- hệ "Vintage bản đồ": cân bằng nóng/lạnh (đỏ gạch/vàng/mận xen xanh dương/xanh lá/xanh ngọc),
 # đã qua kiểm tra màu (chroma, phân biệt mù màu, tương phản) -- xem mockup đã chọn với người dùng,
 # thay cho bảng "Sổ Tay" cũ (quá xỉn, vài cặp cạnh nhau khó phân biệt, không đạt kiểm tra). KHÔNG
@@ -260,7 +260,7 @@ CHART_COLORS = ["#c1440e", "#2f8f5e", "#3a5a9e", "#c9932a", "#8a3b8f", "#1f9caf"
 # đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
 # git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
 # tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). Bảng này
-# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Danh mục/Dự án đã đổi sang hệ "Vintage bản đồ" --
+# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Nhóm/Dự án đã đổi sang hệ "Vintage bản đồ" --
 # xem CHART_COLORS) -- accent giao diện vẫn giữ nguyên tông đất/mộc mạc, không bị ảnh hưởng.
 ACCENT_PRESETS = {
     "Đất nung": "#b5502e",
@@ -459,7 +459,7 @@ def _teal_shades(n, l_lo=None, l_hi=None):
 
 
 def build_color_map(names):
-    """Gán màu cố định cho từng tên (Danh mục/Dự án). Ưu tiên bảng màu cơ sở (CHART_COLORS,
+    """Gán màu cố định cho từng tên (Nhóm/Dự án). Ưu tiên bảng màu cơ sở (CHART_COLORS,
     CỐ ĐỊNH -- không đổi theo accent đang chọn, để biểu đồ luôn dễ phân biệt dù accent là màu
     gì); nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
     (golden angle) để không bao giờ bị trùng màu, vẫn ổn định theo tên."""
@@ -567,13 +567,13 @@ def save_db(df):
 @st.cache_data
 def load_mapping():
     return _load_simple_table("mapping", "project,category",
-                               {"project": "Dự án", "category": "Danh mục"}, ["Dự án", "Danh mục"])
+                               {"project": "Dự án", "category": "Nhóm"}, ["Dự án", "Nhóm"])
 
 def save_mapping(df):
     sb = _get_supabase()
     _sb_delete_all("mapping", "project")
     if not df.empty:
-        recs = [{"project": str(r["Dự án"]), "category": str(r["Danh mục"])} for r in df.to_dict("records")]
+        recs = [{"project": str(r["Dự án"]), "category": str(r["Nhóm"])} for r in df.to_dict("records")]
         sb.table("mapping").insert(recs).execute()
     st.cache_data.clear()
 
@@ -1817,18 +1817,18 @@ def prep_analysis_data():
     # KHÔNG early-return pd.DataFrame() khi db rỗng: load_db() đã tự đảm bảo db rỗng vẫn CÓ
     # cột (['Thời gian bắt đầu','Thời gian kết thúc','Dự án','Thời lượng (Phút)']), nên để hàm
     # chạy tiếp bình thường trên db rỗng-có-cột (merge/to_datetime/.dt an toàn trên Series rỗng)
-    # -> kết quả rỗng nhưng vẫn đủ cột, tránh KeyError ở các trang đọc df['Dự án']/df['Danh mục']
+    # -> kết quả rỗng nhưng vẫn đủ cột, tránh KeyError ở các trang đọc df['Dự án']/df['Nhóm']
     # ngay cả khi người dùng chưa từng tải CSV Forest (vd chỉ có dữ liệu đọc sách từ Reminders).
     
     if not mapping.empty:
         db = db.merge(mapping, on='Dự án', how='left')
         # Cờ "có phân loại thật" (trước khi fillna) -> phân biệt với trường hợp tên
-        # Danh mục trùng tên Dự án. Không suy ra bằng so sánh tên ở nơi hiển thị.
-        db['Có danh mục'] = db['Danh mục'].notna() & (db['Danh mục'].astype(str).str.strip() != '')
-        db['Danh mục'] = db['Danh mục'].fillna(db['Dự án'])
+        # Nhóm trùng tên Dự án. Không suy ra bằng so sánh tên ở nơi hiển thị.
+        db['Có nhóm'] = db['Nhóm'].notna() & (db['Nhóm'].astype(str).str.strip() != '')
+        db['Nhóm'] = db['Nhóm'].fillna(db['Dự án'])
     else:
-        db['Có danh mục'] = False
-        db['Danh mục'] = db['Dự án']
+        db['Có nhóm'] = False
+        db['Nhóm'] = db['Dự án']
         
     db['Thời gian bắt đầu'] = pd.to_datetime(db['Thời gian bắt đầu'], errors='coerce')
     db['Thời gian kết thúc'] = pd.to_datetime(db['Thời gian kết thúc'], errors='coerce')
@@ -1843,9 +1843,9 @@ def prep_analysis_data():
     # Suy luận Dự án cụ thể cho phiên tag chung Gundam/Sách -- ĐÂY LÀ ĐIỂM NỐI DUY NHẤT, mọi báo
     # cáo/biểu đồ/bảng trong app đọc thẳng cột 'Dự án' của df này nên chỉ cần sửa 1 chỗ. Giữ
     # nguyên tên tag gốc ở cột 'Dự án gốc' -- 2 nhánh nav "Gundam"/"Nhật ký đọc sách" cần lọc đúng
-    # tag thật (không dùng được 'Dự án' sau khi bị ghi đè dưới đây). 'Danh mục' đã gán XONG ở trên
-    # theo tag gốc (Gundam -> Danh mục "Gundam", Reading -> Danh mục "Reading") nên KHÔNG bị ảnh
-    # hưởng bởi việc ghi đè 'Dự án' này -- đúng nguyên tắc đã chốt: Danh mục vẫn gộp chung, Dự án
+    # tag thật (không dùng được 'Dự án' sau khi bị ghi đè dưới đây). 'Nhóm' đã gán XONG ở trên
+    # theo tag gốc (Gundam -> Nhóm "Gundam", Reading -> Nhóm "Reading") nên KHÔNG bị ảnh
+    # hưởng bởi việc ghi đè 'Dự án' này -- đúng nguyên tắc đã chốt: Nhóm vẫn gộp chung, Dự án
     # hiện đúng series/cuốn sách cụ thể.
     db['Dự án gốc'] = db['Dự án']
     if not db.empty:
@@ -2868,7 +2868,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     if show_top3:
         st.write("")
         c_top1, c_top2 = st.columns(2)
-        with c_top1: render_top_3(df_period, 'Danh mục', f'Top 3 Danh mục{top3_suffix}')
+        with c_top1: render_top_3(df_period, 'Nhóm', f'Top 3 Nhóm{top3_suffix}')
         with c_top2: render_top_3(df_period, 'Dự án', f'Top 3 Dự án{top3_suffix}')
 
 
@@ -2908,7 +2908,7 @@ def _compute_alltime_records(df):
         return recs
 
     project_records = _group_records(df, 'Dự án')
-    category_records = _group_records(df[df['Có danh mục']], 'Danh mục')
+    category_records = _group_records(df[df['Có nhóm']], 'Nhóm')
 
     return {
         "overall_top3": overall_top3,
@@ -2963,7 +2963,7 @@ def _quick_note_chips_html(qn_day):
 def _record_chips_html(badges):
     """Chip "Kỷ lục" cho 1 ngày (badges = day_badges.get(ngày), có thể None/rỗng) -- dùng chung
     _chip_row_html() với _book_chips_html(), 1 chip riêng mỗi badge (không gộp) vì 1 ngày có
-    thể vừa giữ hạng chung vừa giữ kỷ lục riêng vài Dự án/Nhóm. Nhãn "Danh mục" ghi
+    thể vừa giữ hạng chung vừa giữ kỷ lục riêng vài Dự án/Nhóm. Nhãn "Nhóm" ghi
     rõ chữ "Nhóm" (khác "Dự án" giữ nguyên tên) -- nếu không, 1 Nhóm tự đặt trùng tên đúng 1 Dự
     án duy nhất của nó (vd Nhóm "Deep Work" chỉ gồm Dự án "Deep Work") sẽ ra 2 chip đọc y hệt
     nhau "Kỷ lục Deep Work", trông như bị lặp badge dù thực ra là 2 kỷ lục khác khái niệm."""
@@ -2974,7 +2974,7 @@ def _record_chips_html(badges):
     for b in badges:
         if b["kind"] == "overall":
             label = _ORD.get(b["rank"], f"Hạng {b['rank']}") + " mọi thời đại"
-        elif b["kind"] == "Danh mục":
+        elif b["kind"] == "Nhóm":
             label = f"Kỷ lục Nhóm {b['name']}"
         else:
             label = f"Kỷ lục {b['name']}"
@@ -3222,7 +3222,7 @@ def _render_kindle_quotes_tab():
 def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14, labels=READING_LABELS,
                         show_favorites=True, extra_overview=None):
     """Bảng + timeline + tóm tắt cho từng cuốn sách (đọc tuần tự), GỘP 2 nguồn: phiên Forest
-    (nhóm Danh mục = Reading) và phần đã đọc đồng bộ từ Apple Reminders (reading_log_df). Một
+    (nhóm Nhóm = Reading) và phần đã đọc đồng bộ từ Apple Reminders (reading_log_df). Một
     cuốn sách chỉ cần có mặt ở MỘT trong 2 nguồn là đủ để lên bảng -- cột thuộc nguồn còn thiếu
     hiện '—'. Trạng thái Đang đọc/Đã xong dựa trên hoạt động GẦN NHẤT của CẢ 2 nguồn (lấy max
     của ngày phiên Forest gần nhất và ngày hoàn thành reminder gần nhất).
@@ -5406,19 +5406,19 @@ def render_year_month_bars(df_y):
 
 
 def render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y):
-    """Chương "Danh mục cả năm" (Báo cáo -> Năm, mockup): thanh ngang xếp hạng theo Danh mục --
+    """Chương "Nhóm cả năm" (Báo cáo -> Năm, mockup): thanh ngang xếp hạng theo Nhóm --
     CÙNG khuôn frag_category_bars() (thanh fill dài tỉ lệ theo TỔNG cả năm, màu theo COLOR_MAP)
-    nhưng KHÔNG có toggle Danh mục/Dự án (mockup chỉ vẽ Danh mục) và có thêm % so với CÙNG KỲ
+    nhưng KHÔNG có toggle Nhóm/Dự án (mockup chỉ vẽ Nhóm) và có thêm % so với CÙNG KỲ
     năm trước ngay sau giá trị giờ (elapsed_mask_y -- cùng logic công bằng đã dùng cho billboard/
     Tổng quan, không so năm dở dang với 1 năm đầy đủ)."""
     if df_y.empty:
         st.caption("Chưa có dữ liệu.")
         return
     total_min = df_y['Thời lượng (Phút)'].sum()
-    cat_now = df_y.groupby('Danh mục')['Thời lượng (Phút)'].sum().sort_values(ascending=False)
+    cat_now = df_y.groupby('Nhóm')['Thời lượng (Phút)'].sum().sort_values(ascending=False)
     prev_scope = (df[(df['Năm'] == prev_year_key) & elapsed_mask_y] if elapsed_mask_y is not None
                   else df[df['Năm'] == prev_year_key])
-    cat_prev = prev_scope.groupby('Danh mục')['Thời lượng (Phút)'].sum()
+    cat_prev = prev_scope.groupby('Nhóm')['Thời lượng (Phút)'].sum()
     rows_html = ""
     for i, (name, mins) in enumerate(cat_now.items()):
         pct = mins / total_min * 100 if total_min else 0
@@ -5551,7 +5551,7 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
     """"Điểm nhấn" (Báo cáo -> Tháng): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong tháng" (ngày dài
     nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính RIÊNG trong tháng đang
     chọn qua df_m, KHÔNG phải kỷ lục toàn thời gian) và "So với tháng trước" (4 dòng delta: tổng
-    giờ/số phiên/danh mục tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt động). Không còn là chương riêng
+    giờ/số phiên/nhóm tăng-giảm rõ nhất/TB giờ mỗi ngày hoạt động). Không còn là chương riêng
     (đã gộp vào cuối chương "Tổng quan", xác nhận lại với người dùng) -- chấp nhận vài dòng lặp
     lại thông tin đã có ở billboard/hero (Ngày dài nhất, 3 delta tổng) vì đây là 1 khối "tóm tắt
     nhanh" bổ sung, không bắt buộc tránh lặp hoàn toàn như billboard Dự án."""
@@ -5608,8 +5608,8 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
 
         _prev_scope = (df[(df['Tháng'] == prev_month_key) & elapsed_mask_m] if elapsed_mask_m is not None
                         else df[df['Tháng'] == prev_month_key])
-        _cat_now = df_m.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
-        _cat_prev = _prev_scope.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
+        _cat_now = df_m.groupby('Nhóm')['Thời lượng (Phút)'].sum() / 60
+        _cat_prev = _prev_scope.groupby('Nhóm')['Thời lượng (Phút)'].sum() / 60
         _cat_idx = _cat_now.index.union(_cat_prev.index)
         _cat_delta = _cat_now.reindex(_cat_idx, fill_value=0) - _cat_prev.reindex(_cat_idx, fill_value=0)
         if len(_cat_delta) and _cat_delta.min() < 0 and _cat_delta.max() > 0:
@@ -5689,7 +5689,7 @@ TABLE_PAGE_SIZE = 15
 def _table_page_slice(n, key, page_size=TABLE_PAGE_SIZE):
     """Trả (start, end, num_pages, paged) cho 1 trang bảng PHẲNG (mỗi dòng dữ liệu độc lập, không
     nhóm cha/con) -- dùng chung cho mọi bảng .dtbl chỉ cần cắt lát theo dòng (khác
-    _paginate_row_blocks() dùng cho bảng có nhóm Danh mục/Dự án lồng nhau). Tự clamp
+    _paginate_row_blocks() dùng cho bảng có nhóm Nhóm/Dự án lồng nhau). Tự clamp
     session_state[key] về num_pages hợp lệ (phòng khi dữ liệu co lại sau xoá). paged=False (n <=
     page_size) -> start=0, end=n, không cần vẽ pagination."""
     if n <= page_size:
@@ -5703,7 +5703,7 @@ def _table_page_slice(n, key, page_size=TABLE_PAGE_SIZE):
 
 def _paginate_row_blocks(blocks, page_size=TABLE_PAGE_SIZE):
     """Gom các block (html, n_rows) thành từng trang tối đa page_size dòng, KHÔNG tách 1 block ra
-    2 trang -- dùng cho bảng có nhóm cha/con (vd 1 Danh mục + các Dự án con của nó trong
+    2 trang -- dùng cho bảng có nhóm cha/con (vd 1 Nhóm + các Dự án con của nó trong
     render_data_table()/render_detail_table() phải nằm trọn trong 1 trang, không đứt giữa). Nếu 1
     block tự nó đã vượt page_size (nhóm quá nhiều dòng con) thì vẫn để riêng 1 trang, chấp nhận
     vượt nhẹ ngưỡng thay vì tách nhóm."""
@@ -5736,11 +5736,11 @@ def render_data_table(df, time_col, key):
     if df.empty:
         return
     cols = sorted(df[time_col].unique())
-    proj = (df.groupby(['Danh mục', 'Dự án', time_col])['Thời lượng (Phút)'].sum()
+    proj = (df.groupby(['Nhóm', 'Dự án', time_col])['Thời lượng (Phút)'].sum()
               .unstack(fill_value=0).reindex(columns=cols, fill_value=0)) / 60
-    cat = (df.groupby(['Danh mục', time_col])['Thời lượng (Phút)'].sum()
+    cat = (df.groupby(['Nhóm', time_col])['Thời lượng (Phút)'].sum()
              .unstack(fill_value=0).reindex(columns=cols, fill_value=0)) / 60
-    # Thang heat riêng cho dòng Danh mục và dòng Dự án để cả hai đều thấy gradient
+    # Thang heat riêng cho dòng Nhóm và dòng Dự án để cả hai đều thấy gradient
     vmax_proj = float(proj.values.max()) if proj.size else 0.0
     vmax_cat = float(cat.values.max()) if cat.size else 0.0
 
@@ -5764,10 +5764,10 @@ def render_data_table(df, time_col, key):
         yr_groups = [(yr, len(list(g))) for yr, g in groupby(cols, key=lambda c: str(c).split('-')[0])]
         yr_head = ''.join(f'<th class="yrspan" colspan="{n}">{yr}</th>' for yr, n in yr_groups)
         thead_html = (f'<tr class="yr"><th class="lbl"></th>{yr_head}<th></th></tr>'
-                      f'<tr class="wk"><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>')
+                      f'<tr class="wk"><th class="lbl">Nhóm / Dự án</th>{head}<th>Tổng</th></tr>')
     else:
-        thead_html = f'<tr><th class="lbl">Danh mục / Dự án</th>{head}<th>Tổng</th></tr>'
-    # 1 block = 1 Danh mục + các Dự án con của nó -- đơn vị phân trang, không tách rời khỏi nhau
+        thead_html = f'<tr><th class="lbl">Nhóm / Dự án</th>{head}<th>Tổng</th></tr>'
+    # 1 block = 1 Nhóm + các Dự án con của nó -- đơn vị phân trang, không tách rời khỏi nhau
     # (xem _paginate_row_blocks()).
     blocks = []
     for c in sorted(cat.index):
@@ -5807,11 +5807,11 @@ def render_data_table(df, time_col, key):
 
 
 def render_detail_table(scope_df, key):
-    """Bảng chi tiết một kỳ (Tháng/Tuần): mỗi Danh mục/Dự án một số giờ tổng."""
+    """Bảng chi tiết một kỳ (Tháng/Tuần): mỗi Nhóm/Dự án một số giờ tổng."""
     if scope_df.empty:
         return
-    cat = scope_df.groupby('Danh mục')['Thời lượng (Phút)'].sum() / 60
-    proj = scope_df.groupby(['Danh mục', 'Dự án'])['Thời lượng (Phút)'].sum() / 60
+    cat = scope_df.groupby('Nhóm')['Thời lượng (Phút)'].sum() / 60
+    proj = scope_df.groupby(['Nhóm', 'Dự án'])['Thời lượng (Phút)'].sum() / 60
     vmax_cat = float(cat.max()) if len(cat) else 0.0
     vmax_proj = float(proj.max()) if len(proj) else 0.0
     total_all = float(cat.sum()) or 1.0
@@ -5845,7 +5845,7 @@ def render_detail_table(scope_df, key):
 
     st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Danh mục / Dự án</th><th>Số giờ</th><th>Tỉ trọng</th></tr></thead>
+<thead><tr><th class="lbl">Nhóm / Dự án</th><th>Số giờ</th><th>Tỉ trọng</th></tr></thead>
 <tbody>{pages[_page - 1]}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -5856,10 +5856,10 @@ def render_detail_table(scope_df, key):
 def render_period_day_table(df_period, all_days=None):
     """Bảng chi tiết theo NGÀY (Báo cáo -> Tuần, mục "Bảng số liệu") -- mỗi ngày trong kỳ 1 dòng
     (Ngày/Giờ/Phiên/TB mỗi phiên/Dự án nhiều nhất), khác trục hẳn với render_detail_table (theo
-    Danh mục/Dự án) -- dùng cho Tuần vì trục Danh mục/Dự án đã có frag_category_bars riêng ở
+    Nhóm/Dự án) -- dùng cho Tuần vì trục Nhóm/Dự án đã có frag_category_bars riêng ở
     chương trước, bảng ở đây bổ sung trục còn thiếu (theo ngày) thay vì lặp lại cùng 1 trục lần
     thứ 2 như Tháng/Năm (những trang đó không có frag_category_bars nên vẫn giữ render_detail_table
-    theo Danh mục/Dự án). KHÔNG phân trang (khác mọi bảng .dtbl khác trong app) -- luôn đúng 7
+    theo Nhóm/Dự án). KHÔNG phân trang (khác mọi bảng .dtbl khác trong app) -- luôn đúng 7
     dòng/tuần + 1 dòng Tổng, không bao giờ chạm ngưỡng TABLE_PAGE_SIZE.
 
     all_days: list[date] đầy đủ của kỳ (vd 7 ngày Thứ Hai->Chủ Nhật) -- truyền vào để bảng hiện ĐỦ
@@ -6059,7 +6059,7 @@ def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=No
     kicker=None/"" -> bỏ hẳn nhãn kicker cuối hàng (dùng khi kicker chỉ lặp lại đúng tên trang
     đang đứng, vd "Hôm nay" ở tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
     nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như "Universal
-    Century"/"Dự án → Danh mục" trong mockup). Kicker đứng SAU kẻ ngang (cuối hàng), không phải
+    Century"/"Dự án → Nhóm" trong mockup). Kicker đứng SAU kẻ ngang (cuối hàng), không phải
     trước tiêu đề.
 
     tight_top=True -> bỏ margin-top mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay sau 1
@@ -6201,7 +6201,7 @@ def frag_trend(scope_df, key_prefix, default_color):
             tcol = st.segmented_control("Gộp theo", ["Ngày", "Tuần", "Tháng"], default="Ngày",
                                          key=f"{key_prefix}_time", label_visibility="collapsed")
         with o3:
-            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+            ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color,
                                          key=f"{key_prefix}_color", label_visibility="collapsed")
         rl = rl or "90 ngày"
         tcol = tcol or "Ngày"
@@ -6227,11 +6227,11 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
                 rl = st.segmented_control("Khoảng thời gian", list(RANGE_OPTS.keys()), default="90 ngày",
                                            key=f"{key_prefix}_range", label_visibility="collapsed")
             with c2:
-                ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+                ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color,
                                              key=f"{key_prefix}_color", label_visibility="collapsed")
             scope_df = filter_by_range(scope_df, rl or "90 ngày")
         else:
-            ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color,
+            ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color,
                                          key=f"{key_prefix}_color", label_visibility="collapsed")
         render_hourly_chart(scope_df, ccol or default_color)
 
@@ -6243,7 +6243,7 @@ def frag_pie(scope_df, key, default_color):
     [class*="st-key-piewrap_"], [class*="st-key-chartopt_"]) mà không đụng margin của mọi
     segmented_control khác trong app."""
     with st.container(key=f"piewrap_{key}"):
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+        ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
         pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
         pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
@@ -6255,15 +6255,14 @@ def frag_pie(scope_df, key, default_color):
 @st.fragment
 def frag_category_bars(scope_df, key, default_color):
     """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở Báo cáo -> Tuần và
-    Hôm nay -- Tháng/Năm vẫn giữ frag_pie, chưa đổi) -- toggle Danh mục/Dự án, mỗi hàng nhãn + 1
+    Hôm nay -- Tháng/Năm vẫn giữ frag_pie, chưa đổi) -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1
     thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo hàng cao nhất -- đúng theo mockup Forest
     Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng dồn ra khớp tổng giờ cả kỳ) + giá trị bên
-    phải, cộng dòng tóm tắt "X nổi bật" liệt kê top 3 trong phạm vi TOGGLE ĐANG CHỌN (mockup vẽ
-    tĩnh nên luôn ghi "Dự án nổi bật" dù thanh đang hiện Danh mục -- ở đây đổi nhãn theo đúng toggle
-    cho nhất quán, tránh lệch trục giữa thanh và dòng tóm tắt). Bọc trong container "chartopt_..."
-    (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống nội dung ngay dưới."""
+    phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu cầu người dùng -- chỉ còn thanh xếp hạng.
+    Bọc trong container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống
+    nội dung ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+        ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
         g = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().sort_values(ascending=False)
         total_min = scope_df['Thời lượng (Phút)'].sum()
@@ -6280,15 +6279,8 @@ def frag_category_bars(scope_df, key, default_color):
                 f"<span class='catbar-track'><span class='catbar-fill' "
                 f"style='width:{pct:.1f}%;background:{color};'></span></span>"
                 f"<span class='catbar-val'>{_fmt_hours_short(mins / 60)}</span></div>")
-        top3 = g.head(3)
-        noun = "Danh mục nổi bật" if ccol == "Danh mục" else "Dự án nổi bật"
-        parts = [(f"<b>{html_escape(str(n))} {_fmt_hours_short(v / 60)}</b>" if i == 0
-                   else f"{html_escape(str(n))} {_fmt_hours_short(v / 60)}")
-                  for i, (n, v) in enumerate(top3.items())]
-        st.markdown(
-            f"<div class='catbars-card'><div class='catbars'>{rows_html}</div>"
-            f"<div class='catbars-top'>{noun}: {' · '.join(parts)}</div></div>",
-            unsafe_allow_html=True)
+        st.markdown(f"<div class='catbars-card'><div class='catbars'>{rows_html}</div></div>",
+                    unsafe_allow_html=True)
 
 
 @st.fragment
@@ -6298,7 +6290,7 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
     container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
-        ccol = st.segmented_control("Phân loại", ["Danh mục", "Dự án"], default=default_color, key=key,
+        ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
         g = scope_df.groupby([group_col, ccol])['Thời lượng (Phút)'].sum().reset_index()
         g['Số giờ'] = g['Thời lượng (Phút)'] / 60
@@ -6823,7 +6815,7 @@ st.markdown(
         margin-bottom: 0 !important;
     }
 
-    /* Mục "Danh mục & dự án" dạng thanh ngang xếp hạng (frag_category_bars) -- thay biểu đồ tròn
+    /* Mục "Nhóm & dự án" dạng thanh ngang xếp hạng (frag_category_bars) -- thay biểu đồ tròn
        cũ, style theo mockup Forest Dashboard.dc.html: thẻ padding 16px 18px (khác 14px của thẻ
        biểu đồ Plotly/Vega vì đây là HTML thuần, không tự có card qua rule [data-testid=
        "stPlotlyChart"]), mỗi hàng nhãn 150px + thanh fill co giãn + giá trị 60px canh phải. */
@@ -6834,7 +6826,7 @@ st.markdown(
     .catbars { display: flex; flex-direction: column; gap: 10px; }
     .catbar-row { display: grid; grid-template-columns: 150px 1fr 60px; align-items: center;
         gap: 10px; font-size: 13px; }
-    /* Chương "Danh mục cả năm" (Báo cáo -> Năm, mockup, render_year_category_bars()) -- cột giá
+    /* Chương "Nhóm cả năm" (Báo cáo -> Năm, mockup, render_year_category_bars()) -- cột giá
        trị rộng hơn (110px so với 60px mặc định) vì có thêm % so với cùng kỳ năm trước cạnh giờ
        (vd "112h +31%"), 60px gốc không đủ chỗ. */
     .catbar-row.wide { grid-template-columns: 150px 1fr 110px; }
@@ -7027,7 +7019,7 @@ st.markdown(
        ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
        vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
        không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
-    /* .maprow .chip: badge Danh mục ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
+    /* .maprow .chip: badge Nhóm ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
        tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ thêm vào phạm vi scope
        vì không phải billboard/stat-panel. */
     .stat-panel .chip, .pbill-chips .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
@@ -7207,7 +7199,7 @@ st.markdown(
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
        segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. Gộp thêm
-       "tb_phanloai_tabs" (2 tab Danh mục/Sách, mục "2. Phân loại" trang Tuỳ biến) vào rule ẩn
+       "tb_phanloai_tabs" (2 tab Nhóm/Sách, mục "2. Phân loại" trang Tuỳ biến) vào rule ẩn
        vạch xám này -- NHƯNG không gộp vào rule căn giữa ở trên: xác nhận với người dùng tab này
        giữ style gạch chân giống hệt, chỉ riêng CĂN LỀ TRÁI (mặc định justify-content: flex-start
        của trình duyệt, không cần khai báo lại) thay vì căn giữa như rl_view_tabs. */
@@ -7552,7 +7544,7 @@ st.markdown(
     /* Header chương kiểu mockup hiện hành: 1 hàng ngang canh giữa dọc, không còn số lớn mờ chồng
        góc phải (bản cũ) -- ô vuông teal chứa số nhỏ + tiêu đề + badge tuỳ chọn + kẻ ngang mở
        (flex:1, lấp hết chỗ trống còn lại) + kicker tuỳ chọn (đặt SAU kẻ ngang, không phải trước
-       tiêu đề như bản cũ -- xem ví dụ "Universal Century"/"Dự án → Danh mục" trong mockup). */
+       tiêu đề như bản cũ -- xem ví dụ "Universal Century"/"Dự án → Nhóm" trong mockup). */
     .sec-ch-row { display: flex; align-items: center; gap: 10px; }
     .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
         color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
@@ -7685,10 +7677,10 @@ st.markdown(
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
-    /* Bảng Phân loại TĨNH (Tuỳ biến -> chương "2. Phân loại") -- badge màu Danh mục không thể vẽ
+    /* Bảng Phân loại TĨNH (Tuỳ biến -> chương "2. Phân loại") -- badge màu Nhóm không thể vẽ
        trong 1 ô data_editor (SelectboxColumn chỉ nhận text đơn thuần, không chèn được HTML màu),
        nên hiển thị dạng bảng tĩnh khớp mockup; sửa phân loại chuyển sang 1 form riêng bên dưới
-       (chọn Dự án + Danh mục + nút Lưu) thay vì sửa ngay trong ô bảng. */
+       (chọn Dự án + Nhóm + nút Lưu) thay vì sửa ngay trong ô bảng. */
     /* Mọi hàng (kể cả dòng "+N dự án khác" cuối bảng) đều là div.maprow trực tiếp trong .maptbl
        -- :last-child (không phải :last-of-type, vốn so theo TAG chứ không theo class, sẽ khớp
        nhầm nếu dòng cuối mang thêm class phụ) mới chắc chắn khớp đúng div cuối cùng để bỏ viền. */
@@ -8184,11 +8176,11 @@ NAV_SHORT = {
 df = prep_analysis_data()
 DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
 
-# Bản đồ màu cố định: mỗi Danh mục/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab.
-# Danh mục (mặc định để tô màu) được nhận các màu cơ sở đẹp & tách biệt nhất trước,
-# dự án nhận phần còn lại -> biểu đồ theo Danh mục luôn dễ phân biệt.
+# Bản đồ màu cố định: mỗi Nhóm/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab.
+# Nhóm (mặc định để tô màu) được nhận các màu cơ sở đẹp & tách biệt nhất trước,
+# dự án nhận phần còn lại -> biểu đồ theo Nhóm luôn dễ phân biệt.
 if not df.empty:
-    _cats = sorted(df['Danh mục'].dropna().unique())
+    _cats = sorted(df['Nhóm'].dropna().unique())
     _projs = sorted(set(df['Dự án'].dropna().unique()) - set(_cats))
     COLOR_MAP = build_color_map(_cats + _projs)
 else:
@@ -8775,7 +8767,7 @@ def render_day_report(df):
         # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
         # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
         # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
-        # án. KHÔNG có Top 3 Danh mục/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
+        # án. KHÔNG có Top 3 Nhóm/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
         # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
         # lại thông tin.
         render_day_timeline(day_df)
@@ -8794,8 +8786,8 @@ def render_day_report(df):
         rows_html = ''
         for i, (_, r) in enumerate(_day_sorted.iloc[_start:_end].iterrows(), _start + 1):
             s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
-            cat = r.get('Danh mục')
-            cat = str(cat) if (r.get('Có danh mục') and pd.notna(cat)) else '—'
+            cat = r.get('Nhóm')
+            cat = str(cat) if (r.get('Có nhóm') and pd.notna(cat)) else '—'
             rows_html += ('<tr class="prow">'
                           f'<td class="lbl">{i}</td>'
                           f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
@@ -8806,7 +8798,7 @@ def render_day_report(df):
                       f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
         st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Danh mục</th></tr></thead>
+<thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Nhóm</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -8846,7 +8838,7 @@ elif nav == "Báo cáo":
             total_trees = len(df)
             num_days = df['Ngày'].nunique() or 1
             base_avg = total_hrs / num_days
-            n_cats = df['Danh mục'].nunique()
+            n_cats = df['Nhóm'].nunique()
             n_projs = df['Dự án'].nunique()
 
             # Câu nhận định chuỗi chuyển lên cột phải billboard (không còn làm footer của panel
@@ -8862,7 +8854,7 @@ elif nav == "Báo cáo":
 
             render_period_billboard(
                 "Toàn bộ dữ liệu", _fmt_hours_short(total_hrs), "tổng thời gian đã trồng",
-                f"{num_days} ngày · {n_cats} danh mục · {n_projs} dự án",
+                f"{num_days} ngày · {n_cats} nhóm · {n_projs} dự án",
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
                 + _nudge_html,
@@ -8903,7 +8895,7 @@ elif nav == "Báo cáo":
             st.write("")
             c_top1, c_top2 = st.columns(2)
             _wk_now = _today_vn().strftime('%G-W%V')
-            with c_top1: render_top_3(df, 'Danh mục', 'Top 3 Danh mục', week_key=_wk_now)
+            with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
             sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
@@ -8913,9 +8905,9 @@ elif nav == "Báo cáo":
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
                 key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
             if _tq_trend_view == "Theo thời gian":
-                frag_trend(df, "trend_main", "Danh mục")
+                frag_trend(df, "trend_main", "Nhóm")
             else:
-                frag_hourly(df, "hour_main", "Danh mục")
+                frag_hourly(df, "hour_main", "Nhóm")
             sec_chapter("bc-tq-ch4", 4, None, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
@@ -8941,11 +8933,11 @@ elif nav == "Báo cáo":
             if not df_w.empty:
                 # Billboard số to + câu nhận định (mockup) -- bộ chương đã khác hẳn Tháng theo
                 # mockup riêng của Tuần: bỏ "Xu hướng tập trung theo khung giờ", đổi "Phân bổ
-                # thời gian" (pie) -> "Danh mục & dự án" (thanh ngang xếp hạng, frag_category_bars),
-                # đổi Bảng số liệu sang trục theo NGÀY (render_period_day_table) thay vì Danh mục/
+                # thời gian" (pie) -> "Nhóm & dự án" (thanh ngang xếp hạng, frag_category_bars),
+                # đổi Bảng số liệu sang trục theo NGÀY (render_period_day_table) thay vì Nhóm/
                 # Dự án (đã có ở chương thanh ngang rồi, không lặp lại trục), và đổi tên chương
                 # "Xu hướng theo thời gian" -> "Theo ngày" (giữ đúng thứ tự mockup: Theo ngày đứng
-                # trước Danh mục & dự án). Tháng đã có billboard + "Lịch tháng"/"Phân bổ danh mục"
+                # trước Nhóm & dự án). Tháng đã có billboard + "Lịch tháng"/"Phân bổ nhóm"
                 # riêng (xem nhánh Tháng) nhưng vẫn giữ "Xu hướng theo thời gian"/"Xu hướng khung
                 # giờ"/"Bảng số liệu" cũ -- không đủ giống Tuần để gộp chung. Năm CHƯA đối chiếu
                 # mockup riêng -- vẫn giữ nguyên sec_hero cũ, không đụng tới.
@@ -8984,20 +8976,20 @@ elif nav == "Báo cáo":
                     f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
                     f"{_week_start:%d/%m} – {_week_end:%d/%m} · hoạt động {_active_days_w}/7 ngày",
                     f"<div class='pbill-title'>{_pbill_title_w}</div><div class='pbill-sub'>{_pbill_sub_w}</div>",
-                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Danh mục & dự án"),
+                    [("bc-tuan-ch1", "1 · Tổng quan"), ("bc-tuan-ch2", "2 · Nhóm & dự án"),
                      ("bc-tuan-ch3", "3 · Theo ngày"), ("bc-tuan-ch4", "4 · Nhật ký"),
                      ("bc-tuan-ch5", "5 · Bảng số liệu")])
-                # KHÔNG có Top 3 Danh mục/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
-                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Danh mục &
+                # KHÔNG có Top 3 Nhóm/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
+                # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Nhóm &
                 # dự án" bên dưới.
                 _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
                                               anchor_prefix="bc-tuan", show_footer=False)
-                sec_chapter("bc-tuan-ch2", 2, None, "Danh mục & dự án")
-                frag_category_bars(df_w, "rad_tab4", "Danh mục")
+                sec_chapter("bc-tuan-ch2", 2, None, "Nhóm & dự án")
+                frag_category_bars(df_w, "rad_tab4", "Nhóm")
                 sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
-                frag_period_trend(df_w, "trend_w_color", "Danh mục", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
+                frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
                 sec_chapter("bc-tuan-ch4", 4, None, "Nhật ký")
                 render_notes_journal(selected_week, 'week', df)
                 sec_chapter("bc-tuan-ch5", 5, None, "Bảng số liệu")
@@ -9026,9 +9018,9 @@ elif nav == "Báo cáo":
             if not df_m.empty:
                 # Billboard số to + câu nhận định (mockup, theo đúng pattern Tuần đã làm trước --
                 # xem chú thích ở nhánh Tuần) -- cột phải là câu nhận định tự tính (KHÔNG phải
-                # hàng chip "vs Tháng trước"/"Danh mục dẫn đầu"/... như bản mockup vẽ tĩnh, vì các
+                # hàng chip "vs Tháng trước"/"Nhóm dẫn đầu"/... như bản mockup vẽ tĩnh, vì các
                 # số đó ĐÃ có trong chương "Tổng quan" giữ nguyên bên dưới -- hero item deltas +
-                # Top 3 Danh mục/Dự án -- lặp lại ở billboard sẽ dư thừa).
+                # Top 3 Nhóm/Dự án -- lặp lại ở billboard sẽ dư thừa).
                 _curr_hrs_m = df_m['Thời lượng (Phút)'].sum() / 60
                 _active_days_m = df_m['Ngày'].nunique()
                 _by_day_m = df_m.groupby('Ngày')['Thời lượng (Phút)'].sum()
@@ -9066,7 +9058,7 @@ elif nav == "Báo cáo":
                     f"{_active_days_m} ngày hoạt động · {len(df_m)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_m}</div><div class='pbill-sub'>{_pbill_sub_m}</div>",
                     [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Lịch tháng"),
-                     ("bc-thang-ch3", "3 · Phân bổ danh mục"), ("bc-thang-ch4", "4 · Xu hướng"),
+                     ("bc-thang-ch3", "3 · Phân bổ nhóm"), ("bc-thang-ch4", "4 · Xu hướng"),
                      ("bc-thang-ch5", "5 · Nhật ký"), ("bc-thang-ch6", "6 · Bảng số liệu")])
                 _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
@@ -9083,8 +9075,8 @@ elif nav == "Báo cáo":
                 # tháng đang chọn, không kéo dài tới ngày hiện tại như khi truyền full df.
                 render_calendar_grid(df_m, df_m)
 
-                sec_chapter("bc-thang-ch3", 3, None, "Phân bổ danh mục")
-                frag_category_bars(df_m, "rad_tab3", "Danh mục")
+                sec_chapter("bc-thang-ch3", 3, None, "Phân bổ nhóm")
+                frag_category_bars(df_m, "rad_tab3", "Nhóm")
 
                 sec_chapter("bc-thang-ch4", 4, None, "Xu hướng")
                 _thang_trend_view = st.segmented_control(
@@ -9093,9 +9085,9 @@ elif nav == "Báo cáo":
                 if _thang_trend_view == "Theo tuần":
                     render_month_week_bars(df_m)
                 elif _thang_trend_view == "Theo ngày":
-                    frag_period_trend(df_m, "trend_m_color", "Danh mục", 'Ngày', "Ngày trong tháng")
+                    frag_period_trend(df_m, "trend_m_color", "Nhóm", 'Ngày', "Ngày trong tháng")
                 else:
-                    frag_hourly(df_m, "hour_m", "Danh mục", with_range=False)
+                    frag_hourly(df_m, "hour_m", "Nhóm", with_range=False)
 
                 sec_chapter("bc-thang-ch5", 5, None, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
@@ -9158,7 +9150,7 @@ elif nav == "Báo cáo":
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
                     [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
-                     ("bc-nam-ch3", "3 · Danh mục cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
+                     ("bc-nam-ch3", "3 · Nhóm cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
                      ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
                                               lbl_prev_y, lbl_avg_y, _clip_note_y,
@@ -9169,7 +9161,7 @@ elif nav == "Báo cáo":
                 # xử lý "Điểm nhấn" ở nhánh Tháng, xác nhận với người dùng.
                 render_year_highlights(df_y, _active_days_y, _elapsed_days_y, selected_year)
 
-                # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Danh mục cả năm/Theo
+                # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Nhóm cả năm/Theo
                 # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
                 # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
                 sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
@@ -9179,7 +9171,7 @@ elif nav == "Báo cáo":
                 # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
                 render_calendar_grid(df_y, df_y)
 
-                sec_chapter("bc-nam-ch3", 3, None, "Danh mục cả năm")
+                sec_chapter("bc-nam-ch3", 3, None, "Nhóm cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
 
                 sec_chapter("bc-nam-ch4", 4, None, "Theo tháng")
@@ -9189,20 +9181,20 @@ elif nav == "Báo cáo":
                 render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
-            # Gom dự án theo nhóm (Danh mục) và phân biệt rõ Nhóm vs Dự án trong dropdown
-            proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Danh mục'].first()
+            # Gom dự án theo nhóm (Nhóm) và phân biệt rõ Nhóm vs Dự án trong dropdown
+            proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
             # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách (đúng điều kiện books_df ở nhánh
-            # "Nhật ký đọc sách" bên dưới: Danh mục == BOOKS_GROUP, KHÔNG nằm trong BOOKS_EXCLUDE)
+            # "Nhật ký đọc sách" bên dưới: Nhóm == BOOKS_GROUP, KHÔNG nằm trong BOOKS_EXCLUDE)
             # thì bỏ khỏi danh sách chọn ở đây -- xem số liệu qua trang Sách (đủ ngữ cảnh sách/tác
             # giả/tiến độ đọc), không cần lặp lại tuỳ chọn ở Báo cáo → Dự án nữa. Gundam/The
             # Economist (nằm trong BOOKS_EXCLUDE) vẫn giữ nguyên -- không "đã có trong phần Sách".
             _book_projects = set(
-                df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique())
+                df[(df['Nhóm'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique())
             # Mục rỗng đứng đầu -- mặc định KHÔNG chọn sẵn nhóm/dự án nào khi mới vào trang,
             # giống hệt selectbox "Chọn 1 cuốn/series" ở sub-tab Chi tiết (Sách/Gundam).
             _placeholder = ("none", "— Chọn để xem chi tiết —")
             _opts, _labels = [_placeholder], {_placeholder: _placeholder[1]}
-            for _c in sorted(df['Danh mục'].dropna().unique()):
+            for _c in sorted(df['Nhóm'].dropna().unique()):
                 _projs = [p for p in sorted(proj_to_cat[proj_to_cat == _c].index.tolist())
                           if p not in _book_projects]
                 if not _projs:
@@ -9221,7 +9213,7 @@ elif nav == "Báo cáo":
                 st.info("Chọn 1 Nhóm hoặc Dự án ở trên để xem chi tiết.")
             else:
                 _kind, sel_grp = sel
-                df_g = df[df['Danh mục'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
+                df_g = df[df['Nhóm'] == sel_grp] if _kind == "cat" else df[df['Dự án'] == sel_grp]
 
                 # Mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1 cuốn sách theo dõi qua
                 # Reminders (so _book_title() của List với tên Dự án) -- KHÔNG đánh số (giữ nguyên
@@ -9276,7 +9268,7 @@ elif nav == "Báo cáo":
                 if _kind == "proj":
                     _cat_of_proj = proj_to_cat.get(sel_grp)
                     if pd.notna(_cat_of_proj):
-                        _chips_g_bb.append({"k": "Danh mục", "v": html_escape(str(_cat_of_proj))})
+                        _chips_g_bb.append({"k": "Nhóm", "v": html_escape(str(_cat_of_proj))})
                 else:
                     _chips_g_bb.append({"k": "Số dự án", "v": f"{df_g['Dự án'].nunique()}"})
                 _chips_g_bb.append({"k": "TB / tuần (4 tuần)", "v": _fmt_hours_short(_tb_4w_hrs_g)})
@@ -9391,7 +9383,7 @@ elif nav == "Nhật ký đọc sách":
     # án' của (2) đã được prep_analysis_data() suy luận SẴN thành đúng tên cuốn (qua
     # _assign_reading_sessions() + book_overrides, xem điểm nối trung tâm) -- không cần gọi lại ở
     # đây, chỉ cần lọc đúng theo 'Dự án gốc' (tag Forest thật, KHÔNG bị ghi đè) để tách 2 nhóm.
-    books_df_legacy = df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án gốc'].isin(BOOKS_EXCLUDE))
+    books_df_legacy = df[(df['Nhóm'] == BOOKS_GROUP) & (~df['Dự án gốc'].isin(BOOKS_EXCLUDE))
                           & (df['Dự án gốc'] != BOOKS_TAG)]
     rl_all = load_reading_log()
     # Loại Reminder List Gundam (tên "Gundam - ...") -- có tab riêng, không tính vào tab Sách.
@@ -9402,7 +9394,7 @@ elif nav == "Nhật ký đọc sách":
     books_df = pd.concat([books_df_legacy, books_df_new], ignore_index=True)
     if books_df.empty and rl_books.empty:
         st.info(f"Chưa có dữ liệu sách trong nhóm '{BOOKS_GROUP}' và chưa có dữ liệu đọc sách từ "
-                f"Reminders. Gán Danh mục '{BOOKS_GROUP}' cho các dự án sách ở trang Chuẩn bị "
+                f"Reminders. Gán Nhóm '{BOOKS_GROUP}' cho các dự án sách ở trang Chuẩn bị "
                 f"dữ liệu, hoặc tải file ở mục 'Tải lên từ Reminder'.")
     else:
         # Chuẩn hoá cả 2 ứng viên về pd.Timestamp trước khi so sánh -- max() thô giữa
@@ -9782,7 +9774,7 @@ elif nav == "Tuỳ biến":
 
     sec_chapter("tb-ch2", 2, None, "Phân loại")
     with st.container(border=True, key="tb_mapping_card"):
-        # Trước đây có 2 tab con "Danh mục"/"Sách" (tab "Sách" là gán tay Dự án Forest -> Cuốn
+        # Trước đây có 2 tab con "Nhóm"/"Sách" (tab "Sách" là gán tay Dự án Forest -> Cuốn
         # sách cho tên lệch) -- đã BỎ tab "Sách" cùng bảng book_project_map: mọi sách cũ đã có tên
         # tag khớp TUYỆT ĐỐI tên sách bên Reminders (xác nhận với người dùng), còn sách MỚI dùng
         # chung tag BOOKS_TAG nên không còn khái niệm "1 Dự án Forest = 1 cuốn sách" để gán tay
@@ -9790,7 +9782,7 @@ elif nav == "Tuỳ biến":
         db_current = load_db()
         mapping_df = load_mapping()
         all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
-        cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Danh mục'])) if not mapping_df.empty else {}
+        cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Nhóm'])) if not mapping_df.empty else {}
         if not all_projs:
             st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 1 trước.")
         else:
@@ -9802,7 +9794,7 @@ elif nav == "Tuỳ biến":
             else:
                 st.success("Tất cả dự án đã được phân loại.")
 
-            # Bảng TĨNH (badge màu Danh mục, khớp mockup) -- data_editor cũ không vẽ được badge
+            # Bảng TĨNH (badge màu Nhóm, khớp mockup) -- data_editor cũ không vẽ được badge
             # màu trong ô (SelectboxColumn chỉ nhận text đơn thuần), nên sửa chuyển xuống form
             # riêng bên dưới bảng (xem "Sửa phân loại"). Sắp theo số phiên giảm dần, cắt bớt nếu
             # danh sách dài (khớp mockup "+N dự án khác") -- form sửa vẫn chọn được MỌI dự án qua
@@ -9814,7 +9806,7 @@ elif nav == "Tuỳ biến":
             _show_rows = _rows_sorted[:_MAP_SHOW]
             _extra_n = len(_rows_sorted) - len(_show_rows)
 
-            _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Danh mục</span><span style='text-align:right;'>Phiên</span></div>"
+            _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Nhóm</span><span style='text-align:right;'>Phiên</span></div>"
             for p in _show_rows:
                 _cat = cur_map.get(p)
                 _cat = str(_cat) if pd.notna(_cat) and str(_cat).strip() else None
@@ -9843,17 +9835,17 @@ elif nav == "Tuỳ biến":
             with fc2:
                 _cur_val = cur_map.get(edit_proj)
                 _cur_idx = opts.index(_cur_val) if _cur_val in opts else None
-                edit_cat = st.selectbox("Danh mục", opts, index=_cur_idx, key="map_edit_cat",
-                                        placeholder="— Chọn danh mục —")
+                edit_cat = st.selectbox("Nhóm", opts, index=_cur_idx, key="map_edit_cat",
+                                        placeholder="— Chọn nhóm —")
             with fc3:
                 st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
                 if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
                     if edit_cat:
                         nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
-                              if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Danh mục"]))
-                        nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Danh mục": edit_cat}])],
+                              if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Nhóm"]))
+                        nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Nhóm": edit_cat}])],
                                        ignore_index=True)
-                        save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
+                        save_mapping(nm[["Dự án", "Nhóm"]].reset_index(drop=True))
                         st.rerun()
     sec_chapter("tb-ch3", 3, None, "Giao diện")
     with st.container(border=True, key="tb_theme_card"):
@@ -10346,7 +10338,7 @@ elif nav == "Hướng dẫn":
     sec_chapter(
         "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — nhìn lại với một câu hỏi trong đầu")
     _q_rows = [
-        ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (Tháng: biểu đồ tròn · Tuần: Danh mục &amp; dự án dạng thanh xếp hạng)", "Báo cáo → Tháng / Tuần"],
+        ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (Tháng: biểu đồ tròn · Tuần: Nhóm &amp; dự án dạng thanh xếp hạng)", "Báo cáo → Tháng / Tuần"],
         ["Mình thường tập trung tốt nhất vào lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tháng"],
         ["Nhịp độ đang tăng lên hay đang chùng xuống?", "Xu hướng và đường trung bình động 7 ngày", "Mọi trang Báo cáo"],
         ["Ngày hôm đó tập trung sâu hay chỉ vụn vặt?", "Thanh phân bố độ dài phiên", "Mọi trang Báo cáo · Sách · Gundam"],
@@ -10704,18 +10696,18 @@ elif nav == "Hướng dẫn":
                  "series từ trước tới giờ. Ứng dụng tự suy luận ngày nào đang đọc cuốn nào dựa theo "
                  "lần tick Reminder gần nhất, có mục “Sửa gán sách tự động” ở trang Sách để sửa tay "
                  "khi đoán sai. Sách cũ đã có tag riêng vẫn giữ nguyên lịch sử, không cần đổi gì.",
-                 "**Danh mục và Dự án tách bạch rõ ràng xuyên suốt ứng dụng** — chọn xem theo Danh mục "
+                 "**Nhóm và Dự án tách bạch rõ ràng xuyên suốt ứng dụng** — chọn xem theo Nhóm "
                  "vẫn gộp chung “Gundam”/“Reading”, nhưng chọn xem theo Dự án giờ hiện đúng tên từng "
                  "series/cuốn sách cụ thể ở mọi nơi (Báo cáo, Bảng vàng, Top 3, biểu đồ lịch, Tìm "
                  "kiếm...), không cần sửa riêng từng trang.",
-                 "**The Economist tách khỏi nhóm Sách** — không còn bị loại trừ ngầm, giờ xếp Danh "
-                 "mục riêng và hiện như một Dự án bình thường ở Báo cáo.",
+                 "**The Economist tách khỏi nhóm Sách** — không còn bị loại trừ ngầm, giờ xếp Nhóm "
+                 "riêng và hiện như một Dự án bình thường ở Báo cáo.",
                  "**Bỏ hẳn tính năng “Gán Dự án Forest với Cuốn sách”** — không còn tình huống nào "
                  "cần dùng tới sau khi chuyển sang thẻ chung.",
                  "**Nút “Đồng bộ ngay” giờ bấm được từ mọi trang** — một nút tròn nổi cạnh nút “Về "
                  "đầu trang”, không cần mở tab Tuỳ biến mới đồng bộ được nữa.",
                  "Cùng vài chỉnh sửa nhỏ: cột đếm số nguyên hết cảnh “.0” thừa, chip “Ngày nổi bật” ở "
-                 "Báo cáo Tháng thêm tên Thứ, bảng màu biểu đồ Danh mục/Dự án đổi sang “Vintage bản "
+                 "Báo cáo Tháng thêm tên Thứ, bảng màu biểu đồ Nhóm/Dự án đổi sang “Vintage bản "
                  "đồ” rõ ràng hơn, và cách viết giờ phút đổi từ “1h30p” sang “1h30′”.",
              ]),
         dict(pr="223,224", date="18/07/2026", pr_lines=1, total_lines=10352,
