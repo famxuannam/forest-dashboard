@@ -2754,23 +2754,32 @@ def _top_days(df_scope, n=3):
     return [{"rank": int(ranks[d]), "date": d, "hours": h / 60} for d, h in top.items()]
 
 
-def _top_days_chips(items):
+def _top_days_chips(items, show_year=True, show_weekday=False):
     """Chuyển kết quả _top_days()/overall_top3 thành chips cho render_stat_panel() -- dùng
-    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm."""
-    return [{"k": f"#{it['rank']}", "v": f"{it['date']:%d/%m/%Y} · {_fmt_hours_short(it['hours'])}"} for it in items]
+    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm. show_year=False (Tuần/Tháng/Năm -- xác nhận với
+    người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm khỏi
+    ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. show_weekday=True
+    (riêng Tháng, dễ nhận biết ngày trong tuần hơn khi nhìn cả tháng) thêm tên Thứ trước ngày."""
+    def _fmt_date(d):
+        ts = pd.Timestamp(d)
+        s = ts.strftime('%d/%m/%Y' if show_year else '%d/%m')
+        return f"{VN_DAYS.get(ts.day_name(), '')}, {s}" if show_weekday else s
+    return [{"k": f"#{it['rank']}", "v": f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}"} for it in items]
 
 
-def _top_days_section(df_scope, label, n=3):
+def _top_days_section(df_scope, label, n=3, show_weekday=False):
     """1 section "Ngày nổi bật" cho render_stat_panel() (sections=...), hoặc None nếu kỳ chưa
     có ngày nào -- dùng chung ở Bảng số liệu Tuần/Tháng/Năm (Tổng quan tự truyền thẳng
-    overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây)."""
+    overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây). Luôn
+    show_year=False -- chỉ Tổng quan mới cần năm (xem _top_days_chips())."""
     items = _top_days(df_scope, n)
-    return [{"label": label, "chips": _top_days_chips(items)}] if items else None
+    return [{"label": label, "chips": _top_days_chips(items, show_year=False, show_weekday=show_weekday)}] if items else None
 
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  anchor_prefix, top3_suffix="", show_footer=True):
+                                  anchor_prefix, top3_suffix="", show_footer=True,
+                                  top_days_show_weekday=False):
     """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
@@ -2819,7 +2828,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
          "deltas": [d for d in [_delta_t(d1_trd, f"cây {lbl_prev}"), _delta_t(d2_trd, f"cây {lbl_avg}")] if d]},
         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút",
          "deltas": [d for d in [_delta_t(d1_ms, f"phút {lbl_prev}"), _delta_t(d2_ms, f"phút {lbl_avg}")] if d]},
-    ], sections=_top_days_section(df_period, top_days_label),
+    ], sections=_top_days_section(df_period, top_days_label, show_weekday=top_days_show_weekday),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None)
     render_project_rhythm(df_period)
@@ -9008,7 +9017,7 @@ elif nav == "Báo cáo":
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
                                               "Ngày nổi bật trong tháng", show_top3=False,
                                               anchor_prefix="bc-thang", top3_suffix=" Tháng",
-                                              show_footer=False)
+                                              show_footer=False, top_days_show_weekday=True)
                 # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
                 # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
