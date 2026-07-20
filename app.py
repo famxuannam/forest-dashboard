@@ -6933,6 +6933,13 @@ _MAIN_CSS = """
         background-size: var(--bg-size);
         background-position: var(--bg-position);
     }
+    /* [data-testid="stHeader"] (thanh trên cùng chứa menu "Deploy"/⋮) mặc định đọc
+       backgroundColor TĨNH từ .streamlit/config.toml -- trùng khớp giá trị --bg gốc CHỈ vì lúc
+       thiết kế ban đầu chỉ có đúng 1 bảng màu nền khả dĩ nên 2 nơi tình cờ cùng giá trị. Từ khi có
+       nhiều Bảng màu nền chọn được ở Tuỳ biến, config.toml không đổi theo được (đọc 1 lần lúc
+       server khởi động, không phải theo settings runtime) -- phải ép lại bằng var(--bg) ở đây để
+       thanh này không bị "đứng yên" lạc tông khi đổi bảng màu nền. */
+    [data-testid="stHeader"] { background: var(--bg) !important; }
 
     /* padding-top PHẢI đủ lớn để nội dung nằm HẲN dưới [data-testid="stHeader"] của Streamlit --
        thanh đó là position:absolute, height 60px CỐ ĐỊNH, z-index 999990 (rất cao), nền tô ĐẶC
