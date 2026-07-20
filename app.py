@@ -3602,19 +3602,49 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             return fmt.format(v) if pd.notna(v) else '—'
 
         kh_all = load_kindle_highlights() if show_quotes else None
-        vmax_h = float(t['Tổng giờ'].max()) if t['Tổng giờ'].notna().any() else 0.0
+        _ns = "sach" if page_name == "Sách" else "gundam"
 
-        _pg_key = "stats_tbl_page_sach" if page_name == "Sách" else "stats_tbl_page_gundam"
-        _n = len(t)
+        # Lọc theo năm "Bắt đầu" (mỗi sách/series chỉ thuộc đúng 1 năm cố định -- không lọc theo
+        # "Gần nhất" vì 1 cuốn đọc xuyên nhiều năm sẽ đổi nhóm liên tục nếu dùng mốc đó), CÙNG khuôn
+        # chip "Lọc theo sách" ở tab Trích dẫn ("Tất cả · N" đứng đầu, năm gần nhất trước). Chỉ hiện
+        # hàng chip khi có từ 2 năm trở lên -- 1 năm duy nhất thì lọc chẳng có ý nghĩa gì. Quá 6 năm
+        # thu gọn còn 6 năm gần nhất + nút "Hiện thêm" (mockup đã duyệt) -- khác tab Trích dẫn (ở đó
+        # chip "Lọc theo sách" không thu gọn, chỉ danh sách BÊN DƯỚI thu gọn) vì hàng chip năm dễ
+        # tràn nhiều dòng hơn nếu để hiện hết.
+        _year_counts = t['Bắt đầu'].dt.year.value_counts().sort_index(ascending=False)
+        t_view = t
+        if len(_year_counts) > 1:
+            _yr_more_key = f"stats_tbl_yr_show_all_{_ns}"
+            _yr_show_all = st.session_state.get(_yr_more_key, False)
+            _year_list = _year_counts.index.tolist()
+            _visible_years = _year_list if _yr_show_all else _year_list[:6]
+            _hidden_years = [] if _yr_show_all else _year_list[6:]
+            _yr_chip_opts = [f"Tất cả · {len(t)}"] + [f"{y} · {_year_counts[y]}" for y in _visible_years]
+            yr_pick = st.segmented_control("Lọc theo năm", _yr_chip_opts, default=_yr_chip_opts[0],
+                                            key=f"stats_tbl_yr_filter_{_ns}", label_visibility="collapsed")
+            if _hidden_years:
+                _hidden_n = sum(_year_counts[y] for y in _hidden_years)
+                if st.button(f"Hiện thêm {len(_hidden_years)} năm · {_hidden_n} {labels['item_col'].lower()}",
+                              key=f"stats_tbl_yr_more_btn_{_ns}"):
+                    st.session_state[_yr_more_key] = True
+                    st.rerun()
+            if yr_pick and not yr_pick.startswith("Tất cả · "):
+                t_view = t[t['Bắt đầu'].dt.year == int(yr_pick.rsplit(" · ", 1)[0])]
+
+        vmax_h = float(t_view['Tổng giờ'].max()) if t_view['Tổng giờ'].notna().any() else 0.0
+
+        _pg_key = f"stats_tbl_page_{_ns}"
+        _n = len(t_view)
         _start, _end, _num_pages, _paged = _table_page_slice(_n, _pg_key)
-        t_page = t.iloc[_start:_end]
+        t_page = t_view.iloc[_start:_end]
 
         rows_html = ''
-        for _, r in t_page.iterrows():
+        for _i, (_, r) in enumerate(t_page.iterrows()):
             s_col = ACCENT if r['Trạng thái'] == labels['ongoing'] else 'var(--text-2)'
             start_s = pd.to_datetime(r['Bắt đầu']).strftime('%d/%m/%Y')
             last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
             rows_html += '<tr class="prow">'
+            rows_html += f'<td class="stt">{_start + _i + 1}</td>'
             rows_html += f'<td class="lbl">{html_escape(str(r["Cuốn sách"]))}</td>'
             rows_html += f'<td>{start_s}</td><td>{last_s}</td>'
             rows_html += f'<td>{_c(r["Số ngày"])}</td><td>{_c(r["Ngày đọc"])}</td>'
@@ -3633,7 +3663,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
         st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap" style="margin-top:14px;">
 <table class="dtbl">
-<thead><tr><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th>{_quote_th}<th class="txt">Trạng thái</th></tr></thead>
+<thead><tr><th class="stt">STT</th><th class="lbl">{labels['item_col']}</th><th>Bắt đầu</th><th>Gần nhất</th><th>Số ngày</th><th>{labels['days_label']}</th><th>Tổng giờ</th><th>Số phiên</th><th>Giờ/tuần</th><th>{labels['parts_label']}</th><th class="txt">{labels['part_recent_label']}</th>{_quote_th}<th class="txt">Trạng thái</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
@@ -5625,6 +5655,9 @@ DTBL_CSS = """
 .dtbl th.txt, .dtbl td.txt { text-align:left; }
 .dtbl tr.prow td { color:var(--text); font-weight:400; border-top:1px solid var(--divider); }
 .dtbl tr.prow td.lbl { color:var(--text-3); font-weight:500; }
+/* Cột STT (Bảng số liệu Tổng quan Sách/Gundam, xem _render_stats_table()) -- width:1% để cột co
+   sát theo nội dung số (2-3 ký tự) thay vì kéo giãn ngang bằng các cột số liệu khác. */
+.dtbl th.stt, .dtbl td.stt { width: 1%; color: var(--text-2); }
 </style>
 """
 
