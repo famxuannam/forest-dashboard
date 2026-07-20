@@ -1743,46 +1743,71 @@ def _render_nav_sync_fab():
     """Nút "Đồng bộ" dạng tròn nổi -- gọi 1 LẦN DUY NHẤT (xem nơi gọi, cạnh
     _inject_scroll_to_top_button()) nên hiện xuyên suốt MỌI trang mà không cần sửa từng nhánh nav.
     Mockup đã xác nhận với người dùng: hình tròn 44px, CÙNG phong cách nút "Về đầu trang"
-    (#app-scroll-top-btn), xếp NGAY PHÍA TRÊN nó (bottom 76px, cách 22px+44px+10px gap của nút
-    kia) -- chỉ icon refresh, KHÔNG chữ/badge số đếm file chờ (bản trước có badge, bỏ theo yêu cầu
-    "chỉ icon refresh thôi là được").
+    (#app-scroll-top-btn), xếp NGAY PHÍA TRÊN nó -- chỉ icon refresh, KHÔNG chữ/badge số đếm file
+    chờ (bản trước có badge, bỏ theo yêu cầu "chỉ icon refresh thôi là được").
 
-    st.button THẬT (khác nút "Về đầu trang" -- JS thuần, chỉ cuộn trang, không side-effect Python
-    nào) vì cần gọi được _do_quick_sync() bằng Python khi bấm. Canh cố định bằng CSS nhắm
-    `.st-key-nav_sync_fab` (key của st.container bọc ngoài, CÙNG khuôn `.st-key-tb_quick_sync_row`
-    đã dùng để canh nút "Đồng bộ ngay" ở Tuỳ biến) -- .st-key-* luôn là cách canh CSS cho 1 widget
-    cụ thể trong app này. Vẫn bọc 1 st.container(key=...) thay vì đặt key= thẳng trên st.button
-    (ui-components.md có ghi mọi widget đặt key= đều tự có class riêng, kể cả không bọc container)
-    -- CHƯA kiểm chứng được cấu trúc DOM thật của st.button lồng CSS nested selector
-    `div[data-testid="stButton"] button` có còn khớp hay không nếu bỏ lớp bọc, nên giữ nguyên
-    cách đã chạy đúng thay vì đổi khi chưa test trực quan được."""
+    Nút HIỂN THỊ thật ra là 1 phần tử JS gắn thẳng vào window.parent.document.body
+    (#app-sync-fab-btn, xem CSS + JS bên dưới) -- CÙNG kỹ thuật với #app-scroll-top-btn, KHÔNG phải
+    st.button với CSS position:fixed như bản trước. Bản trước chỉ nổi đúng trên mobile, biến mất
+    trên desktop: nút đó sống trong cây DOM thường của Streamlit, và 1 tổ tiên có transform (khung
+    sidebar desktop khi mở) tự biến thành containing block mới cho position:fixed, kéo nút lệch
+    khỏi viewport; mobile tình cờ không có tổ tiên transform đó (sidebar sập thành overlay khác cấu
+    trúc) nên vẫn đúng. Gắn thẳng vào document CHA thì không lệ thuộc DOM Streamlit nữa.
+
+    st.button THẬT (key="nav_sync_fab_btn") vẫn giữ nguyên để Python xử lý _do_quick_sync() khi
+    bấm -- chỉ ẩn nó đi (display:none ở .st-key-nav_sync_fab), nút JS proxy click sang nút thật
+    bằng .click() (lập trình gọi .click() vẫn kích hoạt onClick handler bình thường dù ẩn, không
+    cần hit-test/hiển thị).
+
+    Ẩn nút sau khi đồng bộ xong (yêu cầu người dùng): session_state "_sync_fab_hidden" bật lên
+    True ngay sau khi _do_quick_sync() chạy xong (bất kể có lỗi hay không -- người dùng chỉ muốn
+    "ấn xong thì ẩn", không phân biệt kết quả), rồi truyền cờ này vào JS mỗi lần rerun để ẩn hẳn
+    phần tử (không chỉ ẩn 1 lần, vì components.html tạo iframe MỚI mỗi rerun nhưng nút vẫn sống
+    trong document cha nên phải tự set lại display mỗi lần theo đúng state hiện tại)."""
+    _fab_hidden = st.session_state.get("_sync_fab_hidden", False)
     st.markdown(
-        """<style>
-        .st-key-nav_sync_fab {
-            position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 76px;
-            z-index: 99979;
-        }
-        .st-key-nav_sync_fab div[data-testid="stButton"] button {
-            width: 44px; height: 44px; min-height: 0; border-radius: 50%; padding: 0;
-            background: var(--accent); border: none;
-            box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
-        }
-        .st-key-nav_sync_fab div[data-testid="stButton"] button:hover { opacity: 0.9; }
-        .st-key-nav_sync_fab div[data-testid="stButton"] button span[data-testid="stIconMaterial"] {
-            font-size: 20px; color: #fff;
-        }
-        @media (max-width: 640px) {
-            .st-key-nav_sync_fab { right: auto; left: 14px; bottom: 68px; }
-        }
-        </style>""",
+        """<style>.st-key-nav_sync_fab { display: none; }</style>""",
         unsafe_allow_html=True)
     with st.container(key="nav_sync_fab"):
         if st.button("", icon=":material/refresh:", key="nav_sync_fab_btn",
                      help="Đồng bộ nhanh từ Forest/Reminder"):
             with st.spinner("Đang đồng bộ..."):
                 _msg, _has_err = _do_quick_sync()
+            st.session_state["_sync_fab_hidden"] = True
             st.toast(_msg, icon="⚠️" if _has_err else "✅")
             st.rerun()
+
+    _hide_js = "true" if _fab_hidden else "false"
+    components.html(
+        "<script>\n"
+        "(function(){\n"
+        "  const w = window.parent;\n"
+        "  const HIDE = " + _hide_js + ";\n"
+        "  let btn = w.document.getElementById('app-sync-fab-btn');\n"
+        "  if (!btn) {\n"
+        "    btn = w.document.createElement('button');\n"
+        "    btn.id = 'app-sync-fab-btn';\n"
+        "    btn.type = 'button';\n"
+        "    btn.setAttribute('aria-label', 'Đồng bộ nhanh');\n"
+        "    btn.title = 'Đồng bộ nhanh từ Forest/Reminder';\n"
+        "    btn.innerHTML = '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" "
+        "stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
+        "<path d=\"M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5\"/></svg>';\n"
+        "    btn.addEventListener('click', function(){\n"
+        "      if (btn.classList.contains('syncing')) return;\n"
+        "      const scope = w.document.querySelector('.st-key-nav_sync_fab');\n"
+        "      const real = scope ? scope.querySelector('button') : null;\n"
+        "      if (!real) return;\n"
+        "      btn.classList.add('syncing');\n"
+        "      real.click();\n"
+        "    });\n"
+        "    w.document.body.appendChild(btn);\n"
+        "  }\n"
+        "  btn.style.display = HIDE ? 'none' : 'flex';\n"
+        "  if (!HIDE) btn.classList.remove('syncing');\n"
+        "})();\n"
+        "</script>",
+        height=0)
 
 
 @st.cache_data
@@ -6005,10 +6030,10 @@ def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=No
     trước tiêu đề.
 
     tight_top=True -> bỏ margin-top mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay sau 1
-    sec_hero()/billboard: margin-top đó cộng dồn với margin-bottom sẵn có của hero/billboard + gap
-    flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item như block
-    thường) tạo khoảng trắng rộng bất thường ngay dưới hero, trong khi giữa các chương với nhau
-    (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
+    billboard (render_period_billboard()): margin-top đó cộng dồn với margin-bottom sẵn có của
+    billboard + gap flex mặc định giữa 2 khối (Streamlit không collapse margin giữa các flex item
+    như block thường) tạo khoảng trắng rộng bất thường ngay dưới billboard, trong khi giữa các
+    chương với nhau (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
 
     badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026" ở "Chỉ số bất thường"
     của Sức khoẻ) -- tách phần thông tin động (ngày/giá trị cụ thể) ra khỏi CHÍNH văn bản tiêu đề,
@@ -6030,36 +6055,6 @@ def sec_block(html):
     """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) của trang
     Hướng dẫn bản cũ -- không cần key container nên không đụng rule CSS glass-card chung)."""
     st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
-
-
-def sec_hero(kicker, title, sub, chips, meta=None):
-    """Khối mở đầu 1 trang cuộn dọc kiểu "chương": kicker + tiêu đề lớn + đoạn tóm tắt ngắn +
-    hàng chip nhảy nhanh tới từng chương (chips: list[(anchor, nhãn)]). Factor lại từ khối hero
-    viết tay ban đầu của trang Trợ giúp -- dùng chung cho mọi trang chuyển sang bố cục này để
-    không lặp lại cùng 1 khối HTML nhiều lần.
-
-    kicker=None/"" -> bỏ hẳn dòng kicker; sub=None/"" -> bỏ hẳn đoạn tóm tắt. Dùng cho các trang
-    chỉ cần tiêu đề + chip mục lục, không cần nhãn ngữ cảnh hay câu mô tả thêm (mọi hero ngoài
-    Trợ giúp hiện đều gọi kiểu này -- Trợ giúp là ngoại lệ duy nhất còn giữ đủ cả 2, vì đó là nội
-    dung hướng dẫn thật cần câu mở đầu giải thích app, không phải phần "dư thừa" như các trang
-    khác). chips=[] -> bỏ hẳn hàng chip (không render div rỗng để lại khoảng trắng thừa) -- dùng
-    khi sub-tab không có chương/mục nào khác để nhảy tới (vd Sách/Gundam → Tổng quan).
-
-    meta=None/"" -> bỏ hẳn dòng nhỏ dưới tiêu đề. KHÁC bản chất với sub (đoạn mô tả tĩnh đã bị bỏ
-    khỏi mọi hero ngoài Trợ giúp) -- meta dành cho 1 dòng dữ liệu SỐNG (vd "Cập nhật lần cuối ...
-    trước", đúng khuôn .tbill-meta của billboard Hôm nay), chỉ trang nào thực sự có mốc cập nhật
-    đáng theo dõi mới truyền (hiện chỉ Sức khoẻ)."""
-    _kicker_html = f"<div class='hh-kicker'>{kicker}</div>" if kicker else ""
-    _sub_html = f"<div class='hh-sub'>{sub}</div>" if sub else ""
-    _meta_html = f"<div class='hh-meta'>{meta}</div>" if meta else ""
-    _toc_html = ""
-    if chips:
-        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
-        _toc_html = f"<div class='sec-toc'>{_chips_html}</div>"
-    st.markdown(
-        f"<div class='sec-hero'>{_kicker_html}"
-        f"<div class='hh-title'>{title}</div>{_sub_html}{_meta_html}{_toc_html}</div>",
-        unsafe_allow_html=True)
 
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
@@ -7445,35 +7440,26 @@ st.markdown(
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
-       (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
-    /* sec_hero() (Trợ giúp, Sức khoẻ, sub-hero Sách/Gundam...) -- ĐÃ TỪNG cố ý tô gradient phớt
-       accent để phân biệt với billboard nền phẳng, nhưng xác nhận lại với người dùng (đối chiếu
-       ảnh Trợ giúp thật) là mockup gốc dùng nền PHẲNG var(--card) giống mọi thẻ khác, không có
-       gradient -- đổi lại khớp mockup, áp dụng cho MỌI nơi gọi sec_hero(), không riêng Trợ giúp. */
-    .sec-hero {
-        background: var(--card) !important;
-    }
+       (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent.
+       Billboard đầu trang dùng chung render_period_billboard() với mọi trang khác (đã bỏ hẳn
+       sec_hero() riêng -- xác nhận với người dùng: nền phẳng + viền mảnh của nó trông khác biệt
+       hẳn "kính mờ" billboard mọi nơi khác, không còn lý do giữ ngoại lệ). */
     /* Billboard Hôm nay: hiệu ứng kính mờ (frosted/liquid glass) thật -- nền phớt accent bán
        trong suốt + backdrop-filter blur/saturate làm mờ VÀ rực màu hoạ tiết chấm nền trang đứng
        sau nó (khác bản trước chỉ có rgba phẳng, chấm nền vẫn hiện SẮC NÉT xuyên qua, chưa ra được
        cảm giác "kính" thật). saturate(1.6) bù lại độ nhạt do blur, tránh nền trông xám xịt.
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
-       bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
+       bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). Liệt kê ĐỦ MỌI
+       key billboard trong app ở đây (kể cả help_billboard) -- selector khớp CHÍNH XÁC theo key,
+       không dùng prefix chung. */
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
+    .st-key-help_billboard {
         background: rgba(var(--accent-rgb),0.10) !important;
         backdrop-filter: blur(16px) saturate(1.6);
         -webkit-backdrop-filter: blur(16px) saturate(1.6);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
-    .sec-hero { padding: 20px 28px 16px; border-radius: 12px; border: 1px solid var(--border);
-        margin-bottom: 34px; }
-    .sec-hero .hh-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-        text-transform: uppercase; color: var(--accent-dark); }
-    .sec-hero .hh-title { font-size: 30px; font-weight: 800; color: var(--text);
-        margin: 6px 0 8px; line-height: 1.2; }
-    .sec-hero .hh-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55; }
-    .sec-hero .hh-meta { font-size: 12.5px; color: var(--text-2); margin-top: -2px; }
     /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
        tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard). */
     .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
@@ -7640,8 +7626,6 @@ st.markdown(
     [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
         padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
     @media (max-width: 640px) {
-        .sec-hero { padding: 22px 18px; }
-        .sec-hero .hh-title { font-size: 26px; }
         .sec-flow { flex-direction: column; align-items: flex-start; }
         .sec-flow-arr::after { content: "↓"; padding: 0; }
         .sec-heat { grid-template-columns: repeat(10, 13px); }
@@ -8101,6 +8085,34 @@ st.markdown(
     #app-scroll-top-btn svg { width: 20px; height: 20px; }
     @media (max-width: 640px) {
         #app-scroll-top-btn { right: auto; left: 14px; bottom: 14px; width: 40px; height: 40px; }
+    }
+
+    /* Nút tròn nổi "Đồng bộ nhanh" -- tạo bằng JS (_render_nav_sync_fab()), gắn thẳng vào
+       window.parent.document.body Y HỆT #app-scroll-top-btn, thay vì st.button CSS position:fixed
+       như bản trước: bản st.button từng chỉ nổi đúng trên mobile, biến mất trên desktop -- nút đó
+       sống bên trong cây DOM thường của Streamlit, và 1 tổ tiên có transform (khung sidebar desktop
+       khi mở) tự biến thành containing block mới cho position:fixed, kéo nút lệch khỏi viewport;
+       mobile không có tổ tiên transform đó (sidebar sập thành overlay khác cấu trúc) nên tình cờ
+       vẫn đúng. Gắn thẳng vào document CHA như nút "Về đầu trang" thì không lệ thuộc DOM Streamlit
+       nữa, luôn đúng viewport bất kể desktop/mobile. Xếp NGAY PHÍA TRÊN nút "Về đầu trang" (bottom
+       76px = 22px + 44px + 10px gap, cùng công thức mobile 68px = 14+40+14). st.button thật
+       (key="nav_sync_fab_btn") vẫn giữ nguyên để Python xử lý _do_quick_sync() -- chỉ ẩn nó đi
+       (display:none ở .st-key-nav_sync_fab bên dưới), nút JS này proxy click sang nút thật bằng
+       .click() (không cần hiển thị/hit-test, click() lập trình vẫn kích hoạt handler bình thường). */
+    #app-sync-fab-btn {
+        position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 76px; z-index: 99979;
+        width: 44px; height: 44px; border-radius: 50%;
+        background: var(--accent); color: #fff; border: none;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
+        cursor: pointer; transition: opacity 0.2s ease;
+    }
+    #app-sync-fab-btn:hover { opacity: 0.9; }
+    #app-sync-fab-btn svg { width: 20px; height: 20px; }
+    #app-sync-fab-btn.syncing svg { animation: sync-fab-spin 0.9s linear infinite; }
+    @keyframes sync-fab-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @media (max-width: 640px) {
+        #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
     }
     </style>
     """,
@@ -10163,23 +10175,32 @@ elif nav == "Hướng dẫn":
     # theo theme như thời còn assets/help/. Nội dung mỗi chương chỉ giữ phần "luật ngầm" của app
     # (ngữ nghĩa đồng bộ, timezone, cách đọc số) — phần mô tả hiển nhiên nhìn UI là hiểu thì bỏ.
 
-    # --- Hero + mục lục ---
-    sec_hero(
-        "Trợ giúp", "Xin chào, đây là một lượt dạo qua Forest Dashboard",
-        "Trước hết, xin nói để bạn an tâm: ứng dụng này chỉ là một tấm gương để nhìn lại chính "
-        "mình, không phải một người giám sát đứng sau nhắc việc — không đặt mục tiêu, không thúc "
-        "ép, cũng không có thanh tiến độ nào đòi hỏi bạn phải hoàn tất. Ứng dụng chỉ lặng lẽ ghi "
-        "lại những gì Forest đã lưu, rồi chờ bạn quay lại xem khi thuận tiện. Chính vì lẽ đó, "
-        "hướng dẫn này cũng không bắt bạn học từng trang một cách máy móc, mà kể theo đúng nhịp "
-        "một ngày bình thường: buổi sáng xem qua để định hướng, trong ngày cứ để ứng dụng đó mà "
-        "làm việc, buổi tối dành năm phút khép lại ngày hôm đó — rồi từ đó mở rộng dần ra thành "
-        "tuần, tháng, năm. Đọc trọn từ đầu đến cuối có lẽ mất chừng một khoảng trà; nếu muốn, bạn "
-        "cũng có thể chỉ lướt qua mục lục dưới đây rồi vào thẳng phần đang cần.",
+    # --- Billboard + mục lục -- render_period_billboard() (KHÔNG phải sec_hero() cũ, đã bỏ) để
+    # đồng bộ đúng màu nền/viền "kính mờ" (frosted glass) với billboard mọi trang khác (Hôm nay/
+    # Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến) -- xác nhận với người dùng: sec_hero() nền phẳng +
+    # viền mảnh trông khác biệt, không còn lý do giữ ngoại lệ riêng cho trang này. Số to bên trái
+    # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
+    # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
+    # HELP_CHANGELOG, xem docstring render_help_changelog()).
+    _help_latest_date, _help_latest_lines = "20/07/2026", 10760
+    render_period_billboard(
+        "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
+        "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
+        "<div class='pbill-sub'>Trước hết, xin nói để bạn an tâm: ứng dụng này chỉ là một tấm gương để "
+        "nhìn lại chính mình, không phải một người giám sát đứng sau nhắc việc — không đặt mục tiêu, "
+        "không thúc ép, cũng không có thanh tiến độ nào đòi hỏi bạn phải hoàn tất. Ứng dụng chỉ lặng lẽ "
+        "ghi lại những gì Forest đã lưu, rồi chờ bạn quay lại xem khi thuận tiện. Chính vì lẽ đó, hướng "
+        "dẫn này cũng không bắt bạn học từng trang một cách máy móc, mà kể theo đúng nhịp một ngày bình "
+        "thường: buổi sáng xem qua để định hướng, trong ngày cứ để ứng dụng đó mà làm việc, buổi tối "
+        "dành năm phút khép lại ngày hôm đó — rồi từ đó mở rộng dần ra thành tuần, tháng, năm. Đọc trọn "
+        "từ đầu đến cuối có lẽ mất chừng một khoảng trà; nếu muốn, bạn cũng có thể chỉ lướt qua mục lục "
+        "dưới đây rồi vào thẳng phần đang cần.</div>",
         [("help-ch1", "1 · Buổi sáng"), ("help-ch2", "2 · Trong ngày"),
          ("help-ch3", "3 · Cuối ngày"), ("help-ch4", "4 · Tuần &amp; tháng"),
          ("help-ch5", "5 · Sách · Gundam · Sức khoẻ"), ("help-ch6", "6 · Dữ liệu &amp; đồng bộ"),
          ("help-ch7", "7 · Tuỳ biến"), ("help-ch8", "8 · Câu hỏi thường gặp"),
-         ("help-ch9", "9 · Nhật ký phát triển")])
+         ("help-ch9", "9 · Nhật ký phát triển")],
+        key="help_billboard")
 
     # ==========================================
     # CHƯƠNG 1: BUỔI SÁNG
@@ -10638,6 +10659,9 @@ elif nav == "Hướng dẫn":
     # Mỗi mục gộp TẤT CẢ PR có ý nghĩa với người dùng cuối merge trong CÙNG 1 ngày thành 1 entry
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
     # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
+    # date/total_lines của entry ĐẦU (mới nhất) bị TRÙNG với _help_latest_date/_help_latest_lines
+    # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
+    # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
         dict(pr="235-238", date="20/07/2026", pr_lines=168, total_lines=10760,
              title="Sách đổi sang mô hình Gundam: một thẻ chung, tự suy luận đúng cuốn theo ngày",
