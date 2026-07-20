@@ -8451,6 +8451,15 @@ def _inject_keyboard_shortcuts():
     _txt2 = "var(--text-2)"
     _bg = "var(--card)"
     _border = "var(--border)"
+    # activeNavLabel()/clickNavByLabel() SCOPE theo .st-key-nav (class Streamlit gắn cho khối bọc
+    # widget key="nav") -- bản Streamlit cũ dùng data-testid="stBaseButton-segmented_control"/
+    # "...Active" để nhận diện nút/nút đang chọn, NHƯNG bản đang cài đã đổi hẳn markup segmented_
+    # control (button data-variant="segmented_control" + aria-checked, không còn data-testid riêng
+    # trên từng nút -- xác nhận qua DevTools) -- 2 testid cũ không khớp gì cả khiến MỌI phím tắt phụ
+    # thuộc điều hướng nav (số 1-7, n, một phần /, cả ← → vì activeNavLabel() luôn trả null) im lặng
+    # không hoạt động, không báo lỗi console (phát hiện qua báo cáo thực tế + Playwright, không phải
+    # suy đoán). Scope theo .st-key-nav (thay vì query toàn document như bản cũ) để không lỡ khớp
+    # nhầm 1 segmented_control khác cùng trang (vd Mật độ bố cục ở Tuỳ biến) có label trùng tình cờ.
     js = (
         "<script>\n"
         "(function(){\n"
@@ -8463,12 +8472,12 @@ def _inject_keyboard_shortcuts():
         "    return parts[parts.length - 1];\n"
         "  }\n"
         "  function activeNavLabel(){\n"
-        "    const b = w.document.querySelector('[data-testid=\"stBaseButton-segmented_controlActive\"]');\n"
+        "    const b = w.document.querySelector('.st-key-nav [data-variant=\"segmented_control\"][aria-checked=\"true\"]');\n"
         "    return b ? lastLine(b) : null;\n"
         "  }\n"
         "  function clickNavByLabel(label){\n"
         "    if (activeNavLabel() === label) return true;\n"
-        "    const btns = w.document.querySelectorAll('[data-testid^=\"stBaseButton-segmented_control\"]');\n"
+        "    const btns = w.document.querySelectorAll('.st-key-nav [data-variant=\"segmented_control\"]');\n"
         "    for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
         "    return false;\n"
         "  }\n"
