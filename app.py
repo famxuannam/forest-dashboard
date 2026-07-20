@@ -247,7 +247,7 @@ MAC_COLORS = [
     "#8e8e93", # Gray
 ]
 
-# Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Nhóm/Dự án, xem build_color_map())
+# Bảng màu cố định cho biểu đồ phân loại (cột theo Nhóm/Dự án, xem build_color_map())
 # -- hệ "Vintage bản đồ": cân bằng nóng/lạnh (đỏ gạch/vàng/mận xen xanh dương/xanh lá/xanh ngọc),
 # đã qua kiểm tra màu (chroma, phân biệt mù màu, tương phản) -- xem mockup đã chọn với người dùng,
 # thay cho bảng "Sổ Tay" cũ (quá xỉn, vài cặp cạnh nhau khó phân biệt, không đạt kiểm tra). KHÔNG
@@ -336,6 +336,15 @@ def _hex_hue(hexcode):
     r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
     hue, _, _ = colorsys.rgb_to_hls(r, g, b)
     return hue
+
+
+def _hex_sat(hexcode):
+    """Mã hex -> saturation [0,1] (colorsys.rgb_to_hls) -- suy TEAL_SAT động từ accent đang chọn,
+    dùng cùng cặp với _hex_hue()."""
+    h = hexcode.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    _, _, sat = colorsys.rgb_to_hls(r, g, b)
+    return sat
 
 
 def _hex_rgb_str(hexcode):
@@ -430,6 +439,8 @@ ACCENT_RGB = _hex_rgb_str(ACCENT)
 # nguyên -- mọi nơi đang dùng (chip.tw, guide alert, NUDGE_TONES "good") tự đúng cả 2 chế độ.
 ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
+TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades() lý do
+# cần biến này thay vì hardcode 1 mức saturation cố định.
 
 # Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT ở trên (giá trị lạ/preset cũ
 # đã bỏ -> rơi về "Chấm bi" mặc định, không crash).
@@ -443,10 +454,14 @@ BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
-    """Sinh n sắc độ (cùng hue với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại từ thời accent
-    mặc định là Xanh ngọc #00a3ad, nay chỉ còn là tên gọi lịch sử) từ nhạt (l_lo) đến đậm (l_hi)
-    -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, thẻ "Theo buổi"/"Độ dài phiên" của
-    render_project_rhythm()) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
+    """Sinh n sắc độ (cùng hue VÀ saturation với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại
+    từ thời accent mặc định là Xanh ngọc #00a3ad, nay chỉ còn là tên gọi lịch sử) từ nhạt (l_lo)
+    đến đậm (l_hi) -> dùng chung cho các bảng nhiệt (Biểu đồ lịch, thẻ "Theo buổi"/"Độ dài phiên"
+    của render_project_rhythm()) để đồng bộ một họ màu thay vì mỗi nơi một tông riêng.
+    Dùng TEAL_SAT (saturation THẬT của accent) thay vì hardcode 1 mức cố định -- trước đây cố
+    định 0.75 bất kể accent, khiến accent trầm/mộc mạc (vd "Rêu" sat thật chỉ ~0.31) bị đẩy
+    sắc độ lên chói/rực hơn hẳn màu accent gốc, lệch tông "Sổ Tay" chung của app (phát hiện qua
+    ảnh chụp thật, xác nhận với người dùng).
     Mặc định (không truyền l_lo/l_hi) ĐẢO CHIỀU ramp khi dark: trên nền tối, teal L thấp
     (đậm ở light) gần như tàng hình còn L cao (nhạt ở light) nổi bật nhất -- nếu giữ nguyên
     chiều, "nhiều giờ" sẽ trông như "ít giờ". Dark dùng dải sáng hơn hẳn (0.22->0.72, mờ tối
@@ -455,19 +470,46 @@ def _teal_shades(n, l_lo=None, l_hi=None):
         l_lo = 0.22 if IS_DARK else 0.90
     if l_hi is None:
         l_hi = 0.72 if IS_DARK else 0.26
-    return [_hsl_hex(TEAL_HUE, 0.75, l_lo + (l_hi - l_lo) * i / (n - 1)) for i in range(n)]
+    return [_hsl_hex(TEAL_HUE, TEAL_SAT, l_lo + (l_hi - l_lo) * i / (n - 1)) for i in range(n)]
 
 
-def build_color_map(names):
-    """Gán màu cố định cho từng tên (Nhóm/Dự án). Ưu tiên bảng màu cơ sở (CHART_COLORS,
-    CỐ ĐỊNH -- không đổi theo accent đang chọn, để biểu đồ luôn dễ phân biệt dù accent là màu
-    gì); nếu nhiều hơn số màu sẵn có thì sinh thêm màu phân biệt bằng góc vàng
-    (golden angle) để không bao giờ bị trùng màu, vẫn ổn định theo tên."""
+def build_color_map(cat_names, proj_to_cat=None):
+    """Gán màu cố định cho từng Nhóm. Ưu tiên bảng màu cơ sở (CHART_COLORS, CỐ ĐỊNH -- không đổi
+    theo accent đang chọn, để biểu đồ luôn dễ phân biệt dù accent là màu gì); nếu nhiều hơn số màu
+    sẵn có thì sinh thêm màu phân biệt bằng góc vàng (golden angle) để không bao giờ bị trùng màu,
+    vẫn ổn định theo tên.
+
+    proj_to_cat (Series/dict tra Dự án -> Nhóm cha, tuỳ chọn -- truyền vào cho COLOR_MAP dùng
+    chung toàn app, KHÔNG truyền ở nơi chỉ cần màu phẳng cho danh sách Nhóm như trang Tuỳ biến):
+    mỗi Nhóm 1 hue riêng như trên, nhưng Dự án con trong CÙNG 1 Nhóm chỉ đổi sắc độ (shading)
+    trong hue của Nhóm đó thay vì mỗi Dự án 1 hue tách biệt -- hạn chế số hue khi 1 Nhóm có nhiều
+    Dự án con, đúng khuyến nghị "dùng shading thay vì đổi màu liên tục khi có nhiều series liên
+    quan". Dự án không có Nhóm thật (Nhóm == chính tên Dự án, xem prep_analysis_data) coi như 1
+    Nhóm độc lập 1 thành viên, giữ nguyên màu như mọi Nhóm khác, không shading."""
     colors = list(CHART_COLORS)
-    for k in range(len(names) - len(colors)):
+    for k in range(len(cat_names) - len(colors)):
         h = (0.61 + (k + 1) * 0.6180339887) % 1.0  # rải đều sắc độ
         colors.append(_hsl_hex(h, 0.62, 0.55))
-    return {name: colors[i] for i, name in enumerate(names)}
+    cmap = {name: colors[i] for i, name in enumerate(cat_names)}
+    if proj_to_cat is None:
+        return cmap
+
+    _by_cat = {}
+    for proj, cat in proj_to_cat.items():
+        if proj != cat:  # bỏ Dự án tự map về chính nó (không có Nhóm thật) -- đã có màu ở cmap
+            _by_cat.setdefault(cat, []).append(proj)
+    for cat, projs in _by_cat.items():
+        base = cmap.get(cat)
+        if base is None:
+            continue
+        hue = _hex_hue(base)
+        projs = sorted(projs)
+        n = len(projs)
+        l_lo, l_hi = (0.30, 0.68) if IS_DARK else (0.72, 0.32)  # nhạt->đậm (light) / tối->sáng (dark)
+        for i, proj in enumerate(projs):
+            l = l_lo if n == 1 else l_lo + (l_hi - l_lo) * i / (n - 1)
+            cmap[proj] = _hsl_hex(hue, 0.62, l)
+    return cmap
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU (đọc/ghi qua Supabase) ---
@@ -1926,7 +1968,7 @@ def add_week_dividers(fig, dates):
     fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
     return fig
 
-def format_plotly_fig(fig, is_pie=False):
+def format_plotly_fig(fig):
     fig.update_layout(
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
@@ -1942,25 +1984,13 @@ def format_plotly_fig(fig, is_pie=False):
         margin=dict(t=10, r=28),
         xaxis=dict(automargin=True),
     )
-    if is_pie:
-        # Đường viền phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer) -- khớp
-        # màu nền thẻ (--card) đổi theo IS_DARK để viền "hoà" vào nền thay vì luôn trắng cứng.
-        _pie_line = "#2c2c2e" if IS_DARK else "#ffffff"
-        # customdata: chuỗi "X giờ Y phút" đã format sẵn -- hovertemplate của Plotly chỉ hỗ trợ
-        # d3-format cho %{value}, không tự tách giờ/phút được, nên phải tính trước ở Python.
-        for tr in fig.data:
-            if tr.values is not None:
-                tr.customdata = [[_fmt_hours_long(v)] for v in tr.values]
-        fig.update_traces(marker=dict(line=dict(color=_pie_line, width=2)),
-                          hovertemplate='<b>%{label}</b><br>%{customdata[0]}<extra></extra>')
-    else:
-        for tr in fig.data:
-            if tr.y is not None:
-                tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
-        # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
-        # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
-        fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
+    for tr in fig.data:
+        if tr.y is not None:
+            tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
+    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
+    # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
+    # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
+    fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
     return fig
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
@@ -6180,8 +6210,9 @@ def render_help_changelog(entries):
 # (nhanh hơn, nhất là trang nhiều dữ liệu/khi xem trên điện thoại).
 @st.fragment
 def frag_calendar(scope_df, key):
-    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng. Bọc trong container "chartopt_..." (xem
-    docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng. Bọc trong container "chartopt_..." (mọi
+    fragment biểu đồ trong app dùng chung quy ước này) để thu hẹp khoảng cách dọc xuống biểu đồ
+    ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         df_cal = range_radio(scope_df, key=key)
         render_calendar_grid(df_cal, df_cal)
@@ -6190,7 +6221,7 @@ def frag_calendar(scope_df, key):
 @st.fragment
 def frag_trend(scope_df, key_prefix, default_color):
     """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại. Bọc trong
-    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key_prefix}"):
         o1, o2, o3 = st.columns([5, 3, 2])
@@ -6219,7 +6250,8 @@ def frag_trend(scope_df, key_prefix, default_color):
 def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
     """Mục Xu hướng tập trung theo khung giờ — bộ điều khiển ĐỘC LẬP của riêng mục
     (khoảng thời gian nếu có + phân loại). Không dùng chung với mục nào khác. Bọc trong container
-    "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ ngay
+    dưới."""
     with st.container(key=f"chartopt_{key_prefix}"):
         if with_range:
             c1, c2 = st.columns([5, 3])
@@ -6237,30 +6269,13 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
 
 
 @st.fragment
-def frag_pie(scope_df, key, default_color):
-    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng. Bọc trong container riêng
-    (key="piewrap_...") chỉ để CSS thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới (xem rule
-    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"]) mà không đụng margin của mọi
-    segmented_control khác trong app."""
-    with st.container(key=f"piewrap_{key}"):
-        ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
-                                     label_visibility="collapsed") or default_color
-        pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
-        pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
-        fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
-        fig = format_plotly_fig(fig, is_pie=True)
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
-
-@st.fragment
 def frag_category_bars(scope_df, key, default_color):
-    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở Báo cáo -> Tuần và
-    Hôm nay -- Tháng/Năm vẫn giữ frag_pie, chưa đổi) -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1
-    thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo hàng cao nhất -- đúng theo mockup Forest
-    Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng dồn ra khớp tổng giờ cả kỳ) + giá trị bên
-    phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu cầu người dùng -- chỉ còn thanh xếp hạng.
-    Bọc trong container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống
-    nội dung ngay dưới."""
+    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở mọi trang Báo cáo)
+    -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1 thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo
+    hàng cao nhất -- đúng theo mockup Forest Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng
+    dồn ra khớp tổng giờ cả kỳ) + giá trị bên phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu
+    cầu người dùng -- chỉ còn thanh xếp hạng. Bọc trong container "chartopt_..." (xem docstring
+    frag_calendar) để thu hẹp khoảng cách dọc xuống nội dung ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
@@ -6287,7 +6302,7 @@ def frag_category_bars(scope_df, key, default_color):
 def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
     Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig). Bọc trong
-    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
@@ -6993,11 +7008,10 @@ st.markdown(
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
 
-    /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
-       các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
-       Cần cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
+    /* Đổ bóng CẢ KHỐI cho cột: áp lên cả group (không từng path) -> trong một cột các segment
+       kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong. Cần
+       cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
     [data-testid="stPlotlyChart"] g.barlayer { filter: drop-shadow(0 2.5px 2.5px rgba(0,0,0,0.30)); }
-    [data-testid="stPlotlyChart"] g.pielayer { filter: drop-shadow(0 3px 4px rgba(0,0,0,0.30)); }
 
     [data-testid="stMetric"] { display: none; }
 
@@ -7159,16 +7173,16 @@ st.markdown(
        theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
     .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
     /* Toggle điều khiển (Khoảng thời gian/Gộp theo/Phân loại...) xuống thẻ biểu đồ ngay dưới, ÁP
-       DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_pie key="piewrap_...", frag_calendar/frag_trend/
-       frag_hourly/frag_period_trend key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung (hàng
-       toggle + biểu đồ) trong 1 container riêng, xem docstring frag_pie). Ghi đè trực tiếp "gap"
-       flex của CHÍNH container đó xuống 4px (thay vì 10px chung toàn trang) -- sửa qua margin-
-       bottom của stButtonGroup (như nav bar/sub-tab picker ở trên) KHÔNG hiệu quả ở đây vì
+       DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_calendar/frag_trend/frag_hourly/
+       frag_period_trend/frag_category_bars key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung
+       (hàng toggle + biểu đồ) trong 1 container riêng, xem docstring frag_calendar). Ghi đè trực
+       tiếp "gap" flex của CHÍNH container đó xuống 4px (thay vì 10px chung toàn trang) -- sửa qua
+       margin-bottom của stButtonGroup (như nav bar/sub-tab picker ở trên) KHÔNG hiệu quả ở đây vì
        frag_trend/frag_hourly xếp 2-3 toggle cạnh nhau qua st.columns(), margin-bottom của từng
        stButtonGroup lồng trong cột không cộng dồn vào gap flex ngoài cùng như trường hợp 1 toggle
-       đơn (piewrap_/nav) -- đo thật bằng Playwright xác nhận marginBottom áp đúng nhưng khoảng
-       cách hiển thị không đổi, phải sửa thẳng "gap" của container mới ăn. */
-    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"] {
+       đơn -- đo thật bằng Playwright xác nhận marginBottom áp đúng nhưng khoảng cách hiển thị
+       không đổi, phải sửa thẳng "gap" của container mới ăn. */
+    [class*="st-key-chartopt_"] {
         gap: 4px !important;
     }
 
@@ -8176,13 +8190,14 @@ NAV_SHORT = {
 df = prep_analysis_data()
 DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
 
-# Bản đồ màu cố định: mỗi Nhóm/Dự án luôn giữ một màu xuyên suốt mọi biểu đồ/tab.
-# Nhóm (mặc định để tô màu) được nhận các màu cơ sở đẹp & tách biệt nhất trước,
-# dự án nhận phần còn lại -> biểu đồ theo Nhóm luôn dễ phân biệt.
+# Bản đồ màu cố định: mỗi Nhóm luôn giữ một màu xuyên suốt mọi biểu đồ/tab; Dự án con trong
+# cùng 1 Nhóm dùng sắc độ (shading) của ĐÚNG hue Nhóm đó thay vì mỗi Dự án 1 màu tách biệt
+# (xem docstring build_color_map()) -- biểu đồ theo Nhóm/Dự án luôn dễ phân biệt mà không cần
+# quá nhiều hue khác nhau cùng lúc.
 if not df.empty:
     _cats = sorted(df['Nhóm'].dropna().unique())
-    _projs = sorted(set(df['Dự án'].dropna().unique()) - set(_cats))
-    COLOR_MAP = build_color_map(_cats + _projs)
+    _proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+    COLOR_MAP = build_color_map(_cats, proj_to_cat=_proj_to_cat)
 else:
     COLOR_MAP = {}
 
@@ -9185,18 +9200,21 @@ elif nav == "Báo cáo":
             proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
             # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách (đúng điều kiện books_df ở nhánh
             # "Nhật ký đọc sách" bên dưới: Nhóm == BOOKS_GROUP, KHÔNG nằm trong BOOKS_EXCLUDE)
-            # thì bỏ khỏi danh sách chọn ở đây -- xem số liệu qua trang Sách (đủ ngữ cảnh sách/tác
-            # giả/tiến độ đọc), không cần lặp lại tuỳ chọn ở Báo cáo → Dự án nữa. Gundam/The
-            # Economist (nằm trong BOOKS_EXCLUDE) vẫn giữ nguyên -- không "đã có trong phần Sách".
+            # hoặc ĐÃ là 1 series Gundam theo dõi ở trang Gundam (Nhóm == GUNDAM_TAG) thì bỏ khỏi
+            # danh sách chọn ở đây -- xem số liệu qua đúng trang riêng (đủ ngữ cảnh sách/tác giả/
+            # tiến độ đọc, hoặc series/tập Gundam), không cần lặp lại tuỳ chọn ở Báo cáo → Dự án
+            # nữa. The Economist (nằm trong BOOKS_EXCLUDE) vẫn giữ nguyên -- không "đã có trong
+            # phần Sách" (khác Gundam, luôn bị loại toàn bộ vì đã có tab riêng).
             _book_projects = set(
                 df[(df['Nhóm'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique())
+            _gundam_projects = set(df[df['Nhóm'] == GUNDAM_TAG]['Dự án'].dropna().unique())
             # Mục rỗng đứng đầu -- mặc định KHÔNG chọn sẵn nhóm/dự án nào khi mới vào trang,
             # giống hệt selectbox "Chọn 1 cuốn/series" ở sub-tab Chi tiết (Sách/Gundam).
             _placeholder = ("none", "— Chọn để xem chi tiết —")
             _opts, _labels = [_placeholder], {_placeholder: _placeholder[1]}
             for _c in sorted(df['Nhóm'].dropna().unique()):
                 _projs = [p for p in sorted(proj_to_cat[proj_to_cat == _c].index.tolist())
-                          if p not in _book_projects]
+                          if p not in _book_projects and p not in _gundam_projects]
                 if not _projs:
                     continue
                 if _projs == [_c]:  # dự án chưa gán nhóm (nhóm trùng tên dự án) -> coi như một dự án độc lập
