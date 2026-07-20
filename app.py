@@ -10500,7 +10500,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "20/07/2026", 10760
+    _help_latest_date, _help_latest_lines = "20/07/2026", 11102
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -10981,6 +10981,22 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
+        dict(pr="244", date="20/07/2026", pr_lines=439, total_lines=11102,
+             title="Cá nhân hoá giao diện: bảng màu nền, kiểu thẻ, mật độ bố cục, font thân chữ",
+             bullets=[
+                 "**3 trục cá nhân hoá mới ở Tuỳ biến → “4. Giao diện”** — Bảng màu nền (5 bộ màu "
+                 "phối sẵn), Kiểu thẻ (bo góc/độ dày viền/đổ bóng), Mật độ bố cục (khoảng đệm/khoảng "
+                 "cách giữa các thẻ) — cả 3 tách biệt và kết hợp tự do với Màu accent/Kiểu nền trang "
+                 "đã có từ trước, không trục nào phá trục khác.",
+                 "**Font thân chữ tự chọn** — Manrope (mặc định)/Inter/Public Sans, chỉ tải đúng font "
+                 "đang chọn để không đội thêm dung lượng trang.",
+                 "**8 màu accent đổi sang bộ đa dạng hơn** — trải đều quanh vòng màu thay vì cụm tông "
+                 "đất/mộc mạc gần nhau như bộ cũ.",
+                 "**Sửa loạt chỗ giao diện “đứng yên” khi đổi Bảng màu nền/Màu accent** — thanh menu "
+                 "trên cùng, các thẻ Sao lưu/Khôi phục/Làm mới, khung tải file lên, hộp thoại xác "
+                 "nhận, ô tick checkbox — tất cả trước đây vẫn giữ đúng màu mặc định gốc bất kể lựa "
+                 "chọn mới, giờ đã theo đúng bảng màu/màu accent đang dùng.",
+             ]),
         dict(pr="235-238", date="20/07/2026", pr_lines=168, total_lines=10760,
              title="Sách đổi sang mô hình Gundam: một thẻ chung, tự suy luận đúng cuốn theo ngày",
              bullets=[
