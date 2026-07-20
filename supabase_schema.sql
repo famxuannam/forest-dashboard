@@ -146,7 +146,7 @@ create table if not exists health_metrics (
   unique (test_date, category, indicator)
 );
 
--- Gán tay ngày -> series Gundam, ghi đè kết quả suy luận tự động của _assign_gundam_sessions()
+-- Gán tay ngày -> series Gundam, ghi đè kết quả suy luận tự động của _assign_reading_sessions()
 -- trong app.py (Forest chỉ có 1 tag "Gundam" chung, không phân biệt series -- suy luận theo
 -- "lần hoàn thành reminder gần nhất" có thể đoán sai nếu 2 series xem xen kẽ nhau). Khoá theo
 -- NGÀY (không phải từng phiên) vì bản thân suy luận tự động cũng gán theo ngày.
@@ -155,15 +155,14 @@ create table if not exists gundam_overrides (
   series text not null
 );
 
--- Gán tay Dự án Forest -> Cuốn sách (khớp NGUYÊN VĂN với reading_log book title đã strip tác
--- giả, xem _book_title() trong app.py) -- dùng khi tên Dự án bấm giờ trong Forest không trùng
--- khớp tuyệt đối với tên sách lấy từ Reminders (khác dấu, viết tắt...), khiến các số liệu/chip
--- đối chiếu Forest <-> Reminders (vd chip "Thời gian" ở Nhật ký Chi tiết Sách) không tự nối
--- được qua so sánh chuỗi chính xác. Khoá theo forest_project (mỗi Dự án Forest chỉ gán vào
--- đúng 1 cuốn sách) -- xem UI "Gán Dự án Forest với Cuốn sách" ở tab Tuỳ biến.
-create table if not exists book_project_map (
-  forest_project text primary key,
-  book_title text not null
+-- Gán tay ngày -> cuốn sách, ghi đè kết quả suy luận tự động của _assign_reading_sessions() trong
+-- app.py cho tag chung "Reading" (BOOKS_TAG) -- mirror NGUYÊN gundam_overrides, chỉ khác tên bảng/
+-- cột "book" thay vì "series" (mọi cuốn sách mới đều dùng chung 1 tag Forest, không phân biệt
+-- được cuốn nào -- suy luận theo "lần hoàn thành reminder gần nhất" có thể đoán sai nếu 2 cuốn
+-- đọc xen kẽ nhau).
+create table if not exists book_overrides (
+  session_date date primary key,
+  book text not null
 );
 
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
@@ -182,7 +181,7 @@ alter table kindle_highlights enable row level security;
 alter table kindle_book_map enable row level security;
 alter table deleted_kindle_highlights enable row level security;
 alter table gundam_overrides enable row level security;
-alter table book_project_map enable row level security;
+alter table book_overrides enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -197,7 +196,7 @@ create policy "anon full access" on kindle_highlights for all using (true) with 
 create policy "anon full access" on kindle_book_map for all using (true) with check (true);
 create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);
 create policy "anon full access" on gundam_overrides for all using (true) with check (true);
-create policy "anon full access" on book_project_map for all using (true) with check (true);
+create policy "anon full access" on book_overrides for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket

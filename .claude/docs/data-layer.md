@@ -23,6 +23,7 @@ cặp hàm:
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
 | `deleted_kindle_highlights` | `load_deleted_kindle()` | `add_deleted_kindle()` (cộng dồn) · `save_deleted_kindle()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá trích dẫn Kindle trong app) |
 | `gundam_overrides` | `load_gundam_overrides()` (trả `dict {date: series}`) | `save_gundam_override()`/`delete_gundam_override()` (gán/bỏ gán 1 ngày trong app) · `save_gundam_overrides_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng sửa tay ở trang Gundam → "Sửa gán series tự động" |
+| `book_overrides` | `load_book_overrides()` (trả `dict {date: book}`) | `save_book_override()`/`delete_book_override()` (gán/bỏ gán 1 ngày trong app) · `save_book_overrides_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng sửa tay ở trang Sách → "Sửa gán sách tự động" |
 
 Mỗi `load_*` bọc 1 lần đọc bảng Supabase, cache bằng `@st.cache_data`; `save_*`/`sync_*` tương ứng
 ghi xong rồi **bắt buộc** gọi `st.cache_data.clear()` — quên bước này là bug kinh điển (UI hiện dữ
@@ -150,16 +151,28 @@ sau khi người dùng bấm "Cập nhật" lưu ghi chú chính thành công (H
 dấu, không đụng bảng) — tránh mất ghi chú nhanh nếu đổi ý giữa chừng trước khi lưu. 2 bảng vẫn tách
 biệt hoàn toàn, không có quan hệ khoá ngoại nào được lưu.
 
-## `gundam_overrides`: gán tay ngày → series, ghi đè suy luận tự động
+## `gundam_overrides`/`book_overrides`: gán tay ngày → series/sách, ghi đè suy luận tự động
 
-Forest chỉ có 1 tag `GUNDAM_TAG` chung cho mọi phiên xem Gundam, không phân biệt được đang xem
-series nào — `_assign_gundam_sessions()` suy luận bằng cách gán mỗi NGÀY có phiên Gundam vào series
-có lần hoàn thành reminder GẦN NHẤT (`pd.merge_asof(direction='nearest')`). Suy luận này có thể sai
-nếu 2 series được xem xen kẽ nhau. `gundam_overrides` (khoá theo `session_date`, KHÔNG theo từng
-phiên — vì bản thân suy luận tự động cũng gán theo ngày) cho phép ghi đè tay; `_assign_gundam_sessions()`
-nhận thêm tham số `overrides` (dict `{date: series}` từ `load_gundam_overrides()`), áp dụng SAU
-`merge_asof` nên override luôn thắng. UI sửa nằm ở trang Gundam → expander "Sửa gán series tự động"
-(chỉ hiện khi có từ 2 series trở lên — 1 series duy nhất thì suy luận không thể sai).
+Forest chỉ có 1 tag chung cho mỗi luồng (`GUNDAM_TAG` cho Gundam, `BOOKS_TAG = "Reading"` cho MỌI
+cuốn sách mới — không tạo tag riêng từng cuốn nữa), không phân biệt được đang xem/đọc series/cuốn
+nào — `_assign_reading_sessions()` (dùng chung cho cả 2 luồng) suy luận bằng cách gán mỗi NGÀY có
+phiên tag chung đó vào series/cuốn có lần hoàn thành reminder GẦN NHẤT
+(`pd.merge_asof(direction='nearest')`). Suy luận này có thể sai nếu 2 series/cuốn được xem/đọc xen
+kẽ nhau. `gundam_overrides`/`book_overrides` (khoá theo `session_date`, KHÔNG theo từng phiên — vì
+bản thân suy luận tự động cũng gán theo ngày) cho phép ghi đè tay; `_assign_reading_sessions()`
+nhận thêm tham số `overrides` (dict `{date: series/book}` từ `load_gundam_overrides()`/
+`load_book_overrides()`), áp dụng SAU `merge_asof` nên override luôn thắng. UI sửa dùng chung
+`_render_reading_series_override()`, nằm ở trang Gundam/Sách → expander "Sửa gán series/sách tự
+động" (chỉ hiện khi có từ 2 series/cuốn trở lên — 1 series/cuốn duy nhất thì suy luận không thể
+sai).
+
+Sách CŨ đã có tag Forest riêng từ TRƯỚC khi đổi sang `BOOKS_TAG` KHÔNG đi qua cơ chế suy luận này —
+lịch sử của nó đã đóng băng theo đúng tên tag cũ, tên tag này PHẢI khớp TUYỆT ĐỐI tên sách bên
+Reminders (đã xác nhận với người dùng mọi sách cũ đều khớp — không còn bảng gán tay tên lệch nào
+cho trường hợp này nữa, đã bỏ `book_project_map` cùng UI "Gán Dự án Forest với Cuốn sách" ở Tuỳ
+biến vì không còn tình huống nào cần dùng tới). Ở nav "Nhật ký đọc sách", `books_df` là
+`pd.concat()` của 2 nguồn: sách cũ (lọc Danh mục `Reading`, trừ `BOOKS_TAG` chính nó) và sách mới
+(phiên tag `BOOKS_TAG`, chạy qua `_assign_reading_sessions()`).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 
