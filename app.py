@@ -1808,6 +1808,33 @@ def prep_analysis_data():
     db['Khung giờ'] = db['Thời gian bắt đầu'].dt.hour
     
     db['Thứ'] = db['Thời gian bắt đầu'].dt.day_name().map(VN_DAYS)
+
+    # Suy luận Dự án cụ thể cho phiên tag chung Gundam/Sách -- ĐÂY LÀ ĐIỂM NỐI DUY NHẤT, mọi báo
+    # cáo/biểu đồ/bảng trong app đọc thẳng cột 'Dự án' của df này nên chỉ cần sửa 1 chỗ. Giữ
+    # nguyên tên tag gốc ở cột 'Dự án gốc' -- 2 nhánh nav "Gundam"/"Nhật ký đọc sách" cần lọc đúng
+    # tag thật (không dùng được 'Dự án' sau khi bị ghi đè dưới đây). 'Danh mục' đã gán XONG ở trên
+    # theo tag gốc (Gundam -> Danh mục "Gundam", Reading -> Danh mục "Reading") nên KHÔNG bị ảnh
+    # hưởng bởi việc ghi đè 'Dự án' này -- đúng nguyên tắc đã chốt: Danh mục vẫn gộp chung, Dự án
+    # hiện đúng series/cuốn sách cụ thể.
+    db['Dự án gốc'] = db['Dự án']
+    if not db.empty:
+        rl_all = load_reading_log()
+        rl_gundam = rl_all[rl_all['Sách (gốc)'].map(_is_gundam_list)] if not rl_all.empty else rl_all
+        rl_books = rl_all[~rl_all['Sách (gốc)'].map(_is_gundam_list)] if not rl_all.empty else rl_all
+        gundam_overrides = load_gundam_overrides()
+        book_overrides = load_book_overrides()
+
+        _other = db[(db['Dự án gốc'] != GUNDAM_TAG) & (db['Dự án gốc'] != BOOKS_TAG)]
+        _gundam_part = db[db['Dự án gốc'] == GUNDAM_TAG]
+        _book_part = db[db['Dự án gốc'] == BOOKS_TAG]
+        # Chỉ suy luận khi CÓ dữ liệu reading_log để đối chiếu -- không thì giữ nguyên "Gundam"/
+        # "Reading" ở cột 'Dự án' (đã xác nhận với người dùng: đúng hành vi mong muốn khi chưa suy
+        # luận được, không phải bug).
+        if not _gundam_part.empty and not rl_gundam.empty:
+            _gundam_part = _assign_reading_sessions(_gundam_part, rl_gundam, gundam_overrides)
+        if not _book_part.empty and not rl_books.empty:
+            _book_part = _assign_reading_sessions(_book_part, rl_books, book_overrides)
+        db = pd.concat([_other, _gundam_part, _book_part], ignore_index=True)
     return db
 
 def add_total_labels(fig, df, x_col, y_col):
@@ -4785,9 +4812,13 @@ def render_search():
     rl = load_reading_log()
     if not rl.empty:
         rl = rl.assign(_d=rl['Ngày hoàn thành'].dt.normalize())
-    db = load_db()
+    # df toàn cục (đã qua prep_analysis_data(), gán ở dòng df = prep_analysis_data() phía dưới) --
+    # KHÔNG gọi lại load_db() thô: 'Dự án' của df đã được suy luận sẵn thành đúng series/cuốn cho
+    # phiên tag chung Gundam/Reading, tìm theo tên series/cuốn cụ thể sẽ khớp đúng thay vì chỉ khớp
+    # được tên tag gốc "Gundam"/"Reading".
+    db = df
     if not db.empty:
-        db = db.assign(_d=pd.to_datetime(db['Thời gian bắt đầu'], format='ISO8601').dt.normalize())
+        db = db.assign(_d=db['Thời gian bắt đầu'].dt.normalize())
     kh = load_kindle_highlights()
     if not kh.empty:
         kh = kh.assign(_d=kh['Ngày thêm'].dt.normalize())
@@ -9292,17 +9323,18 @@ elif nav == "Nhật ký đọc sách":
     #
     # books_df hợp nhất 2 nhóm sách: (1) sách CŨ đã có tag Forest riêng của nó (đóng băng -- tên
     # tag khớp TUYỆT ĐỐI tên sách bên Reminders, đã xác nhận với người dùng nên không còn cần
-    # bảng gán tay tên lệch nữa), và (2) sách MỚI dùng chung 1 tag BOOKS_TAG ("Reading"), suy luận
-    # cuốn đang đọc mỗi ngày qua _assign_reading_sessions() (đúng cơ chế Gundam, xem docstring hàm
-    # đó + book_overrides).
-    books_df_legacy = df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))
-                          & (df['Dự án'] != BOOKS_TAG)]
+    # bảng gán tay tên lệch nữa), và (2) sách MỚI dùng chung 1 tag BOOKS_TAG ("Reading"). Cột 'Dự
+    # án' của (2) đã được prep_analysis_data() suy luận SẴN thành đúng tên cuốn (qua
+    # _assign_reading_sessions() + book_overrides, xem điểm nối trung tâm) -- không cần gọi lại ở
+    # đây, chỉ cần lọc đúng theo 'Dự án gốc' (tag Forest thật, KHÔNG bị ghi đè) để tách 2 nhóm.
+    books_df_legacy = df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án gốc'].isin(BOOKS_EXCLUDE))
+                          & (df['Dự án gốc'] != BOOKS_TAG)]
     rl_all = load_reading_log()
     # Loại Reminder List Gundam (tên "Gundam - ...") -- có tab riêng, không tính vào tab Sách.
     rl_books = rl_all[~rl_all['Sách (gốc)'].map(_is_gundam_list)] if not rl_all.empty else rl_all
-    book_sessions = df[df['Dự án'] == BOOKS_TAG] if not df.empty else df
+    book_sessions = df[df['Dự án gốc'] == BOOKS_TAG] if not df.empty else df
     book_overrides = load_book_overrides()
-    books_df_new = _assign_reading_sessions(book_sessions, rl_books, book_overrides)
+    books_df_new = book_sessions  # đã suy luận + áp override sẵn ở prep_analysis_data()
     books_df = pd.concat([books_df_legacy, books_df_new], ignore_index=True)
     if books_df.empty and rl_books.empty:
         st.info(f"Chưa có dữ liệu sách trong nhóm '{BOOKS_GROUP}' và chưa có dữ liệu đọc sách từ "
@@ -9329,18 +9361,20 @@ elif nav == "Nhật ký đọc sách":
 # ==========================================
 elif nav == "Gundam":
     # Reminder List Gundam (tên "Gundam - Tên series") + phiên Forest tag GUNDAM_TAG -- Forest
-    # không có Dự án riêng theo từng series nên phải suy ra qua _assign_reading_sessions()
-    # (ghép mỗi ngày có phiên Gundam với lần hoàn thành reminder gần nhất, xem docstring hàm đó).
+    # không có Dự án riêng theo từng series nên phải suy ra qua _assign_reading_sessions(). Cột
+    # 'Dự án' đã được prep_analysis_data() suy luận SẴN (đúng điểm nối trung tâm, ghép mỗi ngày có
+    # phiên Gundam với lần hoàn thành reminder gần nhất) -- không cần gọi lại ở đây, chỉ lọc đúng
+    # theo 'Dự án gốc' (tag Forest thật) để lấy ra phiên Gundam.
     rl_all_g = load_reading_log()
     rl_gundam = rl_all_g[rl_all_g['Sách (gốc)'].map(_is_gundam_list)] if not rl_all_g.empty else rl_all_g
-    gundam_sessions = df[df['Dự án'] == GUNDAM_TAG] if not df.empty else df
+    gundam_sessions = df[df['Dự án gốc'] == GUNDAM_TAG] if not df.empty else df
     if rl_gundam.empty and gundam_sessions.empty:
         st.info(f"Chưa có dữ liệu Gundam. Đổi tên Reminder List thành \"Gundam - Tên series\" "
                 f"rồi tải lên ở mục 'Tải lên từ Reminder', hoặc gán tag \"{GUNDAM_TAG}\" cho "
                 f"phiên Forest khi xem.")
     else:
         gundam_overrides = load_gundam_overrides()
-        gundam_df = _assign_reading_sessions(gundam_sessions, rl_gundam, gundam_overrides)
+        gundam_df = gundam_sessions  # đã suy luận + áp override sẵn ở prep_analysis_data()
         _cands_g = [pd.Timestamp(v) for v in [gundam_df['Ngày'].max() if not gundam_df.empty else None,
                                                rl_gundam['Ngày hoàn thành'].max() if not rl_gundam.empty else None]
                     if v is not None and pd.notna(v)]
