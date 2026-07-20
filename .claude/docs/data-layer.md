@@ -166,11 +166,13 @@ nhận thêm tham số `overrides` (dict `{date: series/book}` từ `load_gundam
 động" (chỉ hiện khi có từ 2 series/cuốn trở lên — 1 series/cuốn duy nhất thì suy luận không thể
 sai).
 
-Sách CŨ đã có tag Forest riêng từ TRƯỚC khi đổi sang `BOOKS_TAG` (vd "Mobile Suit Gundam") KHÔNG đi
-qua cơ chế suy luận này — lịch sử của nó đã đóng băng theo đúng tên tag cũ, chỉ cần `book_project_map`
-nếu tên tag không khớp tuyệt đối tên sách bên Reminders. Ở nav "Nhật ký đọc sách", `books_df` là
-`pd.concat()` của 2 nguồn: sách cũ (lọc Danh mục `Reading`, trừ `BOOKS_TAG` chính nó, remap qua
-`book_project_map`) và sách mới (phiên tag `BOOKS_TAG`, chạy qua `_assign_reading_sessions()`).
+Sách CŨ đã có tag Forest riêng từ TRƯỚC khi đổi sang `BOOKS_TAG` KHÔNG đi qua cơ chế suy luận này —
+lịch sử của nó đã đóng băng theo đúng tên tag cũ, tên tag này PHẢI khớp TUYỆT ĐỐI tên sách bên
+Reminders (đã xác nhận với người dùng mọi sách cũ đều khớp — không còn bảng gán tay tên lệch nào
+cho trường hợp này nữa, đã bỏ `book_project_map` cùng UI "Gán Dự án Forest với Cuốn sách" ở Tuỳ
+biến vì không còn tình huống nào cần dùng tới). Ở nav "Nhật ký đọc sách", `books_df` là
+`pd.concat()` của 2 nguồn: sách cũ (lọc Danh mục `Reading`, trừ `BOOKS_TAG` chính nó) và sách mới
+(phiên tag `BOOKS_TAG`, chạy qua `_assign_reading_sessions()`).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 

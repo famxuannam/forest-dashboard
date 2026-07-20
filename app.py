@@ -155,7 +155,6 @@ KINDLE_HIGHLIGHTS_FILE = "kindle_highlights.csv"  # trích dẫn/ghi chú Kindle
 KINDLE_BOOK_MAP_FILE = "kindle_book_map.csv"  # ánh xạ tên sách Kindle -> Dự án/nhãn hiển thị
 DELETED_KINDLE_FILE = "deleted_kindle_highlights.csv"  # sổ đen trích dẫn Kindle đã xoá trong app
 GUNDAM_OVERRIDES_FILE = "gundam_overrides.csv"  # gán tay ngày -> series Gundam, ghi đè suy luận tự động
-BOOK_PROJECT_MAP_FILE = "book_project_map.csv"  # gán tay Dự án Forest -> Cuốn sách (tên không trùng khớp tuyệt đối)
 BOOK_OVERRIDES_FILE = "book_overrides.csv"  # gán tay ngày -> cuốn sách, ghi đè suy luận tự động (tag BOOKS_TAG)
 
 @st.cache_resource
@@ -173,8 +172,9 @@ BOOKS_EXCLUDE = {"Gundam"}
 # (không tạo tag riêng từng cuốn nữa), trùng tên với Danh mục BOOKS_GROUP có chủ đích (Dự án
 # "Reading" là 1:1 trong đúng Danh mục "Reading"). Cuốn đang suy luận theo ngày qua
 # _assign_reading_sessions() (nhóm mỗi ngày có phiên tag này với lần hoàn thành reminder gần nhất
-# -- xem hàm đó). Sách cũ đã có tag riêng TRƯỚC khi đổi sang cơ chế này (vd "Mobile Suit Gundam")
-# giữ nguyên tag cũ của nó -- đó là lịch sử đã đóng băng, không cần suy luận, xem book_project_map.
+# -- xem hàm đó). Sách cũ đã có tag riêng TRƯỚC khi đổi sang cơ chế này giữ nguyên tag cũ của nó --
+# đó là lịch sử đã đóng băng, không cần suy luận (áp dụng khi tên tag khớp TUYỆT ĐỐI tên sách bên
+# Reminders -- đã xác nhận với người dùng mọi sách cũ đều khớp, không cần bảng gán tay riêng nữa).
 BOOKS_TAG = "Reading"
 
 # Tag Dự án trên Forest khi bấm giờ xem Gundam -- không có Dự án riêng theo từng series, chỉ 1
@@ -998,38 +998,6 @@ def save_book_overrides_bulk(df):
     if not df.empty:
         recs = [{"session_date": str(r["Ngày"]), "book": str(r["Sách"])} for r in df.to_dict("records")]
         sb.table("book_overrides").insert(recs).execute()
-    st.cache_data.clear()
-
-
-@st.cache_data
-def load_book_project_map():
-    """Gán tay Dự án Forest -> Cuốn sách -- CHỈ áp dụng cho sách CŨ đã có tag riêng của nó trên
-    Forest (từ trước khi đổi sang tag chung BOOKS_TAG), dùng khi tên Dự án bấm giờ trong Forest
-    không trùng khớp tuyệt đối với tên sách lấy từ Reminders (xem UI "Gán Dự án Forest với Cuốn
-    sách" ở tab Tuỳ biến -> "Tải lên từ Reminder"). Áp dụng ở nav "Nhật ký đọc sách" (GHI ĐÈ cột
-    'Dự án' của books_df_legacy qua mapping này trước khi so khớp với 'Cuốn sách') -- KHÔNG áp
-    cho sách mới dùng tag chung BOOKS_TAG (đã tự suy luận 'Dự án' qua _assign_reading_sessions())
-    lẫn Gundam (cùng lý do, qua GUNDAM_TAG)."""
-    return _load_simple_table(
-        "book_project_map", "forest_project,book_title",
-        {"forest_project": "Dự án Forest", "book_title": "Cuốn sách"},
-        ["Dự án Forest", "Cuốn sách"])
-
-
-def save_book_project_map_upsert(df):
-    """Upsert theo forest_project -- mỗi Dự án Forest chỉ gán vào đúng 1 cuốn sách."""
-    sb = _get_supabase()
-    if not df.empty:
-        recs = [{"forest_project": str(r["Dự án Forest"]), "book_title": str(r["Cuốn sách"])}
-                for r in df.to_dict("records") if str(r["Cuốn sách"]).strip()]
-        if recs:
-            sb.table("book_project_map").upsert(recs, on_conflict="forest_project").execute()
-    st.cache_data.clear()
-
-
-def delete_book_project_map(forest_project):
-    """Bỏ gán tay 1 Dự án Forest (quay lại so khớp tên trực tiếp, không qua mapping)."""
-    _get_supabase().table("book_project_map").delete().eq("forest_project", forest_project).execute()
     st.cache_data.clear()
 
 
@@ -9309,21 +9277,13 @@ elif nav == "Nhật ký đọc sách":
     # nếu người dùng chỉ có dữ liệu đọc sách từ Reminders, chưa từng tải CSV Forest (an toàn
     # nhờ đã bỏ early-return columnless ở prep_analysis_data()).
     #
-    # books_df hợp nhất 2 nhóm sách: (1) sách CŨ đã có tag Forest riêng của nó (đóng băng, gán tay
-    # qua book_project_map nếu tên không khớp tuyệt đối tên Reminders -- y hệt cơ chế cũ), và
-    # (2) sách MỚI dùng chung 1 tag BOOKS_TAG ("Reading"), suy luận cuốn đang đọc mỗi ngày qua
-    # _assign_reading_sessions() (đúng cơ chế Gundam, xem docstring hàm đó + book_overrides).
+    # books_df hợp nhất 2 nhóm sách: (1) sách CŨ đã có tag Forest riêng của nó (đóng băng -- tên
+    # tag khớp TUYỆT ĐỐI tên sách bên Reminders, đã xác nhận với người dùng nên không còn cần
+    # bảng gán tay tên lệch nữa), và (2) sách MỚI dùng chung 1 tag BOOKS_TAG ("Reading"), suy luận
+    # cuốn đang đọc mỗi ngày qua _assign_reading_sessions() (đúng cơ chế Gundam, xem docstring hàm
+    # đó + book_overrides).
     books_df_legacy = df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))
                           & (df['Dự án'] != BOOKS_TAG)]
-    # Áp gán tay Dự án Forest -> Cuốn sách (xem load_book_project_map()) TRƯỚC khi mọi nơi khác
-    # so khớp 'Dự án' với 'Cuốn sách' -- ghi đè tên Dự án gốc bằng đúng tên sách đã gán, để tên
-    # bấm giờ trong Forest không trùng khớp tuyệt đối (khác dấu, viết tắt...) vẫn nối được với
-    # tiến độ đọc từ Reminders (bảng tổng hợp, chip "Thời gian" ở Nhật ký Chi tiết, biểu đồ lịch).
-    _book_proj_map = load_book_project_map()
-    if not _book_proj_map.empty:
-        books_df_legacy = books_df_legacy.copy()
-        books_df_legacy['Dự án'] = books_df_legacy['Dự án'].replace(
-            dict(zip(_book_proj_map['Dự án Forest'], _book_proj_map['Cuốn sách'])))
     rl_all = load_reading_log()
     # Loại Reminder List Gundam (tên "Gundam - ...") -- có tab riêng, không tính vào tab Sách.
     rl_books = rl_all[~rl_all['Sách (gốc)'].map(_is_gundam_list)] if not rl_all.empty else rl_all
@@ -9711,155 +9671,78 @@ elif nav == "Tuỳ biến":
 
     sec_chapter("tb-ch2", 2, None, "Phân loại")
     with st.container(border=True, key="tb_mapping_card"):
-        # key="tb_phanloai_tabs" -- CSS ở khối .st-key-rl_view_tabs (chương "Sách/Gundam -> Chi
-        # tiết") dùng chung rule ẩn vạch xám full-width dưới hàng tab cho cả key này -- cùng style
-        # gạch chân, nhưng CĂN LỀ TRÁI (không căn giữa như rl_view_tabs) -- xác nhận với người
-        # dùng. Nhãn tab đặt LẠI vào trong card màu (thử tách ra ngoài trước đó, phản hồi thực tế
-        # là để trong card nhìn hợp hơn) -- 1 card CHUNG bọc cả 2 tab thay vì mỗi tab 1 card riêng.
-        # Nhãn "Danh mục"/"Sách" (KHÔNG dùng ký hiệu "↔" -- xác nhận với người dùng không thích ký
-        # hiệu này) -- ngắn gọn, đã đủ rõ nghĩa nhờ tiêu đề "2. Phân loại" ngay phía trên, không
-        # cần lặp lại chữ "Dự án".
-        _tab_cat_map, _tab_book_map = st.tabs(["Danh mục", "Sách"], key="tb_phanloai_tabs")
-        with _tab_cat_map:
-            db_current = load_db()
-            mapping_df = load_mapping()
-            all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
-            cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Danh mục'])) if not mapping_df.empty else {}
-            if not all_projs:
-                st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 1 trước.")
+        # Trước đây có 2 tab con "Danh mục"/"Sách" (tab "Sách" là gán tay Dự án Forest -> Cuốn
+        # sách cho tên lệch) -- đã BỎ tab "Sách" cùng bảng book_project_map: mọi sách cũ đã có tên
+        # tag khớp TUYỆT ĐỐI tên sách bên Reminders (xác nhận với người dùng), còn sách MỚI dùng
+        # chung tag BOOKS_TAG nên không còn khái niệm "1 Dự án Forest = 1 cuốn sách" để gán tay
+        # nữa (xem _assign_reading_sessions()) -- tính năng không còn tình huống nào cần dùng tới.
+        db_current = load_db()
+        mapping_df = load_mapping()
+        all_projs = sorted(db_current['Dự án'].dropna().astype(str).unique()) if not db_current.empty else []
+        cur_map = dict(zip(mapping_df['Dự án'].astype(str), mapping_df['Danh mục'])) if not mapping_df.empty else {}
+        if not all_projs:
+            st.info("Chưa có dự án nào. Hãy tải dữ liệu ở mục 1 trước.")
+        else:
+            existing_cats = sorted({str(v) for v in cur_map.values() if pd.notna(v) and str(v).strip()})
+            unmapped = [p for p in all_projs if not (cur_map.get(p) and str(cur_map.get(p)).strip())]
+            if unmapped:
+                _show = ", ".join(unmapped[:8]) + ("…" if len(unmapped) > 8 else "")
+                st.warning(f"Còn **{len(unmapped)}** dự án chưa phân loại: {_show}")
             else:
-                existing_cats = sorted({str(v) for v in cur_map.values() if pd.notna(v) and str(v).strip()})
-                unmapped = [p for p in all_projs if not (cur_map.get(p) and str(cur_map.get(p)).strip())]
-                if unmapped:
-                    _show = ", ".join(unmapped[:8]) + ("…" if len(unmapped) > 8 else "")
-                    st.warning(f"Còn **{len(unmapped)}** dự án chưa phân loại: {_show}")
+                st.success("Tất cả dự án đã được phân loại.")
+
+            # Bảng TĨNH (badge màu Danh mục, khớp mockup) -- data_editor cũ không vẽ được badge
+            # màu trong ô (SelectboxColumn chỉ nhận text đơn thuần), nên sửa chuyển xuống form
+            # riêng bên dưới bảng (xem "Sửa phân loại"). Sắp theo số phiên giảm dần, cắt bớt nếu
+            # danh sách dài (khớp mockup "+N dự án khác") -- form sửa vẫn chọn được MỌI dự án qua
+            # selectbox riêng, không phụ thuộc dự án đó có đang hiện trong bảng hay không.
+            _proj_sessions = db_current['Dự án'].astype(str).value_counts()
+            _cat_colors = build_color_map(existing_cats) if existing_cats else {}
+            _rows_sorted = sorted(all_projs, key=lambda p: -_proj_sessions.get(p, 0))
+            _MAP_SHOW = 8
+            _show_rows = _rows_sorted[:_MAP_SHOW]
+            _extra_n = len(_rows_sorted) - len(_show_rows)
+
+            _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Danh mục</span><span style='text-align:right;'>Phiên</span></div>"
+            for p in _show_rows:
+                _cat = cur_map.get(p)
+                _cat = str(_cat) if pd.notna(_cat) and str(_cat).strip() else None
+                if _cat:
+                    _dot = _cat_colors.get(_cat, "var(--accent)")
+                    _badge = (f"<span class='chip' style='display:inline-flex;align-items:center;'>"
+                              f"<i style='display:inline-block;width:9px;height:9px;border-radius:3px;"
+                              f"margin-right:6px;background:{_dot};'></i>{html_escape(_cat)}</span>")
                 else:
-                    st.success("Tất cả dự án đã được phân loại.")
+                    _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— chưa phân loại —</span>"
+                _n = int(_proj_sessions.get(p, 0))
+                _rows_html += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
+                               f"<span class='mp-cat'>{_badge}</span>"
+                               f"<span class='mp-n'>{_n}</span></div>")
+            if _extra_n > 0:
+                _rows_html += f"<div class='maprow maprow-extra'>+ {_extra_n} dự án khác · sửa phân loại bên dưới</div>"
+            st.markdown(f"<div class='maptbl'>{_rows_html}</div>", unsafe_allow_html=True)
 
-                # Bảng TĨNH (badge màu Danh mục, khớp mockup) -- data_editor cũ không vẽ được badge
-                # màu trong ô (SelectboxColumn chỉ nhận text đơn thuần), nên sửa chuyển xuống form
-                # riêng bên dưới bảng (xem "Sửa phân loại"). Sắp theo số phiên giảm dần, cắt bớt nếu
-                # danh sách dài (khớp mockup "+N dự án khác") -- form sửa vẫn chọn được MỌI dự án qua
-                # selectbox riêng, không phụ thuộc dự án đó có đang hiện trong bảng hay không.
-                _proj_sessions = db_current['Dự án'].astype(str).value_counts()
-                _cat_colors = build_color_map(existing_cats) if existing_cats else {}
-                _rows_sorted = sorted(all_projs, key=lambda p: -_proj_sessions.get(p, 0))
-                _MAP_SHOW = 8
-                _show_rows = _rows_sorted[:_MAP_SHOW]
-                _extra_n = len(_rows_sorted) - len(_show_rows)
-
-                _rows_html = "<div class='maprow maprow-head'><span>Dự án</span><span>Danh mục</span><span style='text-align:right;'>Phiên</span></div>"
-                for p in _show_rows:
-                    _cat = cur_map.get(p)
-                    _cat = str(_cat) if pd.notna(_cat) and str(_cat).strip() else None
-                    if _cat:
-                        _dot = _cat_colors.get(_cat, "var(--accent)")
-                        _badge = (f"<span class='chip' style='display:inline-flex;align-items:center;'>"
-                                  f"<i style='display:inline-block;width:9px;height:9px;border-radius:3px;"
-                                  f"margin-right:6px;background:{_dot};'></i>{html_escape(_cat)}</span>")
-                    else:
-                        _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— chưa phân loại —</span>"
-                    _n = int(_proj_sessions.get(p, 0))
-                    _rows_html += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
-                                   f"<span class='mp-cat'>{_badge}</span>"
-                                   f"<span class='mp-n'>{_n}</span></div>")
-                if _extra_n > 0:
-                    _rows_html += f"<div class='maprow maprow-extra'>+ {_extra_n} dự án khác · sửa phân loại bên dưới</div>"
-                st.markdown(f"<div class='maptbl'>{_rows_html}</div>", unsafe_allow_html=True)
-
-                st.markdown("<div style='margin-top:16px;font-size:13px;font-weight:600;"
-                            "color:var(--text-2);'>Sửa phân loại</div>", unsafe_allow_html=True)
-                new_cat = st.text_input("Tạo nhóm mới:").strip()
-                opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
-                fc1, fc2, fc3 = st.columns([2, 2, 1])
-                with fc1:
-                    edit_proj = st.selectbox("Dự án", all_projs, key="map_edit_proj")
-                with fc2:
-                    _cur_val = cur_map.get(edit_proj)
-                    _cur_idx = opts.index(_cur_val) if _cur_val in opts else None
-                    edit_cat = st.selectbox("Danh mục", opts, index=_cur_idx, key="map_edit_cat",
-                                            placeholder="— Chọn danh mục —")
-                with fc3:
-                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                    if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
-                        if edit_cat:
-                            nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
-                                  if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Danh mục"]))
-                            nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Danh mục": edit_cat}])],
-                                           ignore_index=True)
-                            save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
-                            st.rerun()
-
-        with _tab_book_map:
-            # Gán tay Dự án Forest -> Cuốn sách -- CÙNG khuôn bảng tĩnh .maptbl/.maprow + form
-            # "Sửa" bên dưới như tab "Danh mục" ở trên (xác nhận với người dùng), nhưng
-            # KHÁC 2 điểm vì bản chất khác: (1) KHÔNG có banner "còn N dự án chưa gán" -- gán Sách
-            # là TUỲ CHỌN (chỉ cần khi tên bấm giờ trong Forest không trùng khớp tuyệt đối với tên
-            # sách lấy từ Reminders), khác Danh mục là BẮT BUỘC cho mọi dự án; (2) KHÔNG có ô "Tạo
-            # nhóm mới" tự do -- Cuốn sách phải chọn đúng 1 tên CÓ SẴN trong Reminders, không tự
-            # đặt tên mới được như Danh mục. Chỉ liệt kê Dự án nhóm BOOKS_GROUP (Sách) TRỪ chính
-            # BOOKS_TAG ("Reading") -- Gundam không cần vì đã tự suy luận 'Dự án' qua
-            # _assign_reading_sessions(), không dựa tên bấm giờ trong Forest. BOOKS_TAG cũng bị
-            # loại cùng lý do: nó được gán cho NHIỀU cuốn qua suy luận theo ngày, không phải 1-1
-            # tĩnh như book_project_map -- để lọt vào đây sẽ cho gán nhầm cả tag chung vào 1 cuốn.
-            _books_forest_all = sorted(
-                df[(df['Danh mục'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))
-                   & (df['Dự án'] != BOOKS_TAG)]
-                ['Dự án'].dropna().astype(str).unique()) if not df.empty else []
-            _rl_all_bpm = load_reading_log()
-            _rl_books_bpm = (_rl_all_bpm[~_rl_all_bpm['Sách (gốc)'].map(_is_gundam_list)]
-                              if not _rl_all_bpm.empty else _rl_all_bpm)
-            _rl_books_titles = (sorted(_rl_books_bpm['Cuốn sách'].dropna().astype(str).unique())
-                                 if not _rl_books_bpm.empty else [])
-            _bpm_all = load_book_project_map()
-            _bpm_dict = (dict(zip(_bpm_all['Dự án Forest'], _bpm_all['Cuốn sách']))
-                         if not _bpm_all.empty else {})
-            if not _books_forest_all:
-                st.info(f"Chưa có Dự án nào trong nhóm '{BOOKS_GROUP}'. Hãy phân loại Danh mục ở tab bên cạnh trước.")
-            else:
-                _proj_sessions_bpm = df['Dự án'].astype(str).value_counts() if not df.empty else pd.Series(dtype=int)
-                _rows_sorted_bpm = sorted(_books_forest_all, key=lambda p: -_proj_sessions_bpm.get(p, 0))
-                _show_rows_bpm = _rows_sorted_bpm[:_MAP_SHOW]
-                _extra_n_bpm = len(_rows_sorted_bpm) - len(_show_rows_bpm)
-
-                _rows_html_bpm = "<div class='maprow maprow-head'><span>Dự án Forest</span><span>Cuốn sách</span><span style='text-align:right;'>Phiên</span></div>"
-                for p in _show_rows_bpm:
-                    _book = _bpm_dict.get(p)
-                    _book = str(_book) if pd.notna(_book) and str(_book).strip() else None
-                    if _book:
-                        _badge = f"<span class='chip'>{html_escape(_book)}</span>"
-                    else:
-                        _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— không gán —</span>"
-                    _n = int(_proj_sessions_bpm.get(p, 0))
-                    _rows_html_bpm += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
-                                       f"<span class='mp-cat'>{_badge}</span>"
-                                       f"<span class='mp-n'>{_n}</span></div>")
-                if _extra_n_bpm > 0:
-                    _rows_html_bpm += f"<div class='maprow maprow-extra'>+ {_extra_n_bpm} dự án khác · sửa gán bên dưới</div>"
-                st.markdown(f"<div class='maptbl'>{_rows_html_bpm}</div>", unsafe_allow_html=True)
-
-                st.markdown("<div style='margin-top:16px;font-size:13px;font-weight:600;"
-                            "color:var(--text-2);'>Sửa gán</div>", unsafe_allow_html=True)
-                _NO_MAP = "— Không gán —"
-                bc1, bc2, bc3 = st.columns([2, 2, 1])
-                with bc1:
-                    edit_book_proj = st.selectbox("Dự án Forest", _books_forest_all, key="book_map_edit_proj")
-                with bc2:
-                    _book_opts = [_NO_MAP] + _rl_books_titles
-                    _cur_book = _bpm_dict.get(edit_book_proj)
-                    _cur_book_idx = _book_opts.index(_cur_book) if _cur_book in _book_opts else 0
-                    edit_book = st.selectbox("Cuốn sách", _book_opts, index=_cur_book_idx, key="book_map_edit_book",
-                                             help="Chọn đúng tên sách (theo Reminders) nếu Dự án Forest này đang "
-                                                  "theo dõi 1 cuốn sách nhưng đặt tên không trùng khớp tuyệt đối.")
-                with bc3:
-                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                    if st.button("Lưu", type="primary", key="tbtn_save_book_mapping", use_container_width=True):
-                        if edit_book == _NO_MAP:
-                            if edit_book_proj in _bpm_dict:
-                                delete_book_project_map(edit_book_proj)
-                        else:
-                            save_book_project_map_upsert(pd.DataFrame(
-                                [{"Dự án Forest": edit_book_proj, "Cuốn sách": edit_book}]))
+            st.markdown("<div style='margin-top:16px;font-size:13px;font-weight:600;"
+                        "color:var(--text-2);'>Sửa phân loại</div>", unsafe_allow_html=True)
+            new_cat = st.text_input("Tạo nhóm mới:").strip()
+            opts = sorted(set(existing_cats) | ({new_cat} if new_cat else set()))
+            fc1, fc2, fc3 = st.columns([2, 2, 1])
+            with fc1:
+                edit_proj = st.selectbox("Dự án", all_projs, key="map_edit_proj")
+            with fc2:
+                _cur_val = cur_map.get(edit_proj)
+                _cur_idx = opts.index(_cur_val) if _cur_val in opts else None
+                edit_cat = st.selectbox("Danh mục", opts, index=_cur_idx, key="map_edit_cat",
+                                        placeholder="— Chọn danh mục —")
+            with fc3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
+                    if edit_cat:
+                        nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
+                              if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Danh mục"]))
+                        nm = pd.concat([nm, pd.DataFrame([{"Dự án": edit_proj, "Danh mục": edit_cat}])],
+                                       ignore_index=True)
+                        save_mapping(nm[["Dự án", "Danh mục"]].reset_index(drop=True))
                         st.rerun()
     sec_chapter("tb-ch3", 3, None, "Giao diện")
     with st.container(border=True, key="tb_theme_card"):
@@ -10032,9 +9915,6 @@ elif nav == "Tuỳ biến":
                     save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
                 if GUNDAM_OVERRIDES_FILE in names:
                     save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
-                if BOOK_PROJECT_MAP_FILE in names:
-                    _sb_delete_all("book_project_map", "forest_project")
-                    save_book_project_map_upsert(pd.read_csv(io.BytesIO(_z.read(BOOK_PROJECT_MAP_FILE)), dtype=str))
                 if BOOK_OVERRIDES_FILE in names:
                     save_book_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(BOOK_OVERRIDES_FILE)), dtype=str))
             st.cache_data.clear()
@@ -10060,7 +9940,6 @@ elif nav == "Tuỳ biến":
             _sb_delete_all("kindle_book_map", "kindle_title")
             _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
             _sb_delete_all("gundam_overrides", "session_date")
-            _sb_delete_all("book_project_map", "forest_project")
             _sb_delete_all("book_overrides", "session_date")
             st.cache_data.clear()
             st.success("Đã xoá toàn bộ dữ liệu.")
@@ -10130,7 +10009,6 @@ elif nav == "Tuỳ biến":
                                       (DELETED_KINDLE_FILE, load_deleted_kindle()),
                                       (GUNDAM_OVERRIDES_FILE, pd.DataFrame(
                                           [{"Ngày": k, "Series": v} for k, v in load_gundam_overrides().items()])),
-                                      (BOOK_PROJECT_MAP_FILE, load_book_project_map()),
                                       (BOOK_OVERRIDES_FILE, pd.DataFrame(
                                           [{"Ngày": k, "Sách": v} for k, v in load_book_overrides().items()]))]:
                         if not _df.empty:
