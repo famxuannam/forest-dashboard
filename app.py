@@ -248,18 +248,20 @@ MAC_COLORS = [
 ]
 
 # Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Danh mục/Dự án, xem build_color_map())
-# -- hệ "Sổ Tay": đất nung/nghệ/rêu/chàm biển/chàm/mận + 2 màu bổ sung để đủ phân biệt khi nhiều
-# Danh mục/Dự án hơn 6. KHÔNG đổi theo accent đang chọn (khác heatmap/lịch, xem _teal_shades())
-# -- giữ luôn dễ phân biệt dù người dùng chọn accent nào.
-CHART_COLORS = ["#b5502e", "#c98a1f", "#5f7a41", "#1f6f6a", "#3d4f8f", "#7a3b5e", "#d8674a", "#8a9a6b"]
+# -- hệ "Vintage bản đồ": cân bằng nóng/lạnh (đỏ gạch/vàng/mận xen xanh dương/xanh lá/xanh ngọc),
+# đã qua kiểm tra màu (chroma, phân biệt mù màu, tương phản) -- xem mockup đã chọn với người dùng,
+# thay cho bảng "Sổ Tay" cũ (quá xỉn, vài cặp cạnh nhau khó phân biệt, không đạt kiểm tra). KHÔNG
+# đổi theo accent đang chọn (khác heatmap/lịch, xem _teal_shades()) -- giữ luôn dễ phân biệt dù
+# người dùng chọn accent nào.
+CHART_COLORS = ["#c1440e", "#2f8f5e", "#3a5a9e", "#c9932a", "#8a3b8f", "#1f9caf", "#c94f70", "#6fa02e"]
 
 
 # 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
 # đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
 # git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
-# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). "Cam đất"/
-# "Ô liu" thêm sau đó lấy đúng 2 màu bổ sung đã có sẵn trong CHART_COLORS (biến thể sáng hơn của
-# Đất nung/Rêu) -- không bịa màu mới, đảm bảo vẫn cùng 1 hệ tông với 6 màu gốc.
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). Bảng này
+# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Danh mục/Dự án đã đổi sang hệ "Vintage bản đồ" --
+# xem CHART_COLORS) -- accent giao diện vẫn giữ nguyên tông đất/mộc mạc, không bị ảnh hưởng.
 ACCENT_PRESETS = {
     "Đất nung": "#b5502e",
     "Nghệ": "#c98a1f",
@@ -1749,7 +1751,11 @@ def _render_nav_sync_fab():
     nào) vì cần gọi được _do_quick_sync() bằng Python khi bấm. Canh cố định bằng CSS nhắm
     `.st-key-nav_sync_fab` (key của st.container bọc ngoài, CÙNG khuôn `.st-key-tb_quick_sync_row`
     đã dùng để canh nút "Đồng bộ ngay" ở Tuỳ biến) -- .st-key-* luôn là cách canh CSS cho 1 widget
-    cụ thể trong app này, không tự chế cách khác."""
+    cụ thể trong app này. Vẫn bọc 1 st.container(key=...) thay vì đặt key= thẳng trên st.button
+    (ui-components.md có ghi mọi widget đặt key= đều tự có class riêng, kể cả không bọc container)
+    -- CHƯA kiểm chứng được cấu trúc DOM thật của st.button lồng CSS nested selector
+    `div[data-testid="stButton"] button` có còn khớp hay không nếu bỏ lớp bọc, nên giữ nguyên
+    cách đã chạy đúng thay vì đổi khi chưa test trực quan được."""
     st.markdown(
         """<style>
         .st-key-nav_sync_fab {
@@ -2201,16 +2207,18 @@ def _delta_t(delta, label):
 
 
 def _fmt_hours_short(v):
-    """Số giờ thập phân (vd 1.5) -> dạng gọn 'XhYYp' cho chỗ hẹp (chip/badge/ô bảng/nhãn biểu
-    đồ): 1.5 -> '1h30p', 0.5 -> '30p', 2.0 -> '2h', 0 -> '0p'. Làm tròn tới phút gần nhất, bỏ
-    hẳn phần giờ/phút nếu bằng 0 thay vì hiện '0h'/'00p' thừa."""
+    """Số giờ thập phân (vd 1.5) -> dạng gọn "Xh YY′" cho chỗ hẹp (chip/badge/ô bảng/nhãn biểu
+    đồ): 1.5 -> '1h30′', 0.5 -> '30′', 2.0 -> '2h', 0 -> '0′'. Dấu phút "′" (KHÔNG phải dấu nháy
+    đơn ' thường -- xác nhận với người dùng qua mockup, chọn ký hiệu chuẩn quốc tế cho phút thay
+    vì chữ "p" tiếng Việt lẫn với "h" mượn tiếng Anh). Làm tròn tới phút gần nhất, bỏ hẳn phần
+    giờ/phút nếu bằng 0 thay vì hiện '0h'/'00′' thừa."""
     total_min = max(round(v * 60), 0)
     h, m = divmod(total_min, 60)
     if h and m:
-        return f"{h}h{m:02d}p"
+        return f"{h}h{m:02d}′"
     if h:
         return f"{h}h"
-    return f"{m}p"
+    return f"{m}′"
 
 
 def _fmt_hours_long(v):
@@ -2226,14 +2234,14 @@ def _fmt_hours_long(v):
 
 
 def _fmt_hours_delta(v):
-    """Bản có dấu +/- của _fmt_hours_short cho chênh lệch SỐ GIỜ (vd '+1h30p', '-45p') thay vì
+    """Bản có dấu +/- của _fmt_hours_short cho chênh lệch SỐ GIỜ (vd '+1h30′', '-45′') thay vì
     số thập phân '+1.5'/'−0.8'."""
     sign = "+" if v >= 0 else "-"
     return f"{sign}{_fmt_hours_short(abs(v))}"
 
 
 def _delta_t_hours(delta, label):
-    """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30p'/'-45p' thay vì số
+    """Biến thể _delta_t dành riêng cho chênh lệch SỐ GIỜ -- hiện '+1h30′'/'-45′' thay vì số
     thập phân '+1.5'/'−0.8'."""
     if delta is None:
         return None
@@ -2754,23 +2762,32 @@ def _top_days(df_scope, n=3):
     return [{"rank": int(ranks[d]), "date": d, "hours": h / 60} for d, h in top.items()]
 
 
-def _top_days_chips(items):
+def _top_days_chips(items, show_year=True, show_weekday=False):
     """Chuyển kết quả _top_days()/overall_top3 thành chips cho render_stat_panel() -- dùng
-    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm."""
-    return [{"k": f"#{it['rank']}", "v": f"{it['date']:%d/%m/%Y} · {_fmt_hours_short(it['hours'])}"} for it in items]
+    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm. show_year=False (Tuần/Tháng/Năm -- xác nhận với
+    người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm khỏi
+    ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. show_weekday=True
+    (riêng Tháng, dễ nhận biết ngày trong tuần hơn khi nhìn cả tháng) thêm tên Thứ trước ngày."""
+    def _fmt_date(d):
+        ts = pd.Timestamp(d)
+        s = ts.strftime('%d/%m/%Y' if show_year else '%d/%m')
+        return f"{VN_DAYS.get(ts.day_name(), '')}, {s}" if show_weekday else s
+    return [{"k": f"#{it['rank']}", "v": f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}"} for it in items]
 
 
-def _top_days_section(df_scope, label, n=3):
+def _top_days_section(df_scope, label, n=3, show_weekday=False):
     """1 section "Ngày nổi bật" cho render_stat_panel() (sections=...), hoặc None nếu kỳ chưa
     có ngày nào -- dùng chung ở Bảng số liệu Tuần/Tháng/Năm (Tổng quan tự truyền thẳng
-    overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây)."""
+    overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây). Luôn
+    show_year=False -- chỉ Tổng quan mới cần năm (xem _top_days_chips())."""
     items = _top_days(df_scope, n)
-    return [{"label": label, "chips": _top_days_chips(items)}] if items else None
+    return [{"label": label, "chips": _top_days_chips(items, show_year=False, show_weekday=show_weekday)}] if items else None
 
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  anchor_prefix, top3_suffix="", show_footer=True):
+                                  anchor_prefix, top3_suffix="", show_footer=True,
+                                  top_days_show_weekday=False):
     """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
@@ -2819,7 +2836,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
          "deltas": [d for d in [_delta_t(d1_trd, f"cây {lbl_prev}"), _delta_t(d2_trd, f"cây {lbl_avg}")] if d]},
         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút",
          "deltas": [d for d in [_delta_t(d1_ms, f"phút {lbl_prev}"), _delta_t(d2_ms, f"phút {lbl_avg}")] if d]},
-    ], sections=_top_days_section(df_period, top_days_label),
+    ], sections=_top_days_section(df_period, top_days_label, show_weekday=top_days_show_weekday),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None)
     render_project_rhythm(df_period)
@@ -5590,7 +5607,7 @@ DTBL_CSS = """
 def _heat_cell(v, ref, extra_cls="", drop=False, as_hours=True):
     """Một ô số: <0.05 -> dấu chấm mờ; ngược lại tô nền teal theo tỉ lệ v/ref.
     drop=True -> đánh dấu ▾ đỏ (sụt mạnh so với kỳ liền trước). as_hours=True (mặc định, dùng
-    cho mọi cột "Số giờ") -> hiện dạng gọn 'XhYYp' thay vì số thập phân; as_hours=False (vd cột
+    cho mọi cột "Số giờ") -> hiện dạng gọn 'Xh YY′' thay vì số thập phân; as_hours=False (vd cột
     đếm số phần đọc/xem, luôn là số NGUYÊN) -> hiện số nguyên, không có ".0" thừa."""
     cls = extra_cls.strip()
     mark = "<span style='color:#ff3b30;font-size:10px;'>▾</span>" if drop else ""
@@ -7927,11 +7944,13 @@ st.markdown(
     /* Font Cormorant Garamond (xem _QUOTE_FONT_FACE) -- chọn qua mockup ảnh gửi duyệt, cỡ chữ
        chỉnh LỚN HƠN bản Manrope cũ (mark 52->58px, text 21->23px, src 16.5->17.5px) vì đây là
        kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
-       đậm/vuông vức) nếu giữ nguyên số cũ. */
+       đậm/vuông vức) nếu giữ nguyên số cũ. text SAU ĐÓ giảm 23->20px (xác nhận qua mockup với
+       người dùng, có thói quen trích đoạn dài -- 23px chiếm quá nhiều chỗ) -- mark/src giữ nguyên,
+       chỉ đổi text. */
     .kq-daily-mark { font-size: 58px; line-height: 1; color: var(--accent);
         font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-style: italic;
         opacity: .5; margin-bottom: -14px; }
-    .kq-daily-text { font-size: 23px; line-height: 1.45; font-weight: 600; color: var(--text);
+    .kq-daily-text { font-size: 20px; line-height: 1.45; font-weight: 600; color: var(--text);
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; white-space: pre-wrap; }
     .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif; text-align: right; }
@@ -9008,7 +9027,7 @@ elif nav == "Báo cáo":
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
                                               "Ngày nổi bật trong tháng", show_top3=False,
                                               anchor_prefix="bc-thang", top3_suffix=" Tháng",
-                                              show_footer=False)
+                                              show_footer=False, top_days_show_weekday=True)
                 # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
                 # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
@@ -10237,9 +10256,11 @@ elif nav == "Hướng dẫn":
     sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
-        "<li><b>Đồng bộ ngay</b> (ở Tuỳ biến → 1. Dữ liệu đầu vào) — chỉ một nút bấm mà nạp cả dữ liệu "
-        "Forest, tiến độ Reminders lẫn lịch Work cùng lúc. Đây là bước nền của mọi con số khác trong ứng "
-        "dụng: không đồng bộ thì chẳng có gì để nhìn lại, mọi biểu đồ sẽ trơ ra như tờ giấy trắng.</li>"
+        "<li><b>Đồng bộ ngay</b> (nút tròn ⟳ nổi góc dưới màn hình, bấm được từ MỌI trang — hoặc nút "
+        "\"Đồng bộ ngay\" đầy đủ ở Tuỳ biến → 1. Dữ liệu đầu vào nếu cần xem chi tiết file đang chờ) — "
+        "chỉ một nút bấm mà nạp cả dữ liệu Forest, tiến độ Reminders lẫn lịch Work cùng lúc. Đây là bước "
+        "nền của mọi con số khác trong ứng dụng: không đồng bộ thì chẳng có gì để nhìn lại, mọi biểu đồ "
+        "sẽ trơ ra như tờ giấy trắng.</li>"
         "<li><b>Xem qua trang Hôm nay chừng một phút</b> — nhìn dòng thời gian trong ngày và chip so sánh "
         "với đúng thứ này tuần trước. Chỉ cần tự hỏi một câu: hôm nay có diễn ra như mình định không? Đây "
         "không phải để tự khen hay tự trách, mà chỉ đơn giản là ghi nhận thật thà những gì đã xảy ra.</li>"
@@ -10354,28 +10375,39 @@ elif nav == "Hướng dẫn":
         "ngang đầu tiên</b> gặp trong tên list (ưu tiên dạng có khoảng trắng bao quanh “ - ” "
         "cho chắc): phần đứng sau dấu gạch trở thành tên hiển thị, phần đứng trước bị lược bỏ. Nếu tên "
         "list bắt đầu bằng chữ “gundam” (không phân biệt hoa thường), nó sẽ tự động được "
-        "xếp sang trang Gundam thay vì trang Sách.")
+        "xếp sang trang Gundam thay vì trang Sách. Việc này không đổi dù bấm giờ trên Forest theo cách "
+        "nào (xem mục dưới) — Reminders luôn là 1 list riêng/cuốn.")
+    sec_block(
+        "<h4>Bấm giờ trên Forest: sách mới chỉ cần 1 thẻ chung “Reading”</h4>"
+        "Trước đây mỗi cuốn sách cần 1 thẻ Forest riêng, tên trùng khớp tuyệt đối tên sách bên "
+        "Reminders. Từ nay, sách mới KHÔNG cần tạo thẻ riêng nữa — chỉ cần bấm giờ đọc dưới đúng 1 thẻ "
+        "chung <b>“Reading”</b>, giống hệt cách Gundam đã dùng 1 thẻ chung “Gundam” cho mọi series từ "
+        "trước tới giờ (xem mục suy luận bên dưới để biết ứng dụng ghép ngày đọc với đúng cuốn nào). "
+        "Cuốn nào đã có thẻ riêng từ trước khi đổi cách này thì lịch sử cũ giữ nguyên, đóng băng theo "
+        "đúng thẻ cũ đó — không cần đổi gì, chỉ áp dụng cho lần đọc MỚI trở đi.")
     sec_block(
         "<h4>“Số ngày” được tính ra sao khi có hai nguồn dữ liệu cùng lúc</h4>"
-        "Mỗi cuốn sách hay series được ghép lại từ tối đa hai nguồn: phiên Forest (khi tên Dự án trùng "
-        "khớp với tên sách) và các phần đã tick trong Reminders. Con số “Số ngày” lấy "
-        "<b>hợp</b> của cả hai nguồn — tính từ ngày bắt đầu sớm nhất cho tới ngày kết thúc muộn nhất, gộp "
-        "cả hai bên lại — nên nếu bạn đổi cách theo dõi giữa chừng (đang bấm giờ Forest rồi chuyển sang "
-        "chỉ tick Reminders), khoảng thời gian vẫn không bị cắt cụt mất phần trước đó. Ô nào thiếu hẳn "
-        "một nguồn sẽ hiện dấu gạch ngang “—” để báo là thiếu dữ liệu, thay vì để trống khiến "
-        "bạn tưởng nhầm là lỗi.")
+        "Mỗi cuốn sách hay series được ghép lại từ tối đa hai nguồn: phiên Forest (khớp tên thẻ cũ, "
+        "hoặc suy luận từ thẻ chung “Reading”/“Gundam” — xem mục dưới) và các phần đã tick trong "
+        "Reminders. Con số “Số ngày” lấy <b>hợp</b> của cả hai nguồn — tính từ ngày bắt đầu sớm nhất "
+        "cho tới ngày kết thúc muộn nhất, gộp cả hai bên lại — nên nếu bạn đổi cách theo dõi giữa chừng "
+        "(đang bấm giờ Forest rồi chuyển sang chỉ tick Reminders), khoảng thời gian vẫn không bị cắt cụt "
+        "mất phần trước đó. Ô nào thiếu hẳn một nguồn sẽ hiện dấu gạch ngang “—” để báo là thiếu dữ "
+        "liệu, thay vì để trống khiến bạn tưởng nhầm là lỗi.")
     sec_block(
-        "<h4>Gundam: vì sao ứng dụng phải suy luận series đang xem</h4>"
-        "Vì Forest chỉ có đúng một thẻ chung là “Gundam” cho mọi series, không tách riêng "
-        "từng bộ như Sách. Bởi vậy, với mỗi ngày có phiên gắn thẻ đó, ứng dụng sẽ tìm lần tick Reminder "
-        "gần nhất (ở bất kỳ series Gundam nào, trước hoặc sau ngày đó đều được tính, miễn là gần về mặt "
-        "thời gian) rồi gán cả ngày hôm đó cho đúng series của lần tick ấy — một cách suy luận dựa trên "
-        "dấu vết gần nhất. Nếu bạn chỉ theo dõi đúng một series tại một thời điểm, trường hợp phổ biến "
-        "nhất, suy luận này hầu như luôn đúng; còn nếu bạn có thói quen xem xen kẽ nhiều series, ngày nằm "
-        "giữa hai lần tick sẽ được gán về phía gần hơn, và đôi khi đoán sai cũng là điều khó tránh. Gặp "
-        "trường hợp đó, cứ vào mục <b>“Sửa gán series tự động”</b> ở cuối trang Gundam để sửa "
-        "lại tay — ngày nào đã sửa tay sẽ mang nhãn “Gán tay” để dễ phân biệt, còn nếu sau "
-        "này bạn sửa lại đúng trùng với kết quả suy luận tự động, nhãn đó sẽ tự biến mất.")
+        "<h4>Vì sao ứng dụng phải suy luận series/cuốn sách đang đọc</h4>"
+        "Vì Forest chỉ có đúng một thẻ chung — “Gundam” cho mọi series, “Reading” cho mọi cuốn sách "
+        "mới — không tách riêng từng bộ/cuốn. Bởi vậy, với mỗi ngày có phiên gắn 1 trong 2 thẻ đó, "
+        "ứng dụng sẽ tìm lần tick Reminder gần nhất (ở bất kỳ series/cuốn nào, trước hoặc sau ngày đó "
+        "đều được tính, miễn là gần về mặt thời gian) rồi gán cả ngày hôm đó cho đúng series/cuốn của "
+        "lần tick ấy — một cách suy luận dựa trên dấu vết gần nhất. Nếu bạn chỉ theo dõi đúng một "
+        "series/cuốn tại một thời điểm, trường hợp phổ biến nhất, suy luận này hầu như luôn đúng; còn "
+        "nếu bạn có thói quen đọc/xem xen kẽ nhiều series/cuốn, hoặc vừa chuyển sang cuốn mới nhưng "
+        "chưa tick xong phần đầu tiên, ngày nằm giữa hai lần tick sẽ được gán về phía gần hơn, và đôi "
+        "khi đoán sai cũng là điều khó tránh. Gặp trường hợp đó, cứ vào mục <b>“Sửa gán series/sách tự "
+        "động”</b> ở cuối trang Gundam/Sách để sửa lại tay — ngày nào đã sửa tay sẽ mang nhãn “Gán "
+        "tay” để dễ phân biệt, còn nếu sau này bạn sửa lại đúng trùng với kết quả suy luận tự động, "
+        "nhãn đó sẽ tự biến mất.")
     sec_block(
         "<h4>Trích dẫn Kindle — sửa một lần, giữ nguyên mãi</h4>"
         "Mọi thao tác trên trích dẫn (sửa câu chữ, xoá đi, đánh dấu ⭐ Yêu thích, hay thêm ghi chú riêng) "
@@ -10567,12 +10599,12 @@ elif nav == "Hướng dẫn":
             "một bảng **\"Ánh xạ đã lưu\"** liệt kê mọi cuốn hoặc nguồn đã từng ghép, sửa lại Dự án hoặc "
             "tên hiển thị ngay tại đó rồi bấm Lưu, không cần nạp lại file gốc.")
         help_faq_item(
-            "Gundam bị gán nhầm series rồi, giờ sửa lại ở đâu?",
-            "Hãy tìm tới mục **\"Sửa gán series tự động\"** ở cuối trang Gundam (mục này chỉ xuất hiện khi "
-            "có từ hai series trở lên, vì một series thì không cần đoán): chọn lại đúng series cho từng "
-            "ngày bị gán sai rồi bấm Lưu gán series là xong. Ngày đã sửa tay sẽ được đánh dấu bằng nhãn "
-            "\"Gán tay\" để dễ phân biệt với phần ứng dụng tự đoán — còn nếu sau này bạn sửa lại "
-            "đúng trùng với kết quả suy luận tự động ban đầu, nhãn đó sẽ tự biến mất.")
+            "Gundam/Sách bị gán nhầm series/cuốn rồi, giờ sửa lại ở đâu?",
+            "Hãy tìm tới mục **\"Sửa gán series/sách tự động\"** ở cuối trang Gundam hoặc Sách (mục này "
+            "chỉ xuất hiện khi có từ hai series/cuốn trở lên, vì chỉ một thì không cần đoán): chọn lại "
+            "đúng series/cuốn cho từng ngày bị gán sai rồi bấm Lưu là xong. Ngày đã sửa tay sẽ được đánh "
+            "dấu bằng nhãn \"Gán tay\" để dễ phân biệt với phần ứng dụng tự đoán — còn nếu sau này bạn "
+            "sửa lại đúng trùng với kết quả suy luận tự động ban đầu, nhãn đó sẽ tự biến mất.")
         help_faq_item(
             "Đổi màu accent xong, các biểu đồ có tự đổi màu theo không?",
             "Có, và đổi ngay lập tức không cần làm gì thêm — kể cả Biểu đồ lịch, bảng nhiệt, lẫn màu chữ "
@@ -10607,6 +10639,28 @@ elif nav == "Hướng dẫn":
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
     # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
     HELP_CHANGELOG = [
+        dict(pr="235-237", date="20/07/2026", pr_lines=86, total_lines=10706,
+             title="Sách đổi sang mô hình Gundam: một thẻ chung, tự suy luận đúng cuốn theo ngày",
+             bullets=[
+                 "**Không cần tạo tag riêng cho từng cuốn sách nữa** — chỉ cần bấm giờ đọc dưới đúng "
+                 "1 thẻ Forest chung “Reading”, giống hệt cách Gundam đã dùng 1 thẻ chung cho mọi "
+                 "series từ trước tới giờ. Ứng dụng tự suy luận ngày nào đang đọc cuốn nào dựa theo "
+                 "lần tick Reminder gần nhất, có mục “Sửa gán sách tự động” ở trang Sách để sửa tay "
+                 "khi đoán sai. Sách cũ đã có tag riêng vẫn giữ nguyên lịch sử, không cần đổi gì.",
+                 "**Danh mục và Dự án tách bạch rõ ràng xuyên suốt ứng dụng** — chọn xem theo Danh mục "
+                 "vẫn gộp chung “Gundam”/“Reading”, nhưng chọn xem theo Dự án giờ hiện đúng tên từng "
+                 "series/cuốn sách cụ thể ở mọi nơi (Báo cáo, Bảng vàng, Top 3, biểu đồ lịch, Tìm "
+                 "kiếm...), không cần sửa riêng từng trang.",
+                 "**The Economist tách khỏi nhóm Sách** — không còn bị loại trừ ngầm, giờ xếp Danh "
+                 "mục riêng và hiện như một Dự án bình thường ở Báo cáo.",
+                 "**Bỏ hẳn tính năng “Gán Dự án Forest với Cuốn sách”** — không còn tình huống nào "
+                 "cần dùng tới sau khi chuyển sang thẻ chung.",
+                 "**Nút “Đồng bộ ngay” giờ bấm được từ mọi trang** — một nút tròn nổi cạnh nút “Về "
+                 "đầu trang”, không cần mở tab Tuỳ biến mới đồng bộ được nữa.",
+                 "Cùng vài chỉnh sửa nhỏ: cột đếm số nguyên hết cảnh “.0” thừa, chip “Ngày nổi bật” ở "
+                 "Báo cáo Tháng thêm tên Thứ, bảng màu biểu đồ Danh mục/Dự án đổi sang “Vintage bản "
+                 "đồ” rõ ràng hơn, và cách viết giờ phút đổi từ “1h30p” sang “1h30′”.",
+             ]),
         dict(pr="223,224", date="18/07/2026", pr_lines=1, total_lines=10352,
              title="Viết lại toàn bộ văn bản trong ứng dụng theo giọng điềm đạm, và sửa lỗi hiển thị trên mobile",
              bullets=[
