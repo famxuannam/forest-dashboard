@@ -248,18 +248,20 @@ MAC_COLORS = [
 ]
 
 # Bảng màu cố định cho biểu đồ phân loại (cột/pie theo Danh mục/Dự án, xem build_color_map())
-# -- hệ "Sổ Tay": đất nung/nghệ/rêu/chàm biển/chàm/mận + 2 màu bổ sung để đủ phân biệt khi nhiều
-# Danh mục/Dự án hơn 6. KHÔNG đổi theo accent đang chọn (khác heatmap/lịch, xem _teal_shades())
-# -- giữ luôn dễ phân biệt dù người dùng chọn accent nào.
-CHART_COLORS = ["#b5502e", "#c98a1f", "#5f7a41", "#1f6f6a", "#3d4f8f", "#7a3b5e", "#d8674a", "#8a9a6b"]
+# -- hệ "Vintage bản đồ": cân bằng nóng/lạnh (đỏ gạch/vàng/mận xen xanh dương/xanh lá/xanh ngọc),
+# đã qua kiểm tra màu (chroma, phân biệt mù màu, tương phản) -- xem mockup đã chọn với người dùng,
+# thay cho bảng "Sổ Tay" cũ (quá xỉn, vài cặp cạnh nhau khó phân biệt, không đạt kiểm tra). KHÔNG
+# đổi theo accent đang chọn (khác heatmap/lịch, xem _teal_shades()) -- giữ luôn dễ phân biệt dù
+# người dùng chọn accent nào.
+CHART_COLORS = ["#c1440e", "#2f8f5e", "#3a5a9e", "#c9932a", "#8a3b8f", "#1f9caf", "#c94f70", "#6fa02e"]
 
 
 # 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn -- hệ "Sổ Tay": màu
 # đất/mộc mạc, không dùng tông "candy-bright" kiểu iOS nữa. Rút gọn từ 14 xuống 6 (xem lịch sử
 # git nếu cần bảng cũ) để nhất quán với hướng thiết kế mới; ai đã lưu 1 trong các màu cũ bị bỏ sẽ
-# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). "Cam đất"/
-# "Ô liu" thêm sau đó lấy đúng 2 màu bổ sung đã có sẵn trong CHART_COLORS (biến thể sáng hơn của
-# Đất nung/Rêu) -- không bịa màu mới, đảm bảo vẫn cùng 1 hệ tông với 6 màu gốc.
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên dưới). Bảng này
+# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Danh mục/Dự án đã đổi sang hệ "Vintage bản đồ" --
+# xem CHART_COLORS) -- accent giao diện vẫn giữ nguyên tông đất/mộc mạc, không bị ảnh hưởng.
 ACCENT_PRESETS = {
     "Đất nung": "#b5502e",
     "Nghệ": "#c98a1f",
