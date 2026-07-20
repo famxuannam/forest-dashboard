@@ -1926,7 +1926,7 @@ def add_week_dividers(fig, dates):
     fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
     return fig
 
-def format_plotly_fig(fig, is_pie=False):
+def format_plotly_fig(fig):
     fig.update_layout(
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
@@ -1942,25 +1942,13 @@ def format_plotly_fig(fig, is_pie=False):
         margin=dict(t=10, r=28),
         xaxis=dict(automargin=True),
     )
-    if is_pie:
-        # Đường viền phân tách các miếng cho gọn (bóng cả vòng thêm bằng CSS g.pielayer) -- khớp
-        # màu nền thẻ (--card) đổi theo IS_DARK để viền "hoà" vào nền thay vì luôn trắng cứng.
-        _pie_line = "#2c2c2e" if IS_DARK else "#ffffff"
-        # customdata: chuỗi "X giờ Y phút" đã format sẵn -- hovertemplate của Plotly chỉ hỗ trợ
-        # d3-format cho %{value}, không tự tách giờ/phút được, nên phải tính trước ở Python.
-        for tr in fig.data:
-            if tr.values is not None:
-                tr.customdata = [[_fmt_hours_long(v)] for v in tr.values]
-        fig.update_traces(marker=dict(line=dict(color=_pie_line, width=2)),
-                          hovertemplate='<b>%{label}</b><br>%{customdata[0]}<extra></extra>')
-    else:
-        for tr in fig.data:
-            if tr.y is not None:
-                tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
-        # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
-        # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
-        fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
+    for tr in fig.data:
+        if tr.y is not None:
+            tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
+    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
+    # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
+    # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
+    fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
     return fig
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
@@ -6180,8 +6168,9 @@ def render_help_changelog(entries):
 # (nhanh hơn, nhất là trang nhiều dữ liệu/khi xem trên điện thoại).
 @st.fragment
 def frag_calendar(scope_df, key):
-    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng. Bọc trong container "chartopt_..." (xem
-    docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    """Mục Biểu đồ lịch — bộ chọn khoảng thời gian riêng. Bọc trong container "chartopt_..." (mọi
+    fragment biểu đồ trong app dùng chung quy ước này) để thu hẹp khoảng cách dọc xuống biểu đồ
+    ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         df_cal = range_radio(scope_df, key=key)
         render_calendar_grid(df_cal, df_cal)
@@ -6190,7 +6179,7 @@ def frag_calendar(scope_df, key):
 @st.fragment
 def frag_trend(scope_df, key_prefix, default_color):
     """Mục Xu hướng theo thời gian — chọn khoảng thời gian / cách gộp / phân loại. Bọc trong
-    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key_prefix}"):
         o1, o2, o3 = st.columns([5, 3, 2])
@@ -6219,7 +6208,8 @@ def frag_trend(scope_df, key_prefix, default_color):
 def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
     """Mục Xu hướng tập trung theo khung giờ — bộ điều khiển ĐỘC LẬP của riêng mục
     (khoảng thời gian nếu có + phân loại). Không dùng chung với mục nào khác. Bọc trong container
-    "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới."""
+    "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ ngay
+    dưới."""
     with st.container(key=f"chartopt_{key_prefix}"):
         if with_range:
             c1, c2 = st.columns([5, 3])
@@ -6237,30 +6227,13 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
 
 
 @st.fragment
-def frag_pie(scope_df, key, default_color):
-    """Mục Phân bổ thời gian (biểu đồ tròn) — bộ chọn Phân loại riêng. Bọc trong container riêng
-    (key="piewrap_...") chỉ để CSS thu hẹp khoảng cách dọc xuống biểu đồ ngay dưới (xem rule
-    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"]) mà không đụng margin của mọi
-    segmented_control khác trong app."""
-    with st.container(key=f"piewrap_{key}"):
-        ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
-                                     label_visibility="collapsed") or default_color
-        pc = scope_df.groupby(ccol)['Thời lượng (Phút)'].sum().reset_index()
-        pc['Số giờ'] = pc['Thời lượng (Phút)'] / 60
-        fig = px.pie(pc, values='Số giờ', names=ccol, color=ccol, color_discrete_map=COLOR_MAP)
-        fig = format_plotly_fig(fig, is_pie=True)
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-
-
-@st.fragment
 def frag_category_bars(scope_df, key, default_color):
-    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở Báo cáo -> Tuần và
-    Hôm nay -- Tháng/Năm vẫn giữ frag_pie, chưa đổi) -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1
-    thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo hàng cao nhất -- đúng theo mockup Forest
-    Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng dồn ra khớp tổng giờ cả kỳ) + giá trị bên
-    phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu cầu người dùng -- chỉ còn thanh xếp hạng.
-    Bọc trong container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống
-    nội dung ngay dưới."""
+    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở mọi trang Báo cáo)
+    -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1 thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo
+    hàng cao nhất -- đúng theo mockup Forest Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng
+    dồn ra khớp tổng giờ cả kỳ) + giá trị bên phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu
+    cầu người dùng -- chỉ còn thanh xếp hạng. Bọc trong container "chartopt_..." (xem docstring
+    frag_calendar) để thu hẹp khoảng cách dọc xuống nội dung ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
@@ -6287,7 +6260,7 @@ def frag_category_bars(scope_df, key, default_color):
 def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
     Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig). Bọc trong
-    container "chartopt_..." (xem docstring frag_pie) để thu hẹp khoảng cách dọc xuống biểu đồ
+    container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
@@ -6993,11 +6966,10 @@ st.markdown(
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
 
-    /* Đổ bóng CẢ KHỐI cho cột & pie: áp lên cả group (không từng path) -> trong một cột
-       các segment kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong.
-       Cần cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
+    /* Đổ bóng CẢ KHỐI cho cột: áp lên cả group (không từng path) -> trong một cột các segment
+       kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong. Cần
+       cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
     [data-testid="stPlotlyChart"] g.barlayer { filter: drop-shadow(0 2.5px 2.5px rgba(0,0,0,0.30)); }
-    [data-testid="stPlotlyChart"] g.pielayer { filter: drop-shadow(0 3px 4px rgba(0,0,0,0.30)); }
 
     [data-testid="stMetric"] { display: none; }
 
@@ -7159,16 +7131,16 @@ st.markdown(
        theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
     .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
     /* Toggle điều khiển (Khoảng thời gian/Gộp theo/Phân loại...) xuống thẻ biểu đồ ngay dưới, ÁP
-       DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_pie key="piewrap_...", frag_calendar/frag_trend/
-       frag_hourly/frag_period_trend key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung (hàng
-       toggle + biểu đồ) trong 1 container riêng, xem docstring frag_pie). Ghi đè trực tiếp "gap"
-       flex của CHÍNH container đó xuống 4px (thay vì 10px chung toàn trang) -- sửa qua margin-
-       bottom của stButtonGroup (như nav bar/sub-tab picker ở trên) KHÔNG hiệu quả ở đây vì
+       DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_calendar/frag_trend/frag_hourly/
+       frag_period_trend/frag_category_bars key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung
+       (hàng toggle + biểu đồ) trong 1 container riêng, xem docstring frag_calendar). Ghi đè trực
+       tiếp "gap" flex của CHÍNH container đó xuống 4px (thay vì 10px chung toàn trang) -- sửa qua
+       margin-bottom của stButtonGroup (như nav bar/sub-tab picker ở trên) KHÔNG hiệu quả ở đây vì
        frag_trend/frag_hourly xếp 2-3 toggle cạnh nhau qua st.columns(), margin-bottom của từng
        stButtonGroup lồng trong cột không cộng dồn vào gap flex ngoài cùng như trường hợp 1 toggle
-       đơn (piewrap_/nav) -- đo thật bằng Playwright xác nhận marginBottom áp đúng nhưng khoảng
-       cách hiển thị không đổi, phải sửa thẳng "gap" của container mới ăn. */
-    [class*="st-key-piewrap_"], [class*="st-key-chartopt_"] {
+       đơn -- đo thật bằng Playwright xác nhận marginBottom áp đúng nhưng khoảng cách hiển thị
+       không đổi, phải sửa thẳng "gap" của container mới ăn. */
+    [class*="st-key-chartopt_"] {
         gap: 4px !important;
     }
 
