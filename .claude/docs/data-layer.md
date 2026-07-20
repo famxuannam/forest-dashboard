@@ -171,15 +171,33 @@ lịch sử của nó đã đóng băng theo đúng tên tag cũ, tên tag này 
 Reminders (đã xác nhận với người dùng mọi sách cũ đều khớp — không còn bảng gán tay tên lệch nào
 cho trường hợp này nữa, đã bỏ `book_project_map` cùng UI "Gán Dự án Forest với Cuốn sách" ở Tuỳ
 biến vì không còn tình huống nào cần dùng tới). Ở nav "Nhật ký đọc sách", `books_df` là
-`pd.concat()` của 2 nguồn: sách cũ (lọc Danh mục `Reading`, trừ `BOOKS_TAG` chính nó) và sách mới
-(phiên tag `BOOKS_TAG`, chạy qua `_assign_reading_sessions()`).
+`pd.concat()` của 2 nguồn: sách cũ (lọc Danh mục `Reading`, trừ `BOOKS_TAG` chính nó qua cột `Dự án
+gốc`) và sách mới (phiên tag `BOOKS_TAG`, đã suy luận SẴN thành tên cuốn ở `prep_analysis_data()` —
+xem mục dưới, không gọi lại `_assign_reading_sessions()` ở đây nữa).
 
 ## `prep_analysis_data()`: điểm nối dữ liệu DUY NHẤT cho mọi trang báo cáo
 
 Hàm này join `sessions` với `mapping` (Dự án → Danh mục), sinh thêm cột kỳ (`Tuần`/`Tháng`/`Năm`/
-`Thứ`) từ `Thời gian bắt đầu`. Toàn bộ trang Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án) đọc từ
-DataFrame này rồi tự `groupby`. Hàm PHẢI trả về đúng bộ cột ngay cả khi rỗng (không early-return
+`Thứ`) từ `Thời gian bắt đầu`. Toàn bộ trang Báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án) — và cả trang
+Tìm kiếm (`render_search()`, tái dùng thẳng biến `df` toàn cục thay vì gọi `load_db()` riêng) — đọc
+từ DataFrame này rồi tự `groupby`. Hàm PHẢI trả về đúng bộ cột ngay cả khi rỗng (không early-return
 DataFrame trống trơn) — nhiều trang gọi `df['Dự án']` v.v. mà không kiểm tra `df.empty` trước.
+
+**Cột `Dự án` bị GHI ĐÈ cho phiên tag chung Gundam/Sách** (`GUNDAM_TAG`/`BOOKS_TAG`) thành đúng
+series/cuốn sách suy luận được qua `_assign_reading_sessions()` (nhóm mỗi ngày có phiên tag chung
+với lần hoàn thành reminder gần nhất — xem hàm đó) + `gundam_overrides`/`book_overrides` — làm NGAY
+trong `prep_analysis_data()`, SAU khi đã gán xong `Danh mục` (nên `Danh mục` vẫn luôn là
+"Gundam"/"Reading", gộp chung, không bị ảnh hưởng) nhưng TRƯỚC khi trả về, để MỌI nơi đọc `df['Dự
+án']` (Bảng vàng, Top 3, toggle "Phân loại: Dự án", bảng heat 2 tầng, biểu đồ lịch, Tìm kiếm...) tự
+động hiện đúng tên series/cuốn cụ thể mà không cần sửa từng chỗ riêng lẻ. Không suy luận được (chưa
+có `reading_log` đối chiếu) → giữ nguyên tên tag gốc "Gundam"/"Reading", không phải bug.
+
+Cột `Dự án gốc` giữ NGUYÊN tên tag Forest thật (trước khi ghi đè) — 2 nhánh nav "Gundam"/"Nhật ký
+đọc sách" lọc phiên theo cột này (`df['Dự án gốc'] == GUNDAM_TAG`/`== BOOKS_TAG`), rồi dùng THẲNG
+kết quả đã suy luận sẵn ở `df['Dự án']` làm `gundam_df`/`books_df_new` — KHÔNG gọi lại
+`_assign_reading_sessions()` lần 2 (tránh tính trùng, hàm đó chỉ còn được gọi lại bên trong
+`_render_reading_series_override()` để tính `_auto_df` so sánh với kết quả đã áp override, phục vụ
+UI "Sửa gán series/sách tự động").
 
 ## Timezone: `_today_vn()`, không bao giờ `date.today()` trần
 
