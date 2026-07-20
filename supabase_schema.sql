@@ -166,6 +166,16 @@ create table if not exists book_project_map (
   book_title text not null
 );
 
+-- Gán tay ngày -> cuốn sách, ghi đè kết quả suy luận tự động của _assign_reading_sessions() trong
+-- app.py cho tag chung "Reading" (BOOKS_TAG) -- mirror NGUYÊN gundam_overrides, chỉ khác tên bảng/
+-- cột "book" thay vì "series" (mọi cuốn sách mới đều dùng chung 1 tag Forest, không phân biệt
+-- được cuốn nào -- suy luận theo "lần hoàn thành reminder gần nhất" có thể đoán sai nếu 2 cuốn
+-- đọc xen kẽ nhau).
+create table if not exists book_overrides (
+  session_date date primary key,
+  book text not null
+);
+
 -- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
 -- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
 -- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
@@ -183,6 +193,7 @@ alter table kindle_book_map enable row level security;
 alter table deleted_kindle_highlights enable row level security;
 alter table gundam_overrides enable row level security;
 alter table book_project_map enable row level security;
+alter table book_overrides enable row level security;
 
 create policy "anon full access" on sessions for all using (true) with check (true);
 create policy "anon full access" on mapping for all using (true) with check (true);
@@ -198,6 +209,7 @@ create policy "anon full access" on kindle_book_map for all using (true) with ch
 create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);
 create policy "anon full access" on gundam_overrides for all using (true) with check (true);
 create policy "anon full access" on book_project_map for all using (true) with check (true);
+create policy "anon full access" on book_overrides for all using (true) with check (true);
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
