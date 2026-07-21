@@ -3238,6 +3238,18 @@ def _day_link_html(d, label=None):
     return f"<a class='entity-link' href='?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}' target='_self'>{_label}</a>"
 
 
+def _period_link_html(p, time_col, label=None):
+    """1 thẻ <a target=_self> nhảy tới Báo cáo -> Tuần/Tháng đúng kỳ `p` -- dùng ở cột/hàng "Tuần"/
+    "Tháng" của Bảng số liệu (render_period_table ở Dự án, render_data_table ở Tổng quan). Đích đến
+    đọc qua ?week=/?month= (xem 2 init block trước period_stepper() ở nhánh "Tuần"/"Tháng" của
+    "Báo cáo") -- period_stepper() tự validate giá trị nằm trong danh sách kỳ hợp lệ nên không cần
+    xử lý kỳ không tồn tại ở đây."""
+    _label = label if label is not None else html_escape(str(p))
+    _qkey = "week" if time_col == "Tuần" else "month"
+    _href = f"?nav={quote('Báo cáo')}&sub={quote(time_col)}&{_qkey}={quote(str(p))}"
+    return f"<a class='entity-link' href='{_href}' target='_self'>{_label}</a>"
+
+
 def _quick_notes_on(qn_df, day):
     """Lọc load_quick_notes() về đúng 1 ngày -- qn_df đã sắp cũ→mới sẵn từ query (.order("ts")),
     lọc bằng boolean mask giữ nguyên thứ tự đó, không cần sort lại."""
@@ -6177,7 +6189,7 @@ def render_data_table(df, time_col, key):
     _my = _periods_multiyear(cols)
     # Nhiều năm -> tách năm ra 1 hàng header phụ (gộp theo colspan) thay vì lặp hậu tố năm
     # ở từng cột -> đỡ rối khi có nhiều cột. period_label(c, False) vì năm đã hiện riêng.
-    head = ''.join(f'<th>{period_label(c, False)}</th>' for c in cols)
+    head = ''.join(f'<th>{_period_link_html(c, time_col, label=period_label(c, False))}</th>' for c in cols)
     if _my:
         yr_groups = [(yr, len(list(g))) for yr, g in groupby(cols, key=lambda c: str(c).split('-')[0])]
         yr_head = ''.join(f'<th class="yrspan" colspan="{n}">{yr}</th>' for yr, n in yr_groups)
@@ -6417,7 +6429,7 @@ def render_period_table(df, time_col, key):
     rows_html = ''
     for p in periods[_start:_end]:
         rows_html += '<tr class="prow">'
-        rows_html += f'<td class="lbl">{period_label(p, _my)}</td>'
+        rows_html += f'<td class="lbl">{_period_link_html(p, time_col, label=period_label(p, _my))}</td>'
         rows_html += _heat_cell(float(hrs[p]), vmax)
         rows_html += f'<td>{int(trees[p])}</td>'
         rows_html += f'<td>{int(days[p])}</td>'
@@ -9451,6 +9463,14 @@ elif nav == "Báo cáo":
     elif bc_sub == "Tuần":
         if not df.empty:
             weeks = sorted(df['Tuần'].unique())
+            # Đặt sẵn week_pick từ deep-link (?week=) -- period_stepper() tự validate lại giá trị
+            # nằm trong `periods` mỗi lần gọi (dòng đầu hàm đó) nên chỉ cần set 1 lần ở đây, không
+            # cần cờ _jump riêng như grp_sel/bc_sub (không nơi nào trong-phiên set trực tiếp
+            # week_pick, mọi lối vào đều qua link target=_self -> session mới).
+            if "week_pick" not in st.session_state:
+                _qw = st.query_params.get("week")
+                if _qw in weeks:
+                    st.session_state["week_pick"] = _qw
             selected_week = period_stepper(weeks, key="week", fmt=fmt_week, current=_today_vn().strftime('%G-W%V'))
             df_w = df[df['Tuần'] == selected_week]
 
@@ -9532,6 +9552,11 @@ elif nav == "Báo cáo":
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
+            # Đặt sẵn month_pick từ deep-link (?month=) -- cùng cơ chế week_pick ở trên.
+            if "month_pick" not in st.session_state:
+                _qm = st.query_params.get("month")
+                if _qm in months:
+                    st.session_state["month_pick"] = _qm
             selected_month = period_stepper(months, key="month", fmt=fmt_month, current=_today_vn().strftime('%Y-%m'))
             df_m = df[df['Tháng'] == selected_month]
 
