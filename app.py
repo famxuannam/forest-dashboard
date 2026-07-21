@@ -5170,20 +5170,28 @@ def render_search():
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
-def _book_chips_html(day_g):
+def _book_chips_html(day_g, extra_chip_html=''):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
     người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
     Mỗi chip gắn thêm class 'book'/'gundam' (icon Material tương ứng, xem CSS .jchip.book/
     .jchip.gundam) để phân biệt nhanh 2 loại không cần đọc chữ.
-    Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html."""
+    Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html.
+
+    extra_chip_html: tuỳ chọn (chip "Thời gian" của _reading_rows_html) -- nối vào NGAY BÊN
+    TRONG div của nhóm sách CUỐI CÙNG (không phải nối rời sau toàn bộ out) để cùng dòng với chip
+    tên phần cuối, giống hệt cách _render_reading_kindle_days() (trang Chi tiết) đặt chip Thời
+    gian ngay sau chip tên phần -- _chip_row_html() bọc mỗi nhóm trong 1 <div> khối, nối rời sau
+    sẽ rớt xuống dòng riêng do ranh giới div đó."""
     out = ''
     groups = list(day_g.groupby('Cuốn sách', sort=False))
     groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
-    for book, g in groups:
+    for i, (book, g) in enumerate(groups):
         _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
         parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                         for _, r in g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+        if i == len(groups) - 1:
+            parts += extra_chip_html
         out += _chip_row_html(html_escape(book), parts)
     return out
 
@@ -5209,15 +5217,17 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
     if sort_desc:
         _groups = _groups[::-1]
     for d, day_g in _groups:
+        _time_chip = ''
+        if _day_mins is not None and d in _day_mins.index and _day_mins[d] > 0:
+            _time_chip = (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                          f"<span class='cv'>{int(_day_mins[d])}′</span></span>")
         if label_book:
-            chips_html = _book_chips_html(day_g)
+            chips_html = _book_chips_html(day_g, extra_chip_html=_time_chip)
         else:
             _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
             chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
-        if _day_mins is not None and d in _day_mins.index and _day_mins[d] > 0:
-            chips_html += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
-                           f"<span class='cv'>{int(_day_mins[d])}′</span></span>")
+            chips_html += _time_chip
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
