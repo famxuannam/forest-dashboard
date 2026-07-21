@@ -2819,11 +2819,15 @@ def render_top_3(df, col_name, title, week_key=None, n=3):
         wk = {}
         if week_key is not None and 'Tuần' in df.columns:
             wk = (df[df['Tuần'] == week_key].groupby(col_name)['Thời lượng (Phút)'].sum() / 60).to_dict()
+        _p2c = (df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                if col_name == 'Dự án' else None)
         html_list = "<ul style='margin:0; padding-left: 20px; color: var(--text); font-size: 15px; line-height: 1.6;'>"
         for k, v in top3.items():
             wh = wk.get(k, 0)
             wsuf = f" <span style='color:{ACCENT}; font-size:13px;'>({_fmt_hours_short(wh)} tuần này)</span>" if wh > 0.05 else ""
-            html_list += f"<li><span style='font-weight:600;'>{html_escape(str(k))}</span>: {_fmt_hours_short(v/60)}{wsuf}</li>"
+            _kind = "cat" if col_name == "Nhóm" else _proj_link_kind(_p2c.get(k), k)
+            html_list += (f"<li><span style='font-weight:600;'>{_entity_link_html(k, _kind)}</span>: "
+                          f"{_fmt_hours_short(v/60)}{wsuf}</li>")
         html_list += "</ul>"
 
     html = f"""
@@ -3143,6 +3147,49 @@ def _chip_row_html(heading, chips_html):
     return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
 
 
+def _entity_link_html(name, kind, label=None):
+    """1 thẻ <a target=_self> nhảy tới đúng trang chi tiết Nhóm/Dự án/Sách/Gundam -- dùng chung
+    cho MỌI nơi hiện tên có thể bấm (bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline...). Đích
+    đến (preset selectbox grp_sel / rl_detail_*) đã dựng ở phần đầu trang "Báo cáo"/"Sách"/"Gundam"
+    -- xem query param kind/grp/book/series. target=_self buộc reload toàn trang (giống
+    .jdate-link) -> luôn vào session MỚI, không dính gotcha "widget đã instantiate" (chỉ click
+    biểu đồ trong-phiên mới cần né gotcha đó, xem render_trend_fig/render_hourly_chart).
+    kind: "cat" (Nhóm) | "proj" (Dự án) | "book" (Sách) | "gundam" (series Gundam)."""
+    _label = label if label is not None else html_escape(str(name))
+    _n = quote(str(name))
+    if kind == "cat":
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=cat&grp={_n}"
+    elif kind == "proj":
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=proj&grp={_n}"
+    elif kind == "book":
+        _href = f"?nav={quote('Nhật ký đọc sách')}&book={_n}"
+    elif kind == "gundam":
+        _href = f"?nav={quote('Gundam')}&series={_n}"
+    else:
+        return _label
+    return f"<a class='entity-link' href='{_href}' target='_self'>{_label}</a>"
+
+
+def _proj_link_kind(nhom, ten):
+    """Suy ra kind cho 1 Dự án (KHÔNG áp cho Nhóm, luôn "cat") -- đúng điều kiện lọc
+    _book_projects/_gundam_projects đã dùng ở Báo cáo -> Dự án (app.py gần dòng 9564): 1 Dự án
+    đã có trang riêng (Sách/Gundam) phải trỏ ĐÚNG trang đó, không phải Báo cáo -> Dự án.
+
+    ten == BOOKS_TAG/GUNDAM_TAG (tag GỐC "Reading"/"Gundam" chưa qua _assign_reading_sessions()
+    suy luận thành tên sách/series cụ thể -- vd hàng "Reading" thô ở bảng mapping Tuỳ biến, KHÁC
+    1 cuốn/series đã suy ra được) không phải sách/series thật -- không được trỏ tới book=/
+    series=, sẽ chỉ ra 1 giá trị không khớp _detail_opts nào (rơi về placeholder, gây hiểu lầm
+    "Reading" là 1 cuốn sách). Rơi về "proj" như dự án thường (vẫn có thể rơi về placeholder ở
+    Báo cáo -> Dự án nếu dự án gốc này bị loại khỏi _opts -- edge case chấp nhận được, xem PR A)."""
+    if ten in (BOOKS_TAG, GUNDAM_TAG):
+        return "proj"
+    if nhom == BOOKS_GROUP and ten not in BOOKS_EXCLUDE:
+        return "book"
+    if nhom == GUNDAM_TAG:
+        return "gundam"
+    return "proj"
+
+
 def _quick_notes_on(qn_df, day):
     """Lọc load_quick_notes() về đúng 1 ngày -- qn_df đã sắp cũ→mới sẵn từ query (.order("ts")),
     lọc bằng boolean mask giữ nguyên thứ tự đó, không cần sort lại."""
@@ -3177,16 +3224,21 @@ def _record_chips_html(badges):
     nhau "Kỷ lục Deep Work", trông như bị lặp badge dù thực ra là 2 kỷ lục khác khái niệm."""
     if not badges:
         return ''
+    # proj_to_cat: tra Nhóm của 1 Dự án để suy ra đúng đích link (Báo cáo->Dự án hay Sách/Gundam
+    # riêng, xem _proj_link_kind()) -- df là DataFrame toàn cục (prep_analysis_data(), có sẵn
+    # xuyên suốt module), không cần truyền qua tham số riêng.
+    _proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first() if not df.empty else {}
     _ORD = {1: "Hạng nhất", 2: "Hạng nhì", 3: "Hạng ba"}
     parts = []
     for b in badges:
         if b["kind"] == "overall":
-            label = _ORD.get(b["rank"], f"Hạng {b['rank']}") + " mọi thời đại"
+            label_html = html_escape(_ORD.get(b["rank"], f"Hạng {b['rank']}") + " mọi thời đại")
         elif b["kind"] == "Nhóm":
-            label = f"Kỷ lục Nhóm {b['name']}"
+            label_html = f"Kỷ lục Nhóm {_entity_link_html(b['name'], 'cat')}"
         else:
-            label = f"Kỷ lục {b['name']}"
-        parts.append(f"<span class='jchip rec'>{html_escape(label)}</span>")
+            _kind = _proj_link_kind(_proj_to_cat.get(b['name']), b['name'])
+            label_html = f"Kỷ lục {_entity_link_html(b['name'], _kind)}"
+        parts.append(f"<span class='jchip rec'>{label_html}</span>")
     return _chip_row_html("Kỷ lục", ''.join(parts))
 
 
@@ -4226,8 +4278,10 @@ def render_day_timeline(day_df):
         f'<span class="dtl-tk" style="left:{h/24*100:.3f}%;">{h}{"h" if h in (0, 24) else ""}</span>'
         for h in range(0, 25, 3))
     projs = list(dict.fromkeys(day_df.sort_values('Thời gian bắt đầu')['Dự án'].astype(str)))
+    _p2c = day_df.groupby('Dự án')['Nhóm'].first()
     legend_html = ''.join(
-        f'<span><i style="background:{COLOR_MAP.get(p, "#8e8e93")};"></i>{html_escape(p)}</span>' for p in projs)
+        f'<span><i style="background:{COLOR_MAP.get(p, "#8e8e93")};"></i>'
+        f'{_entity_link_html(p, _proj_link_kind(_p2c.get(p), p))}</span>' for p in projs)
 
     st.markdown(f"""
 <style>
@@ -5251,7 +5305,7 @@ def _book_chips_html(day_g, time_by_book=None, book_class_map=None):
         if _mins > 0:
             parts += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
                       f"<span class='cv'>{int(_mins)}′</span></span>")
-        out += _chip_row_html(html_escape(book), parts)
+        out += _chip_row_html(_entity_link_html(book, "gundam" if is_gundam[book] else "book"), parts)
     return out
 
 
@@ -5747,7 +5801,7 @@ def render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y):
             _chg = f" <span style='color:{_col};font-weight:600;'>{_pct_chg:+.0f}%</span>"
         rows_html += (
             "<div class='catbar-row wide'>"
-            f"<span class='catbar-label'>{html_escape(str(name))}</span>"
+            f"<span class='catbar-label'>{_entity_link_html(name, 'cat')}</span>"
             f"<span class='catbar-track'><span class='catbar-fill' "
             f"style='width:{pct:.1f}%;background:{color};'></span></span>"
             f"<span class='catbar-val'>{_fmt_hours_short(mins/60)}{_chg}</span></div>")
@@ -6089,7 +6143,7 @@ def render_data_table(df, time_col, key):
     for c in sorted(cat.index):
         c_vals = [float(cat.loc[c][col]) for col in cols]
         block_html = '<tr class="cat">'
-        block_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        block_html += f'<td class="lbl">{_entity_link_html(c, "cat")}</td>'
         block_html += heat_row(c_vals, vmax_cat)
         block_html += _heat_cell(sum(c_vals), 0, "tot")   # cột Tổng không tô heat cho gọn
         block_html += '</tr>'
@@ -6099,7 +6153,7 @@ def render_data_table(df, time_col, key):
         for idx, row in sub.iterrows():
             p_vals = [float(row[col]) for col in cols]
             block_html += '<tr class="proj">'
-            block_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            block_html += f'<td class="lbl">{_entity_link_html(idx[1], _proj_link_kind(idx[0], idx[1]))}</td>'
             block_html += heat_row(p_vals, vmax_proj)
             block_html += _heat_cell(sum(p_vals), 0, "tot")
             block_html += '</tr>'
@@ -6136,7 +6190,7 @@ def render_detail_table(scope_df, key):
     for c in sorted(cat.index):
         cv = float(cat.loc[c])
         block_html = '<tr class="cat">'
-        block_html += f'<td class="lbl">{html_escape(str(c))}</td>'
+        block_html += f'<td class="lbl">{_entity_link_html(c, "cat")}</td>'
         block_html += _heat_cell(cv, vmax_cat)
         block_html += f'<td class="tot">{cv/total_all*100:.0f}%</td>'
         block_html += '</tr>'
@@ -6146,7 +6200,7 @@ def render_detail_table(scope_df, key):
         for idx, v in sub.items():
             pv = float(v)
             block_html += '<tr class="proj">'
-            block_html += f'<td class="lbl">{html_escape(str(idx[1]))}</td>'
+            block_html += f'<td class="lbl">{_entity_link_html(idx[1], _proj_link_kind(idx[0], idx[1]))}</td>'
             block_html += _heat_cell(pv, vmax_proj)
             block_html += f'<td class="tot">{pv/total_all*100:.0f}%</td>'
             block_html += '</tr>'
@@ -6192,6 +6246,10 @@ def render_period_day_table(df_period, all_days=None):
         n = len(day_df)
         avg_min = mins / n if n else 0.0
         top_proj = day_df.groupby('Dự án')['Thời lượng (Phút)'].sum().idxmax() if n else "—"
+        top_proj_html = ''
+        if n:
+            _top_nhom = day_df[day_df['Dự án'] == top_proj]['Nhóm'].iloc[0]
+            top_proj_html = _entity_link_html(top_proj, _proj_link_kind(_top_nhom, top_proj))
         vn_dow = VN_DAYS.get(pd.Timestamp(d).day_name(), "")
         rows_html += (
             '<tr class="prow">'
@@ -6199,7 +6257,7 @@ def render_period_day_table(df_period, all_days=None):
             f'<td>{_fmt_hours_short(mins / 60) if n else "—"}</td>'
             f'<td>{n if n else "—"}</td>'
             f'<td>{f"{avg_min:.0f}′" if n else "—"}</td>'
-            f'<td class="txt">{html_escape(str(top_proj)) if n else ""}</td></tr>')
+            f'<td class="txt">{top_proj_html}</td></tr>')
         tot_min += mins
         tot_sessions += n
     avg_all = tot_min / tot_sessions if tot_sessions else 0.0
@@ -6570,13 +6628,16 @@ def frag_category_bars(scope_df, key, default_color):
         if g.empty or total_min <= 0:
             st.caption("Chưa có dữ liệu.")
             return
+        _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                        if ccol == "Dự án" else None)
         rows_html = ""
         for i, (name, mins) in enumerate(g.items()):
             pct = mins / total_min * 100
             color = COLOR_MAP.get(name, MAC_COLORS[i % len(MAC_COLORS)])
+            _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_proj_to_cat.get(name), name)
             rows_html += (
                 "<div class='catbar-row'>"
-                f"<span class='catbar-label'>{html_escape(str(name))}</span>"
+                f"<span class='catbar-label'>{_entity_link_html(name, _kind)}</span>"
                 f"<span class='catbar-track'><span class='catbar-fill' "
                 f"style='width:{pct:.1f}%;background:{color};'></span></span>"
                 f"<span class='catbar-val'>{_fmt_hours_short(mins / 60)}</span></div>")
@@ -8050,6 +8111,13 @@ _MAIN_CSS = """
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
+    /* Tên Dự án/Nhóm/Sách/Gundam có thể bấm (Bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline,
+       chip Kỷ lục, bảng Phân loại) -- nhảy tới đúng trang chi tiết đã chọn sẵn (xem
+       _entity_link_html()). Giữ nguyên màu chữ hiện có (color: inherit), chỉ đổi màu khi hover
+       để không phá vỡ màu cố ý ở những nơi chữ vốn đã tô riêng (chip Timeline trên nền màu Dự
+       án, catbar-label...). */
+    a.entity-link { color: inherit; text-decoration: none; cursor: pointer; }
+    a.entity-link:hover { color: var(--accent); text-decoration: underline; }
     /* Bảng Phân loại TĨNH (Tuỳ biến -> chương "2. Phân loại") -- badge màu Nhóm không thể vẽ
        trong 1 ô data_editor (SelectboxColumn chỉ nhận text đơn thuần, không chèn được HTML màu),
        nên hiển thị dạng bảng tĩnh khớp mockup; sửa phân loại chuyển sang 1 form riêng bên dưới
@@ -10221,11 +10289,11 @@ elif nav == "Tuỳ biến":
                     _dot = _cat_colors.get(_cat, "var(--accent)")
                     _badge = (f"<span class='chip' style='display:inline-flex;align-items:center;'>"
                               f"<i style='display:inline-block;width:9px;height:9px;border-radius:3px;"
-                              f"margin-right:6px;background:{_dot};'></i>{html_escape(_cat)}</span>")
+                              f"margin-right:6px;background:{_dot};'></i>{_entity_link_html(_cat, 'cat')}</span>")
                 else:
                     _badge = "<span style='color:var(--text-2);font-size:12.5px;'>— chưa phân loại —</span>"
                 _n = int(_proj_sessions.get(p, 0))
-                _rows_html += (f"<div class='maprow'><span class='mp-proj'>{html_escape(p)}</span>"
+                _rows_html += (f"<div class='maprow'><span class='mp-proj'>{_entity_link_html(p, _proj_link_kind(_cat, p))}</span>"
                                f"<span class='mp-cat'>{_badge}</span>"
                                f"<span class='mp-n'>{_n}</span></div>")
             if _extra_n > 0:
