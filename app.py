@@ -9748,16 +9748,34 @@ elif nav == "Báo cáo":
         if not df.empty:
             # Gom dự án theo nhóm (Nhóm) và phân biệt rõ Nhóm vs Dự án trong dropdown
             proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
-            # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách (đúng điều kiện books_df ở nhánh
-            # "Nhật ký đọc sách" bên dưới: Nhóm == BOOKS_GROUP, KHÔNG nằm trong BOOKS_EXCLUDE)
-            # hoặc ĐÃ là 1 series Gundam theo dõi ở trang Gundam (Nhóm == GUNDAM_TAG) thì bỏ khỏi
-            # danh sách chọn ở đây -- xem số liệu qua đúng trang riêng (đủ ngữ cảnh sách/tác giả/
-            # tiến độ đọc, hoặc series/tập Gundam), không cần lặp lại tuỳ chọn ở Báo cáo → Dự án
-            # nữa. The Economist (nằm trong BOOKS_EXCLUDE) vẫn giữ nguyên -- không "đã có trong
-            # phần Sách" (khác Gundam, luôn bị loại toàn bộ vì đã có tab riêng).
+            # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách hoặc ĐÃ là 1 series Gundam theo dõi
+            # ở trang Gundam thì bỏ khỏi danh sách chọn ở đây -- xem số liệu qua đúng trang riêng
+            # (đủ ngữ cảnh sách/tác giả/tiến độ đọc, hoặc series/tập Gundam), không cần lặp lại
+            # tuỳ chọn ở Báo cáo → Dự án nữa. The Economist (Nhóm riêng, KHÔNG nằm trong
+            # BOOKS_EXCLUDE nữa) vẫn giữ nguyên -- không "đã có trong phần Sách" (khác Gundam, luôn
+            # bị loại toàn bộ vì đã có tab riêng).
+            #
+            # "Đã theo dõi" phải khớp CHÍNH XÁC điều kiện selectbox "Chi tiết" của 2 trang đó
+            # (_render_reading_detail() -> t['Cuốn sách'], xây từ forest_books | rl_books trong
+            # render_reading_log()) -- KHÔNG chỉ lọc theo Nhóm=="Reading"/"Gundam": 1 series/cuốn
+            # có thể lên bảng "Chi tiết" chỉ nhờ khớp tên với 1 Reminders List đã đồng bộ (Cuốn
+            # sách trong reading_log_df), dù phiên Forest của nó lại gắn tag/Nhóm khác (vd 1 series
+            # Gundam có tag Forest RIÊNG dưới Nhóm "Hobby" thay vì tag chung GUNDAM_TAG) -- bug
+            # thật đã gặp: lọc chỉ theo Nhóm bỏ sót các series/cuốn kiểu này, vẫn hiện trùng lặp ở
+            # Báo cáo → Dự án dù đã có trang Chi tiết riêng.
+            _rl_all_excl = load_reading_log()
+            _rl_gundam_titles = (set(_rl_all_excl[_rl_all_excl['Sách (gốc)'].map(_is_gundam_list)]
+                                      ['Cuốn sách'].dropna().unique())
+                                  if not _rl_all_excl.empty else set())
+            _rl_book_titles = (set(_rl_all_excl[~_rl_all_excl['Sách (gốc)'].map(_is_gundam_list)]
+                                    ['Cuốn sách'].dropna().unique())
+                                if not _rl_all_excl.empty else set())
             _book_projects = set(
-                df[(df['Nhóm'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique())
-            _gundam_projects = set(df[df['Nhóm'] == GUNDAM_TAG]['Dự án'].dropna().unique())
+                df[(df['Nhóm'] == BOOKS_GROUP) & (~df['Dự án'].isin(BOOKS_EXCLUDE))]['Dự án'].dropna().unique()
+            ) | _rl_book_titles
+            _gundam_projects = set(
+                df[df['Nhóm'] == GUNDAM_TAG]['Dự án'].dropna().unique()
+            ) | _rl_gundam_titles
             # Mục rỗng đứng đầu -- mặc định KHÔNG chọn sẵn nhóm/dự án nào khi mới vào trang,
             # giống hệt selectbox "Chọn 1 cuốn/series" ở sub-tab Chi tiết (Sách/Gundam).
             _placeholder = ("none", "— Chọn để xem chi tiết —")
