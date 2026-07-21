@@ -5170,7 +5170,7 @@ def render_search():
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
-def _book_chips_html(day_g, time_by_book=None):
+def _book_chips_html(day_g, time_by_book=None, book_class_map=None):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
     người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
@@ -5186,15 +5186,30 @@ def _book_chips_html(day_g, time_by_book=None):
     div của đúng nhóm sách đó (không nối rời sau) để cùng dòng với chip tên phần của cuốn đó,
     giống hệt cách _render_reading_kindle_days() (trang Chi tiết) đặt chip Thời gian ngay sau
     chip tên phần -- _chip_row_html() bọc mỗi nhóm trong 1 <div> khối, nối rời sau sẽ rớt xuống
-    dòng riêng do ranh giới div đó."""
+    dòng riêng do ranh giới div đó.
+
+    Cuốn có mặt trong time_by_book nhưng KHÔNG có phần hoàn thành nào trong day_g (chỉ có phiên
+    Forest, chưa tick chương nào) vẫn được thêm 1 nhóm riêng, CHỈ có chip "Thời gian" -- khớp
+    hành vi _render_reading_kindle_days() (Chi tiết) đã làm (những ngày CHỈ có phiên Forest vẫn
+    ra 1 hàng riêng, xác nhận với người dùng lúc đó). book_class_map: dict {cuốn: 'book'|'gundam'}
+    tra icon cho đúng cuốn này (không tự suy ra 'Sách (gốc)' được vì không có dòng nào trong
+    day_g) -- _reading_rows_html() xây 1 lần từ TOÀN BỘ reading_log_df, mặc định 'book' nếu
+    cuốn đó chưa từng có phần hoàn thành nào (hiếm)."""
+    time_by_book = time_by_book or {}
+    book_class_map = book_class_map or {}
+    groups = {b: g for b, g in day_g.groupby('Cuốn sách', sort=False)} if not day_g.empty else {}
+    all_books = list(dict.fromkeys(list(groups) + [b for b in time_by_book if b not in groups]))
+    is_gundam = {b: (_is_gundam_list(groups[b]['Sách (gốc)'].iloc[0]) if b in groups
+                     else book_class_map.get(b) == 'gundam') for b in all_books}
+    all_books.sort(key=lambda b: is_gundam[b])
     out = ''
-    groups = list(day_g.groupby('Cuốn sách', sort=False))
-    groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
-    for book, g in groups:
-        _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
-        parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                        for _, r in g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
-        _mins = time_by_book.get(book, 0) if time_by_book else 0
+    for book in all_books:
+        g = groups.get(book)
+        _cls = 'jchip gundam' if is_gundam[book] else 'jchip book'
+        parts = ('' if g is None else
+                  ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+                         for _, r in g.sort_values('Ngày hoàn thành', kind='stable').iterrows()))
+        _mins = time_by_book.get(book, 0)
         if _mins > 0:
             parts += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
                       f"<span class='cv'>{int(_mins)}′</span></span>")
@@ -5213,26 +5228,42 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
     của _render_reading_kindle_days()) -- gộp theo (ngày, Dự án) chứ KHÔNG chỉ theo ngày, vì
     'Dự án' ở đây đã là tên cuốn/series CỤ THỂ (suy luận qua _assign_reading_sessions()), nên
     tách được đúng chip "Thời gian" cho TỪNG cuốn nếu 1 ngày đọc ≥2 cuốn (xem docstring
-    _book_chips_html) -- KHÔNG gộp thành 1 chip chung cho cả ngày như bản thử trước đó."""
-    rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize())
+    _book_chips_html) -- KHÔNG gộp thành 1 chip chung cho cả ngày như bản thử trước đó. Ngày CHỈ
+    có phiên Forest (chưa tick chương nào hoàn thành, không có mặt trong rl_df) vẫn ra 1 hàng
+    riêng -- duyệt qua HỢP ngày của rl_df VÀ sessions_df (không chỉ rl_df như bản trước), khớp
+    hành vi _render_reading_kindle_days() (Chi tiết) đã làm, xác nhận với người dùng sau khi phát
+    hiện Tổng quan đang thiếu các ngày này."""
+    rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize()) if not rl_df.empty else rl_df
     _day_book_mins = None
     if sessions_df is not None and not sessions_df.empty:
         _day_book_mins = sessions_df.groupby(
             [pd.to_datetime(sessions_df['Ngày']).dt.normalize(), 'Dự án'])['Thời lượng (Phút)'].sum()
     _days_with_time = set(_day_book_mins.index.get_level_values(0)) if _day_book_mins is not None else set()
-    rows_html = ''
-    _groups = list(rl.groupby('_d'))
+    _rl_days = set(rl['_d'].dropna().unique()) if not rl_df.empty else set()
+    _book_class_map = {}
+    if not rl_df.empty:
+        for _book, _g in rl.groupby('Cuốn sách', sort=False):
+            _book_class_map[_book] = 'gundam' if _is_gundam_list(_g['Sách (gốc)'].iloc[0]) else 'book'
+    all_days = sorted(_rl_days | _days_with_time)
     if sort_desc:
-        _groups = _groups[::-1]
-    for d, day_g in _groups:
+        all_days = all_days[::-1]
+    rows_html = ''
+    for d in all_days:
+        day_g = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
         _books_today = _day_book_mins.loc[d].to_dict() if d in _days_with_time else {}
         if label_book:
-            chips_html = _book_chips_html(day_g, time_by_book=_books_today)
+            chips_html = _book_chips_html(day_g, time_by_book=_books_today, book_class_map=_book_class_map)
         else:
-            _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
-            chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                                 for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
-            _mins = _books_today.get(day_g['Cuốn sách'].iloc[0], 0)
+            if day_g.empty:
+                _book = next(iter(_books_today), None)
+                _cls = 'jchip gundam' if _book_class_map.get(_book) == 'gundam' else 'jchip book'
+                chips_html = ''
+            else:
+                _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
+                chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+                                     for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+                _book = day_g['Cuốn sách'].iloc[0]
+            _mins = _books_today.get(_book, 0)
             if _mins > 0:
                 chips_html += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
                               f"<span class='cv'>{int(_mins)}′</span></span>")
