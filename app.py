@@ -4025,7 +4025,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                 st.caption(f"Chưa có {empty_noun} nào{_phrase}.")
             else:
                 _pg_key = f"jr_page_{ns}"
-                rows_html, num_pages = _reading_rows_html(_rl_f, sort_desc=True, sessions_df=_sess_f, page_key=_pg_key)
+                rows_html, num_pages = _reading_rows_html(_rl_f, sort_desc=False, sessions_df=_sess_f, page_key=_pg_key)
                 st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
                 if num_pages > 1:
                     _render_table_pagination(num_pages, _pg_key,
@@ -4059,8 +4059,8 @@ _KINDLE_INDEP_PREFIX = "Nguồn khác — "  # tiền tố phân biệt nguồn 
 def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     """Sub-tab "Chi tiết" của render_reading_log(): chọn 1 cuốn/series rồi hiện billboard + 4
     chương đánh số -- 1. Số liệu (render_stat_panel, KHÔNG có hero vì Tổng giờ/số phần đã hiện ở
-    chip billboard ngay trên), 2. Biểu đồ lịch (tô theo SỐ PHẦN/tập trong ngày, không phải giờ --
-    dời lên vị trí 2 để khớp vị trí chuẩn của "Biểu đồ lịch" ở mọi trang khác trong app), 3. Nhật
+    chip billboard ngay trên), 2. Biểu đồ lịch (tô theo thời gian tập trung trong ngày, cùng tín
+    hiệu với Biểu đồ lịch ở mọi trang khác trong app), 3. Nhật
     ký đọc/xem (_render_reading_kindle_days, có thêm chip "Thời gian"/ghi chú ngày -- xem docstring
     hàm đó), 4. Bảng số liệu (từng ngày, heat cell theo _heat_cell). Dùng chung được cho cả Sách
     lẫn Gundam qua labels. Đã xác nhận với người dùng GIỮ NGUYÊN đủ 4 chương này (mockup billboard
@@ -4071,16 +4071,18 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     quyết định đã chốt khi thiết kế (giống cách "Báo cáo → Dự án" chỉ hiện hero sau khi chọn Nhóm/
     Dự án).
 
-    Ô chọn CŨNG liệt kê thêm các nguồn Kindle KHÔNG gắn Dự án nào (vd tạp chí The Economist --
-    project để trống trong kindle_book_map lúc import, xem "Tải trích dẫn Kindle" ở tab Tuỳ biến)
-    -- các nguồn này không có tiến độ đọc (không phiên Forest, không phần Reminders) nên chọn vào
-    chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4 chương đánh số phía trên (vốn đều dựa
-    trên dữ liệu tiến độ mà nguồn độc lập không có) -- và vì vậy CŨNG không có billboard/hero (chỉ
-    1 mục duy nhất, không có gì để mục lục chip điều hướng tới; tên nguồn đã hiện sẵn trong ô
-    chọn phía trên rồi)."""
+    Ô chọn CỦA SÁCH (page_name == "Sách") CŨNG liệt kê thêm các nguồn Kindle KHÔNG gắn Dự án nào
+    (vd tạp chí The Economist -- project để trống trong kindle_book_map lúc import, xem "Tải
+    trích dẫn Kindle" ở tab Tuỳ biến) -- các nguồn này không có tiến độ đọc (không phiên Forest,
+    không phần Reminders) nên chọn vào chỉ hiện đúng 1 khối trích dẫn có sửa/xoá, KHÔNG có 4
+    chương đánh số phía trên (vốn đều dựa trên dữ liệu tiến độ mà nguồn độc lập không có) -- và vì
+    vậy CŨNG không có billboard/hero (chỉ 1 mục duy nhất, không có gì để mục lục chip điều hướng
+    tới; tên nguồn đã hiện sẵn trong ô chọn phía trên rồi). Ô chọn của Gundam KHÔNG có các nguồn
+    này -- đây luôn là nguồn sách (tạp chí/ebook), không phải series Gundam, liệt kê ở đây sẽ gây
+    hiểu lầm (xác nhận với người dùng)."""
     _kh_all = load_kindle_highlights()
     _indep_sources = (sorted(_kh_all[_kh_all['Dự án'].isna()]['Cuốn sách'].dropna().unique())
-                       if not _kh_all.empty else [])
+                       if not _kh_all.empty and page_name == "Sách" else [])
     _detail_opts = (["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
                      + [f"{_KINDLE_INDEP_PREFIX}{s}" for s in _indep_sources])
     # Đặt sẵn cuốn/series từ deep-link (?book=/?series=, xem render_reading_log()'s st.tabs preset)
@@ -4239,9 +4241,9 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
 
 def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
     """Lưới lịch nhiệt kiểu GitHub cho 1 cuốn/series đã chọn (mục "3. Biểu đồ lịch" trong sub-tab
-    Chi tiết) -- tô theo SỐ PHẦN/tập đọc/xem trong ngày (tín hiệu chính, không đổi), khác
-    render_calendar_grid (tô theo giờ tập trung): bậc màu nhỏ hơn (0-5) vì số phần/ngày thường là
-    số nguyên nhỏ, không phải giờ.
+    Chi tiết) -- tô theo THỜI GIAN tập trung trong ngày (phút Forest, cùng tín hiệu với
+    render_calendar_grid), không còn theo số phần/tập như trước (xác nhận với người dùng): số
+    phần/tập vẫn hiện trong tooltip mỗi ô, chỉ không còn quyết định độ đậm màu.
 
     book_forest_df (tuỳ chọn): phiên Forest đúng cuốn/series này -- ngày CÓ phiên Forest nhưng
     CHƯA tick hoàn thành phần nào (lvl 0 theo số phần) được nâng lên lvl 1 (thay vì trông giống
@@ -4269,10 +4271,13 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
     cal_data['day'] = cal_data['Ngày'].dt.day
 
     def _lvl(r):
-        n = r[labels['parts_label']]
-        if n > 0:
-            return min(int(n), 5)
-        return 1 if r['Thời gian (phút)'] > 0 else 0
+        h = r['Thời gian (phút)'] / 60
+        if h <= 0: return 0
+        if h < 0.5: return 1
+        if h < 1: return 2
+        if h < 2: return 3
+        if h < 4: return 4
+        return 5
     cal_data['lvl'] = cal_data.apply(_lvl, axis=1)
     LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5)
 
@@ -5372,9 +5377,9 @@ def _book_chips_html(day_g, time_by_book=None, book_class_map=None):
 def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None, page_key=None):
     """HTML .jrows cho các phần đã đọc (rl_df đã lọc sẵn theo kỳ/sách cần hiện) -- một dòng cho
     mỗi ngày có ≥1 phần hoàn thành. label_book=False dùng khi caller đã lọc đúng 1 cuốn (Báo
-    cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu (Sách ->
-    Tổng quan, mockup xếp "Nhật ký đọc" theo kiểu tin mới lên trên) -- mặc định False (cũ nhất
-    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu).
+    cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu; mặc định
+    False (cũ nhất trước, đúng dòng thời gian) -- Sách/Gundam -> Tổng quan cũng dùng False (xác
+    nhận với người dùng: "Nhật ký đọc/xem" phải đi đúng thứ tự thời gian, cũ lên trước, mới ra sau).
 
     sessions_df: tuỳ chọn, df_books (phiên Forest, CHƯA lọc theo 1 cuốn -- khác book_name đơn lẻ
     của _render_reading_kindle_days()) -- gộp theo (ngày, Dự án) chứ KHÔNG chỉ theo ngày, vì
@@ -5928,10 +5933,10 @@ def render_year_highlights(df_y, active_days_y, elapsed_days_y, selected_year):
         _tb_day = df_y['Thời lượng (Phút)'].sum() / 60 / (active_days_y or 1)
         _tb_week = df_y['Thời lượng (Phút)'].sum() / 60 / _num_weeks_y
         wd_y = _weekday_avg(df_y)
-        _items2 = [f"Ngày hoạt động {active_days_y}/{elapsed_days_y} ({_pct_active:.0f}%)",
-                   f"TB ngày hoạt động {_fmt_hours_short(_tb_day)} · TB tuần {_fmt_hours_short(_tb_week)}"]
+        _items2 = [f"{_mi('event_available')} Ngày hoạt động {active_days_y}/{elapsed_days_y} ({_pct_active:.0f}%)",
+                   f"{_mi('speed')} TB ngày hoạt động {_fmt_hours_short(_tb_day)} · TB tuần {_fmt_hours_short(_tb_week)}"]
         if len(wd_y) and wd_y.max() > 0:
-            _items2.append(f"Thứ năng suất nhất <b>{wd_y.idxmax()}</b> (TB {_fmt_hours_short(wd_y.max())})")
+            _items2.append(f"{_mi('trending_up')} Thứ năng suất nhất <b>{wd_y.idxmax()}</b> (TB {_fmt_hours_short(wd_y.max())})")
         _items2_html = "".join(f"<div class='hlt-item'>{it}</div>" for it in _items2)
         st.markdown(
             "<div class='glass-card year-hl-card' style='padding:14px 18px;height:100%;'>"
@@ -6027,13 +6032,13 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
             _dh = df_m['Thời lượng (Phút)'].sum() / 60 - prev_m['hrs']
             _col = "#34c759" if _dh > 0 else "#ff3b30" if _dh < 0 else "var(--text-2)"
             _arrow = "▲" if _dh > 0 else "▼" if _dh < 0 else "–"
-            _lines.append(f"Tổng giờ <span style='color:{_col};font-weight:600;'>"
+            _lines.append(f"{_mi('schedule')} Tổng giờ <span style='color:{_col};font-weight:600;'>"
                            f"{_fmt_hours_delta(_dh)} {_arrow}</span>")
         if prev_m and prev_m.get('trees') is not None:
             _dn = len(df_m) - prev_m['trees']
             _col_n = "#34c759" if _dn > 0 else "#ff3b30" if _dn < 0 else "var(--text-2)"
             _arrow_n = "▲" if _dn > 0 else "▼" if _dn < 0 else "–"
-            _lines.append(f"Số phiên <span style='color:{_col_n};font-weight:600;'>"
+            _lines.append(f"{_mi('event_repeat')} Số phiên <span style='color:{_col_n};font-weight:600;'>"
                            f"{_fmt_delta(_dn)} {_arrow_n}</span>")
 
         _prev_scope = (df[(df['Tháng'] == prev_month_key) & elapsed_mask_m] if elapsed_mask_m is not None
@@ -6044,14 +6049,14 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
         _cat_delta = _cat_now.reindex(_cat_idx, fill_value=0) - _cat_prev.reindex(_cat_idx, fill_value=0)
         if len(_cat_delta) and _cat_delta.min() < 0 and _cat_delta.max() > 0:
             _worst, _best = _cat_delta.idxmin(), _cat_delta.idxmax()
-            _lines.append(f"{html_escape(str(_worst))} giảm {_fmt_hours_short(abs(_cat_delta[_worst]))} "
-                           f"— bù bởi {html_escape(str(_best))}")
+            _lines.append(f"{_mi('swap_horiz')} {html_escape(str(_worst))} giảm "
+                           f"{_fmt_hours_short(abs(_cat_delta[_worst]))} — bù bởi {html_escape(str(_best))}")
 
         _active_days_now = df_m['Ngày'].nunique() or 1
         _tb_day_now = df_m['Thời lượng (Phút)'].sum() / 60 / _active_days_now
         if prev_m and prev_m.get('hrs_day') is not None:
-            _lines.append(f"TB/ngày hoạt động {_fmt_hours_short(_tb_day_now)} so với "
-                           f"{_fmt_hours_short(prev_m['hrs_day'])} tháng trước")
+            _lines.append(f"{_mi('calendar_month')} TB/ngày hoạt động {_fmt_hours_short(_tb_day_now)} "
+                           f"so với {_fmt_hours_short(prev_m['hrs_day'])} tháng trước")
 
         _lines_html = "".join(f"<div class='hlt-item'>{ln}</div>" for ln in _lines)
         st.markdown(
