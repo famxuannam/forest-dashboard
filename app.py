@@ -2092,10 +2092,28 @@ def add_ma_overlay(fig, scope_df, window=7):
     return fig
 
 
+def add_record_marker(fig, scope_df):
+    """Đánh dấu 1 ngôi sao nhỏ phía trên cột của ngày nhiều giờ nhất TRONG KHOẢNG ĐANG XEM --
+    dùng lại đúng _top_days() (đã tính cho mục "Ngày nổi bật" ở Bảng số liệu), chỉ lấy TOP 1
+    (không phải top 3 như ở đó) để tránh rối mắt trên biểu đồ theo ngày. Nới trần trục hoành
+    18% (cùng hệ số add_total_labels) để ngôi sao không bị cắt ở mép trên canvas."""
+    top = _top_days(scope_df, 1)
+    if not top:
+        return fig
+    d, h = top[0]["date"], top[0]["hours"]
+    fig.add_annotation(
+        x=pd.Timestamp(d), y=h, yshift=16, text="★", showarrow=False,
+        font=dict(size=14, color=ACCENT_DARK),
+        hovertext=f"Nhiều giờ nhất trong khoảng này: {_fmt_hours_long(h)}", captureevents=True,
+    )
+    fig.update_yaxes(range=[0, h * 1.18])
+    return fig
+
+
 def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
     """Biểu đồ xu hướng dạng cột chồng theo thời gian.
     grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
-    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày.
+    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày + đánh dấu ngày kỷ lục.
     cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
     co = {time_col: cat_order} if cat_order else None
     fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
@@ -2103,6 +2121,7 @@ def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x
         fig = add_week_dividers(fig, grouped[time_col])
         if ma_df is not None:
             fig = add_ma_overlay(fig, ma_df, 7)
+            fig = add_record_marker(fig, ma_df)
     else:
         fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
     fig.update_layout(xaxis_title=x_title or time_col, yaxis_title="Số giờ")
@@ -3867,7 +3886,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             if _rl_recent_g.empty:
                 st.caption("Chưa có tập nào hoàn thành trong 14 ngày gần đây.")
             else:
-                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True)}</div>",
+                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True, sessions_df=df_books)}</div>",
                             unsafe_allow_html=True)
         sec_chapter("gd-tq-ch3", 3, None, "Bảng số liệu")
         _render_stats_table()
@@ -3883,7 +3902,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
         if _rl_recent.empty:
             st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
         else:
-            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
+            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True, sessions_df=df_books)}</div>",
                         unsafe_allow_html=True)
     sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
     _render_reading_quotes_teaser()
@@ -5151,13 +5170,23 @@ def render_search():
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
 
 
-def _book_chips_html(day_g):
+def _book_chips_html(day_g, time_by_book=None):
     """Chip các phần đã đọc trong 1 ngày, nhóm theo cuốn sách/series kèm nhãn tên sách (1 ngày
     có thể có phần từ nhiều cuốn). Sách LUÔN xếp trước Gundam (thứ tự Lịch -> Sách -> Gundam
     người dùng yêu cầu) -- sort ổn định theo is_gundam, giữ nguyên thứ tự gặp trong mỗi nhóm.
     Mỗi chip gắn thêm class 'book'/'gundam' (icon Material tương ứng, xem CSS .jchip.book/
     .jchip.gundam) để phân biệt nhanh 2 loại không cần đọc chữ.
-    Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html."""
+    Dùng chung cho render_note_editor, render_notes_journal, _reading_rows_html.
+
+    time_by_book: tuỳ chọn, dict {tên cuốn: phút} của ĐÚNG ngày này (xem _reading_rows_html) --
+    1 ngày có ≥2 cuốn thì MỖI cuốn có chip "Thời gian" RIÊNG (không gộp chung 1 chip cho cả
+    ngày) vì phiên Forest đã được gán CỤ THỂ cho từng cuốn (qua _assign_reading_sessions() + gán
+    tay khi cần, xem docstring hàm đó), nên tách theo đúng cuốn là chính xác chứ không phải ước
+    lượng -- xác nhận với người dùng sau khi thử gộp 1 chip/ngày trước đó. Nối NGAY BÊN TRONG
+    div của đúng nhóm sách đó (không nối rời sau) để cùng dòng với chip tên phần của cuốn đó,
+    giống hệt cách _render_reading_kindle_days() (trang Chi tiết) đặt chip Thời gian ngay sau
+    chip tên phần -- _chip_row_html() bọc mỗi nhóm trong 1 <div> khối, nối rời sau sẽ rớt xuống
+    dòng riêng do ranh giới div đó."""
     out = ''
     groups = list(day_g.groupby('Cuốn sách', sort=False))
     groups.sort(key=lambda kv: _is_gundam_list(kv[1]['Sách (gốc)'].iloc[0]))
@@ -5165,28 +5194,48 @@ def _book_chips_html(day_g):
         _cls = 'jchip gundam' if _is_gundam_list(g['Sách (gốc)'].iloc[0]) else 'jchip book'
         parts = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                         for _, r in g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+        _mins = time_by_book.get(book, 0) if time_by_book else 0
+        if _mins > 0:
+            parts += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                      f"<span class='cv'>{int(_mins)}′</span></span>")
         out += _chip_row_html(html_escape(book), parts)
     return out
 
 
-def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
+def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None):
     """HTML .jrows cho các phần đã đọc (rl_df đã lọc sẵn theo kỳ/sách cần hiện) -- một dòng cho
     mỗi ngày có ≥1 phần hoàn thành. label_book=False dùng khi caller đã lọc đúng 1 cuốn (Báo
     cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu (Sách ->
     Tổng quan, mockup xếp "Nhật ký đọc" theo kiểu tin mới lên trên) -- mặc định False (cũ nhất
-    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu)."""
+    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu).
+
+    sessions_df: tuỳ chọn, df_books (phiên Forest, CHƯA lọc theo 1 cuốn -- khác book_name đơn lẻ
+    của _render_reading_kindle_days()) -- gộp theo (ngày, Dự án) chứ KHÔNG chỉ theo ngày, vì
+    'Dự án' ở đây đã là tên cuốn/series CỤ THỂ (suy luận qua _assign_reading_sessions()), nên
+    tách được đúng chip "Thời gian" cho TỪNG cuốn nếu 1 ngày đọc ≥2 cuốn (xem docstring
+    _book_chips_html) -- KHÔNG gộp thành 1 chip chung cho cả ngày như bản thử trước đó."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize())
+    _day_book_mins = None
+    if sessions_df is not None and not sessions_df.empty:
+        _day_book_mins = sessions_df.groupby(
+            [pd.to_datetime(sessions_df['Ngày']).dt.normalize(), 'Dự án'])['Thời lượng (Phút)'].sum()
+    _days_with_time = set(_day_book_mins.index.get_level_values(0)) if _day_book_mins is not None else set()
     rows_html = ''
     _groups = list(rl.groupby('_d'))
     if sort_desc:
         _groups = _groups[::-1]
     for d, day_g in _groups:
+        _books_today = _day_book_mins.loc[d].to_dict() if d in _days_with_time else {}
         if label_book:
-            chips_html = _book_chips_html(day_g)
+            chips_html = _book_chips_html(day_g, time_by_book=_books_today)
         else:
             _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
             chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+            _mins = _books_today.get(day_g['Cuốn sách'].iloc[0], 0)
+            if _mins > 0:
+                chips_html += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                              f"<span class='cv'>{int(_mins)}′</span></span>")
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
