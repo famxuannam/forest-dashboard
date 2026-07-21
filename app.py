@@ -2168,6 +2168,10 @@ def format_plotly_fig(fig):
     return fig
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
+# Mốc riêng cho "Nhật ký đọc/xem" (Sách/Gundam Tổng quan) -- nhỏ hơn RANGE_OPTS vì liệt kê từng
+# ngày (6 tháng/1 năm sẽ ra trang rất dài), thêm "7 ngày" (RANGE_OPTS không có) cho khoảng hẹp
+# nhất có thể xem nhật ký gần đây.
+JOURNAL_RANGE_OPTS = {"7 ngày": 7, "14 ngày": 14, "30 ngày": 30, "90 ngày": 90, "Tất cả": None}
 
 def filter_by_range(df_all, label):
     """Lọc df theo nhãn khoảng thời gian (mốc tính từ ngày mới nhất)."""
@@ -3875,19 +3879,41 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             _render_table_pagination(_num_pages, _pg_key,
                                        f"Hiển thị {labels['item_col'].lower()} {_start + 1}–{_end} / {_n}")
 
+    def _render_journal(ns, empty_noun):
+        """Mục "Nhật ký đọc"/"Nhật ký xem": bộ lọc "Khoảng thời gian" (JOURNAL_RANGE_OPTS, mặc
+        định "14 ngày" -- giữ đúng hành vi cũ trước khi có bộ lọc này) + phân trang theo ngày
+        (_reading_rows_html(page_key=...), TABLE_PAGE_SIZE/trang). Lọc CẢ 2 nguồn (reading_log_df
+        lẫn df_books) theo CÙNG 1 mốc cutoff -- thiếu lọc df_books từng khiến ngày CHỈ có phiên
+        Forest (không chương hoàn thành) hiện xuyên suốt TOÀN BỘ lịch sử thay vì đúng khoảng đang
+        chọn (bug thật phát hiện lúc thêm bộ lọc này, xem _reading_rows_html)."""
+        _range = st.segmented_control("Khoảng thời gian", list(JOURNAL_RANGE_OPTS.keys()),
+                                        default="14 ngày", key=f"jr_range_{ns}", label_visibility="collapsed")
+        _range = _range or "14 ngày"
+        _days_n = JOURNAL_RANGE_OPTS[_range]
+        if _days_n is not None:
+            _cutoff = pd.Timestamp(_today - timedelta(days=_days_n - 1))
+            _rl_f = reading_log_df[reading_log_df['Ngày hoàn thành'] >= _cutoff] if not reading_log_df.empty else reading_log_df
+            _sess_f = df_books[pd.to_datetime(df_books['Ngày']) >= _cutoff] if not df_books.empty else df_books
+        else:
+            _rl_f, _sess_f = reading_log_df, df_books
+        with st.container(border=True, key=f"jcard_{ns}_journal"):
+            if _rl_f.empty and _sess_f.empty:
+                _phrase = f" trong {_range.lower()} gần đây" if _days_n is not None else ""
+                st.caption(f"Chưa có {empty_noun} nào{_phrase}.")
+            else:
+                _pg_key = f"jr_page_{ns}"
+                rows_html, num_pages = _reading_rows_html(_rl_f, sort_desc=True, sessions_df=_sess_f, page_key=_pg_key)
+                st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
+                if num_pages > 1:
+                    _render_table_pagination(num_pages, _pg_key,
+                                               f"Trang {st.session_state.get(_pg_key, 1)}/{num_pages}")
+
     if page_name == "Gundam":
         _render_gundam_billboard(t, df_books, reading_log_df, _today)
         sec_chapter("gd-tq-ch1", 1, None, "Thống kê", tight_top=True)
         _render_stats_cards()
         sec_chapter("gd-tq-ch2", 2, None, "Nhật ký xem")
-        _rl_recent_g = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
-                        if not reading_log_df.empty else reading_log_df)
-        with st.container(border=True, key="jcard_gundam_journal"):
-            if _rl_recent_g.empty:
-                st.caption("Chưa có tập nào hoàn thành trong 14 ngày gần đây.")
-            else:
-                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True, sessions_df=df_books)}</div>",
-                            unsafe_allow_html=True)
+        _render_journal("gundam", "tập hoàn thành hay phiên xem")
         sec_chapter("gd-tq-ch3", 3, None, "Bảng số liệu")
         _render_stats_table()
         return
@@ -3896,14 +3922,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
     sec_chapter("sach-tq-ch1", 1, None, "Thống kê", tight_top=True)
     _render_stats_cards()
     sec_chapter("sach-tq-ch2", 2, None, "Nhật ký đọc")
-    _rl_recent = (reading_log_df[reading_log_df['Ngày hoàn thành'] >= pd.Timestamp(_today - timedelta(days=13))]
-                  if not reading_log_df.empty else reading_log_df)
-    with st.container(border=True, key="jcard_sach_journal"):
-        if _rl_recent.empty:
-            st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
-        else:
-            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True, sessions_df=df_books)}</div>",
-                        unsafe_allow_html=True)
+    _render_journal("sach", "phần hoàn thành hay phiên đọc")
     sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
     _render_reading_quotes_teaser()
     sec_chapter("sach-tq-ch4", 4, None, "Bảng số liệu")
@@ -5217,7 +5236,7 @@ def _book_chips_html(day_g, time_by_book=None, book_class_map=None):
     return out
 
 
-def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None):
+def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None, page_key=None):
     """HTML .jrows cho các phần đã đọc (rl_df đã lọc sẵn theo kỳ/sách cần hiện) -- một dòng cho
     mỗi ngày có ≥1 phần hoàn thành. label_book=False dùng khi caller đã lọc đúng 1 cuốn (Báo
     cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu (Sách ->
@@ -5232,7 +5251,15 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
     có phiên Forest (chưa tick chương nào hoàn thành, không có mặt trong rl_df) vẫn ra 1 hàng
     riêng -- duyệt qua HỢP ngày của rl_df VÀ sessions_df (không chỉ rl_df như bản trước), khớp
     hành vi _render_reading_kindle_days() (Chi tiết) đã làm, xác nhận với người dùng sau khi phát
-    hiện Tổng quan đang thiếu các ngày này."""
+    hiện Tổng quan đang thiếu các ngày này.
+
+    page_key: tuỳ chọn -- nếu truyền, phân trang theo NGÀY (TABLE_PAGE_SIZE/trang) bằng
+    _table_page_slice() (đã dùng cho Bảng số liệu), CHỈ dựng HTML của đúng trang hiện tại, và trả
+    về TUPLE (rows_html, num_pages) thay vì chuỗi trần -- caller tự gọi _render_table_pagination()
+    SAU KHI vẽ xong .jrows (không gọi ở TRONG hàm này, vì hàm này thường được gọi lồng ngay trong
+    f-string của st.markdown() ở caller -- gọi widget pagination ở đây sẽ render ra TRƯỚC .jrows,
+    sai thứ tự mong muốn). Không truyền (2 nơi gọi cũ, "Báo cáo -> Dự án") giữ nguyên hành vi trả
+    về HTML ĐẦY ĐỦ dạng chuỗi trần, không phân trang."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize()) if not rl_df.empty else rl_df
     _day_book_mins = None
     if sessions_df is not None and not sessions_df.empty:
@@ -5247,8 +5274,13 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
     all_days = sorted(_rl_days | _days_with_time)
     if sort_desc:
         all_days = all_days[::-1]
+    if page_key is not None:
+        _start, _end, _num_pages, _paged = _table_page_slice(len(all_days), page_key)
+        page_days = all_days[_start:_end]
+    else:
+        page_days = all_days
     rows_html = ''
-    for d in all_days:
+    for d in page_days:
         day_g = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
         _books_today = _day_book_mins.loc[d].to_dict() if d in _days_with_time else {}
         if label_book:
@@ -5275,7 +5307,7 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
             f"<div class='jdm'>{d:%d/%m}</div></div></a>"
             f"<div>{chips_html}</div></div>"
         )
-    return rows_html
+    return (rows_html, _num_pages) if page_key is not None else rows_html
 
 
 def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
