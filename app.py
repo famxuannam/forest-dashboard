@@ -1805,7 +1805,7 @@ def sync_from_storage(cal_start, cal_end):
     cột, để còn nguyên đó cho lần thử lại sau khi đã sửa Shortcut. Trả về dict kết quả để hiển thị,
     không raise ra ngoài UI."""
     result = {"forest": None, "forest_error": None, "reading": None, "reading_error": None,
-              "calendar": None, "calendar_error": None, "error": None}
+              "calendar": None, "calendar_error": None, "error": None, "forest_file": None}
     try:
         bucket = _get_supabase().storage.from_(_sync_bucket_name())
         files = _list_sync_files()
@@ -1816,6 +1816,11 @@ def sync_from_storage(cal_start, cal_end):
     forest_meta = _latest_sync_file(files, "forest")
     reading_meta = _latest_sync_file(files, "reminder")
     to_delete = []
+    # Tên file Forest ĐANG xét (dù thành công hay lỗi) -- _do_quick_sync() chỉ lưu vào setting
+    # "last_synced_forest_file" khi KHÔNG lỗi (xem đó), dùng để _has_pending_forest_sync() so
+    # sánh quyết định hiện/ẩn nút tròn nổi.
+    if forest_meta:
+        result["forest_file"] = forest_meta["name"]
 
     if forest_meta:
         try:
@@ -1898,10 +1903,30 @@ def _do_quick_sync():
         _parts.append(f"lịch lỗi ({_qres['calendar_error']})"); _has_err = True
     elif _qres["calendar"] is not None:
         _parts.append(f"{_qres['calendar']} appointment lịch")
+    # Chỉ đánh dấu "đã đồng bộ" file Forest này khi KHÔNG lỗi (file lỗi coi như CHƯA nạp thật, phải
+    # còn tính là "đang chờ" để nút tròn nổi tiếp tục hiện, nhắc thử lại sau khi sửa Shortcut) --
+    # dùng bởi _has_pending_forest_sync() để quyết định hiện/ẩn nút, xem _render_nav_sync_fab().
+    if _qres["forest_file"] and not _qres["forest_error"]:
+        save_setting("last_synced_forest_file", _qres["forest_file"])
     save_setting("last_quick_sync_at", datetime.now(APP_TZ).strftime('%Y-%m-%d %H:%M:%S'))
     save_setting("last_quick_sync_summary", ", ".join(_parts) if _parts else "không có gì mới")
     _msg = "Đã đồng bộ: " + ", ".join(_parts) + "." if _parts else "Không có file mới để đồng bộ."
     return _msg, _has_err
+
+
+def _has_pending_forest_sync():
+    """True nếu file Forest mới nhất trong bucket Storage KHÁC TÊN với file Forest đã đồng bộ
+    thành công lần gần nhất (setting "last_synced_forest_file", ghi bởi _do_quick_sync() khi
+    không lỗi) -- dùng để quyết định hiện/ẩn nút tròn nổi theo đúng "còn gì mới chưa nạp không",
+    không phải theo "đã bấm trong phiên này chưa" (xem _render_nav_sync_fab()). So theo TÊN file
+    (không phải created_at) -- Shortcut iOS luôn đặt tên file mới kèm timestamp mỗi lần xuất, nên
+    tên khác nhau là tín hiệu đủ tin cậy để biết có bản mới. Không tải/parse file (chỉ .list()
+    bucket, rẻ) -- việc nạp thật vẫn chỉ chạy khi bấm nút, ở _do_quick_sync()."""
+    files = _list_sync_files()
+    forest_meta = _latest_sync_file(files, "forest")
+    if not forest_meta:
+        return False
+    return forest_meta["name"] != _cached_settings().get("last_synced_forest_file")
 
 
 def _render_nav_sync_fab():
@@ -1924,12 +1949,19 @@ def _render_nav_sync_fab():
     bằng .click() (lập trình gọi .click() vẫn kích hoạt onClick handler bình thường dù ẩn, không
     cần hit-test/hiển thị).
 
-    Ẩn nút sau khi đồng bộ xong (yêu cầu người dùng): session_state "_sync_fab_hidden" bật lên
-    True ngay sau khi _do_quick_sync() chạy xong (bất kể có lỗi hay không -- người dùng chỉ muốn
-    "ấn xong thì ẩn", không phân biệt kết quả), rồi truyền cờ này vào JS mỗi lần rerun để ẩn hẳn
-    phần tử (không chỉ ẩn 1 lần, vì components.html tạo iframe MỚI mỗi rerun nhưng nút vẫn sống
-    trong document cha nên phải tự set lại display mỗi lần theo đúng state hiện tại)."""
-    _fab_hidden = st.session_state.get("_sync_fab_hidden", False)
+    Ẩn nút khi KHÔNG còn file Forest nào đang chờ (_has_pending_forest_sync() == False) -- đây là
+    điều kiện CHÍNH, xác nhận với người dùng: nút chỉ nên hiện khi file export Forest mới nhất
+    khác file đã nạp vào app, ẩn khi đã trùng, dù mới tải lại trang/session mới cũng phải đúng vậy
+    (khác bản trước chỉ ẩn theo cờ session_state, luôn hiện lại mỗi phiên mới dù chẳng có gì mới).
+    Cộng THÊM session_state "_sync_fab_hidden" (giữ từ bản trước) để ẩn NGAY sau khi bấm dù kết quả
+    lỗi hay không -- file lỗi không được ghi "đã đồng bộ" (xem _do_quick_sync()) nên
+    _has_pending_forest_sync() vẫn trả True, cờ session này đảm bảo không hiện lại ngay trong lúc
+    người dùng còn đang xem thông báo lỗi để tự xử lý (đổi Shortcut/tải tay), rồi tự hết tác dụng
+    khi qua session khác. Truyền lại điều kiện gộp này vào JS mỗi lần rerun để ẩn hẳn phần tử
+    (không chỉ ẩn 1 lần, vì components.html tạo iframe MỚI mỗi rerun nhưng nút vẫn sống trong
+    document cha nên phải tự set lại display mỗi lần theo đúng state hiện tại)."""
+    _fab_hidden = (st.session_state.get("_sync_fab_hidden", False)
+                   or not _has_pending_forest_sync())
     st.markdown(
         """<style>.st-key-nav_sync_fab { display: none; }</style>""",
         unsafe_allow_html=True)
