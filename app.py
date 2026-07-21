@@ -7818,6 +7818,13 @@ _MAIN_CSS = """
         overflow: hidden !important;
         flex-grow: 0 !important;
     }
+    /* Khoảng cách xuống Billboard ngay dưới (period_stepper "Tuần"/"Tháng"/"Năm" VÀ day_stepper
+       "Hôm nay") chỉ đúng 10px mặc định -- lệch với chuẩn 12px vừa thống nhất cho cụm Nav ->
+       Sub-tab picker (xem `.st-key-nav`/`.st-key-bc_sub_picker` phía trên, xác nhận qua mockup
+       phương án B) khiến bộ chọn kỳ trông như dính sát billboard ngay dưới ("ăn mất lề bên dưới",
+       xác nhận qua ảnh chụp thật người dùng gửi). Cùng công thức margin-bottom ĐÈ THẲNG lên gap
+       flex 10px chung -> +2px cho tổng 12px, khớp mọi khoảng khác trong cụm header. */
+    [class*="st-key-stepper_"], .st-key-day_stepper { margin-bottom: 2px !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
        mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
