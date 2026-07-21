@@ -7679,11 +7679,14 @@ _MAIN_CSS = """
     [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         background-color: var(--card) !important;
     }
-    /* Giảm khoảng cách dọc xuống Date Picker ngay dưới nav (mặc định 10px margin-bottom của
-       stButtonGroup + 10px gap flex chung = 20px, hơi rộng) -- chỉ scope riêng nav chính. Margin
-       ÂM (không chỉ về 0) để lấn bớt cả gap flex 10px của khối cha -- 2px rồi 0px vẫn còn rộng
-       theo phản hồi thực tế, -6px cho tổng khoảng cách còn ~4px (10px gap - 6px). */
-    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: -6px !important; }
+    /* Khoảng cách dọc xuống nội dung ngay dưới nav (Date Picker/sub-tab picker/billboard tuỳ
+       trang) = margin-bottom của stButtonGroup CỘNG gap flex 10px chung của khối cha (margin-
+       bottom ĐÈ THẲNG lên mặc định 10px của Streamlit, không cộng dồn -- vd -6px cho tổng 4px,
+       +2px cho tổng 12px). Đặt 2px để khớp ĐÚNG khoảng cách "Sub-tab picker -> Billboard" bên
+       dưới (xem `.st-key-bc_sub_picker`) -- xác nhận với người dùng qua mockup 3 phương án
+       (8/12/16px đều nhau): cả 2 khoảng đều phải bằng nhau, đo thật bằng Playwright xác nhận cả
+       2 cùng ra 12px sau khi sửa (trước đó 4px vs 20px, lệch hẳn dù nhìn qua tưởng đã đều). */
+    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
     /* Toggle điều khiển (Khoảng thời gian/Gộp theo/Phân loại...) xuống thẻ biểu đồ ngay dưới, ÁP
        DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_calendar/frag_trend/frag_hourly/
        frag_period_trend/frag_category_bars key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung
@@ -7705,7 +7708,11 @@ _MAIN_CSS = """
        chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên
        dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn). */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
+    /* Không override -> mặc định margin-bottom:10px của stButtonGroup cộng gap flex 10px ra
+       tổng 20px xuống billboard, gấp đôi khoảng "Nav -> sub-tab picker" (12px, xem `.st-key-nav`
+       ở trên) dù nhìn sơ tưởng đã đều -- đo thật bằng Playwright phát hiện lệch hẳn 4px/20px. Đặt
+       cùng 2px để 2 khoảng bằng nhau (12px), khớp phương án B đã chọn trong mockup. */
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
     .st-key-hm_sub_picker [data-testid="stButtonGroup"] button {
