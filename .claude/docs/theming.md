@@ -91,11 +91,28 @@ cách này, không chỉ tin `background` chung là đủ):
   `.st-key-hm_sub_picker`, "Chọn kỳ xem"/"Xem theo") CHỦ Ý giữ nền trong suốt — rule riêng của 2 nơi
   đó phải khớp/thắng đúng độ đặc hiệu của rule tổng quát này (2 attribute + 1 tag = `(0,2,1)`) nếu
   sau này đổi lại, không thì nền `var(--card)` sẽ đè nhầm lên kiểu tab gạch chân.
-- `[data-testid="stExpander"] summary:hover` — Streamlit tự tô 1 màu nền highlight TĨNH riêng khi
-  hover (không phải `secondaryBackgroundColor`, 1 giá trị nội bộ khác hẳn), rule
-  `background:transparent` ở trạng thái KHÔNG hover không cản được vì hover có rule riêng — phải ép
-  `background-color: transparent` (hoặc `var(--token)` khác nếu muốn có màu) ngay trên chính
-  selector `:hover`.
+- `[data-testid="stExpander"] summary:hover` VÀ `details[open] > summary` — Streamlit tự tô 2 màu
+  nền highlight TĨNH RIÊNG BIỆT (khác nhau, khác cả `secondaryBackgroundColor`) cho trạng thái hover
+  và trạng thái đang mở — 2 rule độc lập, sửa 1 KHÔNG tự sửa luôn cái kia (đã từng vá xong hover
+  rồi tưởng xong, ảnh chụp thật cho thấy mở expander ra dù không hover vẫn còn dải nền cũ). Phải ép
+  `background-color: transparent` (hoặc `var(--token)` khác nếu muốn có màu) trên CẢ 2 selector.
+- `div[data-testid="stDownloadButton"] button[kind="secondary"]` (`st.download_button`, "Tải bản
+  sao lưu") — DOM khác `st.button` (`stDownloadButton` không phải `stButton`), rule nền/viền
+  secondary chung chỉ khớp `div[data-testid="stButton"]` nên lọt lưới — phải thêm selector riêng
+  vào CÙNG rule.
+- `[data-testid="stFileUploaderDropzone"] button[kind="secondary"]` (nút "Upload" bên trong
+  dropzone) — nút này KHÔNG nằm trong `div[data-testid="stButton"]` như mọi nút secondary khác
+  trong app (đứng trực tiếp trong dropzone), nên cũng lọt lưới rule chung — cần rule riêng.
+
+**Giới hạn KHÔNG vá được bằng CSS:** `st.dataframe` (bảng "5. Dữ liệu làm việc hiện tại" ở Tuỳ
+biến, `db_view`) vẽ bằng canvas (glide-data-grid) nội bộ của Streamlit, không phải DOM/CSS thường
+— màu ô/hàng đọc thẳng từ theme resolution của Streamlit lúc vẽ pixel, `!important` CSS KHÔNG chạm
+tới được (đã xác nhận qua screenshot: nền hàng vẫn nguyên tông "Giấy ấm" cũ dù mọi thứ xung quanh
+đã đổi đúng). Muốn bảng này theo đúng Bảng màu nền thì phải thay `st.dataframe` bằng bảng HTML tự
+vẽ kiểu `.dtbl` (đã dùng ở mọi bảng số liệu khác trong app, tự theo `var(--token)` đầy đủ) — đổi
+kiến trúc thật sự (mất tính năng chọn hàng native qua checkbox, phải tự làm lại bằng cách khác),
+không phải 1 rule CSS thêm vào như các mục trên. Chưa làm — cần hỏi người dùng trước vì đổi hẳn
+cách hiện thực, không phải fix nhỏ.
 
 ## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
 

@@ -7148,7 +7148,8 @@ _MAIN_CSS = """
         opacity: 0.9;
     }
     
-    div[data-testid="stButton"] button[kind="secondary"] {
+    div[data-testid="stButton"] button[kind="secondary"],
+    div[data-testid="stDownloadButton"] button[kind="secondary"] {
         background-color: var(--card) !important;
         color: var(--accent) !important;
         border-radius: 7px !important;
@@ -7157,6 +7158,10 @@ _MAIN_CSS = """
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
     div[data-testid="stButton"] button { width: 100%; }
+    /* st.download_button ("Tải bản sao lưu") DOM khác st.button (div data-testid="stDownloadButton",
+       không phải "stButton", xem chú thích ở khối "st-key-tbtn_*" min-height phía dưới) -- rule
+       nền/viền secondary phía trên PHẢI khớp thêm selector riêng này, không thì lọt lưới, đứng yên
+       ở nền secondaryBackgroundColor tĩnh của config.toml (xác nhận qua ảnh chụp thật). */
 
     .stSelectbox > div > div, .stTextInput > div > div > input {
         border-radius: 7px !important;
@@ -7167,8 +7172,18 @@ _MAIN_CSS = """
     /* st.file_uploader (Đồng bộ nhanh -> CSV Forest/Shortcuts/Kindle) -- nền dropzone mặc định đọc
        secondaryBackgroundColor TĨNH từ config.toml (trùng --chip gốc chỉ vì lúc thiết kế ban đầu
        chỉ có 1 bảng màu nền khả dĩ), không tự đổi theo Bảng màu nền chọn ở Tuỳ biến -- ép lại bằng
-       var(--chip) cho khớp. */
+       var(--chip) cho khớp. Nút "Upload" (button[kind="secondary"], data-testid=
+       "stBaseButton-secondary") BÊN TRONG dropzone KHÔNG nằm trong div[data-testid="stButton"] như
+       mọi nút secondary khác trong app -- rule chung ("div[data-testid=\"stButton\"]
+       button[kind=\"secondary\"]") không khớp, lọt lưới riêng, vẫn đứng yên ở màu nền TĨNH khác
+       (không phải --chip/--card, 1 giá trị nội bộ khác của Streamlit) -- phải khớp thêm selector
+       riêng ở đây. */
     [data-testid="stFileUploaderDropzone"] { background-color: var(--chip) !important; }
+    [data-testid="stFileUploaderDropzone"] button[kind="secondary"] {
+        background-color: var(--card) !important;
+        color: var(--accent) !important;
+        border: 1px solid var(--border) !important;
+    }
     /* Hộp thoại xác nhận (st.dialog, "Khôi phục dữ liệu"/"Xoá toàn bộ dữ liệu"/"Định dạng JSON
        mẫu") -- nền khối modal mặc định đọc backgroundColor TĨNH từ config.toml (cùng lý do trên),
        "đứng yên" ở đúng tông "Giấy ấm" gốc dù trang phía sau đã đổi hẳn bảng màu nền. Div con đầu
@@ -7288,8 +7303,12 @@ _MAIN_CSS = """
     [data-testid="stExpander"] summary:hover svg,
     [data-testid="stExpander"] summary:hover p { color: var(--accent) !important; }
     /* Mục đang mở: viền dưới + icon chevron chuyển màu accent để dễ nhận biết đang mở dù
-       không hover; giữ màu chữ mặc định để không rối mắt khi nhiều mục cùng mở. */
-    [data-testid="stExpander"] details[open] > summary { border-bottom-color: var(--accent) !important; }
+       không hover; giữ màu chữ mặc định để không rối mắt khi nhiều mục cùng mở. Streamlit CŨNG tự
+       tô 1 màu nền TĨNH riêng cho trạng thái [open] (khác cả màu hover đã vá phía trên VÀ màu nền
+       mặc định đóng) -- vẫn "đứng yên" lạc tông kể cả khi KHÔNG hover, phải ép transparent ở đây
+       nữa mới hết hẳn (xác nhận qua ảnh chụp thật: mở "Dự phòng" ra vẫn thấy dải nền be cũ dù
+       chuột đã rời khỏi hàng, dù hover đã sửa trước đó). */
+    [data-testid="stExpander"] details[open] > summary { background-color: transparent !important; border-bottom-color: var(--accent) !important; }
     [data-testid="stExpander"] details[open] > summary svg { color: var(--accent) !important; }
     /* Cỡ chữ/độ đậm theo đúng mockup "Sổ Tay" (khối "06 · Bảng số liệu"): 17px/700, không kéo
        letter-spacing âm -- bản cũ 1.35rem (21.6px) + letter-spacing -0.4px nặng nề hơn hẳn mockup,
