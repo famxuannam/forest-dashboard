@@ -278,58 +278,107 @@ ACCENT_PRESETS = {
 # -- "image"/"size"/"position" là giá trị CSS thô ghép thẳng vào background-image/size/position
 # qua biến CSS, dùng var(--divider) để tự đổi theo IS_DARK như mọi hoạ tiết khác trong app. "Trơn"
 # dùng image:none (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi
-# lựa chọn, không cần nhánh riêng trong CSS chính. "position" mặc định "0 0" nếu không khai báo
-# (không đổi gì so với 5 preset gốc, chỉ 2 preset mới cần lệch layer để so le). Đúng 8 kiểu, khớp
-# số lượng 8 màu accent (ACCENT_PRESETS) cho cân trong lưới chọn ở Tuỳ biến.
+# lựa chọn, không cần nhánh riêng trong CSS chính. "position" mặc định "0 0" nếu không khai báo.
+#
+# Đợt đổi mới (xác nhận với người dùng qua nhiều vòng mockup gửi duyệt trực tiếp): giữ lại đúng
+# "Trơn"/"Chấm bi" (mặc định quen thuộc), 6 kiểu hình học thuần "giấy kẻ ô" cũ (Kẻ ngang/Kẻ ô
+# vuông/Chấm bi to/Kẻ chấm/Ô vuông nhỏ/Chấm bi so le) bị THAY HẲN bằng 6 hoạ tiết có chủ đề, theo
+# đúng ý muốn "bỏ khuôn tờ giấy" -- Vũ trụ/Tartan/Argyle/Chevron/Quatrefoil/Xương cá. "Chibi Gundam
+# line art" (ý tưởng gốc) không đạt chất lượng tốt bằng CSS/gradient thuần (cần vẽ minh hoạ tay,
+# ngoài khả năng của kỹ thuật lặp hoạ tiết đang dùng trong app) nên không đưa vào; "Burberry"/hoạ
+# tiết vải cụ thể user gửi ảnh cũng KHÔNG sao chép nguyên bảng màu/hoạ tiết có thương hiệu -- chỉ
+# lấy đúng CẤU TRÚC hình học (Tartan/caro nhiều lớp) rồi vẽ lại bằng var(--divider) đơn sắc, tự
+# thích ứng theme như mọi hoạ tiết khác, không dùng màu đặc trưng thương hiệu nào.
+#
+# color-mix(in srgb, var(--divider) 70%, transparent): Chevron/Xương cá phủ ~50% diện tích ô (đậm
+# hơn hẳn các hoạ tiết chấm/kẻ thưa khác nếu dùng thẳng var(--divider) nguyên độ đậm) -- pha loãng
+# còn 70% ngay trong CSS (không cần thêm token màu riêng trong BG_PALETTES) để cân bằng độ đậm thị
+# giác với phần còn lại, đúng mức "Vừa" người dùng chọn qua so sánh trực tiếp 3 mức đậm nhạt.
 BG_PRESETS = {
-    "Chấm bi": {
-        "image": "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)",
-        "size": "20px 20px",
-    },
     "Trơn": {
         "image": "none",
         "size": "auto",
     },
-    "Kẻ ngang": {
-        "image": "repeating-linear-gradient(transparent 0px, transparent 23px, var(--divider) 24px)",
+    "Chấm bi": {
+        "image": "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)",
+        "size": "20px 20px",
+    },
+    "Vũ trụ": {
+        # 6 lớp radial-gradient chấm cỡ khác nhau rải ngẫu nhiên trong 1 ô 120x100 -> lặp lại trông
+        # như tinh vân sao rải rác, không đều tăm tắp như lưới chấm bi thường.
+        "image": ("radial-gradient(1px 1px at 15px 20px, var(--divider), transparent), "
+                   "radial-gradient(1px 1px at 60px 70px, var(--divider), transparent), "
+                   "radial-gradient(1.8px 1.8px at 90px 30px, var(--divider), transparent), "
+                   "radial-gradient(1px 1px at 35px 85px, var(--divider), transparent), "
+                   "radial-gradient(1.4px 1.4px at 110px 55px, var(--divider), transparent), "
+                   "radial-gradient(1px 1px at 5px 55px, var(--divider), transparent)"),
+        "size": "120px 100px",
+    },
+    "Tartan": {
+        # Lưới caro 2 lớp (ngang + dọc), mỗi lớp có 1 vạch dày (var(--divider-2)) + 1 vạch mảnh
+        # (var(--divider)) lệch nhịp trong chu kỳ 90px -> cấu trúc dệt nhiều lớp, KHÔNG dùng bảng
+        # màu camel/đen/trắng/đỏ đặc trưng Burberry (xác nhận với người dùng sau khi gửi ảnh mẫu).
+        "image": ("repeating-linear-gradient(90deg, var(--divider-2) 0 5px, transparent 5px 46px, var(--divider) 46px 48px, transparent 48px 90px), "
+                   "repeating-linear-gradient(0deg, var(--divider-2) 0 5px, transparent 5px 46px, var(--divider) 46px 48px, transparent 48px 90px)"),
         "size": "auto",
     },
-    "Kẻ ô vuông": {
-        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px), "
-                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 22px)"),
+    "Argyle": {
+        # 2 lớp vạch chéo mảnh (45deg/-45deg) cắt nhau -> lưới trám kiểu vải len, cùng nhà với
+        # Tartan nhưng mảnh/thưa hơn hẳn.
+        "image": ("repeating-linear-gradient(45deg, var(--divider) 0 1px, transparent 1px 24px), "
+                   "repeating-linear-gradient(-45deg, var(--divider) 0 1px, transparent 1px 24px)"),
         "size": "auto",
     },
-    "Chấm bi to": {
-        "image": "radial-gradient(circle, var(--divider) 1.6px, transparent 1.6px)",
-        "size": "28px 28px",
+    "Chevron": {
+        # 4 lớp linear-gradient góc 135/225/315/45, 2 lớp sau lệch nửa ô theo trục X -> so le tạo
+        # hình zigzag liên tục (công thức chevron CSS kinh điển). Vị trí PHẢI khai riêng qua
+        # "position" (không nhét được vào chuỗi "image", background-image không nhận toạ độ).
+        "image": ("linear-gradient(135deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(225deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(315deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(45deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%)"),
+        "size": "60px 60px",
+        "position": "0 0, 0 0, 30px 0, 30px 0",
     },
-    "Kẻ chấm": {
-        # Chấm nhỏ lặp dày theo chiều ngang (6px) nhưng thưa theo chiều dọc (24px) -> tự xếp thành
-        # các hàng chấm ngang trông như dòng kẻ chấm chấm, không cần vẽ path riêng.
-        "image": "radial-gradient(circle, var(--divider) 1px, transparent 1px)",
-        "size": "6px 24px",
+    "Quatrefoil": {
+        # 4 vòng tròn viền mỏng đặt ở 4 cạnh ô (trên/dưới/trái/phải), bán kính chồng lấn lớn hơn
+        # nửa cạnh ô -> các cung giao nhau tạo lưới 4 cánh (mắt cáo) kiểu gạch Morocco/kiến trúc
+        # Gothic, không phải chi tiết riêng của 1 thương hiệu nào.
+        "image": ("radial-gradient(circle at 0 30px, transparent 30px, var(--divider) 30px 32px, transparent 32px), "
+                   "radial-gradient(circle at 60px 30px, transparent 30px, var(--divider) 30px 32px, transparent 32px), "
+                   "radial-gradient(circle at 30px 0, transparent 30px, var(--divider) 30px 32px, transparent 32px), "
+                   "radial-gradient(circle at 30px 60px, transparent 30px, var(--divider) 30px 32px, transparent 32px)"),
+        "size": "60px 60px",
     },
-    "Ô vuông nhỏ": {
-        "image": ("repeating-linear-gradient(0deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px), "
-                   "repeating-linear-gradient(90deg, var(--divider) 0px, var(--divider) 1px, transparent 1px, transparent 12px)"),
-        "size": "auto",
-    },
-    "Chấm bi so le": {
-        # 2 lớp radial-gradient CÙNG kích thước ô nhưng lệch nhau nửa ô (position layer 2 = 10px
-        # 10px) -> chấm xếp so le kiểu viên gạch, khác hẳn lưới thẳng hàng của "Chấm bi" gốc.
-        "image": ("radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px), "
-                   "radial-gradient(circle, var(--divider) 1.1px, transparent 1.1px)"),
-        "size": "20px 20px, 20px 20px",
-        "position": "0 0, 10px 10px",
+    "Xương cá": {
+        # CÙNG công thức 4-lớp góc như Chevron nhưng đổi trục lệch từ ngang (X) sang dọc (Y) VÀ
+        # xoay bộ góc đi 90 độ (135/225/315/45 -> 225/315/45/135) -- xoay CSS transform không dùng
+        # được ở đây (background-image không xoay theo transform của phần tử chứa nó), nên phải suy
+        # lại đúng 4 góc + trục lệch bằng tay để ra hình zigzag DỌC (cột lên xuống) thay vì hàng
+        # ngang, tạo cảm giác "xương cá"/herringbone khi ô đủ nhỏ (40px, mật độ cột dày hơn Chevron).
+        "image": ("linear-gradient(225deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(315deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(45deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(135deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%)"),
+        "size": "40px 40px",
+        "position": "0 0, 0 0, 0 20px, 0 20px",
     },
 }
 
-# Bảng màu nền (tab Tuỳ biến -> "4. Giao diện"), người dùng tự chọn -- mỗi entry bundle ĐỦ 7 token
-# (light, dark) dùng để dựng _TOK (xem khối :root gần cuối file): bg/card/card-tl/border/divider/
-# divider-2/chip. Bundle đủ 7 token cùng lúc (không cho đổi rời từng token) để tránh nền mới "đọ
-# màu" với viền/chip cũ -- accent và text/text-2/3/4 CHỦ Ý không nằm trong bundle này, giữ tách
-# biệt như 2 trục cá nhân hoá riêng đã có. "Giấy ấm" PHẢI giữ đúng 7 giá trị gốc (trước khi có
-# bảng màu nền) để không đổi gì cho người dùng chưa từng chọn.
+# Bảng màu nền (tab Tuỳ biến -> "4. Giao diện"), người dùng tự chọn -- mỗi entry bundle ĐỦ 11
+# token (light, dark) dùng để dựng _TOK (xem khối :root gần cuối file): bg/card/card-tl/border/
+# divider/divider-2/chip/text/text-2/text-3/text-4. Bundle đủ 11 token cùng lúc (không cho đổi rời
+# từng token) để tránh nền mới "đọ màu" với viền/chip/chữ cũ. 5 bảng gốc GIỮ ĐÚNG 4 token chữ gốc
+# (#211c13/#f1ece0 v.v., trước đây là hằng số riêng ngoài bundle) để không đổi gì cho người dùng
+# chưa từng chọn. "Giấy ấm" PHẢI giữ đúng giá trị gốc.
+#
+# text/text-2/3/4 TRƯỚC ĐÂY cố định ngoài bundle (tách biệt khỏi Màu nền) -- đổi quyết định này
+# (xác nhận với người dùng, xem mockup 3 phương án màu nền mới gửi duyệt): 3 bảng mới bên dưới
+# (Bầu trời sao/Tường bê tông/Rừng đêm) có nền ĐẬM ngay cả ở "light" theme (ý tưởng người dùng đề
+# xuất trực tiếp: "ngay cả trong light theme vẫn dùng màu nền đậm hơn tạo tương phản"), nên PHẢI tự
+# mang màu chữ SÁNG đi kèm bất kể IS_DARK, khác hẳn 5 bảng gốc (đều dùng đúng cặp chữ tối/sáng theo
+# IS_DARK như trước). "Tường bê tông" vẫn đủ nhạt ở light nên giữ NGUYÊN cặp chữ gốc, không cần
+# màu riêng.
 BG_PALETTES = {
     "Giấy ấm": {
         "bg":        ("#f3efe4", "#1a1712"),
@@ -339,6 +388,10 @@ BG_PALETTES = {
         "divider":   ("rgba(33,28,19,0.14)", "rgba(255,255,255,0.12)"),
         "divider-2": ("rgba(33,28,19,0.2)", "rgba(255,255,255,0.17)"),
         "chip":      ("#ece4d0", "#322c20"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
     },
     "Trắng tinh": {
         "bg":        ("#f6f6f4", "#18181a"),
@@ -348,6 +401,10 @@ BG_PALETTES = {
         "divider":   ("rgba(20,20,22,0.10)", "rgba(255,255,255,0.11)"),
         "divider-2": ("rgba(20,20,22,0.16)", "rgba(255,255,255,0.16)"),
         "chip":      ("#eeeeeb", "#2c2c30"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
     },
     "Xám đá": {
         "bg":        ("#edf0f0", "#15181a"),
@@ -357,6 +414,10 @@ BG_PALETTES = {
         "divider":   ("rgba(15,25,27,0.12)", "rgba(255,255,255,0.11)"),
         "divider-2": ("rgba(15,25,27,0.18)", "rgba(255,255,255,0.16)"),
         "chip":      ("#e2e8e9", "#272d2f"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
     },
     "Xanh đêm": {
         "bg":        ("#eef1f6", "#12151f"),
@@ -366,6 +427,10 @@ BG_PALETTES = {
         "divider":   ("rgba(15,20,35,0.12)", "rgba(255,255,255,0.12)"),
         "divider-2": ("rgba(15,20,35,0.18)", "rgba(255,255,255,0.17)"),
         "chip":      ("#e3e8f1", "#262b3a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
     },
     "Kem lá": {
         "bg":        ("#f0f0e2", "#161a14"),
@@ -375,12 +440,69 @@ BG_PALETTES = {
         "divider":   ("rgba(25,28,15,0.13)", "rgba(255,255,255,0.12)"),
         "divider-2": ("rgba(25,28,15,0.19)", "rgba(255,255,255,0.17)"),
         "chip":      ("#e7e6d1", "#2c3226"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+    },
+    # 3 bảng mới (xác nhận với người dùng qua mockup): "Bầu trời sao"/"Rừng đêm" đậm ngay cả ở
+    # light (chữ sáng CỐ ĐỊNH, không đổi theo IS_DARK) -- "Tường bê tông" vẫn đủ nhạt ở light nên
+    # giữ nguyên cặp chữ gốc.
+    "Bầu trời sao": {
+        "bg":        ("#232a4d", "#0d1024"),
+        "card":      ("#2b3359", "#161a35"),
+        "card-tl":   ("rgba(43,51,89,0.85)", "rgba(22,26,53,0.85)"),
+        "border":    ("#3a4272", "#242a4a"),
+        "divider":   ("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(255,255,255,0.2)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#323a63", "#1a1f3c"),
+        "text":      ("#eef0fb", "#f2f3ff"),
+        "text-2":    ("#b7bcdf", "#c3c7ea"),
+        "text-3":    ("#8b90b8", "#9195c0"),
+        "text-4":    ("#5c6089", "#4b4f75"),
+    },
+    "Tường bê tông": {
+        "bg":        ("#dedad2", "#201f1d"),
+        "card":      ("#eae7e0", "#2b2a27"),
+        "card-tl":   ("rgba(234,231,224,0.85)", "rgba(43,42,39,0.85)"),
+        "border":    ("#c7c2b8", "#3a3835"),
+        "divider":   ("rgba(28,26,22,0.14)", "rgba(255,255,255,0.11)"),
+        "divider-2": ("rgba(28,26,22,0.2)", "rgba(255,255,255,0.16)"),
+        "chip":      ("#dfdbd2", "#333230"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+    },
+    "Rừng đêm": {
+        "bg":        ("#1f3327", "#0d160f"),
+        "card":      ("#294232", "#16211a"),
+        "card-tl":   ("rgba(41,66,50,0.85)", "rgba(22,33,26,0.85)"),
+        "border":    ("#3c5747", "#25382c"),
+        "divider":   ("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(255,255,255,0.2)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#2f4a3a", "#1a2a20"),
+        "text":      ("#eaf2ec", "#eef5f0"),
+        "text-2":    ("#a9c2b2", "#b3cabb"),
+        "text-3":    ("#7d9989", "#84a091"),
+        "text-4":    ("#4f6b5b", "#425c4d"),
     },
 }
 
 # Kiểu thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập với bảng màu nền ở trên, áp dụng chung
 # lên MỌI bảng màu qua 3 token CSS --card-radius/--card-border-w/--card-shadow. "Bo mềm" PHẢI giữ
 # đúng công thức gốc (10px / 1px / box-shadow nhạt hiện tại) để không đổi gì cho người chưa chọn.
+#
+# 3 lựa chọn gốc chỉ cần đúng 3 token trên. 5 lựa chọn mới (xác nhận với người dùng qua mockup)
+# thêm 3 KHOÁ TUỲ CHỌN "bg_override"/"backdrop"/"border_image" (mặc định var(--card)/none/none nếu
+# không khai báo, xem _card_style_vars) -- 2 hiệu ứng "Kính mờ" (kính mờ thật, backdrop-filter +
+# nền bán trong suốt card-tl có sẵn) và "Viền gradient" (viền đổi màu theo Accent) KHÔNG áp được
+# chỉ qua radius/border_w/shadow (hàng chục nơi rải rác trong app tự viết riêng "border: var(
+# --card-border-w) solid var(--border); background: var(--card);" theo TỪNG khối, không có 1 điểm
+# nối chung để đổi border-style/background-image) -- xử lý bằng 1 rule CSS gộp DUY NHẤT, liệt kê
+# lại đúng danh sách selector card đã rà soát (xem rule ngay sau _card_style_vars), đặt SAU mọi
+# rule gốc trong cascade nên tự thắng mà không cần sửa từng nơi. Mặc định var(--card)/none/none
+# khiến rule gộp này vô hại (không đổi gì) với 6 kiểu còn lại.
 CARD_STYLES = {
     "Bo mềm": {
         "radius": "10px",
@@ -396,6 +518,34 @@ CARD_STYLES = {
         "radius": "12px",
         "border_w": "0.5px",
         "shadow": "0 6px 18px rgba(0,0,0,0.12)",
+    },
+    "Viền kép": {
+        "radius": "6px",
+        "border_w": "1px",
+        "shadow": "0 0 0 3px var(--card), 0 0 0 4px var(--border)",
+    },
+    "Nổi mềm": {
+        "radius": "16px",
+        "border_w": "0px",
+        "shadow": "0 2px 4px rgba(0,0,0,0.04), 0 14px 28px rgba(0,0,0,0.09)",
+    },
+    "Đóng dấu": {
+        "radius": "10px",
+        "border_w": "0px",
+        "shadow": "inset 0 2px 6px rgba(0,0,0,0.15)",
+    },
+    "Kính mờ": {
+        "radius": "14px",
+        "border_w": "1px",
+        "shadow": "0 8px 28px rgba(0,0,0,0.10)",
+        "bg_override": "var(--card-tl)",
+        "backdrop": "blur(14px)",
+    },
+    "Viền gradient": {
+        "radius": "12px",
+        "border_w": "2px",
+        "shadow": "none",
+        "border_image": "linear-gradient(135deg, var(--accent), transparent 75%) 1",
     },
 }
 
@@ -413,14 +563,29 @@ CARD_DENSITY = {
 # nút" (html/body/.stApp + iframe Quill, xem _BODY_FONT_FACE/style_quill()) -- KHÔNG áp cho font
 # bảng số liệu (IBM Plex Mono, _TABLE_FONT_FACE) hay font trích dẫn (Cormorant Garamond,
 # _QUOTE_FONT_FACE), vì 2 font đó được chọn có chủ đích riêng theo vai trò nội dung, không phải
-# "giao diện chung" (xác nhận với người dùng). Cả 3 lựa chọn CÙNG họ sans-serif nhân văn trung
-# tính (khác hẳn font trích dẫn viết tay) để không lệch tông "Sổ Tay" dù đổi font thân chữ.
+# "giao diện chung" (xác nhận với người dùng). 3 lựa chọn gốc CÙNG họ sans-serif nhân văn trung
+# tính nên nhìn khá giống nhau -- đã bổ sung thêm 4 font khác dáng hẳn (serif/monospace/hình học/
+# bo tròn, xem chú thích đầy đủ ở _body_font_b64()) theo đúng phản hồi thực tế "không phân biệt
+# được", đổi quyết định "giữ cùng 1 họ font" trước đó (xác nhận với người dùng).
 # "file_prefix" khớp tên file trong assets/fonts/ (vd Inter-Variable-latin.woff2), "family" là tên
 # CSS font-family thật. "Manrope" PHẢI là mặc định (giữ nguyên hiện trạng cho người chưa từng chọn).
 BODY_FONTS = {
     "Manrope": {"family": "Manrope", "file_prefix": "Manrope-Variable"},
     "Inter": {"family": "Inter", "file_prefix": "Inter-Variable"},
     "Public Sans": {"family": "Public Sans", "file_prefix": "PublicSans-Variable"},
+    # 4 lựa chọn thêm (yêu cầu người dùng: 3 font gốc đều là sans-serif nhân văn/grotesque, nhìn
+    # quá giống nhau, cần vài kiểu chữ THẬT SỰ khác dáng) -- mỗi font 1 kiểu dáng riêng biệt, đều
+    # có bản variable (1 file/subset, cùng kiến trúc 3 font gốc) và hỗ trợ sẵn tiếng Việt:
+    # Literata (serif, cảm giác sách/báo), JetBrains Mono (monospace, khác hẳn dáng chữ đều),
+    # Plus Jakarta Sans (sans-serif hình học, vuông vắn hơn Manrope), Nunito (sans-serif bo tròn,
+    # mềm mại hơn hẳn 3 font gốc).
+    "Literata": {"family": "Literata", "file_prefix": "Literata-Variable"},
+    "JetBrains Mono": {"family": "JetBrains Mono", "file_prefix": "JetBrainsMono-Variable"},
+    "Plus Jakarta Sans": {"family": "Plus Jakarta Sans", "file_prefix": "PlusJakartaSans-Variable"},
+    "Nunito": {"family": "Nunito", "file_prefix": "Nunito-Variable"},
+    # Roboto: người dùng chọn thêm riêng (bản variable wght 100-900, cùng kiến trúc, có subset
+    # "vietnamese" -- đã xác minh trước khi tải).
+    "Roboto": {"family": "Roboto", "file_prefix": "Roboto-Variable"},
 }
 
 
@@ -519,9 +684,30 @@ try:
 except Exception:
     IS_DARK = False
 
+# Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT bên dưới (giá trị lạ/preset cũ
+# đã bỏ -> rơi về "Chấm bi" mặc định, không crash).
+_bg_style_name = _cached_settings().get("bg_style", "Chấm bi")
+if _bg_style_name not in BG_PRESETS:
+    _bg_style_name = "Chấm bi"
+BG_STYLE = _bg_style_name
+BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
+BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
+BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
+
+# Bảng màu nền đang chọn -- tính TRƯỚC PLOT_TEXT (ngay dưới), vì từ khi text/text-2/3/4 vào luôn
+# bundle Màu nền (3 bảng mới -- Bầu trời sao/Tường bê tông/Rừng đêm -- tự mang màu chữ riêng, đủ
+# tương phản trên nền đậm ngay cả ở light theme, xác nhận với người dùng), PLOT_TEXT phải đọc
+# đúng theo bảng đang chọn thay vì hằng số IS_DARK trần như trước.
+_bg_palette_name = _cached_settings().get("bg_palette", "Giấy ấm")
+if _bg_palette_name not in BG_PALETTES:
+    _bg_palette_name = "Giấy ấm"
+BG_PALETTE = _bg_palette_name
+
 # Màu chữ trên biểu đồ Plotly (nhãn tổng, đường TB động, ngưỡng độ dài phiên...) -- khớp token
-# --text light/dark (xem _TOK), gom về 1 hằng để không lặp lại literal + IS_DARK ở nhiều nơi.
-PLOT_TEXT = "#f1ece0" if IS_DARK else "#211c13"
+# --text (xem _TOK), gom về 1 hằng để không lặp lại literal + IS_DARK ở nhiều nơi. Đọc từ ĐÚNG
+# bảng màu nền đang chọn (xem BG_PALETTE ở trên) -- không còn literal cố định, vì 3 bảng mới có
+# màu chữ riêng khác hẳn cặp #211c13/#f1ece0 gốc.
+PLOT_TEXT = BG_PALETTES[BG_PALETTE]["text"][1 if IS_DARK else 0]
 
 # Accent (màu nhấn) đang chọn -- fallback "Lam biển" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
 # khi giá trị đã lưu là 1 màu ở bộ preset cũ đã bị thay -- không crash, chỉ lặng lẽ rơi về mặc định
@@ -541,23 +727,6 @@ ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
 TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades() lý do
 # cần biến này thay vì hardcode 1 mức saturation cố định.
-
-# Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT ở trên (giá trị lạ/preset cũ
-# đã bỏ -> rơi về "Chấm bi" mặc định, không crash).
-_bg_style_name = _cached_settings().get("bg_style", "Chấm bi")
-if _bg_style_name not in BG_PRESETS:
-    _bg_style_name = "Chấm bi"
-BG_STYLE = _bg_style_name
-BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
-BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
-BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
-
-# 3 trục cá nhân hoá mới (bảng màu nền/kiểu thẻ/mật độ) -- cùng khuôn fallback an toàn với
-# ACCENT/BG_STYLE ở trên, mỗi trục độc lập, không phụ thuộc 2 trục kia.
-_bg_palette_name = _cached_settings().get("bg_palette", "Giấy ấm")
-if _bg_palette_name not in BG_PALETTES:
-    _bg_palette_name = "Giấy ấm"
-BG_PALETTE = _bg_palette_name
 
 _card_style_name = _cached_settings().get("card_style", "Bo mềm")
 if _card_style_name not in CARD_STYLES:
@@ -7084,15 +7253,22 @@ if not _has_supabase_secrets:
     st.stop()
 
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang font thật tự host
-# (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác), người dùng tự
-# chọn 1 trong 3 (BODY_FONTS, tab Tuỳ biến -> "4. Giao diện", mặc định Manrope). Biến trục (variable
-# font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ payload hơn
-# hẳn vì app dùng nhiều mức đậm nhạt khác nhau (400/500/600/700/800) rải khắp label/nút/chip/nav.
+# (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác lúc CHẠY THẬT;
+# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi nhúng thẳng vào assets/
+# fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 8 (BODY_FONTS, tab Tuỳ
+# biến -> "4. Giao diện", mặc định Manrope) -- 3 font gốc (Manrope/Inter/Public Sans) đều là sans-
+# serif nhân văn/grotesque khá giống nhau, bổ sung thêm 5 font khác hẳn dáng chữ (xác nhận với
+# người dùng): Literata (serif), JetBrains Mono (monospace), Plus Jakarta Sans (sans hình học),
+# Nunito (sans bo tròn), Roboto (sans neo-grotesque phổ biến, người dùng chọn thêm riêng). Biến
+# trục (variable font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight --
+# đỡ payload hơn hẳn vì app dùng nhiều mức đậm nhạt khác nhau (400/500/600/700/800) rải khắp
+# label/nút/chip/nav -- cả 8 font đều có bản variable phủ đủ dải này (đã xác minh trước khi tải).
 # 3 file riêng theo unicode-range (latin/latin-ext/vietnamese, bỏ cyrillic/hy lạp không dùng tới)
-# đúng cách Google Fonts tự chia subset cho CẢ 3 font (cùng bộ unicode-range, đã xác minh) -- BẮT
+# đúng cách Google Fonts tự chia subset cho MỌI font (cùng bộ unicode-range, đã xác minh) -- BẮT
 # BUỘC có "vietnamese" (khác _LOGO_FONT_FACE chỉ cần "latin" vì wordmark "Forest"/"Dashboard" là
-# tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app. CHỈ tải/nhúng ĐÚNG 1
-# font đang chọn (không nhúng sẵn cả 3) để không đội payload trang lên gấp 3 lần vô ích.
+# tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app -- đã xác minh cả 8
+# font đều có subset "vietnamese" trước khi chọn. CHỈ tải/nhúng ĐÚNG 1 font đang chọn (không nhúng
+# sẵn cả 8) để không đội payload trang lên vô ích.
 @st.cache_resource
 def _body_font_b64(file_prefix):
     out = {}
@@ -7180,25 +7356,26 @@ _QUOTE_FONT_FACE = "".join(
 # con + f-string HTML rải rác) -- (light, dark). Hệ "Sổ Tay": giấy ấm/ngà thay vì xám hệ thống
 # iOS -- không còn đối xứng với bảng systemGray của Apple như bản cũ, mỗi cặp light/dark ở đây
 # chọn tay theo đúng bản thiết kế "Sổ Tay" (xem design handoff).
-# 7 token bg/card/card-tl/border/chip/divider/divider-2 đến từ BG_PALETTES[BG_PALETTE] (tab Tuỳ
-# biến -> "4. Giao diện", bundle đủ 7 token cùng lúc để không lệch tông) -- text/text-2/3/4 CHỦ Ý
-# giữ cố định, KHÔNG nằm trong bảng màu nền, vì là 1 trục cá nhân hoá riêng (không có).
+# 11 token bg/card/card-tl/border/chip/divider/divider-2/text/text-2/text-3/text-4 đến từ
+# BG_PALETTES[BG_PALETTE] (tab Tuỳ biến -> "4. Giao diện", bundle đủ 11 token cùng lúc để không
+# lệch tông) -- text/text-2/3/4 TRƯỚC ĐÂY cố định ngoài bundle, đã chuyển vào bundle (xem chú
+# thích BG_PALETTES) để 3 bảng đậm mới (Bầu trời sao/Rừng đêm) tự mang màu chữ sáng phù hợp.
 _TOK = dict(BG_PALETTES[BG_PALETTE])
-_TOK.update({
-    "text":    ("#211c13", "#f1ece0"),
-    "text-2":  ("#6f6650", "#b3a688"),   # nhãn phụ (gộp cả #6e6e73/#9a9aa0 cũ)
-    "text-3":  ("#a39877", "#857a5f"),   # nhãn mờ (gộp cả #a7a7ac cũ)
-    "text-4":  ("#cabf9d", "#4f483a"),   # rất mờ (gộp cả #cfcfd4/#d2d2d7 cũ)
-})
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 # --card-radius/--card-border-w/--card-shadow (kiểu thẻ) và --card-pad/--card-gap (mật độ) -- 2
 # trục độc lập với bảng màu nền, xem CARD_STYLES/CARD_DENSITY. Áp cho nhóm "thẻ nội dung chung"
 # (.sec-card, .hmtl-card, .dtl-card, container chuẩn...) -- KHÔNG áp --card-pad/--card-gap cho
 # thẻ có padding tinh chỉnh riêng theo nội dung đặc thù (.quotes-card, .dtl-track...).
+# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho "Kính mờ"/"Viền
+# gradient" (xem CARD_STYLES) -- mặc định var(--card)/none/none, vô hại với 6 kiểu còn lại. Áp qua
+# 1 rule gộp riêng ngay dưới đây (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
 _card_style_vars = (
     f"--card-radius:{CARD_STYLES[CARD_STYLE]['radius']};"
     f"--card-border-w:{CARD_STYLES[CARD_STYLE]['border_w']};"
     f"--card-shadow:{CARD_STYLES[CARD_STYLE]['shadow']};"
+    f"--card-bg-override:{CARD_STYLES[CARD_STYLE].get('bg_override', 'var(--card)')};"
+    f"--card-backdrop:{CARD_STYLES[CARD_STYLE].get('backdrop', 'none')};"
+    f"--card-border-image:{CARD_STYLES[CARD_STYLE].get('border_image', 'none')};"
     f"--card-pad:{CARD_DENSITY[CARD_DENSITY_NAME]['pad']};"
     f"--card-gap:{CARD_DENSITY[CARD_DENSITY_NAME]['gap']};"
 )
@@ -8705,6 +8882,31 @@ _MAIN_CSS = """
     @keyframes sync-fab-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @media (max-width: 640px) {
         #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
+    }
+
+    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- "Kính mờ"/"Viền gradient" (xem CARD_STYLES, _card_style_vars)
+       cần thêm background/backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc,
+       nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/hmtl-card/glass-card/
+       sec-card/quotes-card/help-tl-item/nhóm st-key-tb_*_card/note_card/jcard*/kqgroup_fav_...) mỗi
+       khối tự viết riêng "background: var(--card); border: var(--card-border-w) solid
+       var(--border);" theo TỪNG rule, không có 1 điểm nối chung để đổi background-image/backdrop.
+       Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
+       soát ở đây, đặt SAU CÙNG trong cascade (cuối _MAIN_CSS) nên tự thắng theo thứ tự nguồn dù
+       cùng độ đặc hiệu -- 3 token --card-bg-override/--card-backdrop/--card-border-image mặc định
+       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 6 kiểu thẻ còn lại,
+       không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
+       !important (vd rule stExpander details). */
+    .dtl-card, .dtbl-wrap, .catbars-card, .hmtl-card, .glass-card, .sec-card, .quotes-card,
+    .help-tl-item,
+    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details,
+    [class*="st-key-help_faq"] [data-testid="stExpander"] details,
+    .st-key-tb_quick_sync_card, .st-key-tb_mapping_card, .st-key-tb_theme_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
+    [class*="st-key-kqgroup_fav_"] {
+        background: var(--card-bg-override) !important;
+        backdrop-filter: var(--card-backdrop) !important;
+        border-image: var(--card-border-image) !important;
     }
     </style>
     """
@@ -10544,31 +10746,38 @@ elif nav == "Tuỳ biến":
                     "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
                     "Màu nền</div>", unsafe_allow_html=True)
         _pal_items = list(BG_PALETTES.items())
-        _pal_per_row = 5  # đúng 5 bảng -> 1 hàng duy nhất, không cần chia 2 hàng như accent/hoạ tiết
+        _pal_per_row = 4  # 8 bảng / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục màu accent ở trên
         _pal_css = "<style>"
-        _pal_cols = st.columns(_pal_per_row)
-        for _pal_i, (_pal_name, _pal_tok) in enumerate(_pal_items):
-            _pal_key = f"bgpal_sw_{_pal_i}"
-            _pal_selected = _pal_name == BG_PALETTE
-            _pal_bg = _pal_tok["bg"][1] if IS_DARK else _pal_tok["bg"][0]
-            _pal_card = _pal_tok["card"][1] if IS_DARK else _pal_tok["card"][0]
-            _pal_border_c = _pal_tok["border"][1] if IS_DARK else _pal_tok["border"][0]
-            _pal_ring = "var(--accent)" if _pal_selected else _pal_border_c
-            _pal_label = f"✓ {_pal_name}" if _pal_selected else _pal_name
-            # Xem trước chia chéo 2 màu bg/card thật của bảng (giống cách nút hoạ tiết ở dưới dùng
-            # đúng background-image thật) -- người dùng thấy được cả 2 lớp nền/thẻ trước khi chọn.
-            _pal_css += (
-                f".st-key-{_pal_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                f"background: linear-gradient(135deg, {_pal_bg} 50%, {_pal_card} 50%) !important; "
-                f"color: var(--text) !important; border:2px solid {_pal_ring} !important; "
-                f"border-radius:10px !important; width:100% !important; height:auto !important; "
-                f"min-height:56px !important; padding:8px 6px !important; font-weight:600 !important; "
-                f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
-            with _pal_cols[_pal_i]:
-                if st.button(_pal_label, key=_pal_key, use_container_width=True):
-                    if _pal_name != BG_PALETTE:
-                        save_setting("bg_palette", _pal_name)
-                        st.rerun()
+        for _pal_row_start in range(0, len(_pal_items), _pal_per_row):
+            _pal_row_items = _pal_items[_pal_row_start:_pal_row_start + _pal_per_row]
+            _pal_cols = st.columns(_pal_per_row)
+            for _pal_i, (_pal_name, _pal_tok) in enumerate(_pal_row_items):
+                _idx = _pal_row_start + _pal_i
+                _pal_key = f"bgpal_sw_{_idx}"
+                _pal_selected = _pal_name == BG_PALETTE
+                _pal_bg = _pal_tok["bg"][1] if IS_DARK else _pal_tok["bg"][0]
+                _pal_card = _pal_tok["card"][1] if IS_DARK else _pal_tok["card"][0]
+                _pal_border_c = _pal_tok["border"][1] if IS_DARK else _pal_tok["border"][0]
+                _pal_text_c = _pal_tok["text"][1] if IS_DARK else _pal_tok["text"][0]
+                _pal_ring = "var(--accent)" if _pal_selected else _pal_border_c
+                _pal_label = f"✓ {_pal_name}" if _pal_selected else _pal_name
+                # Xem trước chia chéo 2 màu bg/card thật của bảng (giống cách nút hoạ tiết ở dưới dùng
+                # đúng background-image thật) -- người dùng thấy được cả 2 lớp nền/thẻ trước khi chọn.
+                # Màu chữ trên nút đọc ĐÚNG "text" của bảng đó (không phải var(--text) cố định của
+                # bảng đang active) -- 3 bảng mới (Bầu trời sao/Rừng đêm) có chữ sáng cố định khác
+                # hẳn 5 bảng gốc, để tên nút vẫn đọc được trên nền preview đậm của chính nó.
+                _pal_css += (
+                    f".st-key-{_pal_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background: linear-gradient(135deg, {_pal_bg} 50%, {_pal_card} 50%) !important; "
+                    f"color: {_pal_text_c} !important; border:2px solid {_pal_ring} !important; "
+                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
+                    f"min-height:56px !important; padding:8px 6px !important; font-weight:600 !important; "
+                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important; }}")
+                with _pal_cols[_pal_i]:
+                    if st.button(_pal_label, key=_pal_key, use_container_width=True):
+                        if _pal_name != BG_PALETTE:
+                            save_setting("bg_palette", _pal_name)
+                            st.rerun()
         _pal_css += "</style>"
         st.markdown(_pal_css, unsafe_allow_html=True)
 
@@ -10611,27 +10820,34 @@ elif nav == "Tuỳ biến":
                     "letter-spacing:0.5px;color:var(--text);margin-bottom:14px;'>"
                     "Kiểu thẻ</div>", unsafe_allow_html=True)
         _cs_items = list(CARD_STYLES.items())
-        _cs_cols = st.columns(len(_cs_items))
+        _cs_per_row = 4  # 8 kiểu / 4 mỗi hàng -> đúng 2 hàng đều, khớp bố cục accent/màu nền/hoạ tiết
         _cs_css = "<style>"
-        for _cs_i, (_cs_name, _cs_cfg) in enumerate(_cs_items):
-            _cs_key = f"cardstyle_sw_{_cs_i}"
-            _cs_selected = _cs_name == CARD_STYLE
-            _cs_ring = "var(--accent)" if _cs_selected else "var(--border)"
-            _cs_label = f"✓ {_cs_name}" if _cs_selected else _cs_name
-            # Nút xem trước tự áp ĐÚNG radius/độ dày viền/đổ bóng của kiểu đó lên chính nó.
-            _cs_css += (
-                f".st-key-{_cs_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                f"background-color: var(--card) !important; color: var(--text) !important; "
-                f"border:{_cs_cfg['border_w']} solid {_cs_ring} !important; "
-                f"border-radius:{_cs_cfg['radius']} !important; box-shadow:{_cs_cfg['shadow']} !important; "
-                f"width:100% !important; height:auto !important; min-height:48px !important; "
-                f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
-                f"white-space:normal !important; line-height:1.25 !important; }}")
-            with _cs_cols[_cs_i]:
-                if st.button(_cs_label, key=_cs_key, use_container_width=True):
-                    if _cs_name != CARD_STYLE:
-                        save_setting("card_style", _cs_name)
-                        st.rerun()
+        for _cs_row_start in range(0, len(_cs_items), _cs_per_row):
+            _cs_row_items = _cs_items[_cs_row_start:_cs_row_start + _cs_per_row]
+            _cs_cols = st.columns(_cs_per_row)
+            for _cs_i, (_cs_name, _cs_cfg) in enumerate(_cs_row_items):
+                _idx = _cs_row_start + _cs_i
+                _cs_key = f"cardstyle_sw_{_idx}"
+                _cs_selected = _cs_name == CARD_STYLE
+                _cs_ring = "var(--accent)" if _cs_selected else "var(--border)"
+                _cs_label = f"✓ {_cs_name}" if _cs_selected else _cs_name
+                # Nút xem trước tự áp ĐÚNG radius/độ dày viền/đổ bóng của kiểu đó lên chính nó.
+                # "Kính mờ"/"Viền gradient" cần thêm thuộc tính ngoài 3 token gốc (backdrop-filter/
+                # background-image viền) -- xem CARD_STYLES, đọc thêm "extra_css" nếu có.
+                _cs_css += (
+                    f".st-key-{_cs_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
+                    f"background-color: var(--card) !important; color: var(--text) !important; "
+                    f"border:{_cs_cfg['border_w']} solid {_cs_ring} !important; "
+                    f"border-radius:{_cs_cfg['radius']} !important; box-shadow:{_cs_cfg['shadow']} !important; "
+                    f"width:100% !important; height:auto !important; min-height:48px !important; "
+                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
+                    f"white-space:normal !important; line-height:1.25 !important; "
+                    f"{_cs_cfg.get('extra_css', '')} }}")
+                with _cs_cols[_cs_i]:
+                    if st.button(_cs_label, key=_cs_key, use_container_width=True):
+                        if _cs_name != CARD_STYLE:
+                            save_setting("card_style", _cs_name)
+                            st.rerun()
         _cs_css += "</style>"
         st.markdown(_cs_css, unsafe_allow_html=True)
 
