@@ -7277,7 +7277,14 @@ _MAIN_CSS = """
         border-radius: 0 !important;
         transition: color 0.15s ease, border-color 0.15s ease !important;
     }
-    [data-testid="stExpander"] summary:hover { border-bottom-color: var(--accent) !important; }
+    /* Streamlit tự tô riêng 1 màu nền highlight TĨNH (đọc theme .streamlit/config.toml, không
+       phải secondaryBackgroundColor mà 1 giá trị nội bộ khác) lên <summary> khi hover -- rule
+       "background:transparent" ở [data-testid="stExpander"] phía trên KHÔNG cản được vì đó chỉ là
+       trạng thái mặc định, còn hover có rule riêng của Streamlit specificity cao hơn. Không tự đổi
+       theo Bảng màu nền/Màu accent, lạc tông ngay khi rời "Giấy ấm" gốc (xác nhận qua ảnh chụp
+       thật). Ép lại trong suốt để khớp trạng thái không-hover, viền dưới + màu chữ đổi sang accent
+       (2 rule ngay dưới) đã đủ báo hiệu đang hover, không cần thêm nền. */
+    [data-testid="stExpander"] summary:hover { background-color: transparent !important; border-bottom-color: var(--accent) !important; }
     [data-testid="stExpander"] summary:hover svg,
     [data-testid="stExpander"] summary:hover p { color: var(--accent) !important; }
     /* Mục đang mở: viền dưới + icon chevron chuyển màu accent để dễ nhận biết đang mở dù
@@ -7355,11 +7362,17 @@ _MAIN_CSS = """
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
-    /* Nút CHƯA chọn trên nav chính: nền kem var(--card) khớp màu mọi card bên dưới (mặc định
-       Streamlit/BaseWeb không đặt nền riêng cho nút segmented_control chưa chọn, rơi về nền
-       trắng/xám trung tính của theme, lệch tông khỏi hệ "Sổ Tay"). Chỉ áp cho nav chính, không
-       đụng các segmented_control khác (bộ lọc biểu đồ...) -- những nơi đó chưa có yêu cầu đổi. */
-    .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+    /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
+       thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
+       định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
+       tính TĨNH của theme -- không tự đổi theo Bảng màu nền chọn ở Tuỳ biến, lạc tông ngay khi
+       chọn 1 bảng màu khác "Giấy ấm" gốc, xác nhận qua ảnh chụp thật người dùng gửi). TRƯỚC ĐÂY
+       chỉ áp cho nav chính (any lý do: "những nơi đó chưa có yêu cầu đổi") -- giờ áp CHUNG cho mọi
+       [data-testid="stButtonGroup"] vì cùng 1 nguyên nhân gốc, không có lý do giữ khác biệt. Mọi
+       segmented_control lọc biểu đồ trong app đều đứng NGOÀI card nội dung (trong 1
+       st.container(key=f"chartopt_...") riêng, không lồng trong .catbars-card/card khác), giống
+       hệt vị trí nav trên nền trang -- var(--card) không bị lẫn/mờ vào card cha nào cả. */
+    [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         background-color: var(--card) !important;
     }
     /* Giảm khoảng cách dọc xuống Date Picker ngay dưới nav (mặc định 10px margin-bottom của
@@ -7390,7 +7403,8 @@ _MAIN_CSS = """
     .st-key-bc_sub_picker, .st-key-hm_sub_picker { width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
-    .st-key-bc_sub_picker button, .st-key-hm_sub_picker button {
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
+    .st-key-hm_sub_picker [data-testid="stButtonGroup"] button {
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
         color: var(--text-2) !important; padding: 8px 4px !important; margin: 0 14px !important;

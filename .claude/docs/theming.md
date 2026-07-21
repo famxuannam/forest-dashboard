@@ -83,6 +83,19 @@ cách này, không chỉ tin `background` chung là đủ):
   — mặc định tô `primaryColor` tĩnh, ép lại `var(--accent)`. Y hệt lỗi `st.tabs()`/segmented
   control đã vá trước đó (`[data-testid="stTab"][aria-selected="true"]`,
   `.react-aria-SelectionIndicator`) — cùng 1 nguyên nhân gốc.
+- `[data-testid="stButtonGroup"] button:not([data-selected="true"])` (nút CHƯA chọn trong MỌI
+  `st.segmented_control`, không riêng nav chính) — mặc định rơi về nền theme trung tính TĨNH, ép
+  `background-color: var(--card)`. Bản đầu tiên của rule này CHỈ scope `.st-key-nav` ("chưa có yêu
+  cầu đổi" ở nơi khác) — đã tổng quát hoá lên MỌI `stButtonGroup` sau khi phát hiện lệch tông ở bộ
+  lọc "Phân loại" (Nhóm/Dự án). 2 nơi tab kiểu gạch chân dưới (`.st-key-bc_sub_picker`/
+  `.st-key-hm_sub_picker`, "Chọn kỳ xem"/"Xem theo") CHỦ Ý giữ nền trong suốt — rule riêng của 2 nơi
+  đó phải khớp/thắng đúng độ đặc hiệu của rule tổng quát này (2 attribute + 1 tag = `(0,2,1)`) nếu
+  sau này đổi lại, không thì nền `var(--card)` sẽ đè nhầm lên kiểu tab gạch chân.
+- `[data-testid="stExpander"] summary:hover` — Streamlit tự tô 1 màu nền highlight TĨNH riêng khi
+  hover (không phải `secondaryBackgroundColor`, 1 giá trị nội bộ khác hẳn), rule
+  `background:transparent` ở trạng thái KHÔNG hover không cản được vì hover có rule riêng — phải ép
+  `background-color: transparent` (hoặc `var(--token)` khác nếu muốn có màu) ngay trên chính
+  selector `:hover`.
 
 ## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
 
