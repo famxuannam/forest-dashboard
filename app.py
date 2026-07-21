@@ -2887,7 +2887,7 @@ def _explode_session_hours(scope_df, key_col):
     return pd.DataFrame(out, columns=[key_col, 'Khung giờ', 'giờ'])
 
 
-def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
+def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)", key_prefix=None):
     if scope_df.empty:
         return
     num_days = scope_df['Ngày'].nunique() or 1
@@ -2927,7 +2927,16 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
                       xaxis=dict(range=[-PAD, 23 + PAD], dtick=2))
     fig = format_plotly_fig(fig)
     fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}/ngày<extra></extra>')
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    if key_prefix is None:
+        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+        return
+    _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
+    _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+                            on_select="rerun", selection_mode="points",
+                            key=f"{key_prefix}_sel_{_ver}")
+    _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                    if color_col == "Dự án" else None)
+    _plotly_click_jump(fig, _sel, f"{key_prefix}_sel_ver", color_col, _proj_to_cat)
 
 
 def _streak_stats(streak_df):
@@ -3188,6 +3197,33 @@ def _proj_link_kind(nhom, ten):
     if nhom == GUNDAM_TAG:
         return "gundam"
     return "proj"
+
+
+def _plotly_click_jump(fig, sel, sel_ver_key, ccol, proj_to_cat=None):
+    """Xử lý click 1 cột trên biểu đồ Xu hướng/Theo khung giờ (tô theo Nhóm/Dự án,
+    render_trend_fig/render_hourly_chart) -- điều hướng sang "Báo cáo -> Dự án" đúng Nhóm/Dự án
+    đã click, qua cờ _bc_sub_jump/_grp_sel_jump (xem 2 nơi xử lý cờ này, tránh
+    StreamlitAPIException vì widget đã instantiate cùng lượt chạy). Lọc chỉ nhận click trên
+    trace kiểu 'bar' (px.bar tạo đúng 1 trace/giá trị color_col, fig.data[i].name = tên Nhóm/Dự
+    án) -- loại trace phụ cùng fig (đường TB động 7 ngày, nhãn "Tổng", chấm "Tổng cộng" giờ
+    theo khung giờ) không mang nghĩa Nhóm/Dự án, click vào đó phải bỏ qua.
+
+    sel_ver_key: session_state key giữ SỐ HẬU TỐ của key truyền vào st.plotly_chart() ở call
+    site (vd f"{key_prefix}_sel_{ver}") -- tăng lên 1 SAU KHI tiêu thụ click để lần render sau
+    dùng 1 key MỚI, selection rỗng -- Streamlit không cho "xoá" selection cũ qua session_state
+    (chỉ đọc), đổi key là cách duy nhất để tránh click cũ tự fire lại điều hướng khi quay lại
+    đúng biểu đồ đó."""
+    _pts = sel["selection"]["points"] if sel else []
+    _bar_pts = [p for p in _pts if fig.data[p["curve_number"]].type == "bar"]
+    if not _bar_pts:
+        return
+    _clicked = fig.data[_bar_pts[0]["curve_number"]].name
+    _nhom = proj_to_cat.get(_clicked) if proj_to_cat is not None else None
+    _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_nhom, _clicked)
+    st.session_state[sel_ver_key] = st.session_state.get(sel_ver_key, 0) + 1
+    st.session_state["_bc_sub_jump"] = "Dự án"
+    st.session_state["_grp_sel_jump"] = (_kind, _clicked)
+    st.rerun()
 
 
 def _quick_notes_on(qn_df, day):
@@ -6587,7 +6623,13 @@ def frag_trend(scope_df, key_prefix, default_color):
         if tcol == "Ngày":
             g['Ngày'] = pd.to_datetime(g['Ngày'])
         fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+        _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
+        _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+                                on_select="rerun", selection_mode="points",
+                                key=f"{key_prefix}_sel_{_ver}")
+        _proj_to_cat = (dft.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                        if ccol == "Dự án" else None)
+        _plotly_click_jump(fig, _sel, f"{key_prefix}_sel_ver", ccol, _proj_to_cat)
 
 
 @st.fragment
@@ -6609,7 +6651,7 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
         else:
             ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color,
                                          key=f"{key_prefix}_color", label_visibility="collapsed")
-        render_hourly_chart(scope_df, ccol or default_color)
+        render_hourly_chart(scope_df, ccol or default_color, key_prefix=key_prefix)
 
 
 @st.fragment
@@ -6659,7 +6701,13 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
         if group_col == 'Ngày':
             g['Ngày'] = pd.to_datetime(g['Ngày'])
         fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+        _ver = st.session_state.get(f"{key}_sel_ver", 0)
+        _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+                                on_select="rerun", selection_mode="points",
+                                key=f"{key}_sel_{_ver}")
+        _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                        if ccol == "Dự án" else None)
+        _plotly_click_jump(fig, _sel, f"{key}_sel_ver", ccol, _proj_to_cat)
 
 
 @st.fragment
@@ -8940,7 +8988,21 @@ BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
 BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material/calendar_view_month:",
                         "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
                         "Dự án": ":material/folder:"}
-if "bc_sub" not in st.session_state:
+
+# Click biểu đồ Xu hướng/Theo khung giờ (render_trend_fig/render_hourly_chart) nhảy sang sub-tab
+# "Dự án" qua cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["bc_sub_picker"] tại chỗ
+# bấm, vì widget segmented_control (key="bc_sub_picker", dòng dưới) đã instantiate rồi trong
+# CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở _hm_sub_jump) -- phải set TRƯỚC
+# dòng segmented_control, nên xử lý ở đây, đầu dispatch, trước khi "bc_sub" tự đọc query param.
+# Set CẢ 2 key (bc_sub_picker VÀ bc_sub, giống hệt _hm_sub_jump set cả hm_sub_picker/hm_sub) vì
+# "bc_sub" tuy không phải key widget nhưng segmented_control CHỈ đọc default= khi key CHƯA từng
+# có giá trị -- đã ghé "Báo cáo" 1 lần trong phiên thì bc_sub_picker đã có state riêng, set mỗi
+# bc_sub sẽ không đổi được tab đang hiện.
+if "_bc_sub_jump" in st.session_state:
+    _bc_jump = st.session_state.pop("_bc_sub_jump")
+    st.session_state["bc_sub_picker"] = _bc_jump
+    st.session_state["bc_sub"] = _bc_jump
+elif "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
     st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
 if nav == "Báo cáo":
