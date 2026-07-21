@@ -365,20 +365,28 @@ BG_PRESETS = {
     },
 }
 
-# Bảng màu nền (tab Tuỳ biến -> "4. Giao diện"), người dùng tự chọn -- mỗi entry bundle ĐỦ 11
+# Bảng màu nền (tab Tuỳ biến -> "4. Giao diện"), người dùng tự chọn -- mỗi entry bundle ĐỦ 13
 # token (light, dark) dùng để dựng _TOK (xem khối :root gần cuối file): bg/card/card-tl/border/
-# divider/divider-2/chip/text/text-2/text-3/text-4. Bundle đủ 11 token cùng lúc (không cho đổi rời
-# từng token) để tránh nền mới "đọ màu" với viền/chip/chữ cũ. 5 bảng gốc GIỮ ĐÚNG 4 token chữ gốc
-# (#211c13/#f1ece0 v.v., trước đây là hằng số riêng ngoài bundle) để không đổi gì cho người dùng
-# chưa từng chọn. "Giấy ấm" PHẢI giữ đúng giá trị gốc.
+# divider/divider-2/chip/text/text-2/text-3/text-4/text-on-bg/text-on-bg-2. Bundle cùng lúc (không
+# cho đổi rời từng token) để tránh nền mới "đọ màu" với viền/chip/chữ cũ. 5 bảng gốc GIỮ ĐÚNG 4
+# token chữ gốc (#211c13/#f1ece0 v.v., trước đây là hằng số riêng ngoài bundle) để không đổi gì cho
+# người dùng chưa từng chọn. "Giấy ấm" PHẢI giữ đúng giá trị gốc.
 #
-# text/text-2/3/4 TRƯỚC ĐÂY cố định ngoài bundle (tách biệt khỏi Màu nền) -- đổi quyết định này
-# (xác nhận với người dùng, xem mockup 3 phương án màu nền mới gửi duyệt): 3 bảng mới bên dưới
-# (Bầu trời sao/Tường bê tông/Rừng đêm) có nền ĐẬM ngay cả ở "light" theme (ý tưởng người dùng đề
-# xuất trực tiếp: "ngay cả trong light theme vẫn dùng màu nền đậm hơn tạo tương phản"), nên PHẢI tự
-# mang màu chữ SÁNG đi kèm bất kể IS_DARK, khác hẳn 5 bảng gốc (đều dùng đúng cặp chữ tối/sáng theo
-# IS_DARK như trước). "Tường bê tông" vẫn đủ nhạt ở light nên giữ NGUYÊN cặp chữ gốc, không cần
-# màu riêng.
+# text/text-2/3/4: LUÔN là màu chữ dùng BÊN TRONG thẻ/card (nền var(--card)) -- cả 8 bảng đều dùng
+# thẻ SÁNG + chữ TỐI (yêu cầu trực tiếp của người dùng: "ở các màu nền tối như bầu trời sao hay
+# rừng đêm, tôi muốn nó vẫn là light theme, các card vẫn có màu sáng và chữ màu tối"), nên 8 bảng
+# đều dùng chung đúng 1 cặp chữ tối/sáng theo IS_DARK như 5 bảng gốc -- không còn khác biệt riêng
+# cho 3 bảng mới ở nhóm token này nữa (bản trước đây từng để "card"/"text" của Bầu trời sao/Rừng
+# đêm tối theo màu nền, đã đổi lại theo phản hồi này).
+#
+# text-on-bg/text-on-bg-2: token MỚI, chỉ dùng cho phần chữ nằm TRỰC TIẾP trên nền trang
+# (var(--bg), NGOÀI mọi card) -- ví dụ wordmark "Forest/Dashboard" ở header (_wordmark_html()), text
+# phụ ở màn đăng nhập (_login_txt2). 5 bảng gốc + "Tường bê tông" (nền đủ nhạt ở light) dùng LUÔN
+# cặp text/text-2 (không có gì khác biệt). "Bầu trời sao"/"Rừng đêm" có var(--bg) đậm CỐ ĐỊNH bất kể
+# IS_DARK (ý tưởng người dùng đề xuất: "ngay cả trong light theme vẫn dùng màu nền đậm hơn tạo
+# tương phản") nên 2 bảng này cần cặp text-on-bg/text-on-bg-2 SÁNG cố định riêng (không đổi theo
+# IS_DARK, y hệt cặp "text" cũ của 2 bảng này trước khi đổi sang light theme ở trên) để chữ trên nền
+# đậm luôn đọc được, tách biệt hẳn khỏi cặp text/text-2 tối giờ dùng cho bên trong card.
 BG_PALETTES = {
     "Giấy ấm": {
         "bg":        ("#f3efe4", "#1a1712"),
@@ -392,6 +400,8 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
     "Trắng tinh": {
         "bg":        ("#f6f6f4", "#18181a"),
@@ -405,6 +415,8 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
     "Xám đá": {
         "bg":        ("#edf0f0", "#15181a"),
@@ -418,6 +430,8 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
     "Xanh đêm": {
         "bg":        ("#eef1f6", "#12151f"),
@@ -431,6 +445,8 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
     "Kem lá": {
         "bg":        ("#f0f0e2", "#161a14"),
@@ -444,22 +460,28 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    # 3 bảng mới (xác nhận với người dùng qua mockup): "Bầu trời sao"/"Rừng đêm" đậm ngay cả ở
-    # light (chữ sáng CỐ ĐỊNH, không đổi theo IS_DARK) -- "Tường bê tông" vẫn đủ nhạt ở light nên
-    # giữ nguyên cặp chữ gốc.
+    # "Bầu trời sao"/"Rừng đêm": var(--bg) đậm CỐ ĐỊNH bất kể IS_DARK (ý tưởng người dùng), nhưng
+    # card/border/divider/chip/text dùng công thức LIGHT THEME chuẩn (thẻ sáng, chữ tối) giống 5
+    # bảng gốc -- chỉ text-on-bg/text-on-bg-2 (chữ nằm trực tiếp trên nền, ngoài card) mới cần cặp
+    # sáng cố định riêng để đọc được trên nền đậm. "Tường bê tông" vẫn đủ nhạt ở light nên không cần
+    # gì khác 5 bảng gốc.
     "Bầu trời sao": {
         "bg":        ("#232a4d", "#0d1024"),
-        "card":      ("#2b3359", "#161a35"),
-        "card-tl":   ("rgba(43,51,89,0.85)", "rgba(22,26,53,0.85)"),
-        "border":    ("#3a4272", "#242a4a"),
-        "divider":   ("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(255,255,255,0.2)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#323a63", "#1a1f3c"),
-        "text":      ("#eef0fb", "#f2f3ff"),
-        "text-2":    ("#b7bcdf", "#c3c7ea"),
-        "text-3":    ("#8b90b8", "#9195c0"),
-        "text-4":    ("#5c6089", "#4b4f75"),
+        "card":      ("#f5f6fc", "#161a35"),
+        "card-tl":   ("rgba(245,246,252,0.85)", "rgba(22,26,53,0.85)"),
+        "border":    ("#d7dbf0", "#242a4a"),
+        "divider":   ("rgba(20,24,45,0.12)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(20,24,45,0.18)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e7e9f7", "#1a1f3c"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#eef0fb", "#eef0fb"),
+        "text-on-bg-2": ("#b7bcdf", "#b7bcdf"),
     },
     "Tường bê tông": {
         "bg":        ("#dedad2", "#201f1d"),
@@ -473,19 +495,23 @@ BG_PALETTES = {
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
     "Rừng đêm": {
         "bg":        ("#1f3327", "#0d160f"),
-        "card":      ("#294232", "#16211a"),
-        "card-tl":   ("rgba(41,66,50,0.85)", "rgba(22,33,26,0.85)"),
-        "border":    ("#3c5747", "#25382c"),
-        "divider":   ("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(255,255,255,0.2)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#2f4a3a", "#1a2a20"),
-        "text":      ("#eaf2ec", "#eef5f0"),
-        "text-2":    ("#a9c2b2", "#b3cabb"),
-        "text-3":    ("#7d9989", "#84a091"),
-        "text-4":    ("#4f6b5b", "#425c4d"),
+        "card":      ("#f5f9f6", "#16211a"),
+        "card-tl":   ("rgba(245,249,246,0.85)", "rgba(22,33,26,0.85)"),
+        "border":    ("#d3e0d8", "#25382c"),
+        "divider":   ("rgba(20,30,24,0.12)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(20,30,24,0.18)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e5efe8", "#1a2a20"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#eaf2ec", "#eaf2ec"),
+        "text-on-bg-2": ("#a9c2b2", "#a9c2b2"),
     },
 }
 
@@ -7162,8 +7188,15 @@ def _wordmark_html(layout="header"):
     Serif, Chromium desktop không tái hiện được vì khác engine xử lý half-leading), giữ phòng ngừa
     tiếp cho Source Serif 4 (cũng là serif có cap-height/overshoot rõ, cùng lớp rủi ro) thay vì bỏ
     workaround rồi phải tìm lại lỗi từ đầu nếu nó tái phát."""
-    _text = "#f1ece0" if IS_DARK else "#211c13"
-    _text2 = "#b3a688" if IS_DARK else "#6f6650"
+    # Wordmark nằm TRỰC TIẾP trên nền trang (var(--bg)), ngoài mọi card -- phải đọc theo
+    # text-on-bg/text-on-bg-2 (xem BG_PALETTES) chứ không phải text/text-2 thường (màu đó giờ dành
+    # riêng cho chữ BÊN TRONG card, tối trên mọi bảng màu kể cả Bầu trời sao/Rừng đêm nền đậm --
+    # dùng nhầm sẽ ra chữ tối trên nền đậm, không đọc được, đúng bug người dùng lo ngại). Lấy literal
+    # hex thẳng từ BG_PALETTES (không phải var(--text-on-bg)) vì layout="login" render TRƯỚC khối
+    # inject :root CSS var (xem cổng đăng nhập) -- BG_PALETTE (dict Python) đã có sẵn từ rất sớm ở
+    # cấp module nên literal luôn đúng bất kể gọi trước/sau khối :root.
+    _text = BG_PALETTES[BG_PALETTE]["text-on-bg"][1 if IS_DARK else 0]
+    _text2 = BG_PALETTES[BG_PALETTE]["text-on-bg-2"][1 if IS_DARK else 0]
     if layout == "login":
         mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
         return (
@@ -7224,9 +7257,11 @@ if _auth_configured:
         st.stop()
     if not st.user.is_logged_in:
         # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
-        # dùng var(--text-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal theo IS_DARK
-        # -- _wordmark_html() đã tự lo việc này (xem định nghĩa), không cần lặp lại ở đây.
-        _login_txt2 = "#b3a688" if IS_DARK else "#6f6650"
+        # dùng var(--text-on-bg-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal từ
+        # BG_PALETTES theo IS_DARK -- _wordmark_html() cũng tự lo việc này theo đúng cách (xem định
+        # nghĩa). Chữ này nằm trực tiếp trên nền trang (ngoài card) nên đọc text-on-bg-2, không phải
+        # text-2 (giờ dành riêng cho chữ bên trong card).
+        _login_txt2 = BG_PALETTES[BG_PALETTE]["text-on-bg-2"][1 if IS_DARK else 0]
         st.markdown(
             "<div style='max-width:420px;margin:12vh auto 24px;text-align:center;'>"
             f"<div style='margin-bottom:18px;'>{_wordmark_html('login')}</div>"
@@ -8505,6 +8540,31 @@ _MAIN_CSS = """
     [class*="st-key-kqreply_"] [data-testid="stColumn"]:last-child,
     [class*="st-key-kqnew_"] [data-testid="stColumn"]:last-child {
         flex: 0 0 auto !important; width: auto !important;
+    }
+    /* Mobile (<=640px, cùng breakpoint mọi nơi khác trong file): cụm nút Yêu thích/Sửa/Xoá/+ Ghi
+       chú xuống hàng riêng thay vì chen cùng dòng với chữ trích dẫn -- phản hồi thực tế người dùng
+       gửi ảnh chụp mobile, cụm nút chiếm hẳn 1 cột dọc hẹp bên phải rất phí diện tích trên màn hình
+       hẹp. Desktop giữ nguyên 1 hàng (không đổi). Chỉ ép lại flex-wrap/width ở breakpoint này, các
+       rule màu/kích thước nút phía trên vẫn dùng chung. */
+    @media (max-width: 640px) {
+        [class*="st-key-kqrow_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-kqreply_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-kqnew_"] [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+        [class*="st-key-kqrow_"] [data-testid="stColumn"],
+        [class*="st-key-kqreply_"] [data-testid="stColumn"],
+        [class*="st-key-kqnew_"] [data-testid="stColumn"],
+        [class*="st-key-kqrow_"] [data-testid="stColumn"]:last-child,
+        [class*="st-key-kqreply_"] [data-testid="stColumn"]:last-child,
+        [class*="st-key-kqnew_"] [data-testid="stColumn"]:last-child {
+            flex: 1 1 100% !important; width: 100% !important;
+        }
+        [class*="st-key-kqrow_"] [data-testid="stColumn"]:last-child [data-testid="stHorizontalBlock"],
+        [class*="st-key-kqreply_"] [data-testid="stColumn"]:last-child [data-testid="stHorizontalBlock"],
+        [class*="st-key-kqnew_"] [data-testid="stColumn"]:last-child [data-testid="stHorizontalBlock"] {
+            justify-content: flex-end;
+        }
     }
     [class*="st-key-kqrow_"] div[data-testid="stButton"] button[kind="secondary"],
     [class*="st-key-kqreply_"] div[data-testid="stButton"] button[kind="secondary"],
@@ -10766,14 +10826,14 @@ elif nav == "Tuỳ biến":
                 _pal_bg = _pal_tok["bg"][1] if IS_DARK else _pal_tok["bg"][0]
                 _pal_card = _pal_tok["card"][1] if IS_DARK else _pal_tok["card"][0]
                 _pal_border_c = _pal_tok["border"][1] if IS_DARK else _pal_tok["border"][0]
-                _pal_text_c = _pal_tok["text"][1] if IS_DARK else _pal_tok["text"][0]
+                _pal_text_c = _pal_tok["text-on-bg"][1] if IS_DARK else _pal_tok["text-on-bg"][0]
                 _pal_ring = "var(--accent)" if _pal_selected else _pal_border_c
                 _pal_label = f"✓ {_pal_name}" if _pal_selected else _pal_name
                 # Xem trước chia chéo 2 màu bg/card thật của bảng (giống cách nút hoạ tiết ở dưới dùng
                 # đúng background-image thật) -- người dùng thấy được cả 2 lớp nền/thẻ trước khi chọn.
-                # Màu chữ trên nút đọc ĐÚNG "text" của bảng đó (không phải var(--text) cố định của
-                # bảng đang active) -- 3 bảng mới (Bầu trời sao/Rừng đêm) có chữ sáng cố định khác
-                # hẳn 5 bảng gốc, để tên nút vẫn đọc được trên nền preview đậm của chính nó.
+                # Màu chữ trên nút đọc "text-on-bg" (không phải "text", giờ luôn tối vì dành cho BÊN
+                # TRONG card) -- 2 bảng nền đậm (Bầu trời sao/Rừng đêm) có text-on-bg sáng cố định
+                # khác hẳn 6 bảng còn lại, để tên nút vẫn đọc được trên nền preview đậm của chính nó.
                 _pal_css += (
                     f".st-key-{_pal_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
                     f"background: linear-gradient(135deg, {_pal_bg} 50%, {_pal_card} 50%) !important; "
