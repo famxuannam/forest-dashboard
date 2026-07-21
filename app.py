@@ -7818,6 +7818,17 @@ _MAIN_CSS = """
         overflow: hidden !important;
         flex-grow: 0 !important;
     }
+    /* Ô chọn kỳ (st.selectbox, cột giữa) tự cao 40px (viền 1px + padding riêng của react-aria
+       ComboBox, KHÁC 36px của 3 nút icon cạnh nó) -- overflow:hidden ở rule ngay trên (ép mọi cột
+       về chung 36px để canh giữa thẳng hàng) cắt mất 4px cuối, ăn đứt viền dưới + góc bo dưới của
+       ô, để lại đúng 3 cạnh (trên/trái/phải) như ảnh chụp thật người dùng gửi. Ép thẳng CHÍNH ô
+       [role="group"] xuống 36px (khớp .stSelectbox có box-sizing:border-box, viền nằm trong)
+       thay vì để bị cắt qua overflow -- viền hiện đủ 4 cạnh, không cần đụng gì tới clip 36px của
+       nhóm nút cạnh bên. */
+    [class*="st-key-stepper_"] [data-testid="stColumn"] [role="group"] {
+        height: 36px !important;
+        min-height: 36px !important;
+    }
     /* Khoảng cách xuống Billboard ngay dưới (period_stepper "Tuần"/"Tháng"/"Năm" VÀ day_stepper
        "Hôm nay") chỉ đúng 10px mặc định -- lệch với chuẩn 12px vừa thống nhất cho cụm Nav ->
        Sub-tab picker (xem `.st-key-nav`/`.st-key-bc_sub_picker` phía trên, xác nhận qua mockup
