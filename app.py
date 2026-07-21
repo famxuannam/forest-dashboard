@@ -2092,10 +2092,28 @@ def add_ma_overlay(fig, scope_df, window=7):
     return fig
 
 
+def add_record_marker(fig, scope_df):
+    """Đánh dấu 1 ngôi sao nhỏ phía trên cột của ngày nhiều giờ nhất TRONG KHOẢNG ĐANG XEM --
+    dùng lại đúng _top_days() (đã tính cho mục "Ngày nổi bật" ở Bảng số liệu), chỉ lấy TOP 1
+    (không phải top 3 như ở đó) để tránh rối mắt trên biểu đồ theo ngày. Nới trần trục hoành
+    18% (cùng hệ số add_total_labels) để ngôi sao không bị cắt ở mép trên canvas."""
+    top = _top_days(scope_df, 1)
+    if not top:
+        return fig
+    d, h = top[0]["date"], top[0]["hours"]
+    fig.add_annotation(
+        x=pd.Timestamp(d), y=h, yshift=16, text="★", showarrow=False,
+        font=dict(size=14, color=ACCENT_DARK),
+        hovertext=f"Nhiều giờ nhất trong khoảng này: {_fmt_hours_long(h)}", captureevents=True,
+    )
+    fig.update_yaxes(range=[0, h * 1.18])
+    return fig
+
+
 def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
     """Biểu đồ xu hướng dạng cột chồng theo thời gian.
     grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
-    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày.
+    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày + đánh dấu ngày kỷ lục.
     cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
     co = {time_col: cat_order} if cat_order else None
     fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
@@ -2103,6 +2121,7 @@ def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x
         fig = add_week_dividers(fig, grouped[time_col])
         if ma_df is not None:
             fig = add_ma_overlay(fig, ma_df, 7)
+            fig = add_record_marker(fig, ma_df)
     else:
         fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
     fig.update_layout(xaxis_title=x_title or time_col, yaxis_title="Số giờ")
@@ -3867,7 +3886,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             if _rl_recent_g.empty:
                 st.caption("Chưa có tập nào hoàn thành trong 14 ngày gần đây.")
             else:
-                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True)}</div>",
+                st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent_g, sort_desc=True, sessions_df=df_books)}</div>",
                             unsafe_allow_html=True)
         sec_chapter("gd-tq-ch3", 3, None, "Bảng số liệu")
         _render_stats_table()
@@ -3883,7 +3902,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
         if _rl_recent.empty:
             st.caption("Chưa có phần nào hoàn thành trong 14 ngày gần đây.")
         else:
-            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True)}</div>",
+            st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_recent, sort_desc=True, sessions_df=df_books)}</div>",
                         unsafe_allow_html=True)
     sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
     _render_reading_quotes_teaser()
@@ -5169,13 +5188,22 @@ def _book_chips_html(day_g):
     return out
 
 
-def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
+def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None):
     """HTML .jrows cho các phần đã đọc (rl_df đã lọc sẵn theo kỳ/sách cần hiện) -- một dòng cho
     mỗi ngày có ≥1 phần hoàn thành. label_book=False dùng khi caller đã lọc đúng 1 cuốn (Báo
     cáo theo dự án) -- bỏ nhãn tên sách vì thừa. sort_desc=True -> ngày MỚI NHẤT lên đầu (Sách ->
     Tổng quan, mockup xếp "Nhật ký đọc" theo kiểu tin mới lên trên) -- mặc định False (cũ nhất
-    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu)."""
+    trước) giữ nguyên hành vi mọi chỗ gọi khác (đọc tuần tự từ đầu).
+
+    sessions_df: tuỳ chọn, df_books (phiên Forest, CHƯA lọc theo 1 cuốn -- khác book_name đơn lẻ
+    của _render_reading_kindle_days()) -- cộng dồn TẤT CẢ phiên trong đúng ngày đó (không tách theo
+    cuốn, xác nhận với người dùng) thành 1 chip "Thời gian" duy nhất mỗi ngày, CÙNG markup/nhãn
+    _render_reading_kindle_days() đã dùng ở Chi tiết -- chỉ khác phạm vi cộng dồn (1 cuốn -> cả
+    ngày)."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize())
+    _day_mins = None
+    if sessions_df is not None and not sessions_df.empty:
+        _day_mins = sessions_df.groupby(pd.to_datetime(sessions_df['Ngày']).dt.normalize())['Thời lượng (Phút)'].sum()
     rows_html = ''
     _groups = list(rl.groupby('_d'))
     if sort_desc:
@@ -5187,6 +5215,9 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False):
             _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
             chips_html = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
                                  for _, r in day_g.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+        if _day_mins is not None and d in _day_mins.index and _day_mins[d] > 0:
+            chips_html += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                           f"<span class='cv'>{int(_day_mins[d])}′</span></span>")
         _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
