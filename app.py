@@ -7389,14 +7389,22 @@ st.markdown(
 
 _MAIN_CSS = """
     <style>
-    /* Đặt font trên html/body để kế thừa xuống; KHÔNG đặt !important rộng
-       lên mọi phần tử để tránh đè font của icon Material (Material Symbols). Font thân chữ đang
-       chọn (mặc định Manrope, xem BODY_FONTS/setting "body_font") tự host qua _BODY_FONT_FACE
-       (tiêm ở khối <style> ngay phía trên) -- fallback hệ thống giữ nguyên phòng trường hợp
-       @font-face lỗi/chưa kịp tải. Literal 'Manrope' dưới đây bị .replace() thay đúng font đang
-       chọn ngay trước khi inject (khối CSS chính là string thường, không phải f-string -- xem
-       theming.md -- nên chỉ .replace() đúng chỗ cần thay, không đổi cả khối sang f-string). */
-    html, body, .stApp {
+    /* Đặt font trên html/body để kế thừa xuống. Streamlit tự set font-family cụ thể (Source Sans)
+       ngay trên nhiều phần tử con qua CSS-in-JS nội bộ (heading/nút/nhãn/tab...), độ ưu tiên CAO
+       HƠN 1 selector "body" đơn thuần -- nên chỉ đặt ở html/body KHÔNG đủ để đổi được font hiển
+       thị thật (đã xác nhận: trước bản vá này người dùng chỉ thấy font đổi ở vài dropdown). Khối
+       ".stApp.stApp *" tăng độ đặc hiệu (lặp class 2 lần, không dùng !important) để thắng các rule
+       nội bộ đó mà KHÔNG đè được inline style -- icon Material của Streamlit
+       ([data-testid="stIconMaterial"]) tự set font-family qua rule riêng, loại trừ tường minh
+       bằng :not() để không vô tình ép nó theo font thân chữ; icon Material tự vẽ của app (span
+       inline style, xem _mi()) vẫn an toàn vì inline style luôn thắng 1 rule thường (không
+       !important) bất kể độ đặc hiệu. Font thân chữ đang chọn (mặc định Manrope,
+       xem BODY_FONTS/setting "body_font") tự host qua _BODY_FONT_FACE (tiêm ở khối <style> ngay
+       phía trên) -- fallback hệ thống giữ nguyên phòng trường hợp @font-face lỗi/chưa kịp tải.
+       Literal 'Manrope' dưới đây bị .replace() thay đúng font đang chọn ngay trước khi inject
+       (khối CSS chính là string thường, không phải f-string -- xem theming.md -- nên chỉ
+       .replace() đúng chỗ cần thay, không đổi cả khối sang f-string). */
+    html, body, .stApp, .stApp.stApp *:not([data-testid="stIconMaterial"]) {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     /* Nền trang hệ "Sổ Tay": kiểu hoạ tiết (chấm bi/trơn/kẻ ngang/kẻ ô vuông/chấm bi to) do người
