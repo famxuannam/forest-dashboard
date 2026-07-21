@@ -3008,32 +3008,34 @@ def _top_days(df_scope, n=3):
     return [{"rank": int(ranks[d]), "date": d, "hours": h / 60} for d, h in top.items()]
 
 
-def _top_days_chips(items, show_year=True, show_weekday=False):
+def _top_days_chips(items, show_year=True):
     """Chuyển kết quả _top_days()/overall_top3 thành chips cho render_stat_panel() -- dùng
-    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm. show_year=False (Tuần/Tháng/Năm -- xác nhận với
-    người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm khỏi
-    ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. show_weekday=True
-    (riêng Tháng, dễ nhận biết ngày trong tuần hơn khi nhìn cả tháng) thêm tên Thứ trước ngày."""
+    chung ở Bảng số liệu Tổng quan/Tuần/Tháng/Năm/Dự án. show_year=False (Tuần/Tháng/Năm -- xác
+    nhận với người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm
+    khỏi ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. Luôn kèm tên
+    Thứ trước ngày và bọc link nhảy sang Báo cáo Ngày (_day_link_html) -- xác nhận với người
+    dùng, áp dụng cho mọi trang có mục "Ngày nổi bật"."""
     def _fmt_date(d):
         ts = pd.Timestamp(d)
         s = ts.strftime('%d/%m/%Y' if show_year else '%d/%m')
-        return f"{VN_DAYS.get(ts.day_name(), '')}, {s}" if show_weekday else s
-    return [{"k": f"#{it['rank']}", "v": f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}"} for it in items]
+        return f"{VN_DAYS.get(ts.day_name(), '')}, {s}"
+    return [{"k": f"#{it['rank']}",
+             "v": _day_link_html(it['date'], label=f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}")}
+            for it in items]
 
 
-def _top_days_section(df_scope, label, n=3, show_weekday=False):
+def _top_days_section(df_scope, label, n=3):
     """1 section "Ngày nổi bật" cho render_stat_panel() (sections=...), hoặc None nếu kỳ chưa
     có ngày nào -- dùng chung ở Bảng số liệu Tuần/Tháng/Năm (Tổng quan tự truyền thẳng
     overall_top3 vì đã tính sẵn cho mục "Kỷ lục" nên không gọi lại _top_days() ở đây). Luôn
     show_year=False -- chỉ Tổng quan mới cần năm (xem _top_days_chips())."""
     items = _top_days(df_scope, n)
-    return [{"label": label, "chips": _top_days_chips(items, show_year=False, show_weekday=show_weekday)}] if items else None
+    return [{"label": label, "chips": _top_days_chips(items, show_year=False)}] if items else None
 
 
 def _render_period_overview_hero(df_period, full_df, period_col, selected_key, prev, avg,
                                   lbl_prev, lbl_avg, clip_note, top_days_label, show_top3,
-                                  anchor_prefix, top3_suffix="", show_footer=True,
-                                  top_days_show_weekday=False):
+                                  anchor_prefix, top3_suffix="", show_footer=True):
     """Chương "Tổng quan" (mục 1) ở Báo cáo -> Tuần/Tháng/Năm: 5 hero item (Tổng thời gian/
     Thời gian mỗi ngày/Số cây/Số cây mỗi ngày/Thời gian mỗi phiên), mỗi item tối đa 2 delta (vs
     kỳ trước, vs trung bình) + "Ngày nổi bật" + biểu đồ cột phiên + Top 3 (tuỳ chọn, Tuần không
@@ -3082,7 +3084,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
          "deltas": [d for d in [_delta_t(d1_trd, f"cây {lbl_prev}"), _delta_t(d2_trd, f"cây {lbl_avg}")] if d]},
         {"label": "Thời gian / phiên", "value": f"{curr_min_sess:.0f} phút",
          "deltas": [d for d in [_delta_t(d1_ms, f"phút {lbl_prev}"), _delta_t(d2_ms, f"phút {lbl_avg}")] if d]},
-    ], sections=_top_days_section(df_period, top_days_label, show_weekday=top_days_show_weekday),
+    ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None)
     render_project_rhythm(df_period)
@@ -3224,6 +3226,16 @@ def _plotly_click_jump(fig, sel, sel_ver_key, ccol, proj_to_cat=None):
     st.session_state["_bc_sub_jump"] = "Dự án"
     st.session_state["_grp_sel_jump"] = (_kind, _clicked)
     st.rerun()
+
+
+def _day_link_html(d, label=None):
+    """1 thẻ <a target=_self> nhảy tới Báo cáo Ngày (trang Hôm nay) đúng ngày `d` -- dùng chung
+    cho mọi chip/ô bảng hiện 1 ngày cụ thể (Ngày nổi bật, Danh sách phiên, Bảng số liệu Tuần/Dự
+    án). Cùng pattern .jdate-link đã dùng ở Nhật ký đọc/xem, nhưng đứng độc lập (không phụ thuộc
+    cấu trúc .jrows) nên dùng chung class .entity-link."""
+    d = d if isinstance(d, date) else pd.Timestamp(d).date()
+    _label = label if label is not None else f"{d:%d/%m/%Y}"
+    return f"<a class='entity-link' href='?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}' target='_self'>{_label}</a>"
 
 
 def _quick_notes_on(qn_df, day):
@@ -3737,7 +3749,7 @@ def _render_reading_billboard(t, df_books, today):
         if _n_quotes:
             chips.append(f"<span class='chip tw'><span class='cv'>{_n_quotes} trích dẫn đã lưu</span></span>")
         _right = ("<div class='pbill-kicker'>Đang đọc</div>"
-                  f"<div class='pbill-booktitle'>{html_escape(book)}{_author_html}</div>"
+                  f"<div class='pbill-booktitle'>{_entity_link_html(book, 'book')}{_author_html}</div>"
                   f"<div class='pbill-chips'>{''.join(chips)}</div>")
     else:
         _right = ("<div class='pbill-kicker'>Đang đọc</div>"
@@ -3792,7 +3804,7 @@ def _render_gundam_billboard(t, df_books, reading_log_df, today):
             chips.append(f"<span class='chip'><span class='ck'>Nhịp xem</span>"
                           f"<span class='cv'>~{len(_recent) / (30 / 7):.0f} tập/tuần</span></span>")
         _right = ("<div class='pbill-kicker'>Đang xem</div>"
-                  f"<div class='pbill-booktitle'>{html_escape(series)}</div>"
+                  f"<div class='pbill-booktitle'>{_entity_link_html(series, 'gundam')}</div>"
                   f"<div class='pbill-chips'>{''.join(chips)}</div>")
         _big_num = f"{int(primary['Số phần đã đọc'])}" if pd.notna(primary['Số phần đã đọc']) else "0"
     else:
@@ -3828,7 +3840,7 @@ def _render_reading_quotes_teaser(n=3):
         rows_html += (
             "<div class='quote-item'>"
             f"<div class='quote-text'>&ldquo;{html_escape(str(r['Nội dung']))} "
-            f"<span class='quote-meta'>Vị trí {html_escape(str(r['Vị trí']))} · {html_escape(str(r['Cuốn sách']))}</span></div>"
+            f"<span class='quote-meta'>Vị trí {html_escape(str(r['Vị trí']))} · {_entity_link_html(r['Cuốn sách'], 'book')}</span></div>"
             f"{note_html}</div>")
     st.markdown(f"<div class='quotes-card'>{rows_html}</div>", unsafe_allow_html=True)
 
@@ -3952,7 +3964,7 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             last_s = pd.to_datetime(r['Gần nhất']).strftime('%d/%m/%Y')
             rows_html += '<tr class="prow">'
             rows_html += f'<td class="stt">{_start + _i + 1}</td>'
-            rows_html += f'<td class="lbl">{html_escape(str(r["Cuốn sách"]))}</td>'
+            rows_html += f'<td class="lbl">{_entity_link_html(r["Cuốn sách"], "book" if page_name == "Sách" else "gundam")}</td>'
             rows_html += f'<td>{start_s}</td><td>{last_s}</td>'
             rows_html += f'<td>{_c(r["Số ngày"])}</td><td>{_c(r["Ngày đọc"])}</td>'
             rows_html += _heat_cell(float(r['Tổng giờ']), vmax_h) if pd.notna(r['Tổng giờ']) else '<td>—</td>'
@@ -6289,7 +6301,7 @@ def render_period_day_table(df_period, all_days=None):
         vn_dow = VN_DAYS.get(pd.Timestamp(d).day_name(), "")
         rows_html += (
             '<tr class="prow">'
-            f'<td class="lbl">{vn_dow} {pd.Timestamp(d):%d/%m}</td>'
+            f'<td class="lbl">{_day_link_html(d, label=f"{vn_dow} {pd.Timestamp(d):%d/%m}")}</td>'
             f'<td>{_fmt_hours_short(mins / 60) if n else "—"}</td>'
             f'<td>{n if n else "—"}</td>'
             f'<td>{f"{avg_min:.0f}′" if n else "—"}</td>'
@@ -6789,7 +6801,8 @@ def render_project_recent_sessions(df_g, days=30):
     rows_html = ""
     for _, r in page_df.iterrows():
         ts = pd.Timestamp(r['Thời gian bắt đầu'])
-        rows_html += (f"<tr><td class='txt lbl'>{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}</td>"
+        _day_html = _day_link_html(ts.date(), label=f"{VN_DAYS.get(ts.day_name(), '')} {ts:%d/%m}")
+        rows_html += (f"<tr><td class='txt lbl'>{_day_html}</td>"
                       f"<td>{ts:%H:%M}</td><td>{int(r['Thời lượng (Phút)'])}′</td>"
                       f"<td>{_buoi_of(ts.hour)}</td></tr>")
     _tot_hrs = recent['Thời lượng (Phút)'].sum() / 60
@@ -9180,7 +9193,7 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                             # thường gặp "Tác giả, Tên sách") -- trước đây để sách trước, tác giả
                             # sau, phản hồi thực tế là ngược thứ tự mong muốn.
                             _src_txt = (f"{html_escape(str(_author))} · " if pd.notna(_author)
-                                        and str(_author).strip() else "") + html_escape(str(kq['Cuốn sách']))
+                                        and str(_author).strip() else "") + _entity_link_html(kq['Cuốn sách'], 'book')
                             st.markdown(f"<div class='kq-daily-src'>— {_src_txt}</div>", unsafe_allow_html=True)
                         with c_shuffle:
                             if _kh_count > 1 and st.button("", icon=":material/shuffle:", key="kq_daily_shufflebtn",
@@ -9308,12 +9321,14 @@ def render_day_report(df):
             s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
             cat = r.get('Nhóm')
             cat = str(cat) if (r.get('Có nhóm') and pd.notna(cat)) else '—'
+            _proj_html = _entity_link_html(r["Dự án"], _proj_link_kind(cat, r["Dự án"]) if cat != '—' else "proj")
+            _cat_html = _entity_link_html(cat, "cat") if cat != '—' else html_escape(cat)
             rows_html += ('<tr class="prow">'
                           f'<td class="lbl">{i}</td>'
-                          f'<td class="txt">{html_escape(str(r["Dự án"]))}</td>'
+                          f'<td class="txt">{_proj_html}</td>'
                           f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
                           f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
-                          f'<td class="txt">{html_escape(cat)}</td></tr>')
+                          f'<td class="txt">{_cat_html}</td></tr>')
         rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
                       f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
         st.markdown(DTBL_CSS + f"""
@@ -9584,7 +9599,7 @@ elif nav == "Báo cáo":
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
                                               "Ngày nổi bật trong tháng", show_top3=False,
                                               anchor_prefix="bc-thang", top3_suffix=" Tháng",
-                                              show_footer=False, top_days_show_weekday=True)
+                                              show_footer=False)
                 # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
                 # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
@@ -9874,7 +9889,9 @@ elif nav == "Báo cáo":
                     # "Ngày"/"Giờ" cạnh nhau như trước (trông tách rời, khác kiểu với nơi
                     # khác). Đồng hạng (hiếm) vẫn ra nhiều chip, mỗi ngày 1 chip riêng.
                     _grp_sections.append({"label": "Ngày nổi bật", "chips": [
-                        {"k": "#1", "v": f"{d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}"} for d in _rec_g['dates']
+                        {"k": "#1", "v": _day_link_html(
+                            d, label=f"{VN_DAYS.get(pd.Timestamp(d).day_name(), '')}, {d:%d/%m/%Y} · {_fmt_hours_short(_rec_g['hours'])}")}
+                        for d in _rec_g['dates']
                     ]})
 
                 render_stat_panel(
