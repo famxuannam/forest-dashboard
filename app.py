@@ -7271,7 +7271,8 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
     [data-testid="stMarkdownContainer"]:has(> .catbars-card),
     [data-testid="stMarkdownContainer"]:has(> .quotes-card),
-    [data-testid="stMarkdownContainer"]:has(> .hmtl-item) {
+    [data-testid="stMarkdownContainer"]:has(> .hmtl-item),
+    [data-testid="stMarkdownContainer"]:has(> .dtbl-wrap) {
         margin-bottom: 0 !important;
     }
 
