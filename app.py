@@ -413,14 +413,26 @@ CARD_DENSITY = {
 # nút" (html/body/.stApp + iframe Quill, xem _BODY_FONT_FACE/style_quill()) -- KHÔNG áp cho font
 # bảng số liệu (IBM Plex Mono, _TABLE_FONT_FACE) hay font trích dẫn (Cormorant Garamond,
 # _QUOTE_FONT_FACE), vì 2 font đó được chọn có chủ đích riêng theo vai trò nội dung, không phải
-# "giao diện chung" (xác nhận với người dùng). Cả 3 lựa chọn CÙNG họ sans-serif nhân văn trung
-# tính (khác hẳn font trích dẫn viết tay) để không lệch tông "Sổ Tay" dù đổi font thân chữ.
+# "giao diện chung" (xác nhận với người dùng). 3 lựa chọn gốc CÙNG họ sans-serif nhân văn trung
+# tính nên nhìn khá giống nhau -- đã bổ sung thêm 4 font khác dáng hẳn (serif/monospace/hình học/
+# bo tròn, xem chú thích đầy đủ ở _body_font_b64()) theo đúng phản hồi thực tế "không phân biệt
+# được", đổi quyết định "giữ cùng 1 họ font" trước đó (xác nhận với người dùng).
 # "file_prefix" khớp tên file trong assets/fonts/ (vd Inter-Variable-latin.woff2), "family" là tên
 # CSS font-family thật. "Manrope" PHẢI là mặc định (giữ nguyên hiện trạng cho người chưa từng chọn).
 BODY_FONTS = {
     "Manrope": {"family": "Manrope", "file_prefix": "Manrope-Variable"},
     "Inter": {"family": "Inter", "file_prefix": "Inter-Variable"},
     "Public Sans": {"family": "Public Sans", "file_prefix": "PublicSans-Variable"},
+    # 4 lựa chọn thêm (yêu cầu người dùng: 3 font gốc đều là sans-serif nhân văn/grotesque, nhìn
+    # quá giống nhau, cần vài kiểu chữ THẬT SỰ khác dáng) -- mỗi font 1 kiểu dáng riêng biệt, đều
+    # có bản variable (1 file/subset, cùng kiến trúc 3 font gốc) và hỗ trợ sẵn tiếng Việt:
+    # Literata (serif, cảm giác sách/báo), JetBrains Mono (monospace, khác hẳn dáng chữ đều),
+    # Plus Jakarta Sans (sans-serif hình học, vuông vắn hơn Manrope), Nunito (sans-serif bo tròn,
+    # mềm mại hơn hẳn 3 font gốc).
+    "Literata": {"family": "Literata", "file_prefix": "Literata-Variable"},
+    "JetBrains Mono": {"family": "JetBrains Mono", "file_prefix": "JetBrainsMono-Variable"},
+    "Plus Jakarta Sans": {"family": "Plus Jakarta Sans", "file_prefix": "PlusJakartaSans-Variable"},
+    "Nunito": {"family": "Nunito", "file_prefix": "Nunito-Variable"},
 }
 
 
@@ -7084,15 +7096,21 @@ if not _has_supabase_secrets:
     st.stop()
 
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang font thật tự host
-# (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác), người dùng tự
-# chọn 1 trong 3 (BODY_FONTS, tab Tuỳ biến -> "4. Giao diện", mặc định Manrope). Biến trục (variable
-# font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ payload hơn
-# hẳn vì app dùng nhiều mức đậm nhạt khác nhau (400/500/600/700/800) rải khắp label/nút/chip/nav.
-# 3 file riêng theo unicode-range (latin/latin-ext/vietnamese, bỏ cyrillic/hy lạp không dùng tới)
-# đúng cách Google Fonts tự chia subset cho CẢ 3 font (cùng bộ unicode-range, đã xác minh) -- BẮT
-# BUỘC có "vietnamese" (khác _LOGO_FONT_FACE chỉ cần "latin" vì wordmark "Forest"/"Dashboard" là
-# tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app. CHỈ tải/nhúng ĐÚNG 1
-# font đang chọn (không nhúng sẵn cả 3) để không đội payload trang lên gấp 3 lần vô ích.
+# (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác lúc CHẠY THẬT;
+# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi nhúng thẳng vào assets/
+# fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 7 (BODY_FONTS, tab Tuỳ
+# biến -> "4. Giao diện", mặc định Manrope) -- 3 font gốc (Manrope/Inter/Public Sans) đều là sans-
+# serif nhân văn/grotesque khá giống nhau, bổ sung thêm 4 font khác hẳn dáng chữ (xác nhận với
+# người dùng): Literata (serif), JetBrains Mono (monospace), Plus Jakarta Sans (sans hình học),
+# Nunito (sans bo tròn). Biến trục (variable font, wght 200-800 trong 1 file) thay vì nhiều file
+# tĩnh theo từng font-weight -- đỡ payload hơn hẳn vì app dùng nhiều mức đậm nhạt khác nhau
+# (400/500/600/700/800) rải khắp label/nút/chip/nav -- cả 7 font đều có bản variable phủ đủ dải
+# này (đã xác minh trước khi tải). 3 file riêng theo unicode-range (latin/latin-ext/vietnamese, bỏ
+# cyrillic/hy lạp không dùng tới) đúng cách Google Fonts tự chia subset cho MỌI font (cùng bộ
+# unicode-range, đã xác minh) -- BẮT BUỘC có "vietnamese" (khác _LOGO_FONT_FACE chỉ cần "latin" vì
+# wordmark "Forest"/"Dashboard" là tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có
+# dấu của app -- đã xác minh cả 7 font đều có subset "vietnamese" trước khi chọn. CHỈ tải/nhúng
+# ĐÚNG 1 font đang chọn (không nhúng sẵn cả 7) để không đội payload trang lên vô ích.
 @st.cache_resource
 def _body_font_b64(file_prefix):
     out = {}
