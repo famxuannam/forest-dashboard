@@ -7275,6 +7275,20 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .dtbl-wrap) {
         margin-bottom: 0 !important;
     }
+    /* Phần tử tiêm JS thuần (components.html(height=0): _inject_keyboard_shortcuts()/
+       _inject_scroll_to_top_button()/_render_nav_sync_fab(), chạy TRƯỚC dispatch if nav==... nên
+       có mặt ở MỌI trang) không có nội dung hiển thị -- iframe cao 0px, khối <style> ẩn 1 nút, và
+       wrapper của chính nút đã display:none đó -- nhưng vẫn là flex item bình thường nên vẫn ăn
+       gap:10px MỖI BÊN. 3 iframe + 1 <style> + 1 wrapper nút đứng liền nhau ngay sau nav cộng dồn
+       thành 60px trắng (đo thật bằng Playwright, bounding box), khiến billboard/date picker/
+       stepper đầu MỌI trang cách nav xa hơn hẳn khoảng cách chuẩn 10px. display:none loại HẲN
+       khỏi flex layout (không chỉ ẩn hiển thị như margin:0) -- script trong iframe/srcdoc vẫn tự
+       chạy bình thường dù ẩn, không ảnh hưởng phím tắt/nút nổi/khoá lịch tiếng Việt. */
+    [data-testid="stElementContainer"][height="0px"],
+    [data-testid="stElementContainer"]:has(> .stMarkdown style:only-child),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_sync_fab) {
+        display: none !important;
+    }
 
     /* Mục "Nhóm & dự án" dạng thanh ngang xếp hạng (frag_category_bars) -- thay biểu đồ tròn
        cũ, style theo mockup Forest Dashboard.dc.html: thẻ padding 16px 18px (khác 14px của thẻ
