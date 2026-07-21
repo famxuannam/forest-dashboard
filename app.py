@@ -3552,7 +3552,18 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     if show_favorites:
         _tab_labels.append(":material/format_quote: Trích dẫn")
     _tab_labels.append(":material/search: Chi tiết")
-    _tabs = st.tabs(_tab_labels, key="rl_view_tabs" if show_favorites else "rl_view_tabs_gd")
+    # Preset tab "Chi tiết" (luôn tab CUỐI, _tab_labels[-1]) từ deep-link (?book=/?series=) --
+    # tách riêng tham số cho Sách/Gundam vì cả 2 khối "if nav == ..." đều chạy độc lập, không
+    # được đè tham số của nhau (cùng lý do sub/hsub tách riêng, xem architecture-navigation.md).
+    # on_change="rerun" bắt buộc để key=... đọc/ghi được tab đang mở (Streamlit chỉ hỗ trợ vậy
+    # khi on_change là "rerun" hoặc 1 callable) -- không dùng cơ chế _jump kiểu grp_sel vì mọi
+    # lối vào trang này đều qua <a target="_self"> (reload toàn trang -> session MỚI), không có
+    # nguy cơ "widget đã instantiate trong cùng lượt chạy" như click biểu đồ trong-phiên.
+    _tabs_key = "rl_view_tabs" if show_favorites else "rl_view_tabs_gd"
+    _rl_qparam = "book" if show_favorites else "series"
+    if _tabs_key not in st.session_state and st.query_params.get(_rl_qparam):
+        st.session_state[_tabs_key] = _tab_labels[-1]
+    _tabs = st.tabs(_tab_labels, key=_tabs_key, on_change="rerun")
     _tab_overview = _tabs[0]
     if show_favorites:
         _tab_quotes, _tab_detail = _tabs[1], _tabs[2]
@@ -3960,6 +3971,14 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
                        if not _kh_all.empty else [])
     _detail_opts = (["— Chọn để xem chi tiết —"] + sorted(t['Cuốn sách'].tolist())
                      + [f"{_KINDLE_INDEP_PREFIX}{s}" for s in _indep_sources])
+    # Đặt sẵn cuốn/series từ deep-link (?book=/?series=, xem render_reading_log()'s st.tabs preset)
+    # -- guard 1 lần/phiên kiểu day_pick (app.py, day_picker()), không cần cơ chế _jump vì mọi
+    # lối vào trang này đều qua <a target="_self"> (session MỚI hoàn toàn).
+    _detail_key = f"rl_detail_{labels['item_col']}"
+    if _detail_key not in st.session_state:
+        _rl_qv = st.query_params.get("book" if page_name == "Sách" else "series")
+        if _rl_qv and _rl_qv in _detail_opts:
+            st.session_state[_detail_key] = _rl_qv
     with st.container(key="rl_detail_select"):
         _detail_sel = st.selectbox(f"Chọn 1 {labels['item_col'].lower()}",
                                     _detail_opts, key=f"rl_detail_{labels['item_col']}",
@@ -9579,6 +9598,20 @@ elif nav == "Báo cáo":
                     _oc = ("cat", _c); _opts.append(_oc); _labels[_oc] = f"{_c}  ·  Nhóm"
                     for _p in _projs:
                         _op = ("proj", _p); _opts.append(_op); _labels[_op] = f"   {_p}  ·  Dự án"
+
+            # Đặt sẵn grp_sel từ deep-link (?grp=&kind=) HOẶC từ 1 cú nhảy trong-phiên
+            # (_grp_sel_jump -- dùng bởi click biểu đồ Xu hướng/Theo khung giờ, xem
+            # render_trend_fig/render_hourly_chart). PHẢI đặt TRƯỚC st.selectbox(key="grp_sel")
+            # ngay dưới, nếu không sẽ StreamlitAPIException vì widget đã instantiate trong lượt
+            # chạy này -- đúng gotcha đã gặp và vá ở _hm_sub_jump (render_health_page(), gần dòng
+            # 5056), copy y hệt cơ chế đó. frag_trend(df_g, "trend_grp", "Dự án") gọi bên dưới
+            # CHÍNH XÁC trong nhánh này, sau dòng grp_sel -- xác nhận rủi ro có thật.
+            if "_grp_sel_jump" in st.session_state:
+                st.session_state["grp_sel"] = st.session_state.pop("_grp_sel_jump")
+            elif "grp_sel" not in st.session_state:
+                _qk, _qg = st.query_params.get("kind"), st.query_params.get("grp")
+                if (_qk, _qg) in _opts:
+                    st.session_state["grp_sel"] = (_qk, _qg)
 
             with st.container(key="grp_select"):
                 sel = st.selectbox("Chọn Nhóm hoặc Dự án:", _opts, format_func=lambda o: _labels[o],
