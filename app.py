@@ -387,42 +387,48 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    "Trắng tinh": {
-        "bg":        ("#f6f6f4", "#18181a"),
-        "card":      ("#ffffff", "#232326"),
-        "card-tl":   ("rgba(255,255,255,0.85)", "rgba(35,35,38,0.85)"),
-        "border":    ("#e0e0dc", "#38383c"),
-        "divider":   ("rgba(20,20,22,0.10)", "rgba(255,255,255,0.11)"),
-        "divider-2": ("rgba(20,20,22,0.16)", "rgba(255,255,255,0.16)"),
-        "chip":      ("#eeeeeb", "#2c2c30"),
+    # "Rượu vang"/"Đêm tía" thay "Trắng tinh"/"Đá xanh" (xác nhận với người dùng: 2 bảng nền đậm
+    # cố định -- Bầu trời sao/Rừng đêm -- là hơi ít, cần thêm 2 tông đậm khác biệt hẳn về hue thay
+    # cho 2 bảng nhạt). Cùng công thức "nền đậm cố định" với Bầu trời sao/Rừng đêm: bg ĐẬM ở CẢ 2
+    # cột (khác 6 bảng "nền nhạt" -- bg chỉ đậm khi IS_DARK), card/border/chip/divider theo ĐÚNG
+    # công thức bảng "nền nhạt" bình thường (thẻ sáng/tối theo IS_DARK như mọi bảng khác), còn
+    # text-on-bg/text-on-bg-2 SÁNG CỐ ĐỊNH cả 2 cột (bg luôn đậm nên chữ trên nền luôn cần sáng).
+    "Rượu vang": {
+        "bg":        ("#3a1620", "#220c12"),
+        "card":      ("#faf5f6", "#2d181c"),
+        "card-tl":   ("rgba(250,245,246,0.85)", "rgba(45,24,28,0.85)"),
+        "border":    ("#e3c9d0", "#492932"),
+        "divider":   ("rgba(36,10,17,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(36,10,17,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#eddde1", "#3b2027"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#211c13", "#f1ece0"),
-        "text-on-bg-2": ("#6f6650", "#b3a688"),
+        "text-on-bg":   ("#f5eaed", "#f5eaed"),
+        "text-on-bg-2": ("#dbb3be", "#dbb3be"),
     },
-    # 4 bảng dưới đây (Đá xanh/Lá non/Hoàng hôn/Sương tím) lấy ĐÚNG bg/card/border từ mockup
-    # "Tuỳ Chỉnh Giao Diện.dc.html" (xác nhận với người dùng thay hẳn 4 bảng cũ Xám đá/Xanh đêm/
-    # Kem lá/Tường bê tông). Mockup chỉ cho 1 mã màu/token (không phân biệt sáng/tối theo IS_DARK
-    # như app) -- biến thể "dark" (cột thứ 2 mỗi tuple) do agent tự suy ra bằng cách làm tối cùng
-    # tông (giữ nguyên hue, hạ độ sáng) theo đúng công thức 5 bảng gốc đã áp dụng, xác nhận với
-    # người dùng chọn cách này thay vì dùng nguyên 1 mã cho cả 2 chế độ.
-    "Đá xanh": {
-        "bg":        ("#dde7ea", "#0f191c"),
-        "card":      ("#f7fafb", "#18282d"),
-        "card-tl":   ("rgba(247,250,251,0.85)", "rgba(24,40,45,0.85)"),
-        "border":    ("#b4c8cf", "#2c4047"),
-        "divider":   ("rgba(16,31,35,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(16,31,35,0.19)", "rgba(255,255,255,0.17)"),
-        "chip":      ("#c6d6db", "#22343a"),
+    "Đêm tía": {
+        "bg":        ("#2a1a3d", "#160d21"),
+        "card":      ("#f8f5fc", "#21182d"),
+        "card-tl":   ("rgba(248,245,252,0.85)", "rgba(33,24,45,0.85)"),
+        "border":    ("#ddd0ef", "#372949"),
+        "divider":   ("rgba(22,10,36,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(22,10,36,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e9e1f5", "#2c203b"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#211c13", "#f1ece0"),
-        "text-on-bg-2": ("#6f6650", "#b3a688"),
+        "text-on-bg":   ("#efeaf5", "#efeaf5"),
+        "text-on-bg-2": ("#c5b3db", "#c5b3db"),
     },
+    # 2 bảng dưới đây (Lá non/Hoàng hôn) + "Sương tím" (kế tiếp) lấy ĐÚNG bg/card/border từ mockup
+    # "Tuỳ Chỉnh Giao Diện.dc.html" (xác nhận với người dùng thay hẳn bộ bảng cũ). Mockup chỉ cho
+    # 1 mã màu/token (không phân biệt sáng/tối theo IS_DARK như app) -- biến thể "dark" (cột thứ 2
+    # mỗi tuple) do agent tự suy ra bằng cách làm tối cùng tông (giữ nguyên hue, hạ độ sáng) theo
+    # đúng công thức 5 bảng gốc đã áp dụng, xác nhận với người dùng chọn cách này thay vì dùng
+    # nguyên 1 mã cho cả 2 chế độ.
     "Lá non": {
         "bg":        ("#e0ead4", "#161d0e"),
         "card":      ("#f8faf0", "#292d18"),
