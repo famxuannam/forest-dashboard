@@ -4657,7 +4657,14 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
     days_in = (first + pd.offsets.MonthEnd(0)).day
     total_cells = -(-(lead + days_in) // 7) * 7
 
-    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5)
+    # l_lo/l_hi tự chọn (KHÔNG dùng mặc định của _teal_shades, vốn đi tới gần như đen/bão hoà đậm
+    # ở bậc cao nhất) -- chữ trong ô (.rlcal-daynum/.rlcal-quote) nằm TRỰC TIẾP trên nền ô, không
+    # có lớp chip nền riêng che, nên nền càng đậm càng khó đọc. Giới hạn cả dải trong khoảng rất
+    # nhạt -> nhạt vừa (không bao giờ tới mức đậm/bão hoà) để chữ luôn đọc được ở MỌI bậc, xác
+    # nhận với người dùng qua ảnh chụp -- không dùng lại nguyên _teal_shades(5) mặc định như
+    # render_reading_calendar_grid (ô nhỏ, chỉ có 1 số duy nhất, không có nhiều dòng chữ như đây).
+    _l_lo, _l_hi = (0.24, 0.32) if IS_DARK else (0.94, 0.68)
+    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5, _l_lo, _l_hi)
     weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
     dow_html = "".join(f"<div class='rlcal-dow'>{w}</div>" for w in weekdays)
 
