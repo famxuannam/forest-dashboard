@@ -11739,7 +11739,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "20/07/2026", 11102
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12357
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12220,6 +12220,39 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
+        dict(pr="264-269", date="22/07/2026", pr_lines=50, total_lines=12357,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng",
+             bullets=[
+                 "**Nhật ký đọc/xem (Sách/Gundam → Tổng quan) đổi từ danh sách phân trang sang lịch "
+                 "tháng dạng bản đồ nhiệt** — mỗi ngày là 1 ô trong lưới tháng, đậm nhạt theo thời gian "
+                 "đọc/xem, kèm chip phần đã đọc/số trích dẫn, hover xem chi tiết, có nút điều hướng "
+                 "tháng trước/sau/Hôm nay.",
+                 "**Bộ lọc “theo tuần” cho Nhật ký đọc/xem** — thêm ở cả Nhật ký chương “Nhật ký” của "
+                 "Báo cáo Tháng (đỡ phải cuộn cả tháng) lẫn ở trang Chi tiết từng cuốn sách/series "
+                 "(tự tính theo đúng khoảng thời gian đọc/xem thật, có nút “Hiện thêm”/“Tất cả” khi "
+                 "đọc kéo dài nhiều tháng).",
+                 "**Tách trang Tuỳ biến “Giao diện” thành sub-page riêng** theo đúng mockup, cùng loạt "
+                 "sửa tương phản chữ/nền còn sót ở các bảng màu nền đậm cố định.",
+             ]),
+        dict(pr="245-263", date="21/07/2026", pr_lines=148, total_lines=11856,
+             title="Tên Dự án/Sách/Gundam click nhảy tới Chi tiết, thêm font thân chữ mới, đồng bộ spacing",
+             bullets=[
+                 "**Tên Dự án/Nhóm/Sách/Gundam giờ click được để nhảy thẳng tới trang Chi tiết** — áp "
+                 "dụng ở bảng số liệu, chip “Ngày nổi bật”, billboard — không cần tự tìm lại trong bộ "
+                 "lọc nữa; cùng đợt sửa lại toàn bộ phím tắt điều hướng đã ngưng hoạt động.",
+                 "**Nhật ký đọc/xem (Tổng quan) thêm bộ lọc Khoảng thời gian + phân trang**, hiện thêm "
+                 "cả những ngày chỉ có phiên Forest chưa tick chương, và đánh dấu ngày kỷ lục ngay trên "
+                 "biểu đồ Xu hướng.",
+                 "**Thêm 5 font thân chữ mới**, mở rộng Màu nền/Kiểu nền trang/Kiểu thẻ lên 8 lựa chọn "
+                 "mỗi mục, cùng vài lượt sửa lạc tông khi đổi bảng màu nền (bộ lọc Nhóm/Dự án, "
+                 "expander, nút tải file) và sửa font thân chữ tuỳ chọn trước đó chưa áp dụng hết app.",
+                 "**Đồng bộ khoảng cách (spacing) xuyên suốt app** — nav bar, bộ chọn kỳ/ngày, "
+                 "sub-tab picker, billboard đều về chung 12px, sửa vài chỗ viền/khoảng cách bị cắt "
+                 "hoặc lệch chuẩn do CSS cũ.",
+                 "Cùng vài sửa nhỏ: Báo cáo theo Dự án còn lọt series Gundam tag riêng khỏi loại trừ, "
+                 "nút trích dẫn Kindle xuống hàng riêng trên mobile, 2 bảng màu nền đậm giữ đúng light "
+                 "theme cho card/chữ.",
+             ]),
         dict(pr="244", date="20/07/2026", pr_lines=439, total_lines=11102,
              title="Cá nhân hoá giao diện: bảng màu nền, kiểu thẻ, mật độ bố cục, font thân chữ",
              bullets=[
