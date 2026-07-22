@@ -7451,10 +7451,18 @@ _billboard_bg_dark_forced = BG_PALETTE in BG_PALETTES_DARK_BG
 _billboard_bg = ("color-mix(in srgb, var(--accent) 6%, var(--card))" if _billboard_bg_dark_forced
                   else "rgba(var(--accent-rgb),0.10)")
 _billboard_backdrop = "none" if _billboard_bg_dark_forced else "blur(16px) saturate(1.6)"
+# Tab gạch chân nền TRONG SUỐT (.st-key-bc_sub_picker/.st-key-hm_sub_picker/.st-key-tb_sub_picker,
+# đứng TRỰC TIẾP trên var(--bg), xem rule CSS) -- tab ĐANG CHỌN tô màu var(--accent), nhưng chính
+# accent lại có thể cùng tông/độ đậm với 1 trong 4 bảng "nền đậm cố định" (vd accent xanh lá trên
+# nền "Rừng đêm" xanh lá đậm) khiến tab chọn cũng gần như biến mất y hệt lỗi chữ đã vá trước đó --
+# giữ nguyên nền trong suốt (xác nhận với người dùng, không đổi sang nền đặc) nhưng đổi màu chữ/
+# viền gạch chân sang bản SÁNG HƠN của accent (_brighten(), giữ nguyên hue/saturation) thay vì
+# accent gốc khi rơi vào 1 trong 4 bảng đó.
+_tab_accent = _brighten(ACCENT) if _billboard_bg_dark_forced else ACCENT
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
-    f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};"
+    f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -7991,8 +7999,11 @@ _MAIN_CSS = """
     }
     .st-key-bc_sub_picker button[data-selected="true"], .st-key-hm_sub_picker button[data-selected="true"],
     .st-key-tb_sub_picker button[data-selected="true"] {
-        background: transparent !important; color: var(--accent) !important; font-weight: 600 !important;
-        border-bottom-color: var(--accent) !important; box-shadow: none !important;
+        /* var(--tab-accent) thay vì var(--accent) thẳng -- xem _tab_accent (khối :root): bản sáng
+           hơn của accent khi rơi vào 1 trong 4 bảng "nền đậm cố định" để không lẫn vào nền đậm
+           cùng tông, giữ nguyên var(--accent) (không đổi gì) ở 6 bảng còn lại. */
+        background: transparent !important; color: var(--tab-accent) !important; font-weight: 600 !important;
+        border-bottom-color: var(--tab-accent) !important; box-shadow: none !important;
     }
     /* [class*=...] (substring), KHÔNG phải .st-key-rl_view_tabs (class chính xác) -- Sách dùng
        key "rl_view_tabs", Gundam dùng "rl_view_tabs_gd" (tách riêng để không đụng state tab khi
