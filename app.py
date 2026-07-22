@@ -7985,14 +7985,24 @@ _MAIN_CSS = """
     .st-key-tb_sub_picker [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
-    .st-key-hm_sub_picker [data-testid="stButtonGroup"] button,
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] button {
+    .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         /* Nút CHƯA chọn nền trong suốt (giữ nguyên, xem chú thích trên) nên đứng TRỰC TIẾP trên
            var(--bg) -- màu chữ PHẢI đọc var(--text-on-bg-2) (không phải var(--text-2)) để không
-           gần như biến mất trên 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), cùng lý do đã áp
-           cho .sec-ch-*/billboard trước đó -- 6 bảng "nhạt" còn lại 2 token này trùng giá trị nên
-           không đổi gì. */
+           gần như biến mất trên 4 bảng nền đậm cố định (BG_PALETTES_DARK_BG), cùng lý do đã áp
+           cho header chương và billboard trước đó -- 6 bảng nhạt còn lại 2 token này trùng giá
+           trị nên không đổi gì.
+           Bug thật đã phát hiện (không liên quan riêng tới đợt sửa nền đậm): rule chung
+           [data-testid="stButtonGroup"] button:not([data-selected="true"]) (nền var(--card) cho
+           nút chưa chọn của MỌI segmented_control khác trong app) từng đè lên rule này dù selector
+           ở đây có vẻ đặc hiệu hơn -- hoá ra do 1 comment cũ (đã sửa) lỡ có 2 ký tự đóng comment
+           CSS nằm giữa chừng, tự kết thúc comment đó sớm, khiến khai báo "background: transparent
+           !important" ngay sau nó bị trình duyệt hiểu nhầm và bỏ qua khi phân tích -- im lặng sai
+           trên "Giấy ấm" vì var(--card)/var(--bg) gần giống hệt nhau, LỘ RÕ thành 1 khối sáng lệch
+           tông trên bảng nền đậm (đúng ảnh chụp người dùng gửi). Thêm ":not([data-selected=true])"
+           vào chính selector này (độ đặc hiệu 0-3-1, thắng chắc chắn rule chung 0-2-1 bất kể thứ
+           tự nạp) để chắc ăn hơn nếu lỡ có comment nào khác dính lỗi tương tự lần nữa. */
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
         color: var(--text-on-bg-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
@@ -8851,14 +8861,22 @@ _MAIN_CSS = """
        kiểu chữ mảnh/cao ("mảnh, cao, trang trọng"), cùng cỡ px trông NHỎ HƠN Manrope (sans-serif
        đậm/vuông vức) nếu giữ nguyên số cũ. text SAU ĐÓ giảm 23->20px (xác nhận qua mockup với
        người dùng, có thói quen trích đoạn dài -- 23px chiếm quá nhiều chỗ) -- mark/src giữ nguyên,
-       chỉ đổi text. */
+       chỉ đổi text.
+       font-family PHẢI có !important -- bug thật đã phát hiện (từ đợt thêm Font thân chữ tuỳ
+       chọn): rule "html, body, .stApp, .stApp.stApp *:not(...)" (áp BODY_FONT lên toàn app, xem
+       gần đầu _MAIN_CSS) có độ đặc hiệu 2 class + universal = cao hơn hẳn 1 class thường như
+       .kq-daily-text ở đây (dù đứng SAU trong nguồn), nên luôn thắng, khiến "Trích dẫn hôm nay"
+       ("Quote of the Day") lặng lẽ đổi theo Font thân chữ đang chọn thay vì GIỮ CỐ ĐỊNH Cormorant
+       Garamond như trước khi có tính năng đó (xác nhận với người dùng: đây là font trang trọng cố
+       ý tách biệt vai trò nội dung, không phải "giao diện chung" -- đúng tinh thần đã ghi ở
+       BODY_FONTS/_body_font_b64() nhưng thiếu !important nên chưa thật sự bất biến). */
     .kq-daily-mark { font-size: 58px; line-height: 1; color: var(--accent);
-        font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-style: italic;
+        font-family: 'Cormorant Garamond', Georgia, serif !important; font-weight: 600; font-style: italic;
         opacity: .5; margin-bottom: -14px; }
     .kq-daily-text { font-size: 20px; line-height: 1.45; font-weight: 600; color: var(--text);
-        font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; white-space: pre-wrap; }
+        font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
     .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
-        font-family: 'Cormorant Garamond', Georgia, serif; text-align: right; }
+        font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
@@ -9039,7 +9057,7 @@ _MAIN_CSS = """
     /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- "Kính mờ"/"Viền gradient" (xem CARD_STYLES, _card_style_vars)
        cần thêm background/backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc,
        nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/hmtl-card/glass-card/
-       sec-card/quotes-card/help-tl-item/nhóm st-key-tb_*_card/note_card/jcard*/kqgroup_fav_...) mỗi
+       sec-card/quotes-card/help-tl-item/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
        khối tự viết riêng "background: var(--card); border: var(--card-border-w) solid
        var(--border);" theo TỪNG rule, không có 1 điểm nối chung để đổi background-image/backdrop.
        Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
