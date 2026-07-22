@@ -7980,9 +7980,14 @@ _MAIN_CSS = """
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
     .st-key-hm_sub_picker [data-testid="stButtonGroup"] button,
     .st-key-tb_sub_picker [data-testid="stButtonGroup"] button {
+        /* Nút CHƯA chọn nền trong suốt (giữ nguyên, xem chú thích trên) nên đứng TRỰC TIẾP trên
+           var(--bg) -- màu chữ PHẢI đọc var(--text-on-bg-2) (không phải var(--text-2)) để không
+           gần như biến mất trên 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), cùng lý do đã áp
+           cho .sec-ch-*/billboard trước đó -- 6 bảng "nhạt" còn lại 2 token này trùng giá trị nên
+           không đổi gì. */
         background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
-        color: var(--text-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
+        color: var(--text-on-bg-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
     .st-key-bc_sub_picker button[data-selected="true"], .st-key-hm_sub_picker button[data-selected="true"],
     .st-key-tb_sub_picker button[data-selected="true"] {
