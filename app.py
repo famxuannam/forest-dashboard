@@ -4960,6 +4960,9 @@ def render_note_editor(day, day_badges=None):
 
                 qn_day = _quick_notes_on(load_quick_notes(), day)
                 merge_pending_key = f"note_merge_pending_{day}"
+                # del_pending_key: "chờ xoá" -- xem docstring hàm này (đoạn nút Xoá bên dưới) để
+                # biết vì sao KHÔNG xoá quick_notes ngay khi ô soạn đang mở.
+                del_pending_key = f"note_del_pending_{day}"
                 if not qn_day.empty:
                     st.markdown("<span class='rl-book' style='margin-top:8px;'>Ghi chú nhanh</span>",
                                 unsafe_allow_html=True)
@@ -4967,12 +4970,27 @@ def render_note_editor(day, day_badges=None):
                         _qid = int(r['id'])
                         qedit_key = f"qnote_edit_{_qid}"
                         _pending = _qid in st.session_state.get(merge_pending_key, [])
+                        _del_pending = _qid in st.session_state.get(del_pending_key, [])
                         with st.container(key=f"qnote_row_{_qid}"):
                             qc1, qc2, qc3 = st.columns([2, 14, 4])
                             with qc1:
                                 st.markdown(f"<span class='qn-time'>{r['Thời gian']:%H:%M}</span>",
                                             unsafe_allow_html=True)
-                            if st.session_state.get(qedit_key, False):
+                            if _del_pending:
+                                # Chờ xoá (xem docstring nút Xoá) -- vẫn giữ NGUYÊN hàng
+                                # qnote_row_<id> (không bỏ khỏi vòng lặp) để không đổi số lượng
+                                # phần tử đứng trước ô soạn Quill; chỉ đổi NỘI DUNG bên trong
+                                # (gạch ngang + 1 nút Hoàn tác) -- an toàn, không kích hoạt lại
+                                # bug remount đã gặp.
+                                with qc2:
+                                    st.markdown(f"<span class='qn-text qn-delpending'>{html_escape(str(r['Nội dung']))}</span>",
+                                                unsafe_allow_html=True)
+                                with qc3:
+                                    if st.button("", icon=":material/undo:", key=f"qnote_undodel_{_qid}",
+                                                 help="Hoàn tác xoá"):
+                                        st.session_state[del_pending_key].remove(_qid)
+                                        st.rerun()
+                            elif st.session_state.get(qedit_key, False):
                                 qinput_key = f"qnote_input_{_qid}"
                                 with qc2:
                                     st.text_area("Sửa ghi chú nhanh", value=str(r['Nội dung']),
@@ -5018,7 +5036,23 @@ def render_note_editor(day, day_badges=None):
                                             st.rerun()
                                         if st.button("", icon=":material/delete:", key=f"qnote_del_{_qid}",
                                                      help="Xoá"):
-                                            delete_quick_note(_qid)
+                                            if st.session_state.get(edit_key, False):
+                                                # Ô soạn Quill đang mở -- KHÔNG xoá quick_notes
+                                                # ngay: bớt 1 hàng qnote_row_<id> ở đây khiến
+                                                # Streamlit dựng lại widget Quill bên dưới (bug
+                                                # thật đã gặp + xác nhận qua Playwright: nội dung
+                                                # đang gõ dở bị xoá trắng/component chớp tắt), vì
+                                                # Quill là component "uncontrolled" chạy trong
+                                                # iframe riêng, remount ngoài ý muốn luôn mất trắng
+                                                # phần chưa kịp đồng bộ. Chỉ đánh dấu "chờ xoá",
+                                                # xoá thật khi bấm Cập nhật/Huỷ (cùng cơ chế "chờ
+                                                # gộp" merge_pending_key đã có) -- hàng vẫn đứng
+                                                # nguyên vị trí, chỉ đổi nội dung con bên trong nên
+                                                # không đụng tới bug remount này.
+                                                st.session_state.setdefault(del_pending_key, [])
+                                                st.session_state[del_pending_key].append(_qid)
+                                            else:
+                                                delete_quick_note(_qid)
                                             if _qid in st.session_state.get(merge_pending_key, []):
                                                 st.session_state[merge_pending_key].remove(_qid)
                                             st.rerun()
@@ -5072,14 +5106,24 @@ def render_note_editor(day, day_badges=None):
                                 # chỉ bỏ đánh dấu, không đụng tới bảng quick_notes.
                                 for _pid in st.session_state.pop(merge_pending_key, []):
                                     delete_quick_note(_pid)
+                                # Ghi chú nhanh đã bấm "Xoá" trong lúc ô soạn mở (xem nút Xoá ở
+                                # trên) cũng chỉ thực sự xoá TẠI ĐÂY -- ý xoá đã chắc chắn (không
+                                # như merge, không cần chờ ghi chú chính lưu thành công) nên vẫn xoá
+                                # dù người dùng bấm Huỷ/Xoá ghi chú thay vì Cập nhật (2 nhánh dưới).
+                                for _pid in st.session_state.pop(del_pending_key, []):
+                                    delete_quick_note(_pid)
                                 st.session_state[edit_key] = False
                                 st.rerun()
                             if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}"):
                                 st.session_state.pop(merge_pending_key, None)
+                                for _pid in st.session_state.pop(del_pending_key, []):
+                                    delete_quick_note(_pid)
                                 st.session_state[edit_key] = False
                                 st.rerun()
                             if cur and st.button("Xoá ghi chú", icon=":material/delete:", key=f"note_del_{day}"):
                                 st.session_state.pop(merge_pending_key, None)
+                                for _pid in st.session_state.pop(del_pending_key, []):
+                                    delete_quick_note(_pid)
                                 save_note(day, "")
                                 st.session_state[edit_key] = False
                                 st.rerun()
@@ -9316,6 +9360,11 @@ _MAIN_CSS = """
     /* .qn-merged: ghi chú nhanh đã bấm "Gộp", đang chờ Cập nhật ghi chú chính mới thực sự xoá --
        gạch ngang + nhạt màu để phân biệt với các dòng chưa xử lý, không cần xoá khỏi UI ngay. */
     .qn-merged { text-decoration: line-through; color: var(--text-3); }
+    /* .qn-delpending: đã bấm "Xoá" trong lúc ô soạn Quill đang mở -- xem docstring nút Xoá
+       (render_note_editor()) về lý do KHÔNG bỏ hẳn hàng này khỏi UI ngay (tránh Streamlit dựng
+       lại widget Quill làm mất nội dung đang gõ dở). Tông đỏ nhạt (khác teal của .qn-merged) để
+       phân biệt rõ "sẽ xoá" với "sẽ gộp". */
+    .qn-delpending { text-decoration: line-through; color: #ff3b30; opacity: 0.6; }
     .qn-line { padding: 4px 0; }
     .qn-line + .qn-line { border-top: 1px solid var(--divider); }
     /* Ghi chú nhanh (Ghi chú ngày, có sửa/xoá): mỗi quick note 1 hàng st.columns() thật (badge
@@ -11818,7 +11867,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12485
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12539
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12299,9 +12348,14 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="264-274", date="22/07/2026", pr_lines=29, total_lines=12485,
-             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 4 sửa tương phản/spacing/tooltip mobile",
+        dict(pr="264-275", date="22/07/2026", pr_lines=62, total_lines=12539,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 5 sửa tương phản/spacing/tooltip/ghi chú nhanh",
              bullets=[
+                 "**Sửa lỗi xoá ghi chú nhanh trong lúc đang mở ô soạn Ghi chú chính làm mất/hỏng "
+                 "nội dung đang gõ dở** (trang Hôm nay) — xoá 1 dòng phía trên khiến Streamlit dựng "
+                 "lại widget soạn thảo (Quill), có thể xoá trắng phần chưa kịp lưu. Giờ chỉ đánh dấu "
+                 "\"chờ xoá\" (gạch ngang, có nút Hoàn tác), xoá thật khi bấm Cập nhật/Huỷ — cùng cơ "
+                 "chế \"chờ gộp\" đã có, không còn đụng tới ô soạn đang mở.",
                  "**Sửa spacing hẹp bất thường giữa panel số liệu và 2 thẻ \"Theo buổi\"/\"Độ dài "
                  "phiên\" ngay dưới** (desktop, Sách/Gundam → Tổng quan và mọi sub-tab Báo cáo) — "
                  "panel thiếu margin dưới nên khoảng cách này chỉ còn 10px thay vì 24px như mọi cặp "
