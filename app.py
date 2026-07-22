@@ -4530,17 +4530,19 @@ RLCAL_CSS = """
 .rlcal-daynum { font-size:17px; font-weight:800; border-radius:999px; min-width:28px; height:28px;
     display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .rlcal-done { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
-.rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--text); background:var(--chip);
+.rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--accent-dark);
+    background:rgba(var(--accent-rgb),0.16); border:1px solid rgba(var(--accent-rgb),0.22);
     border-radius:6px; padding:2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rlcal-more { font-size:10.5px; color:var(--text-3); }
 .rlcal-quote { font-size:10px; font-weight:700; color:var(--accent); margin-top:4px; opacity:.85; }
 /* Icon Material Symbols (font Streamlit đã tự load sẵn, xem .jchip.book::before) thay ký hiệu chữ
-   trần "✓"/"❝" cũ -- xác nhận với người dùng: nhìn "đẹp" hơn hẳn 2 ký tự đó. */
-.rlcal-quote::before, .rlcal-cnt-done::before, .rlcal-cnt-quote::before {
+   trần "✓"/"❝"/thời gian cũ -- xác nhận với người dùng: nhìn "đẹp" hơn hẳn. */
+.rlcal-quote::before, .rlcal-cnt-done::before, .rlcal-cnt-quote::before, .rlcal-cnt-time::before {
     font-family:'Material Symbols Rounded'; font-size:11px; vertical-align:-1px; margin-right:2px;
 }
 .rlcal-quote::before, .rlcal-cnt-quote::before { content:"format_quote"; }
 .rlcal-cnt-done::before { content:"task_alt"; font-size:10px; }
+.rlcal-cnt-time::before { content:"schedule"; font-size:10px; }
 /* Bản gọn "chỉ số lượng" (icon+N phần/tập, icon+N trích dẫn) -- CHỈ hiện ở mobile, thay cho
    .rlcal-done/.rlcal-quote đầy đủ (tên phần/nội dung trích dẫn, quá dài cho ô hẹp trên điện
    thoại) -- ẩn ở desktop (đã có bản đầy đủ + hover xem chi tiết) để không lặp thông tin 2 lần. */
@@ -4573,7 +4575,7 @@ RLCAL_CSS = """
     .rlcal-counts { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
     .rlcal-cnt { font-size:9px; font-weight:700; color:var(--text-2); white-space:nowrap; }
     .rlcal-cnt-time { color:var(--accent); }
-    .rlcal-cnt-done::before, .rlcal-cnt-quote::before { font-size:9px; }
+    .rlcal-cnt-done::before, .rlcal-cnt-quote::before, .rlcal-cnt-time::before { font-size:9px; }
 }
 </style>
 """
@@ -8567,6 +8569,13 @@ _MAIN_CSS = """
        báo tay. */
     .st-key-note_card { padding: var(--card-pad) !important; }
     [class*="st-key-jcard"] { padding: 6px 18px !important; }
+    /* Lịch Nhật ký đọc/xem (jcard_sach_journal/jcard_gundam_journal) KHÔNG dùng .jrows nhiều hàng
+       tự đệm dọc như các jcard khác -- nội dung là 1 lưới .rlcal-grid không có padding đáy riêng,
+       nên 6px của rule chung ở trên khiến hàng ngày cuối tháng gần như dính viền đáy card (ảnh
+       chụp người dùng gửi). Nới đáy 16px cho cân với 18px 2 bên, chỉ áp cho đúng 2 card lịch này. */
+    [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"] {
+        padding-bottom: 16px !important;
+    }
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
        Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
