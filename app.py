@@ -3872,39 +3872,40 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     if show_favorites:
         _tab_labels.append(":material/format_quote: Trích dẫn")
     _tab_labels.append(":material/search: Chi tiết")
-    # Preset tab "Chi tiết" (luôn tab CUỐI, _tab_labels[-1]) từ deep-link (?book=/?series=) --
-    # tách riêng tham số cho Sách/Gundam vì cả 2 khối "if nav == ..." đều chạy độc lập, không
-    # được đè tham số của nhau (cùng lý do sub/hsub tách riêng, xem architecture-navigation.md).
-    # on_change="rerun" bắt buộc để key=... đọc/ghi được tab đang mở (Streamlit chỉ hỗ trợ vậy
-    # khi on_change là "rerun" hoặc 1 callable) -- không dùng cơ chế _jump kiểu grp_sel vì mọi
-    # lối vào trang này đều qua <a target="_self"> (reload toàn trang -> session MỚI), không có
-    # nguy cơ "widget đã instantiate trong cùng lượt chạy" như click biểu đồ trong-phiên.
+    # segmented_control (không phải st.tabs() như trước) -- đồng bộ đúng kiểu "tab gạch chân" đã
+    # dùng cho MỌI sub-tab picker khác trong app (Báo cáo/Sức khoẻ/Tuỳ biến, xem .st-key-
+    # bc_sub_picker/.st-key-hm_sub_picker/.st-key-tb_sub_picker) -- st.tabs() không nhận được đủ
+    # bộ CSS riêng cho nút CHƯA chọn (màu chữ safe trên 4 bảng nền đậm cố định, khoảng cách/font
+    # nhất quán) như segmented_control, khiến 2 kiểu nav trông lệch nhau (phản hồi thực tế, ảnh
+    # chụp người dùng gửi). Cùng khuôn 2 key bc_sub_picker/bc_sub: _tabs_key giờ là SOURCE OF
+    # TRUTH (đọc/set trực tiếp), key widget tách riêng "_picker" -- không set thẳng vào key widget
+    # vì nó đã instantiate trong CÙNG lượt chạy sẽ lỗi StreamlitAPIException (xem render_health_page).
+    # Preset tab "Chi tiết" (luôn tab CUỐI) từ deep-link (?book=/?series=) -- tách riêng tham số
+    # cho Sách/Gundam vì cả 2 khối "if nav == ..." đều chạy độc lập, không được đè tham số của
+    # nhau (cùng lý do sub/hsub tách riêng, xem architecture-navigation.md).
     _tabs_key = "rl_view_tabs" if show_favorites else "rl_view_tabs_gd"
     _rl_qparam = "book" if show_favorites else "series"
-    if _tabs_key not in st.session_state and st.query_params.get(_rl_qparam):
-        st.session_state[_tabs_key] = _tab_labels[-1]
-    _tabs = st.tabs(_tab_labels, key=_tabs_key, on_change="rerun")
-    _tab_overview = _tabs[0]
-    if show_favorites:
-        _tab_quotes, _tab_detail = _tabs[1], _tabs[2]
-    else:
-        _tab_detail = _tabs[1]
+    if _tabs_key not in st.session_state:
+        st.session_state[_tabs_key] = _tab_labels[-1] if st.query_params.get(_rl_qparam) else _tab_labels[0]
+    _sub_pick = st.segmented_control(
+        "Chọn mục", _tab_labels, default=st.session_state[_tabs_key],
+        key=f"{_tabs_key}_picker", label_visibility="collapsed")
+    if _sub_pick and _sub_pick != st.session_state[_tabs_key]:
+        st.session_state[_tabs_key] = _sub_pick
+    _sel = st.session_state[_tabs_key]
 
     # Tên trang cho hero -- chỉ Sách mới có tab Trích dẫn (show_favorites) nên dùng luôn cờ đó để
     # suy ra thay vì thêm 1 tham số page_name riêng trùng lặp thông tin.
     _page_name = "Sách" if show_favorites else "Gundam"
 
-    with _tab_overview:
+    if _sel == _tab_labels[0]:
         _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                                   _today, labels, _page_name, reading_log_df)
         if extra_overview is not None:
             extra_overview()
-
-    if show_favorites:
-        with _tab_quotes:
-            _render_kindle_quotes_tab()
-
-    with _tab_detail:
+    elif show_favorites and _sel == _tab_labels[1]:
+        _render_kindle_quotes_tab()
+    elif _sel == _tab_labels[-1]:
         _render_reading_detail(t, reading_log_df, labels, _page_name, df_books)
 
 
@@ -4520,16 +4521,17 @@ RLCAL_CSS = """
 .rlcal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
 .rlcal-dow { text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.6px;
     text-transform:uppercase; color:var(--text-3); padding:2px 0 6px; }
-.rlcal-cell { position:relative; min-height:78px; border-radius:9px; padding:6px 7px; }
+.rlcal-cell { position:relative; min-height:108px; border-radius:9px; padding:7px 8px;
+    border:1px solid var(--divider); }
 .rlcal-cell.has:hover { z-index:30; }
 .rlcal-top { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
 .rlcal-time { font-size:10.5px; font-weight:800; color:var(--accent); background:rgba(var(--accent-rgb),0.13);
     border-radius:999px; padding:1.5px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
 .rlcal-daynum { font-size:11px; font-weight:600; border-radius:999px; min-width:19px; height:19px;
     display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.rlcal-done { margin-top:5px; display:flex; flex-direction:column; gap:2px; }
-.rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--text); white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; }
+.rlcal-done { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
+.rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--text); background:var(--chip);
+    border-radius:6px; padding:2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rlcal-more { font-size:10.5px; color:var(--text-3); }
 .rlcal-quote { font-size:10px; font-weight:700; color:var(--accent); margin-top:4px; opacity:.85; }
 .rlcal-link { position:absolute; inset:0; display:block; text-decoration:none; color:inherit; border-radius:inherit; }
@@ -4546,11 +4548,8 @@ RLCAL_CSS = """
 .rlcal-tip-qt { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
 .rlcal-tip-ql { font-size:11.5px; font-style:italic; line-height:1.4; color:var(--text-2); margin-top:3px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.rlcal-legend { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:14px; }
-.rlcal-legend span.lb { font-size:11px; color:var(--text-3); }
-.rlcal-sw { width:14px; height:14px; border-radius:4px; display:inline-block; }
 @media (max-width: 640px) {
-    .rlcal-cell { min-height:52px; padding:4px 5px; }
+    .rlcal-cell { min-height:64px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
     .rlcal-tip { display:none !important; }
     .rlcal-time { font-size:9px; padding:1px 4px; }
@@ -4719,12 +4718,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             f"{_done_html}{_quote_html}{_tip_html}</div>"
         )
 
-    legend_html = "".join(f"<span class='rlcal-sw' style='background:{c};'></span>" for c in LVL_COLORS)
-    st.markdown(
-        RLCAL_CSS
-        + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>"
-        + f"<div class='rlcal-legend'><span class='lb'>Ít</span>{legend_html}<span class='lb'>Nhiều</span></div>",
-        unsafe_allow_html=True)
+    st.markdown(RLCAL_CSS + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>", unsafe_allow_html=True)
 
 
 def render_day_timeline(day_df):
@@ -8184,13 +8178,19 @@ _MAIN_CSS = """
         gap: 4px !important;
     }
 
-    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo) và
-       "Xem theo" (Sức khoẻ) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt
-       .st-key-nav ở trên. Đổi thêm dáng nút từ pill sang tab gạch chân (giống Tổng quan/Chi tiết
-       ở Sách/Gundam) cho gọn và nhất quán, thay vì nền đặc teal như nav chính -- gap:0 để huỷ gap
-       chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên
-       dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn). */
-    .st-key-bc_sub_picker, .st-key-hm_sub_picker, .st-key-tb_sub_picker { width: 100% !important; }
+    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo),
+       "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem
+       render_reading_log() -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông
+       lệch hẳn so với các sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác
+       nhận với người dùng qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục
+       giống hệt .st-key-nav ở trên. Dáng nút tab gạch chân (không phải nền đặc teal như nav
+       chính) -- gap:0 để huỷ gap chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0
+       14px của từng nút bên dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá
+       lớn). [class*="st-key-rl_view_tabs"] (substring, KHÔNG phải class chính xác) vì Sách dùng
+       key "rl_view_tabs_picker", Gundam "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ
+       khớp 1 trong 2 trang. */
+    .st-key-bc_sub_picker, .st-key-hm_sub_picker, .st-key-tb_sub_picker,
+    [class*="st-key-rl_view_tabs"] { width: 100% !important; }
     /* Không override -> mặc định margin-bottom:10px của stButtonGroup cộng gap flex 10px ra
        tổng 20px xuống billboard, gấp đôi khoảng "Nav -> sub-tab picker" (12px, xem `.st-key-nav`
        ở trên) dù nhìn sơ tưởng đã đều -- đo thật bằng Playwright phát hiện lệch hẳn 4px/20px. Đặt
@@ -8199,12 +8199,15 @@ _MAIN_CSS = """
        "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn giữa như Báo cáo/Sức khoẻ, không
        phải dáng nút pill của nav chính). */
     .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"],
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
+    .st-key-tb_sub_picker [data-testid="stButtonGroup"],
+    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
+    .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
+    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
     .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+    .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         /* Nút CHƯA chọn nền trong suốt (giữ nguyên, xem chú thích trên) nên đứng TRỰC TIẾP trên
            var(--bg) -- màu chữ PHẢI đọc var(--text-on-bg-2) (không phải var(--text-2)) để không
            gần như biến mất trên 4 bảng nền đậm cố định (BG_PALETTES_DARK_BG), cùng lý do đã áp
@@ -8225,28 +8228,25 @@ _MAIN_CSS = """
         color: var(--text-on-bg-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
     .st-key-bc_sub_picker button[data-selected="true"], .st-key-hm_sub_picker button[data-selected="true"],
-    .st-key-tb_sub_picker button[data-selected="true"] {
+    .st-key-tb_sub_picker button[data-selected="true"],
+    [class*="st-key-rl_view_tabs"] button[data-selected="true"] {
         /* var(--tab-accent) thay vì var(--accent) thẳng -- xem _tab_accent (khối :root): bản sáng
            hơn của accent khi rơi vào 1 trong 4 bảng "nền đậm cố định" để không lẫn vào nền đậm
            cùng tông, giữ nguyên var(--accent) (không đổi gì) ở 6 bảng còn lại. */
         background: transparent !important; color: var(--tab-accent) !important; font-weight: 600 !important;
         border-bottom-color: var(--tab-accent) !important; box-shadow: none !important;
     }
-    /* [class*=...] (substring), KHÔNG phải .st-key-rl_view_tabs (class chính xác) -- Sách dùng
-       key "rl_view_tabs", Gundam dùng "rl_view_tabs_gd" (tách riêng để không đụng state tab khi
-       chuyển qua lại 2 trang, xem render_reading_log()); chọn theo class chính xác trước đây chỉ
-       khớp Sách, khiến tab Gundam mất hẳn rule căn giữa/ẩn vạch xám bên dưới. */
-    [class*="st-key-rl_view_tabs"] [role="tablist"] { justify-content: center !important; }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
-       data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
-       segmented_control tự dựng, không có vạch này). Ẩn CHUNG cho MỌI st.tabs() trong app (không
-       chỉ rl_view_tabs/tb_phanloai_tabs như trước -- xác nhận với người dùng: nút đang chọn ở MỌI
-       nav bar sub-tab, dù dựng bằng segmented_control hay st.tabs(), chỉ nên còn lại đúng 1 đường
-       kẻ màu accent bên dưới, không kèm vạch xám full-width phía sau tạo cảm giác "đường đúp" --
-       cùng nguyên tắc "đồng bộ" đã áp cho màu chữ/vạch chọn ở rule .react-aria-SelectionIndicator
-       ngay dưới, không scope theo key vì áp dụng chung cho MỌI st.tabs() kể cả nơi không đặt key
-       (vd 4 tab "Dự phòng" ở "1. Dữ liệu đầu vào" trang Tuỳ biến). */
+       data-baseweb="tab-border", đã đổi hẳn) -- không có ở segmented_control (tự dựng, không có
+       vạch này). Ẩn CHUNG cho các st.tabs() còn lại trong app (Tuỳ biến -> "1. Dữ liệu đầu vào",
+       sub-tab Hướng dẫn -- Sách/Gundam đã đổi hẳn sang segmented_control ở trên, không còn
+       st.tabs() nào ở 2 trang đó nữa) -- xác nhận với người dùng: nút đang chọn ở MỌI nav bar
+       sub-tab, dù dựng bằng segmented_control hay st.tabs(), chỉ nên còn lại đúng 1 đường kẻ màu
+       accent bên dưới, không kèm vạch xám full-width phía sau tạo cảm giác "đường đúp" -- cùng
+       nguyên tắc "đồng bộ" đã áp cho màu chữ/vạch chọn ở rule .react-aria-SelectionIndicator ngay
+       dưới, không scope theo key vì áp dụng chung cho MỌI st.tabs() kể cả nơi không đặt key (vd 4
+       tab "Dự phòng" ở "1. Dữ liệu đầu vào" trang Tuỳ biến). */
     [role="tablist"]::after { display: none !important; }
 
     /* Pagination MỌI bảng .dtbl căn giữa: stPagination là flex full-width nhưng justify
@@ -8416,8 +8416,9 @@ _MAIN_CSS = """
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
 
-    /* Mọi st.tabs() trong app (Tổng quan/Chi tiết ở Sách & Gundam, "1. Dữ liệu đầu vào" ở Tuỳ
-       biến, sub-tab ở Hướng dẫn): tab đang chọn + vạch gạch chân mặc định lấy theo primaryColor
+    /* Mọi st.tabs() còn lại trong app ("1. Dữ liệu đầu vào" ở Tuỳ biến, sub-tab ở Hướng dẫn --
+       Sách/Gundam đã đổi sang segmented_control, không còn dùng st.tabs() nữa): tab đang chọn +
+       vạch gạch chân mặc định lấy theo primaryColor
        cứng trong .streamlit/config.toml (#00a3ad) chứ KHÔNG theo accent đang chọn -- override
        lại bằng var(--accent) cho đồng bộ. Streamlit >=1.59 đổi hẳn markup nội bộ (không còn
        [data-baseweb="tab"]/"tab-highlight" nữa -- tab dùng role="tab" + aria-selected qua
