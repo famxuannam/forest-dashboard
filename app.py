@@ -4556,10 +4556,16 @@ RLCAL_CSS = """
     .rlcal-cell { min-height:74px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
     .rlcal-tip { display:none !important; }
-    .rlcal-time { font-size:9px; padding:1px 4px; }
+    /* Bỏ hẳn chip thời gian dạng pill ở mobile (nền + padding + bo tròn dễ bị cắt chữ trong ô
+       hẹp, ảnh chụp người dùng gửi thấy "24′" chỉ còn "2") -- thời gian chuyển sang hiện trong
+       .rlcal-counts (cùng hàng với ✓N/❝N, chữ trần không nền, xem _count_parts trong Python) --
+       xác nhận với người dùng. */
+    .rlcal-time { display:none; }
+    .rlcal-top { justify-content:flex-end; }
     .rlcal-daynum { font-size:14px; min-width:24px; height:24px; }
     .rlcal-counts { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
     .rlcal-cnt { font-size:9px; font-weight:700; color:var(--text-2); white-space:nowrap; }
+    .rlcal-cnt-time { color:var(--accent); }
 }
 </style>
 """
@@ -4702,6 +4708,8 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             _done_html += "</div>"
         _quote_html = f"<div class='rlcal-quote'>❝ {len(d_quotes)} trích dẫn</div>" if d_quotes else ""
         _count_parts = []
+        if d_min > 0:
+            _count_parts.append(f"<span class='rlcal-cnt rlcal-cnt-time'>{_fmt_hours_short(d_min / 60)}</span>")
         if d_done:
             _count_parts.append(f"<span class='rlcal-cnt'>✓ {len(d_done)}</span>")
         if d_quotes:
