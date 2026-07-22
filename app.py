@@ -2369,10 +2369,6 @@ def format_plotly_fig(fig):
     return fig
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
-# Mốc riêng cho "Nhật ký đọc/xem" (Sách/Gundam Tổng quan) -- nhỏ hơn RANGE_OPTS vì liệt kê từng
-# ngày (6 tháng/1 năm sẽ ra trang rất dài), thêm "7 ngày" (RANGE_OPTS không có) cho khoảng hẹp
-# nhất có thể xem nhật ký gần đây.
-JOURNAL_RANGE_OPTS = {"7 ngày": 7, "14 ngày": 14, "30 ngày": 30, "90 ngày": 90, "Tất cả": None}
 
 def filter_by_range(df_all, label):
     """Lọc df theo nhãn khoảng thời gian (mốc tính từ ngày mới nhất)."""
@@ -4081,8 +4077,8 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
     sao mà dữ liệu hiện có không có (xem docstring _render_gundam_billboard), sau khi bỏ 2 thứ đó
     bảng gần như trùng hệt _render_stats_table() sẵn có -- xác nhận với người dùng dùng khung 3
     chương giống hệt Sách (Thống kê/Nhật ký xem/Bảng số liệu) thay vì dựng 1 bảng mới gần trùng
-    lặp. "Nhật ký xem" tái dùng nguyên _reading_rows_html() (cùng cơ chế "Nhật ký đọc" của Sách,
-    lọc theo reading_log_df đã là rl_gundam sẵn -- không cần lọc lại theo _is_gundam_list)."""
+    lặp. "Nhật ký xem" tái dùng nguyên _render_reading_calendar_month() (cùng cơ chế "Nhật ký đọc"
+    của Sách, chỉ khác không có kh_df -- xem _render_journal() bên dưới)."""
     def _render_stats_cards():
         # Thẻ 1: hero + Tổng kết (theo đầu cuốn). "Tổng giờ" CHỈ hiện ở Sách -- billboard Sách chỉ
         # show giờ đọc NĂM NAY (không trùng hero toàn thời gian ở đây), còn billboard Gundam
@@ -4204,33 +4200,16 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                                        f"Hiển thị {labels['item_col'].lower()} {_start + 1}–{_end} / {_n}")
 
     def _render_journal(ns, empty_noun):
-        """Mục "Nhật ký đọc"/"Nhật ký xem": bộ lọc "Khoảng thời gian" (JOURNAL_RANGE_OPTS, mặc
-        định "14 ngày" -- giữ đúng hành vi cũ trước khi có bộ lọc này) + phân trang theo ngày
-        (_reading_rows_html(page_key=...), TABLE_PAGE_SIZE/trang). Lọc CẢ 2 nguồn (reading_log_df
-        lẫn df_books) theo CÙNG 1 mốc cutoff -- thiếu lọc df_books từng khiến ngày CHỈ có phiên
-        Forest (không chương hoàn thành) hiện xuyên suốt TOÀN BỘ lịch sử thay vì đúng khoảng đang
-        chọn (bug thật phát hiện lúc thêm bộ lọc này, xem _reading_rows_html)."""
-        _range = st.segmented_control("Khoảng thời gian", list(JOURNAL_RANGE_OPTS.keys()),
-                                        default="14 ngày", key=f"jr_range_{ns}", label_visibility="collapsed")
-        _range = _range or "14 ngày"
-        _days_n = JOURNAL_RANGE_OPTS[_range]
-        if _days_n is not None:
-            _cutoff = pd.Timestamp(_today - timedelta(days=_days_n - 1))
-            _rl_f = reading_log_df[reading_log_df['Ngày hoàn thành'] >= _cutoff] if not reading_log_df.empty else reading_log_df
-            _sess_f = df_books[pd.to_datetime(df_books['Ngày']) >= _cutoff] if not df_books.empty else df_books
-        else:
-            _rl_f, _sess_f = reading_log_df, df_books
+        """Mục "Nhật ký đọc"/"Nhật ký xem": lịch tháng (_render_reading_calendar_month, thay bảng
+        liệt kê theo trang cũ) -- xem docstring hàm đó. kh_df (số trích dẫn/ngày) CHỈ tải cho Sách
+        (ns == "sach"), lọc đúng những cuốn đang thuộc phạm vi trang này (t['Cuốn sách']) -- Gundam
+        không có khái niệm trích dẫn Kindle."""
+        _kh = None
+        if ns == "sach":
+            _kh_all = load_kindle_highlights()
+            _kh = _kh_all[_kh_all['Cuốn sách'].isin(t['Cuốn sách'])] if not _kh_all.empty else _kh_all
         with st.container(border=True, key=f"jcard_{ns}_journal"):
-            if _rl_f.empty and _sess_f.empty:
-                _phrase = f" trong {_range.lower()} gần đây" if _days_n is not None else ""
-                st.caption(f"Chưa có {empty_noun} nào{_phrase}.")
-            else:
-                _pg_key = f"jr_page_{ns}"
-                rows_html, num_pages = _reading_rows_html(_rl_f, sort_desc=False, sessions_df=_sess_f, page_key=_pg_key)
-                st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
-                if num_pages > 1:
-                    _render_table_pagination(num_pages, _pg_key,
-                                               f"Trang {st.session_state.get(_pg_key, 1)}/{num_pages}")
+            _render_reading_calendar_month(ns, reading_log_df, df_books, _kh, empty_noun)
 
     if page_name == "Gundam":
         _render_gundam_billboard(t, df_books, reading_log_df, _today)
@@ -4508,6 +4487,233 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
         background='transparent',
     ).configure_view(strokeWidth=0)
     st.altair_chart(chart, width='content')
+
+
+def _reading_cal_lvl(mins):
+    """Bậc màu heatmap theo phút -- CÙNG 6 mốc giờ cố định với render_reading_calendar_grid()
+    (0/<0.5h/<1h/<2h/<4h/>=4h), không co giãn theo tháng đang xem, khớp triết lý "thang màu cố
+    định" đã xác nhận cho mọi Biểu đồ lịch trong app (xem tab Trợ giúp)."""
+    h = mins / 60
+    if h <= 0: return 0
+    if h < 0.5: return 1
+    if h < 1: return 2
+    if h < 2: return 3
+    if h < 4: return 4
+    return 5
+
+
+RLCAL_CSS = """
+<style>
+.rlcal-title { font-size:15px; font-weight:700; min-width:120px; text-align:center; white-space:nowrap; }
+.rlcal-summary { font-size:12.5px; color:var(--text-2); text-align:right; margin:-4px 0 10px; }
+.rlcal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+.rlcal-dow { text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); padding:2px 0 6px; }
+.rlcal-cell { position:relative; min-height:78px; border-radius:9px; padding:6px 7px; }
+.rlcal-cell.has:hover { z-index:30; }
+.rlcal-top { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
+.rlcal-time { font-size:10.5px; font-weight:800; color:var(--accent); background:rgba(var(--accent-rgb),0.13);
+    border-radius:999px; padding:1.5px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.rlcal-daynum { font-size:11px; font-weight:600; border-radius:999px; min-width:19px; height:19px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.rlcal-done { margin-top:5px; display:flex; flex-direction:column; gap:2px; }
+.rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--text); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+.rlcal-more { font-size:10.5px; color:var(--text-3); }
+.rlcal-quote { font-size:10px; font-weight:700; color:var(--accent); margin-top:4px; opacity:.85; }
+.rlcal-link { position:absolute; inset:0; display:block; text-decoration:none; color:inherit; border-radius:inherit; }
+.rlcal-tip { display:none; position:absolute; width:250px; background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,0.22); z-index:40;
+    pointer-events:none; text-align:left; }
+.rlcal-cell:hover .rlcal-tip { display:block; }
+.rlcal-tip-hd { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.rlcal-tip-date { font-size:12.5px; font-weight:800; color:var(--text); }
+.rlcal-tip-time { font-size:12px; font-weight:700; color:var(--accent); }
+.rlcal-tip-line { font-size:12px; line-height:1.45; color:var(--text-2); display:flex; gap:6px; margin-top:5px; }
+.rlcal-tip-dot { width:4px; height:4px; margin-top:6px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+.rlcal-tip-q { margin-top:9px; padding-top:9px; border-top:1px solid var(--divider); }
+.rlcal-tip-qt { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
+.rlcal-tip-ql { font-size:11.5px; font-style:italic; line-height:1.4; color:var(--text-2); margin-top:3px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.rlcal-legend { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:14px; }
+.rlcal-legend span.lb { font-size:11px; color:var(--text-3); }
+.rlcal-sw { width:14px; height:14px; border-radius:4px; display:inline-block; }
+@media (max-width: 640px) {
+    .rlcal-cell { min-height:52px; padding:4px 5px; }
+    .rlcal-done, .rlcal-quote { display:none; }
+    .rlcal-tip { display:none !important; }
+    .rlcal-time { font-size:9px; padding:1px 4px; }
+    .rlcal-daynum { font-size:10px; min-width:16px; height:16px; }
+}
+</style>
+"""
+
+
+def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
+    """Lịch tháng cho mục "Nhật ký đọc"/"Nhật ký xem" (Sách/Gundam -> Tổng quan), thay bảng liệt
+    kê theo trang cũ: mỗi ô ngày có chip thời gian đọc/xem, phần/tập hoàn thành, số trích dẫn
+    (chỉ Sách -- kh_df=None ở Gundam) + tô nền heatmap theo 6 bậc giờ CỐ ĐỊNH (xem _reading_cal_lvl,
+    cùng thang với render_reading_calendar_grid -- nhất quán "thang màu cố định" toàn app thay vì
+    co giãn riêng theo tháng đang xem). Hover 1 ô có dữ liệu hiện tooltip đầy đủ (CSS thuần, không
+    cần JS); ô đó cũng là link nhảy sang trang "Hôm nay" đúng ngày -- vừa là lối ra cho mobile
+    (không hover được) vừa khớp quy ước .jdate-link đã dùng ở nơi khác trong app.
+
+    Điều hướng tháng qua st.session_state (khoá rlcal_ym_<ns>), kẹp trong [tháng có dữ liệu sớm
+    nhất, max(tháng có dữ liệu mới nhất, tháng hiện tại)] -- không cho lùi/tiến ra ngoài khoảng có
+    ý nghĩa."""
+    if rl_df.empty and sessions_df.empty:
+        st.caption(f"Chưa có {empty_noun} nào.")
+        return
+
+    _today = _today_vn()
+    _all_dates = []
+    if not rl_df.empty:
+        _all_dates += list(rl_df['Ngày hoàn thành'].dropna())
+    if not sessions_df.empty:
+        _all_dates += list(pd.to_datetime(sessions_df['Ngày']).dropna())
+    _ym = lambda d: (d.year, d.month)
+    _lo_ym = min(_ym(pd.Timestamp(d)) for d in _all_dates)
+    _hi_ym = max([_ym(pd.Timestamp(d)) for d in _all_dates] + [_ym(_today)])
+
+    _skey = f"rlcal_ym_{ns}"
+    if _skey not in st.session_state:
+        st.session_state[_skey] = _hi_ym
+
+    def _clamp(ym):
+        return max(_lo_ym, min(ym, _hi_ym))
+
+    def _shift(delta):
+        y, m = st.session_state[_skey]
+        m += delta
+        if m < 1: y, m = y - 1, 12
+        elif m > 12: y, m = y + 1, 1
+        st.session_state[_skey] = _clamp((y, m))
+
+    def _goto_today():
+        st.session_state[_skey] = _hi_ym
+
+    cur_y, cur_m = st.session_state[_skey]
+
+    with st.container(key=f"rlcal_stepper_{ns}"):
+        c1, c2, c3, c4 = st.columns([1, 1, 6, 2], vertical_alignment="center")
+        with c1:
+            st.button("", icon=":material/chevron_left:", key=f"rlcal_prev_{ns}", on_click=_shift,
+                       args=(-1,), disabled=(cur_y, cur_m) <= _lo_ym, use_container_width=True)
+        with c2:
+            st.button("", icon=":material/chevron_right:", key=f"rlcal_next_{ns}", on_click=_shift,
+                       args=(1,), disabled=(cur_y, cur_m) >= _hi_ym, use_container_width=True)
+        with c3:
+            st.markdown(f"<div class='rlcal-title'>Tháng {cur_m}, {cur_y}</div>", unsafe_allow_html=True)
+        with c4:
+            st.button("Hôm nay", key=f"rlcal_today_{ns}", on_click=_goto_today,
+                       disabled=(cur_y, cur_m) == _hi_ym, use_container_width=True)
+
+    _in_m = lambda s: (s.dt.year == cur_y) & (s.dt.month == cur_m)
+    _sess_by_day = {}
+    if not sessions_df.empty:
+        _sd = pd.to_datetime(sessions_df['Ngày'])
+        _sm = sessions_df.loc[_in_m(_sd)]
+        if not _sm.empty:
+            _sess_by_day = _sm.groupby(pd.to_datetime(_sm['Ngày']).dt.day)['Thời lượng (Phút)'].sum().to_dict()
+
+    _done_by_day = {}
+    if not rl_df.empty:
+        _rm = rl_df.loc[_in_m(rl_df['Ngày hoàn thành'])]
+        if not _rm.empty:
+            for day, g in _rm.groupby(_rm['Ngày hoàn thành'].dt.day):
+                _done_by_day[day] = g.sort_values('Ngày hoàn thành', kind='stable')['Tiêu đề phần'].tolist()
+
+    _quotes_by_day = {}
+    if kh_df is not None and not kh_df.empty:
+        _km = kh_df.loc[(kh_df['Loại'] == 'highlight') & _in_m(kh_df['Ngày thêm'])]
+        if not _km.empty:
+            for day, g in _km.groupby(_km['Ngày thêm'].dt.day):
+                _quotes_by_day[day] = g['Nội dung'].tolist()
+
+    _unit = "đọc" if ns == "sach" else "xem"
+    _total_min = sum(_sess_by_day.values())
+    _active_days = len(set(_sess_by_day) | set(_done_by_day))
+    _total_quotes = sum(len(v) for v in _quotes_by_day.values())
+    if _active_days:
+        _summary = f"{_fmt_hours_short(_total_min / 60)} {_unit} · {_active_days} ngày hoạt động"
+        if _total_quotes:
+            _summary += f" · {_total_quotes} trích dẫn"
+    else:
+        _summary = "Chưa có hoạt động trong tháng này"
+    st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
+
+    first = pd.Timestamp(cur_y, cur_m, 1)
+    lead = first.dayofweek  # Thứ Hai = 0, khớp thứ tự weekdays bên dưới
+    days_in = (first + pd.offsets.MonthEnd(0)).day
+    total_cells = -(-(lead + days_in) // 7) * 7
+
+    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5)
+    weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+    dow_html = "".join(f"<div class='rlcal-dow'>{w}</div>" for w in weekdays)
+
+    cells_html = ""
+    for i in range(total_cells):
+        day_num = i - lead + 1
+        in_month = 1 <= day_num <= days_in
+        row, col = divmod(i, 7)
+        d_min = _sess_by_day.get(day_num, 0) if in_month else 0
+        d_done = _done_by_day.get(day_num, []) if in_month else []
+        d_quotes = _quotes_by_day.get(day_num, []) if in_month else []
+        has = in_month and (d_min > 0 or bool(d_done) or bool(d_quotes))
+        lvl = _reading_cal_lvl(d_min) if in_month else 0
+        bg = LVL_COLORS[lvl] if in_month else "transparent"
+        is_today = in_month and (cur_y, cur_m, day_num) == (_today.year, _today.month, _today.day)
+        _cell_border = "border:1.5px solid var(--accent);" if is_today else ""
+        _dn_bg = "var(--accent)" if is_today else "transparent"
+        _dn_color = "#fff" if is_today else ("var(--text-2)" if in_month else "transparent")
+        _time_html = f"<span class='rlcal-time'>{_fmt_hours_short(d_min / 60)}</span>" if d_min > 0 else "<span></span>"
+        _done_html = ""
+        if d_done:
+            _done_html = "<div class='rlcal-done'>" + "".join(
+                f"<span class='rlcal-donechip'>{html_escape(str(t))}</span>" for t in d_done[:2])
+            if len(d_done) > 2:
+                _done_html += f"<span class='rlcal-more'>+{len(d_done) - 2} khác</span>"
+            _done_html += "</div>"
+        _quote_html = f"<div class='rlcal-quote'>❝ {len(d_quotes)} trích dẫn</div>" if d_quotes else ""
+        _tip_html = ""
+        _link_html = ""
+        if has:
+            if d_done:
+                _tip_lines = "".join(
+                    f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
+                    f"<span>Hoàn thành: {html_escape(str(t))}</span></div>" for t in d_done)
+            elif d_min > 0:
+                _tip_lines = (f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
+                               f"<span>Có phiên {_unit}, chưa hoàn thành phần nào</span></div>")
+            else:
+                _tip_lines = ""
+            _tip_q = ""
+            if d_quotes:
+                _tip_q = (f"<div class='rlcal-tip-q'><div class='rlcal-tip-qt'>{len(d_quotes)} trích dẫn</div>"
+                          + "".join(f"<div class='rlcal-tip-ql'>❝ {html_escape(str(q))}</div>" for q in d_quotes[:3])
+                          + "</div>")
+            _anchor_h = "top:calc(100% + 8px);bottom:auto;" if row == 0 else "bottom:calc(100% + 8px);top:auto;"
+            _anchor_v = "right:-6px;left:auto;" if col >= 5 else "left:-6px;right:auto;"
+            _tip_html = (f"<div class='rlcal-tip' style='{_anchor_h}{_anchor_v}'>"
+                         f"<div class='rlcal-tip-hd'><span class='rlcal-tip-date'>{day_num:02d}/{cur_m:02d}/{cur_y}</span>"
+                         f"<span class='rlcal-tip-time'>{_fmt_hours_short(d_min / 60) if d_min > 0 else ''}</span></div>"
+                         f"{_tip_lines}{_tip_q}</div>")
+            _href = f"?nav={quote('Hôm nay')}&day={cur_y:04d}-{cur_m:02d}-{day_num:02d}"
+            _link_html = f"<a class='rlcal-link' href='{_href}' target='_self'></a>"
+        cells_html += (
+            f"<div class='rlcal-cell{' has' if has else ''}' style='background:{bg};{_cell_border}'>"
+            f"{_link_html}"
+            f"<div class='rlcal-top'>{_time_html}"
+            f"<span class='rlcal-daynum' style='background:{_dn_bg};color:{_dn_color};'>{day_num if in_month else ''}</span></div>"
+            f"{_done_html}{_quote_html}{_tip_html}</div>"
+        )
+
+    legend_html = "".join(f"<span class='rlcal-sw' style='background:{c};'></span>" for c in LVL_COLORS)
+    st.markdown(
+        RLCAL_CSS
+        + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>"
+        + f"<div class='rlcal-legend'><span class='lb'>Ít</span>{legend_html}<span class='lb'>Nhiều</span></div>",
+        unsafe_allow_html=True)
 
 
 def render_day_timeline(day_df):
