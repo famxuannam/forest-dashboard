@@ -8023,13 +8023,14 @@ _MAIN_CSS = """
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở "Chọn kỳ xem" (Báo cáo, dùng
-       segmented_control tự dựng, không có vạch này) -- ẩn đi cho 2 giao diện đồng nhất. Gộp thêm
-       "tb_phanloai_tabs" (2 tab Nhóm/Sách, mục "2. Phân loại" trang Tuỳ biến) vào rule ẩn
-       vạch xám này -- NHƯNG không gộp vào rule căn giữa ở trên: xác nhận với người dùng tab này
-       giữ style gạch chân giống hệt, chỉ riêng CĂN LỀ TRÁI (mặc định justify-content: flex-start
-       của trình duyệt, không cần khai báo lại) thay vì căn giữa như rl_view_tabs. */
-    [class*="st-key-rl_view_tabs"] [role="tablist"]::after,
-    [class*="st-key-tb_phanloai_tabs"] [role="tablist"]::after { display: none !important; }
+       segmented_control tự dựng, không có vạch này). Ẩn CHUNG cho MỌI st.tabs() trong app (không
+       chỉ rl_view_tabs/tb_phanloai_tabs như trước -- xác nhận với người dùng: nút đang chọn ở MỌI
+       nav bar sub-tab, dù dựng bằng segmented_control hay st.tabs(), chỉ nên còn lại đúng 1 đường
+       kẻ màu accent bên dưới, không kèm vạch xám full-width phía sau tạo cảm giác "đường đúp" --
+       cùng nguyên tắc "đồng bộ" đã áp cho màu chữ/vạch chọn ở rule .react-aria-SelectionIndicator
+       ngay dưới, không scope theo key vì áp dụng chung cho MỌI st.tabs() kể cả nơi không đặt key
+       (vd 4 tab "Dự phòng" ở "1. Dữ liệu đầu vào" trang Tuỳ biến). */
+    [role="tablist"]::after { display: none !important; }
 
     /* Pagination MỌI bảng .dtbl căn giữa: stPagination là flex full-width nhưng justify
        flex-start -> đẩy hàng nút vào giữa. margin-top tách khỏi bảng/dtbl-wrap phía trên --
