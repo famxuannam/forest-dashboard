@@ -5985,7 +5985,10 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
     dùng, khác hành vi cũ chỉ duyệt ngày có mặt trong rl_df/kh_df). CỐ Ý KHÔNG hiện "Ghi chú
     ngày"/"Ghi chú nhanh" ở đây (khác Nhật ký Báo cáo Tuần/Tháng, render_notes_journal()) -- xác
     nhận với người dùng mục này chỉ cần đúng Phần/Chương đọc + Thời gian, không cần kéo thêm ghi
-    chú chung của ngày vào (từng thử thêm rồi bỏ lại theo phản hồi thực tế)."""
+    chú chung của ngày vào (từng thử thêm rồi bỏ lại theo phản hồi thực tế).
+
+    Có bộ lọc "theo tuần" (xem khối ngay dưới all_days) khi span >1 tuần -- cùng nhu cầu "cả tháng
+    quá dài" đã sửa ở Báo cáo Tháng, áp dụng thêm cho mục này theo yêu cầu người dùng."""
     rl = rl_df.assign(_d=rl_df['Ngày hoàn thành'].dt.normalize()) if not rl_df.empty else rl_df
     kh = kh_df.copy()
     if not kh.empty:
@@ -5997,7 +6000,50 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
                        if df_books is not None and not df_books.empty and book_name else None)
     forest_days = (set(pd.to_datetime(_book_sessions['Ngày']).dt.normalize().unique())
                    if _book_sessions is not None and not _book_sessions.empty else set())
-    for i, d in enumerate(sorted(rl_days | kh_days | forest_days)):
+    all_days = sorted(rl_days | kh_days | forest_days)
+
+    # Bộ lọc "theo tuần" -- CÙNG cơ chế đã làm cho "Nhật ký" ở Báo cáo Tháng (render_notes_journal),
+    # áp dụng thêm ở đây theo yêu cầu người dùng: 1 cuốn/series đọc/xem xuyên nhiều tháng cũng dài
+    # tương tự, cần lọc bớt. Khác Báo cáo Tháng (tuần CỐ ĐỊNH theo đúng cấu trúc lịch của 1 tháng),
+    # ở đây không có "kỳ" cố định nào để bó theo -- tự tính tuần ISO từ chính all_days (khoảng thời
+    # gian đọc/xem thật của cuốn/series này), rồi giới hạn hiện tối đa 8 tuần GẦN NHẤT + nút "Hiện
+    # thêm" (CÙNG khuôn "Lọc theo năm" ở Bảng số liệu, _render_stats_table()) -- vì span có thể kéo
+    # dài nhiều tháng/năm với sách đọc rất chậm, không thể liệt kê hết như Báo cáo Tháng (tối đa 5-6
+    # tuần/tháng). Mặc định chọn tuần có hoạt động GẦN NHẤT (không phải "tuần chứa hôm nay" như
+    # Báo cáo Tháng -- sách/series đã đọc xong có thể không còn hoạt động nào gần hôm nay).
+    if len(all_days) > 1:
+        _wk_of = lambda d: d.strftime('%G-W%V')
+        _weeks_present = list(dict.fromkeys(_wk_of(d) for d in all_days))
+        if len(_weeks_present) > 1:
+            _wk_scope_id = book_name or (kh_df['Cuốn sách'].iloc[0] if not kh_df.empty else 'indep')
+            _wk_key = f"jkq_wk_{_wk_scope_id}"
+            _wk_labels = {w: fmt_week(w) for w in _weeks_present}
+            _weeks_recent_first = _weeks_present[::-1]
+            _wk_show_all = st.session_state.get(f"{_wk_key}_show_all", False)
+            _visible_weeks = _weeks_recent_first if _wk_show_all else _weeks_recent_first[:8]
+            _hidden_weeks = [] if _wk_show_all else _weeks_recent_first[8:]
+            _wk_opts = ["Tất cả"] + [_wk_labels[w] for w in _visible_weeks]
+            if _wk_key not in st.session_state:
+                st.session_state[_wk_key] = _wk_labels[_weeks_recent_first[0]]
+            _wk_pick = st.segmented_control(
+                "Lọc theo tuần", _wk_opts, default=st.session_state[_wk_key],
+                key=f"{_wk_key}_picker", label_visibility="collapsed")
+            if _wk_pick and _wk_pick != st.session_state[_wk_key]:
+                st.session_state[_wk_key] = _wk_pick
+            if _hidden_weeks:
+                _hidden_n = sum(1 for d in all_days if _wk_of(d) in _hidden_weeks)
+                if st.button(f"Hiện thêm {len(_hidden_weeks)} tuần · {_hidden_n} ngày", key=f"{_wk_key}_more_btn"):
+                    st.session_state[f"{_wk_key}_show_all"] = True
+                    st.rerun()
+            _wk_sel = st.session_state[_wk_key]
+            if _wk_sel != "Tất cả":
+                _wk_target = next(w for w, lbl in _wk_labels.items() if lbl == _wk_sel)
+                all_days = [d for d in all_days if _wk_of(d) == _wk_target]
+            if not all_days:
+                st.caption("Chưa có ngày nào trong tuần này.")
+                return
+
+    for i, d in enumerate(all_days):
         day_rl = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
         day_kh = kh[kh['_d'] == d].sort_values('_loc_key') if not kh.empty else kh
         with st.container(key=f"jkq_row_{i}"):
