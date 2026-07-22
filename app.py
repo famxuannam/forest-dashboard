@@ -4529,6 +4529,9 @@ RLCAL_CSS = """
 .rlcal-cell { position:relative; min-height:108px; border-radius:9px; padding:7px 8px;
     border:1px solid var(--divider); }
 .rlcal-cell.has:hover { z-index:30; }
+/* rlcalOpen: gắn bằng JS (_inject_reading_calendar_tap_tip()) khi chạm ô lần đầu trên thiết bị
+   không có hover thật -- cùng cách hiện tooltip như :hover ở desktop, xem docstring hàm đó. */
+.rlcal-cell.rlcalOpen { z-index:30; }
 .rlcal-top { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
 .rlcal-time { font-size:10.5px; font-weight:800; color:var(--accent); background:rgba(var(--accent-rgb),0.13);
     border-radius:999px; padding:1.5px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
@@ -4556,7 +4559,7 @@ RLCAL_CSS = """
 .rlcal-tip { display:none; position:absolute; width:250px; background:var(--card); border:1px solid var(--border);
     border-radius:12px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,0.22); z-index:40;
     pointer-events:none; text-align:left; }
-.rlcal-cell:hover .rlcal-tip { display:block; }
+.rlcal-cell:hover .rlcal-tip, .rlcal-cell.rlcalOpen .rlcal-tip { display:block; }
 .rlcal-tip-hd { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .rlcal-tip-date { font-size:12.5px; font-weight:800; color:var(--text); }
 .rlcal-tip-time { font-size:12px; font-weight:700; color:var(--accent); }
@@ -4592,7 +4595,10 @@ RLCAL_CSS = """
 @media (max-width: 640px) {
     .rlcal-cell { min-height:74px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
-    .rlcal-tip { display:none !important; }
+    /* KHÔNG còn display:none !important ở đây (bản trước ẩn hẳn tooltip trên mobile vì chạm ô là
+       nhảy trang ngay, không kịp xem) -- giờ tooltip hiện qua .rlcalOpen (JS chạm lần đầu, xem
+       _inject_reading_calendar_tap_tip()), chỉ thu hẹp bề rộng cho vừa màn hẹp. */
+    .rlcal-tip { width:min(250px, calc(100vw - 40px)); }
     /* Bỏ hẳn chip thời gian dạng pill ở mobile (nền + padding + bo tròn dễ bị cắt chữ trong ô
        hẹp, ảnh chụp người dùng gửi thấy "24′" chỉ còn "2") -- thời gian chuyển sang hiện trong
        .rlcal-counts (cùng hàng với ✓N/❝N, chữ trần không nền, xem _count_parts trong Python) --
@@ -9782,6 +9788,51 @@ def _inject_keyboard_shortcuts():
     components.html(js, height=0)
 
 
+def _inject_reading_calendar_tap_tip():
+    """Lịch tháng Sách/Gundam (`.rlcal-cell`, xem `_render_reading_calendar_month()`): mỗi ô có
+    dữ liệu là 1 `<a class="rlcal-link">` phủ kín ô, điều hướng thẳng sang trang "Hôm nay" của
+    đúng ngày đó -- tooltip `.rlcal-tip` chỉ hiện khi `:hover`, vốn không có trên màn cảm ứng, nên
+    trên mobile chạm vào ô là nhảy trang ngay, không kịp xem tooltip (phản hồi thực tế của người
+    dùng). Vá bằng JS thay vì thuần CSS vì `<a href>` không có cách chặn điều hướng lần chạm đầu
+    tiên bằng CSS -- chặn lần chạm đầu (thêm class `rlcalOpen` cho `.rlcal-cell` để CSS hiện tooltip,
+    xem rule `.rlcal-cell.rlcalOpen .rlcal-tip`), lần chạm THỨ HAI vào đúng ô đang mở mới cho điều
+    hướng tiếp -- giống hệt kiểu "chạm xem trước, chạm lần nữa để mở" quen thuộc trên các app lịch
+    di động. `matchMedia('(hover: none)')` đảm bảo hành vi desktop (click 1 lần là nhảy trang ngay,
+    đã đúng ý từ trước) không đổi -- chỉ can thiệp trên thiết bị không có hover thật.
+
+    Cùng khuôn `_inject_keyboard_shortcuts()`: gắn 1 listener duy nhất vào `window.parent.document`
+    (không phải document của iframe components.html, vốn bị Streamlit dựng lại mỗi rerun), tự canh
+    cờ cài đặt để không gắn trùng qua nhiều lần rerun."""
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  const w = window.parent;\n"
+        "  if (w.__rlcalTapTipInstalled) return;\n"
+        "  w.__rlcalTapTipInstalled = true;\n"
+        "  w.document.addEventListener('click', function(e){\n"
+        "    if (!w.matchMedia('(hover: none)').matches) return;\n"
+        "    const link = e.target.closest ? e.target.closest('.rlcal-link') : null;\n"
+        "    if (!link) {\n"
+        "      w.document.querySelectorAll('.rlcal-cell.rlcalOpen').forEach(function(c){\n"
+        "        c.classList.remove('rlcalOpen');\n"
+        "      });\n"
+        "      return;\n"
+        "    }\n"
+        "    const cell = link.closest('.rlcal-cell');\n"
+        "    if (!cell) return;\n"
+        "    if (cell.classList.contains('rlcalOpen')) return;  // chạm lần 2 -> cho điều hướng tiếp\n"
+        "    e.preventDefault();\n"
+        "    w.document.querySelectorAll('.rlcal-cell.rlcalOpen').forEach(function(c){\n"
+        "      if (c !== cell) c.classList.remove('rlcalOpen');\n"
+        "    });\n"
+        "    cell.classList.add('rlcalOpen');\n"
+        "  });\n"
+        "})();\n"
+        "</script>"
+    )
+    components.html(js, height=0)
+
+
 def _inject_note_editor_shortcuts():
     """Ctrl/Cmd+Enter -> bấm "Cập nhật", Escape -> bấm "Huỷ", khi con trỏ đang ở trong ô soạn
     Quill. Quill chạy trong iframe RIÊNG (component streamlit_quill) nên keydown gõ trong đó
@@ -9885,6 +9936,7 @@ elif "tsub" in st.query_params:
     del st.query_params["tsub"]
 
 _inject_keyboard_shortcuts()
+_inject_reading_calendar_tap_tip()
 
 
 def _inject_scroll_to_top_button():
@@ -11749,7 +11801,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12409
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12464
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12230,9 +12282,12 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="264-272", date="22/07/2026", pr_lines=37, total_lines=12409,
-             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 2 sửa tương phản/spacing",
+        dict(pr="264-273", date="22/07/2026", pr_lines=63, total_lines=12464,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 3 sửa tương phản/spacing/tooltip mobile",
              bullets=[
+                 "**Lịch tháng Sách/Gundam: chạm 1 ô ngày trên mobile giờ hiện tooltip trước, chạm lần "
+                 "2 mới nhảy sang trang \"Hôm nay\" của ngày đó** — trước đây chạm là nhảy trang ngay, "
+                 "không kịp xem tooltip (tooltip vốn chỉ hiện khi hover, màn cảm ứng không có hover).",
                  "**Sửa tương phản tiêu đề/caption của \"Sửa gán series/sách tự động\"** (Sách/Gundam "
                  "→ Tổng quan) — expander này đứng trực tiếp trên nền trang nên chữ mất tương phản "
                  "trên các Bảng màu nền cố định tông đậm; giờ hiện như 1 thẻ khớp màu nền đang chọn.",
