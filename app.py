@@ -8277,21 +8277,28 @@ _MAIN_CSS = """
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
-       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard). */
+       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard).
+       MỌI màu chữ ở đây PHẢI dùng var(--text-on-bg)/var(--text-on-bg-2), KHÔNG phải var(--text)/
+       var(--text-2) -- billboard là 1 lớp kính mờ (nền rgba(--accent-rgb,0.10) bán trong suốt,
+       xem rule .st-key-*_billboard) đặt TRỰC TIẾP trên var(--bg), không có nền đặc var(--card)
+       riêng, nên chữ phải đọc đúng token "chữ trên nền trang" -- 6/8 bảng màu nền 2 token này
+       trùng giá trị với text/text-2 nên không đổi gì, nhưng "Bầu trời sao"/"Rừng đêm" (nền đậm
+       CỐ ĐỊNH) mới lộ rõ khác biệt: chữ tối (--text) gần như biến mất trên nền đậm đó, phải đọc
+       đúng cặp sáng cố định (--text-on-bg) mới đọc được (bug thật đã phát hiện qua ảnh chụp). */
     .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
-    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
-    .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
+    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text-on-bg); margin-top: 5px; }
+    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text-on-bg); line-height: 1.2; }
+    .pbill-sub { font-size: 15px; color: var(--text-on-bg-2); max-width: 560px; line-height: 1.55;
         margin-top: 8px; }
     /* Billboard Sách (Tổng quan) -- cột phải khác Tuần/Báo cáo (kicker "ĐANG ĐỌC" + tên sách/tác
        giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Cormorant Garamond với trích
        dẫn Kindle billboard Hôm nay (_QUOTE_FONT_FACE) cho đồng bộ "chữ viết tay" ở mọi nơi trích
        tên riêng/tác giả trong app. */
     .pbill-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
-        color: var(--text-2); }
-    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.2;
+        color: var(--text-on-bg-2); }
+    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text-on-bg); line-height: 1.2;
         margin-top: 4px; }
-    .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
+    .pbill-author { font-size: 16px; color: var(--text-on-bg-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
     /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
        dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
@@ -8340,15 +8347,22 @@ _MAIN_CSS = """
     .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
         color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
         justify-content: center; }
-    .sec-ch-title { font-size: 19px; font-weight: 750; color: var(--text); }
+    /* .sec-ch-title/.sec-ch-kicker/.sec-ch-lead nằm TRỰC TIẾP trên var(--bg) (chương mở đầu 1
+       trang cuộn dọc, không lồng trong .sec-card) nên PHẢI đọc var(--text-on-bg)/var(--text-on-
+       bg-2), cùng lý do với .pbill-* ở trên -- .sec-ch-badge KHÔNG đổi vì có nền riêng var(--chip)
+       (giống 1 chip nhỏ, var(--text-2) vẫn đúng vì đọc trên nền chip chứ không phải nền trang).
+       .sec-ch-kicker dùng var(--text-on-bg-2) (không phải -3, token đó không có bản "trên nền
+       trang" riêng) -- đậm hơn 1 chút so với --text-3 gốc nhưng vẫn đọc được, ưu tiên hơn để mất
+       hẳn trên 2 bảng nền đậm. */
+    .sec-ch-title { font-size: 19px; font-weight: 750; color: var(--text-on-bg); }
     /* Chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026") -- tách thông tin ĐỘNG theo dữ liệu ra
        khỏi văn bản tiêu đề cố định, xem docstring sec_chapter() tham số badge. */
     .sec-ch-badge { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-2);
         background: var(--chip); border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
     .sec-ch-rule { flex: 1; height: 1px; background: var(--divider-2); min-width: 24px; }
     .sec-ch-kicker { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--text-3); }
-    .sec-ch-lead { font-size: 14px; color: var(--text-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
+        text-transform: uppercase; color: var(--text-on-bg-2); }
+    .sec-ch-lead { font-size: 14px; color: var(--text-on-bg-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
     .sec-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
         box-shadow: var(--card-shadow); padding: var(--card-pad); margin: var(--card-gap);
         font-size: 14px; color: var(--text); line-height: 1.6; }
@@ -8740,8 +8754,10 @@ _MAIN_CSS = """
     .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
         text-transform: uppercase; color: var(--card); }
     .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
-    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
+    /* .tbill-dow/.tbill-meta -- cùng lý do var(--text-on-bg)/var(--text-on-bg-2) đã áp cho .pbill-*
+       ở trên (billboard Hôm nay dùng chung khối .tbill-date, xem docstring render_period_billboard). */
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text-on-bg); margin-top: 5px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-on-bg-2); margin-top: 10px; line-height: 1.7; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
