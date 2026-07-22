@@ -8232,7 +8232,12 @@ _MAIN_CSS = """
     [class*="st-key-rl_view_tabs"] button[data-selected="true"] {
         /* var(--tab-accent) thay vì var(--accent) thẳng -- xem _tab_accent (khối :root): bản sáng
            hơn của accent khi rơi vào 1 trong 4 bảng "nền đậm cố định" để không lẫn vào nền đậm
-           cùng tông, giữ nguyên var(--accent) (không đổi gì) ở 6 bảng còn lại. */
+           cùng tông, giữ nguyên var(--accent) (không đổi gì) ở 6 bảng còn lại.
+           CHỈ ghi đè border-bottom-color, không reset "border" shorthand -- viền mặc định 3 cạnh
+           còn lại (top/left/right) của segmented_control vẫn giữ nguyên màu accent nhạt của
+           Streamlit, tạo thành khung viền mảnh quanh nút đang chọn (không chỉ 1 gạch chân trần).
+           Đã xác nhận với người dùng đây là hình thức ĐƯỢC THÍCH, không phải lỗi cần dọn -- không
+           tự ý "sửa" thành gạch chân trần thuần tuý nếu thấy lại chi tiết này. */
         background: transparent !important; color: var(--tab-accent) !important; font-weight: 600 !important;
         border-bottom-color: var(--tab-accent) !important; box-shadow: none !important;
     }
