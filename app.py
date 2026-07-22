@@ -4389,8 +4389,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
     # với billboard).
     if not _rl_detail.empty or not _kh_book.empty or not _book_forest_ct.empty:
-        with st.container(border=True, key="jcard_reading_detail"):
-            _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books, book_name=_detail_sel)
+        _render_reading_kindle_days(_rl_detail, _kh_book, df_books=df_books, book_name=_detail_sel)
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
@@ -6043,29 +6042,30 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
                 st.caption("Chưa có ngày nào trong tuần này.")
                 return
 
-    for i, d in enumerate(all_days):
-        day_rl = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
-        day_kh = kh[kh['_d'] == d].sort_values('_loc_key') if not kh.empty else kh
-        with st.container(key=f"jkq_row_{i}"):
-            c_date, c_body = st.columns([1, 5])
-            with c_date:
-                st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
-                            f"<div class='jdm'>{d:%d/%m/%Y}</div></div>", unsafe_allow_html=True)
-            with c_body:
-                chips = ''
-                if not day_rl.empty:
-                    _cls = 'jchip gundam' if _is_gundam_list(day_rl['Sách (gốc)'].iloc[0]) else 'jchip book'
-                    chips = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
-                                    for _, r in day_rl.sort_values('Ngày hoàn thành', kind='stable').iterrows())
-                if _book_sessions is not None and not _book_sessions.empty:
-                    _mins = _book_sessions[_book_sessions['Ngày'] == d.date()]['Thời lượng (Phút)'].sum()
-                    if _mins > 0:
-                        chips += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
-                                  f"<span class='cv'>{int(_mins)}′</span></span>")
-                if chips:
-                    st.markdown(chips, unsafe_allow_html=True)
-                if not day_kh.empty:
-                    _render_kindle_day_quotes(day_kh)
+    with st.container(border=True, key="jcard_reading_detail"):
+        for i, d in enumerate(all_days):
+            day_rl = rl[rl['_d'] == d] if not rl_df.empty else rl_df.iloc[0:0]
+            day_kh = kh[kh['_d'] == d].sort_values('_loc_key') if not kh.empty else kh
+            with st.container(key=f"jkq_row_{i}"):
+                c_date, c_body = st.columns([1, 5])
+                with c_date:
+                    st.markdown(f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
+                                f"<div class='jdm'>{d:%d/%m/%Y}</div></div>", unsafe_allow_html=True)
+                with c_body:
+                    chips = ''
+                    if not day_rl.empty:
+                        _cls = 'jchip gundam' if _is_gundam_list(day_rl['Sách (gốc)'].iloc[0]) else 'jchip book'
+                        chips = ''.join(f"<span class='{_cls}'>{html_escape(str(r['Tiêu đề phần']))}</span>"
+                                        for _, r in day_rl.sort_values('Ngày hoàn thành', kind='stable').iterrows())
+                    if _book_sessions is not None and not _book_sessions.empty:
+                        _mins = _book_sessions[_book_sessions['Ngày'] == d.date()]['Thời lượng (Phút)'].sum()
+                        if _mins > 0:
+                            chips += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
+                                      f"<span class='cv'>{int(_mins)}′</span></span>")
+                    if chips:
+                        st.markdown(chips, unsafe_allow_html=True)
+                    if not day_kh.empty:
+                        _render_kindle_day_quotes(day_kh)
 
 
 def _render_kindle_day_quotes(day_kh):
