@@ -511,6 +511,13 @@ BG_PALETTES = {
     },
 }
 
+# 4 bảng "nền đậm cố định" (bg đậm ở CẢ 2 cột, xem chú thích trong BG_PALETTES) -- billboard
+# (render_period_billboard()/_render_today_billboard()) PHẢI đọc nền SÁNG + chữ TỐI như 1 thẻ
+# thật, KHÔNG hoà theo màu nền trang đậm phía sau (xác nhận với người dùng: billboard vẫn là
+# "light theme" y hệt các bảng nền nhạt, chỉ có nền NGOÀI thẻ/billboard mới được phép đậm) -- xem
+# _billboard_bg/_billboard_backdrop ngay dưới _root_vars.
+BG_PALETTES_DARK_BG = {"Bầu trời sao", "Rừng đêm", "Rượu vang", "Đêm tía"}
+
 # Kiểu thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập với bảng màu nền ở trên, áp dụng chung
 # lên MỌI bảng màu qua 3 token CSS --card-radius/--card-border-w/--card-shadow. "Bo mềm" PHẢI giữ
 # đúng công thức gốc (10px / 1px / box-shadow nhạt hiện tại) để không đổi gì cho người chưa chọn.
@@ -7432,9 +7439,22 @@ _card_style_vars = (
     f"--card-pad:{CARD_DENSITY[CARD_DENSITY_NAME]['pad']};"
     f"--card-gap:{CARD_DENSITY[CARD_DENSITY_NAME]['gap']};"
 )
+# Billboard (render_period_billboard()/_render_today_billboard()) mặc định là 1 lớp "kính mờ"
+# BÁN TRONG SUỐT (nền rgba(--accent-rgb,0.10) + backdrop-filter blur, xem rule .st-key-*_billboard)
+# -- với 6 bảng màu nền "nhạt" thường, lớp kính đó hoà với var(--bg) SÁNG phía sau nên tự trông
+# sáng, đúng ý muốn. Với 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), var(--bg) phía sau ĐẬM
+# nên lớp kính bán trong suốt đó cũng tự trông đậm theo -- xác nhận với người dùng billboard vẫn
+# phải là 1 "thẻ" nền sáng/chữ tối như light theme bình thường, chỉ nền NGOÀI thẻ mới được đậm.
+# Nên 4 bảng này đổi hẳn sang nền ĐẶC (color-mix phớt accent lên var(--card), không xuyên thấu nền
+# trang phía sau nữa) + tắt backdrop-filter (vô nghĩa khi nền đã đặc).
+_billboard_bg_dark_forced = BG_PALETTE in BG_PALETTES_DARK_BG
+_billboard_bg = ("color-mix(in srgb, var(--accent) 6%, var(--card))" if _billboard_bg_dark_forced
+                  else "rgba(var(--accent-rgb),0.10)")
+_billboard_backdrop = "none" if _billboard_bg_dark_forced else "blur(16px) saturate(1.6)"
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
+    f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -8273,38 +8293,42 @@ _MAIN_CSS = """
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). Liệt kê ĐỦ MỌI
-       key billboard trong app ở đây (kể cả help_billboard) -- selector khớp CHÍNH XÁC theo key,
-       không dùng prefix chung. */
+       key billboard trong app ở đây (kể cả help_billboard/tbgd_billboard) -- selector khớp CHÍNH
+       XÁC theo key, không dùng prefix chung.
+       background/backdrop-filter đọc qua var(--billboard-bg)/var(--billboard-backdrop) (tính ở
+       khối :root, xem _billboard_bg/_billboard_backdrop) thay vì hardcode rgba/blur cố định --
+       4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) cần nền ĐẶC (không xuyên thấu nền trang đậm
+       phía sau) để billboard vẫn là 1 "thẻ" sáng/chữ tối như light theme bình thường, xác nhận
+       với người dùng. */
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
-    .st-key-help_billboard {
-        background: rgba(var(--accent-rgb),0.10) !important;
-        backdrop-filter: blur(16px) saturate(1.6);
-        -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    .st-key-tbgd_billboard, .st-key-help_billboard {
+        background: var(--billboard-bg) !important;
+        backdrop-filter: var(--billboard-backdrop);
+        -webkit-backdrop-filter: var(--billboard-backdrop);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
     /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
        tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard).
-       MỌI màu chữ ở đây PHẢI dùng var(--text-on-bg)/var(--text-on-bg-2), KHÔNG phải var(--text)/
-       var(--text-2) -- billboard là 1 lớp kính mờ (nền rgba(--accent-rgb,0.10) bán trong suốt,
-       xem rule .st-key-*_billboard) đặt TRỰC TIẾP trên var(--bg), không có nền đặc var(--card)
-       riêng, nên chữ phải đọc đúng token "chữ trên nền trang" -- 6/8 bảng màu nền 2 token này
-       trùng giá trị với text/text-2 nên không đổi gì, nhưng "Bầu trời sao"/"Rừng đêm" (nền đậm
-       CỐ ĐỊNH) mới lộ rõ khác biệt: chữ tối (--text) gần như biến mất trên nền đậm đó, phải đọc
-       đúng cặp sáng cố định (--text-on-bg) mới đọc được (bug thật đã phát hiện qua ảnh chụp). */
+       Màu chữ ở đây dùng var(--text)/var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) --
+       billboard LUÔN có nền hiệu ứng SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền
+       nào đang chọn: 6 bảng "nhạt" là kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố
+       định" (BG_PALETTES_DARK_BG) đổi hẳn sang nền đặc phớt accent lên var(--card) -- billboard
+       PHẢI là 1 "thẻ" sáng/chữ tối như light theme bình thường (xác nhận với người dùng, chỉ nền
+       NGOÀI billboard/thẻ mới được phép đậm), nên var(--text) luôn đúng ở đây. */
     .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text-on-bg); margin-top: 5px; }
-    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text-on-bg); line-height: 1.2; }
-    .pbill-sub { font-size: 15px; color: var(--text-on-bg-2); max-width: 560px; line-height: 1.55;
+    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
         margin-top: 8px; }
     /* Billboard Sách (Tổng quan) -- cột phải khác Tuần/Báo cáo (kicker "ĐANG ĐỌC" + tên sách/tác
        giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Cormorant Garamond với trích
        dẫn Kindle billboard Hôm nay (_QUOTE_FONT_FACE) cho đồng bộ "chữ viết tay" ở mọi nơi trích
        tên riêng/tác giả trong app. */
     .pbill-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
-        color: var(--text-on-bg-2); }
-    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text-on-bg); line-height: 1.2;
+        color: var(--text-2); }
+    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.2;
         margin-top: 4px; }
-    .pbill-author { font-size: 16px; color: var(--text-on-bg-2); font-weight: 600;
+    .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
     /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
        dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
@@ -8713,7 +8737,8 @@ _MAIN_CSS = """
     /* Nền phẳng var(--card) + đổ bóng filter:drop-shadow (xem rule màu/bóng riêng phía trên) --
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
-    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard {
+    .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
+    .st-key-tbgd_billboard, .st-key-help_billboard {
         border-color: var(--border) !important;
         padding: 20px 28px 16px !important;
         border-radius: 12px !important;
@@ -8760,10 +8785,10 @@ _MAIN_CSS = """
     .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
         text-transform: uppercase; color: var(--card); }
     .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    /* .tbill-dow/.tbill-meta -- cùng lý do var(--text-on-bg)/var(--text-on-bg-2) đã áp cho .pbill-*
-       ở trên (billboard Hôm nay dùng chung khối .tbill-date, xem docstring render_period_billboard). */
-    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text-on-bg); margin-top: 5px; }
-    .tbill-meta { font-size: 12.5px; color: var(--text-on-bg-2); margin-top: 10px; line-height: 1.7; }
+    /* .tbill-dow/.tbill-meta -- cùng lý do var(--text)/var(--text-2) đã áp cho .pbill-* ở trên
+       (billboard Hôm nay dùng chung khối .tbill-date, xem docstring render_period_billboard). */
+    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
