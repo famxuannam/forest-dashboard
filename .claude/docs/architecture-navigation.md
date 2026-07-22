@@ -31,7 +31,11 @@ set trực tiếp từ phía JS.
 - Trang "Báo cáo" có sub-nav riêng: list `BAOCAO_SUBS = [Tổng quan, Tuần, Tháng, Năm, Dự án]`,
   seed/ghi lại qua `?sub=` — **cùng 1 pattern hệt `NAV`/`?nav=`**, kể cả nếu bạn không đọc lại code
   chi tiết, áp y hệt cách suy luận. Trang "Sức khoẻ" có `SUCKHOE_SUBS = [Báo cáo, Lịch sử, Dữ liệu
-  đầu vào]` qua `?hsub=`, cùng khuôn.
+  đầu vào]` qua `?hsub=`, cùng khuôn. Trang "Tuỳ biến" có `TUYBIEN_SUBS = [Tổng quan, Giao diện]`
+  qua `?tsub=`, cùng khuôn -- "Giao diện" (6 trục cá nhân hoá, billboard mở đầu đóng luôn vai trò
+  xem trước trực tiếp, xem `theming.md`) tách hẳn khỏi chuỗi chương "Tổng quan" thành 1 sub-page
+  riêng để có billboard/chip-TOC/hàng nút Reset-Ngẫu nhiên của riêng nó, dù bố cục bên trong (billboard
+  + chuỗi `sec_chapter()`) vẫn dùng ĐÚNG khuôn chung với "Tổng quan"/Báo cáo/Sách/Gundam.
 - `day_picker()` (dùng ở trang "Hôm nay") làm điều tương tự với `?day=` cho việc chọn ngày cụ thể.
 - Muốn nhảy sang 1 sub-tab khác BẰNG CODE (không phải người dùng tự click) — vd 1 nút ở sub-tab A
   chuyển sang sub-tab B — xem gotcha `StreamlitAPIException` + cách fix đúng (cờ chờ xử lý, set
