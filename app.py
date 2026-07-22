@@ -3560,7 +3560,13 @@ def _render_reading_series_override(tag_sessions, rl_subset, assigned_df, overri
     _opts = sorted(rl_subset['Cuốn sách'].unique()) if not rl_subset.empty else []
     if len(_opts) <= 1 or tag_sessions.empty:
         return
-    with st.expander(f"Sửa gán {item_label} tự động", expanded=False):
+    # container key="rl_series_override" (xem CSS .st-key-rl_series_override) -- expander này đứng
+    # trực tiếp trên nền trang (ngoài mọi .sec-card), tiêu đề/caption mặc định đọc var(--text)/
+    # var(--text-2) sẽ mất tương phản trên các Bảng màu nền cố định tông đậm (vd "Rượu vang") vì 2
+    # token đó tính theo var(--bg) SÁNG thông thường. Ghi đè thành 1 thẻ var(--card) như đã làm ở
+    # "Sửa/xoá xét nghiệm" (key="hm_hist_edit") và FAQ (key="help_faq") thay vì đổi sang
+    # var(--text-on-bg) -- var(--text) mặc định lại ĐÚNG khi nằm trên var(--card).
+    with st.container(key="rl_series_override"), st.expander(f"Sửa gán {item_label} tự động", expanded=False):
         st.caption(
             f"Forest chỉ có 1 tag chung, không phân biệt {item_label} -- mỗi ngày có phiên được "
             f"tự động gán vào {item_label} có lần hoàn thành gần nhất trên Reminders. Nếu 2 "
@@ -4824,7 +4830,7 @@ def render_day_timeline(day_df):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:14px 18px;margin-top:14px;}}
+.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:14px 18px;margin:14px 0;}}
 .dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
@@ -8879,6 +8885,22 @@ _MAIN_CSS = """
         border-bottom: 1px solid var(--divider) !important; }
     [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
         padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
+    /* "Sửa gán series/sách tự động" (_render_reading_series_override(), Sách/Gundam -> Tổng quan)
+       -- cùng khuôn hm_hist_edit/help_faq phía trên: expander này đứng trực tiếp trên nền trang,
+       ghi đè thành 1 thẻ var(--card) để tiêu đề/caption không mất tương phản trên Bảng màu nền cố
+       định tông đậm. */
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] details {
+        background: var(--card) !important; border: var(--card-border-w) solid var(--border) !important;
+        border-radius: var(--card-radius) !important; box-shadow: var(--card-shadow) !important; }
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] summary {
+        padding: 12px 16px !important; border-bottom: none !important; }
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] summary p {
+        font-size: 14px !important; font-weight: 600 !important; }
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] details[open] > summary {
+        border-bottom: 1px solid var(--divider) !important; }
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+        padding: 10px 16px 14px !important; }
     @media (max-width: 640px) {
         .sec-flow { flex-direction: column; align-items: flex-start; }
         .sec-flow-arr::after { content: "↓"; padding: 0; }
@@ -9446,6 +9468,7 @@ _MAIN_CSS = """
     .help-tl-item,
     [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details,
     [class*="st-key-help_faq"] [data-testid="stExpander"] details,
+    [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
     .st-key-tbgd_cardstyle_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
@@ -11726,7 +11749,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12380
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12409
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12207,9 +12230,15 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="264-271", date="22/07/2026", pr_lines=163, total_lines=12380,
-             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading",
+        dict(pr="264-272", date="22/07/2026", pr_lines=37, total_lines=12409,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 2 sửa tương phản/spacing",
              bullets=[
+                 "**Sửa tương phản tiêu đề/caption của \"Sửa gán series/sách tự động\"** (Sách/Gundam "
+                 "→ Tổng quan) — expander này đứng trực tiếp trên nền trang nên chữ mất tương phản "
+                 "trên các Bảng màu nền cố định tông đậm; giờ hiện như 1 thẻ khớp màu nền đang chọn.",
+                 "**Sửa spacing hẹp bất thường giữa card \"Dòng thời gian trong ngày\" và \"Theo buổi\"** "
+                 "(trang Hôm nay, mobile) — card đầu thiếu margin dưới nên khoảng cách này hẹp hơn hẳn "
+                 "mọi cặp card khác trên cùng trang.",
                  "**Bỏ nhãn kicker bên phải tiêu đề mỗi chương** (`sec_chapter`) — trên màn hình mobile "
                  "hẹp, dòng chữ này ép tiêu đề phải xuống dòng nhiều lần; giờ mỗi chương chỉ còn số thứ "
                  "tự + tiêu đề + kẻ ngang.",
