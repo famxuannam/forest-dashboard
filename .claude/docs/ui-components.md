@@ -2,7 +2,7 @@
 
 Đối tượng đọc: AI agent cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
 
-## Quy ước đánh số `sec_chapter(anchor, num, kicker, title, tight_top=False, badge=None)`
+## Quy ước đánh số `sec_chapter(anchor, num, title, tight_top=False, badge=None)`
 
 Các trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết Sách/Gundam, Sức khoẻ) được dựng từ 1
 chuỗi lời gọi `sec_chapter(anchor, num, ...)` đánh số thứ tự (KHÔNG phải `st.expander` — mỗi
