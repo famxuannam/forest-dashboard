@@ -33,7 +33,19 @@ lan ra 3 nơi bằng 3 cơ chế khác nhau, phải nhớ cả 3 khi thêm 1 UI 
    trang chính (kể cả `:root` var) KHÔNG lan vào được. App tự tiêm 1 đoạn `<style>` riêng vào BÊN
    TRONG iframe đó (lặp lại theo interval để chống Streamlit dựng lại iframe làm mất style).
 
-## 3 trục cá nhân hoá nền/thẻ (tab Tuỳ biến → "4. Giao diện"), tách biệt với accent
+## 6 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
+
+"Giao diện" là 1 sub-page riêng của tab Tuỳ biến (`TUYBIEN_SUBS`, query param `?tsub=`, xem
+`architecture-navigation.md`) -- KHÔNG còn là 1 chương trong chuỗi cuộn dọc "Tổng quan" như trước.
+Khác bố cục 2 cột của mockup gốc "Tuỳ Chỉnh Giao Diện.dc.html" -- xác nhận với người dùng đổi lại
+theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app (Báo cáo/Sách/Gundam): billboard mở đầu (đóng
+LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 6 trục, số to bên trái là
+"6" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
+thuần hồi cứu) + chip TOC nhảy neo xuống từng chương, rồi tới hàng 2 nút "Đặt lại mặc định"/"Ngẫu
+nhiên" (random hoá cả 6 setting cùng lúc), rồi 6 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
+`st.container(border=True)` dựng qua helper dùng chung `_tb_axis_grid()`). Billboard KHÔNG mô
+phỏng token bằng state/JS riêng như bản `.dc.html` gốc, chỉ đọc thẳng `var(--token)`/`ACCENT`/
+`BG_PALETTE`... hiện hành vì toàn trang đã tự re-render đúng lựa chọn mới sau mỗi `st.rerun()`.
 
 Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 3 trục CSS-variable độc lập, kết hợp tự do với
 nhau và với accent:
