@@ -295,46 +295,46 @@ BG_PRESETS = {
     "Sương mai": {
         # 5 lớp radial-gradient chấm nhỏ rải rác trong 1 ô 90x80 -> sương sớm lấm tấm, thưa hơn hẳn
         # "Vũ trụ" cũ.
-        "image": ("radial-gradient(1.6px 1.6px at 12px 18px, var(--divider), transparent), "
-                   "radial-gradient(1.4px 1.4px at 55px 62px, var(--divider), transparent), "
-                   "radial-gradient(2.2px 2.2px at 78px 24px, var(--divider), transparent), "
-                   "radial-gradient(1.4px 1.4px at 30px 70px, var(--divider), transparent), "
-                   "radial-gradient(1.8px 1.8px at 68px 46px, var(--divider), transparent)"),
+        "image": ("radial-gradient(1.6px 1.6px at 12px 18px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(1.4px 1.4px at 55px 62px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(2.2px 2.2px at 78px 24px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(1.4px 1.4px at 30px 70px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(1.8px 1.8px at 68px 46px, var(--divider-on-bg), transparent)"),
         "size": "90px 80px",
     },
     "Vòng tuổi": {
         # 1 lớp repeating-radial-gradient tâm giữa ô -> các vòng tròn đồng tâm lặp lại, gợi vòng
         # năm của cây.
-        "image": "repeating-radial-gradient(circle at 50% 50%, transparent 0 10px, var(--divider) 10px 12px, transparent 12px 24px)",
+        "image": "repeating-radial-gradient(circle at 50% 50%, transparent 0 10px, var(--divider-on-bg) 10px 12px, transparent 12px 24px)",
         "size": "64px 64px",
     },
     "Vân gỗ": {
         # 2 lớp repeating-linear-gradient gần ngang, lệch góc rất nhẹ (0.8deg/-1.4deg) và chu kỳ
         # khác nhau -> thớ gỗ mộc mạc, không đều tăm tắp như kẻ ngang thường.
-        "image": ("repeating-linear-gradient(0.8deg, var(--divider) 0 1.5px, transparent 1.5px 11px), "
-                   "repeating-linear-gradient(-1.4deg, var(--divider) 0 1px, transparent 1px 17px)"),
+        "image": ("repeating-linear-gradient(0.8deg, var(--divider-on-bg) 0 1.5px, transparent 1.5px 11px), "
+                   "repeating-linear-gradient(-1.4deg, var(--divider-on-bg) 0 1px, transparent 1px 17px)"),
         "size": "auto",
     },
     "Lá rơi": {
         # 5 lớp radial-gradient chấm cỡ lớn hơn "Sương mai", rải rác trong ô 130x110 -> lá rụng rải
         # rác cuối thu.
-        "image": ("radial-gradient(3.4px 3.4px at 20px 30px, var(--divider), transparent), "
-                   "radial-gradient(2.8px 2.8px at 90px 80px, var(--divider), transparent), "
-                   "radial-gradient(4px 4px at 112px 36px, var(--divider), transparent), "
-                   "radial-gradient(3px 3px at 54px 96px, var(--divider), transparent), "
-                   "radial-gradient(2.6px 2.6px at 66px 12px, var(--divider), transparent)"),
+        "image": ("radial-gradient(3.4px 3.4px at 20px 30px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(2.8px 2.8px at 90px 80px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(4px 4px at 112px 36px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(3px 3px at 54px 96px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(2.6px 2.6px at 66px 12px, var(--divider-on-bg), transparent)"),
         "size": "130px 110px",
     },
     "Đường mòn": {
         # 1 lớp vạch chéo 45deg lặp lại, chu kỳ thưa (20px) -> lối đi trong rừng, mảnh/thưa hơn hẳn
         # "Argyle" cũ.
-        "image": "repeating-linear-gradient(45deg, var(--divider) 0 8px, transparent 8px 20px)",
+        "image": "repeating-linear-gradient(45deg, var(--divider-on-bg) 0 8px, transparent 8px 20px)",
         "size": "34px 34px",
     },
     "Giọt sương": {
         # 2 chấm nhỏ lệch nhau trong 1 ô 32x32 -> lưới hơi nước trên lá, thưa hơn "Chấm bi" cũ.
-        "image": ("radial-gradient(2.2px 2.2px at 8px 8px, var(--divider), transparent), "
-                   "radial-gradient(2.2px 2.2px at 24px 24px, var(--divider), transparent)"),
+        "image": ("radial-gradient(2.2px 2.2px at 8px 8px, var(--divider-on-bg), transparent), "
+                   "radial-gradient(2.2px 2.2px at 24px 24px, var(--divider-on-bg), transparent)"),
         "size": "32px 32px",
     },
     "Núi xa": {
@@ -342,8 +342,8 @@ BG_PRESETS = {
         # công thức gốc với "Chevron" cũ (chỉ 2 lớp thay vì 4, không cần lệch "position" riêng).
         # Phủ ~25% diện tích ô -> pha loãng còn 70% qua color-mix() như Chevron cũ để không đậm hơn
         # hẳn 7 hoạ tiết chấm/kẻ thưa còn lại.
-        "image": ("linear-gradient(135deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%), "
-                   "linear-gradient(225deg, color-mix(in srgb, var(--divider) 70%, transparent) 25%, transparent 25%)"),
+        "image": ("linear-gradient(135deg, color-mix(in srgb, var(--divider-on-bg) 70%, transparent) 25%, transparent 25%), "
+                   "linear-gradient(225deg, color-mix(in srgb, var(--divider-on-bg) 70%, transparent) 25%, transparent 25%)"),
         "size": "56px 30px",
     },
 }
@@ -517,6 +517,17 @@ BG_PALETTES = {
 # "light theme" y hệt các bảng nền nhạt, chỉ có nền NGOÀI thẻ/billboard mới được phép đậm) -- xem
 # _billboard_bg/_billboard_backdrop ngay dưới _root_vars.
 BG_PALETTES_DARK_BG = {"Bầu trời sao", "Rừng đêm", "Rượu vang", "Đêm tía"}
+
+# divider-on-bg: token riêng cho hoạ tiết nền (BG_PRESETS, vẽ trực tiếp lên var(--bg) qua
+# --bg-image) -- KHÔNG dùng chung "divider" được nữa vì "divider" thiết kế cho viền/kẻ BÊN TRONG
+# card (thẻ luôn sáng, xem chú thích trên BG_PALETTES), cột "light" của nó là mực TỐI. Với 4 bảng
+# BG_PALETTES_DARK_BG, var(--bg) luôn ĐẬM bất kể IS_DARK -- dùng nguyên "divider" ở light theme sẽ
+# ra mực tối vẽ trên nền đậm, hoạ tiết gần như vô hình (bug thật, ảnh chụp người dùng gửi ở "Đêm
+# tía"). Lấy nguyên cột "dark" của divider (đã là màu sáng, tương phản tốt trên nền đậm) cho CẢ 2
+# cột. 6 bảng "nền nhạt" còn lại giữ y hệt divider gốc -- không đổi hành vi cũ.
+for _pal_name, _pal in BG_PALETTES.items():
+    _pal["divider-on-bg"] = ((_pal["divider"][1], _pal["divider"][1]) if _pal_name in BG_PALETTES_DARK_BG
+                              else _pal["divider"])
 
 # Kiểu thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập với bảng màu nền ở trên, áp dụng chung
 # lên MỌI bảng màu qua 3 token CSS --card-radius/--card-border-w/--card-shadow. "Bo mềm" PHẢI giữ
@@ -9084,6 +9095,14 @@ _MAIN_CSS = """
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
     .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
+    /* Tên sách trong "Trích dẫn hôm nay" là <a class="entity-link"> (xem _entity_link_html()) --
+       CÙNG bug !important đã ghi ở .kq-daily-text phía trên: rule font thân chữ toàn app khớp
+       TRỰC TIẾP thẻ <a> này (không phải qua kế thừa từ .kq-daily-src), nên luôn thắng bất kể
+       .kq-daily-src có !important hay không -- font-family phải khai báo lại tường minh ngay trên
+       chính thẻ <a>, không đủ nếu chỉ đặt ở div cha. Ảnh chụp người dùng gửi: tên sách hiện sai
+       hẳn sang font thân chữ (Manrope) trong khi tác giả/nội dung trích dẫn vẫn đúng Cormorant
+       Garamond. */
+    .kq-daily-src a { font-family: 'Cormorant Garamond', Georgia, serif !important; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
