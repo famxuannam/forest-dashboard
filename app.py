@@ -4701,7 +4701,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             if d_done:
                 _tip_lines = "".join(
                     f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
-                    f"<span>Hoàn thành: {html_escape(str(t))}</span></div>" for t in d_done)
+                    f"<span>{html_escape(str(t))}</span></div>" for t in d_done)
             elif d_min > 0:
                 _tip_lines = (f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
                                f"<span>Có phiên {_unit}, chưa hoàn thành phần nào</span></div>")
