@@ -4561,6 +4561,21 @@ RLCAL_CSS = """
 .rlcal-tip-qt { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
 .rlcal-tip-ql { font-size:11.5px; font-style:italic; line-height:1.4; color:var(--text-2); margin-top:3px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+/* Nút ‹/›/"Hôm nay" (rlcal_stepper_sach/rlcal_stepper_gundam) trước đây use_container_width=True
+   nên tự kéo giãn hết bề rộng cột 1/10 và 2/10 của khối 10 cột -- trên card rộng, cột đó rất
+   rộng nên nút thành hình chữ nhật to bè, mất cân đối (ảnh chụp người dùng gửi). Bỏ
+   use_container_width ở Python (xem _render_reading_calendar_month) rồi ép lại đây: ‹/› vuông
+   36px, "Hôm nay" co theo chữ (không kéo giãn) -- CỘT vẫn giữ tỉ lệ [1,1,6,2] cũ để layout tổng
+   thể (‹› trái, tiêu đề giữa, Hôm nay phải) không đổi, chỉ chính nút bên trong hẹp lại. */
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"] { display:flex; align-items:center; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(1) { justify-content:flex-start; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(2) { justify-content:flex-start; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(4) { justify-content:flex-end; }
+[class*="st-key-rlcal_stepper_"] button { height:36px !important; min-height:0 !important; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(1) button,
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(2) button {
+    width:36px !important; padding:0 !important;
+}
 @media (max-width: 640px) {
     .rlcal-cell { min-height:74px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
@@ -4630,15 +4645,15 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
         c1, c2, c3, c4 = st.columns([1, 1, 6, 2], vertical_alignment="center")
         with c1:
             st.button("", icon=":material/chevron_left:", key=f"rlcal_prev_{ns}", on_click=_shift,
-                       args=(-1,), disabled=(cur_y, cur_m) <= _lo_ym, use_container_width=True)
+                       args=(-1,), disabled=(cur_y, cur_m) <= _lo_ym)
         with c2:
             st.button("", icon=":material/chevron_right:", key=f"rlcal_next_{ns}", on_click=_shift,
-                       args=(1,), disabled=(cur_y, cur_m) >= _hi_ym, use_container_width=True)
+                       args=(1,), disabled=(cur_y, cur_m) >= _hi_ym)
         with c3:
             st.markdown(f"<div class='rlcal-title'>Tháng {cur_m}, {cur_y}</div>", unsafe_allow_html=True)
         with c4:
             st.button("Hôm nay", key=f"rlcal_today_{ns}", on_click=_goto_today,
-                       disabled=(cur_y, cur_m) == _hi_ym, use_container_width=True)
+                       disabled=(cur_y, cur_m) == _hi_ym)
 
     _in_m = lambda s: (s.dt.year == cur_y) & (s.dt.month == cur_m)
     _sess_by_day = {}
