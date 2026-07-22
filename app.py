@@ -3294,7 +3294,12 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
          "deltas": [d for d in [_delta_t(d1_ms, f"phút {lbl_prev}"), _delta_t(d2_ms, f"phút {lbl_avg}")] if d]},
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
-        if show_footer else None)
+        if show_footer else None,
+        # margin-bottom -- card_style mặc định ("padding:18px;") không có margin, khiến khoảng
+        # cách xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), cũng
+        # không tự có margin) chỉ còn đúng gap 10px của khối cha thay vì 14px+10px như mọi cặp
+        # thẻ khác (cùng lỗi đã sửa ở Sách/Gundam -> Tổng quan, áp dụng nhất quán sang Báo cáo).
+        card_style="padding:18px;margin-bottom:14px;")
     render_project_rhythm(df_period)
     if show_top3:
         st.write("")
@@ -4131,7 +4136,11 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                     {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
                 ]},
             ],
-            card_style="padding:18px;margin-top:14px;",
+            # margin ĐỐI XỨNG (không chỉ margin-top) -- thiếu margin-bottom khiến khoảng cách
+            # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), không tự
+            # có margin riêng) chỉ còn đúng gap 10px của khối cha thay vì 24px như mọi cặp thẻ
+            # khác trong chương này (bug thật đã gặp, ảnh chụp người dùng gửi ở tab Sách/Gundam).
+            card_style="padding:18px;margin:14px 0;",
         )
 
         render_project_rhythm(df_books)
@@ -10491,6 +10500,10 @@ elif nav == "Báo cáo":
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
+                # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm, Dự án và Sách/
+                # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
+                # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px.
+                card_style="padding:18px;margin-bottom:14px;",
             )
             render_project_rhythm(df)
 
@@ -10997,6 +11010,10 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
+                    # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm và Sách/
+                    # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
+                    # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px.
+                    card_style="padding:18px;margin-bottom:14px;",
                 )
                 # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
                 # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
@@ -11801,7 +11818,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12464
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12485
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12282,9 +12299,13 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="264-273", date="22/07/2026", pr_lines=63, total_lines=12464,
-             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 3 sửa tương phản/spacing/tooltip mobile",
+        dict(pr="264-274", date="22/07/2026", pr_lines=29, total_lines=12485,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 4 sửa tương phản/spacing/tooltip mobile",
              bullets=[
+                 "**Sửa spacing hẹp bất thường giữa panel số liệu và 2 thẻ \"Theo buổi\"/\"Độ dài "
+                 "phiên\" ngay dưới** (desktop, Sách/Gundam → Tổng quan và mọi sub-tab Báo cáo) — "
+                 "panel thiếu margin dưới nên khoảng cách này chỉ còn 10px thay vì 24px như mọi cặp "
+                 "card khác trong cùng chương.",
                  "**Lịch tháng Sách/Gundam: chạm 1 ô ngày trên mobile giờ hiện tooltip trước, chạm lần "
                  "2 mới nhảy sang trang \"Hôm nay\" của ngày đó** — trước đây chạm là nhảy trang ngay, "
                  "không kịp xem tooltip (tooltip vốn chỉ hiện khi hover, màn cảm ứng không có hover).",
