@@ -5097,6 +5097,40 @@ def render_notes_journal(period_key, kind, df_all):
         st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong kỳ này.")
         return
 
+    # Bộ lọc "theo tuần" -- CHỈ cho kind='month' (kind='week' đã tự nhiên chỉ có 7 ngày, đủ ngắn,
+    # không cần lọc thêm). Nhật ký cả tháng dài hơn hẳn Nhật ký tuần (tối đa 31 dòng so với 7),
+    # xác nhận với người dùng: cần nút lọc theo tuần ở đầu để không phải cuộn qua cả tháng mỗi lần.
+    # Tính đủ các tuần ISO PHỦ hết tháng (không chỉ tuần có dữ liệu) để nút lọc khớp đúng cấu trúc
+    # lịch tháng, dù tuần đó trống -- chọn vào vẫn hiện được caption "trống" thay vì biến mất nút.
+    # Mặc định: tuần chứa hôm nay nếu tháng đang xem là tháng hiện tại, ngược lại tuần đầu tháng --
+    # giải quyết đúng lời phàn nàn "phải nhìn cả tháng quá dài" ngay từ lần vẽ đầu, không cần bấm
+    # thêm bước nào.
+    if kind == 'month':
+        _month_first = pd.Timestamp(int(period_key[:4]), int(period_key[5:7]), 1)
+        _month_last = _month_first + pd.offsets.MonthEnd(0)
+        _weeks_in_month = list(dict.fromkeys(
+            d.strftime('%G-W%V') for d in pd.date_range(_month_first, _month_last)))
+        if len(_weeks_in_month) > 1:
+            _today_wk = _today_vn().strftime('%G-W%V')
+            _default_wk = _today_wk if _today_wk in _weeks_in_month else _weeks_in_month[0]
+            _wk_labels = {w: fmt_week(w) for w in _weeks_in_month}
+            _wk_opts = ["Cả tháng"] + [_wk_labels[w] for w in _weeks_in_month]
+            _wk_key = f"jrn_wk_{period_key}"
+            if _wk_key not in st.session_state:
+                st.session_state[_wk_key] = _wk_labels[_default_wk]
+            _wk_pick = st.segmented_control(
+                "Lọc theo tuần", _wk_opts, default=st.session_state[_wk_key],
+                key=f"{_wk_key}_picker", label_visibility="collapsed")
+            if _wk_pick and _wk_pick != st.session_state[_wk_key]:
+                st.session_state[_wk_key] = _wk_pick
+            _wk_sel = st.session_state[_wk_key]
+            if _wk_sel != "Cả tháng":
+                _wk_target = next(w for w, lbl in _wk_labels.items() if lbl == _wk_sel)
+                days = [d for d in days if d.strftime('%G-W%V') == _wk_target]
+            if not days:
+                st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong tuần này.")
+                return
+
     rows_html = ''
     for d in days:
         rec_html = _record_chips_html(day_badges.get(d.date()))
@@ -8572,9 +8606,16 @@ _MAIN_CSS = """
     /* Lịch Nhật ký đọc/xem (jcard_sach_journal/jcard_gundam_journal) KHÔNG dùng .jrows nhiều hàng
        tự đệm dọc như các jcard khác -- nội dung là 1 lưới .rlcal-grid không có padding đáy riêng,
        nên 6px của rule chung ở trên khiến hàng ngày cuối tháng gần như dính viền đáy card (ảnh
-       chụp người dùng gửi). Nới đáy 16px cho cân với 18px 2 bên, chỉ áp cho đúng 2 card lịch này. */
+       chụp người dùng gửi, xác nhận lại lần 2 vẫn còn -- 16px trước đó chưa đủ). Đo thật bằng
+       Playwright: khối bọc .stMarkdown của Streamlit tự báo cáo chiều cao NGẮN HƠN chiều cao thật
+       đã render của .rlcal-grid khoảng 15-16px (kể cả khi đặt padding-bottom:0, card vẫn kết thúc
+       TRƯỚC khi lưới lịch render hết, đo được -15px) -- cùng loại lỗi "scrollHeight thật >
+       offsetHeight" Streamlit đã gặp ở nơi khác trong file này (xem day_stepper). Không sửa được
+       tận gốc (chiều cao đó Streamlit tự đo, không lộ ra CSS var/inline style để ép lại), nên bù
+       thêm đúng phần hụt đó vào padding mong muốn (16px hiển thị + ~16px hụt = 32px khai báo) --
+       đã đo lại bằng Playwright xác nhận khoảng cách hiển thị ra đúng ~16px sau khi bù. */
     [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"] {
-        padding-bottom: 16px !important;
+        padding-bottom: 32px !important;
     }
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
