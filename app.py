@@ -4520,7 +4520,7 @@ RLCAL_CSS = """
 .rlcal-summary { font-size:12.5px; color:var(--text-2); text-align:right; margin:-4px 0 10px; }
 .rlcal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
 .rlcal-dow { text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.6px;
-    text-transform:uppercase; color:var(--text-3); padding:2px 0 6px; }
+    text-transform:uppercase; color:var(--text); padding:2px 0 6px; }
 .rlcal-cell { position:relative; min-height:108px; border-radius:9px; padding:7px 8px;
     border:1px solid var(--divider); }
 .rlcal-cell.has:hover { z-index:30; }
@@ -4682,7 +4682,10 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
         is_today = in_month and (cur_y, cur_m, day_num) == (_today.year, _today.month, _today.day)
         _cell_border = "border:1.5px solid var(--accent);" if is_today else ""
         _dn_bg = "var(--accent)" if is_today else "transparent"
-        _dn_color = "#fff" if is_today else ("var(--text-2)" if in_month else "transparent")
+        # var(--text) (không phải var(--text-2) mờ như trước) -- xác nhận với người dùng: số ngày
+        # cần rõ hẳn (đen ở light/trắng ở dark, giống mọi chữ chính khác trong app), không mờ như
+        # nhãn phụ nữa.
+        _dn_color = "#fff" if is_today else ("var(--text)" if in_month else "transparent")
         _time_html = f"<span class='rlcal-time'>{_fmt_hours_short(d_min / 60)}</span>" if d_min > 0 else "<span></span>"
         _done_html = ""
         if d_done:
