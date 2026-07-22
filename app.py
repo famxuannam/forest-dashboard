@@ -3253,14 +3253,14 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     của "Báo cáo", chỉ khác hậu tố biến) -- gộp lại còn 1 bản, tham số hoá đúng phần THỰC SỰ khác
     nhau giữa 3 kỳ (nhãn delta, dòng "kỳ chưa kết thúc" clip_note, có Top3 hay không). period_col
     ('Tuần'/'Tháng'/'Năm') PHẢI khớp đúng cột `_period_comparison()` đã dùng để tính prev/avg --
-    dùng làm period_col cho _smart_digest() luôn, không tính lại; cũng dùng làm kicker của chương.
+    dùng làm period_col cho _smart_digest() luôn, không tính lại.
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
     không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương").
 
     show_footer=False (Tuần/Tháng/Năm) -- billboard riêng của từng trang (render_period_billboard)
     đã có câu nhận định tự tính bao gồm đúng nội dung của _smart_digest (so kỳ trước) ở cột phải,
     dòng "nhận xét" cuối thẻ ở đây thành thừa/lặp lại nếu giữ cả 2."""
-    sec_chapter(f"{anchor_prefix}-ch1", 1, None, "Tổng quan", tight_top=True)
+    sec_chapter(f"{anchor_prefix}-ch1", 1, "Tổng quan", tight_top=True)
     curr_hrs = df_period['Thời lượng (Phút)'].sum() / 60
     curr_trees = len(df_period)
     num_days = df_period['Ngày'].nunique() or 1
@@ -4225,22 +4225,22 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
 
     if page_name == "Gundam":
         _render_gundam_billboard(t, df_books, reading_log_df, _today)
-        sec_chapter("gd-tq-ch1", 1, None, "Thống kê", tight_top=True)
+        sec_chapter("gd-tq-ch1", 1, "Thống kê", tight_top=True)
         _render_stats_cards()
-        sec_chapter("gd-tq-ch2", 2, None, "Nhật ký xem")
+        sec_chapter("gd-tq-ch2", 2, "Nhật ký xem")
         _render_journal("gundam", "tập hoàn thành hay phiên xem")
-        sec_chapter("gd-tq-ch3", 3, None, "Bảng số liệu")
+        sec_chapter("gd-tq-ch3", 3, "Bảng số liệu")
         _render_stats_table()
         return
 
     _render_reading_billboard(t, df_books, _today)
-    sec_chapter("sach-tq-ch1", 1, None, "Thống kê", tight_top=True)
+    sec_chapter("sach-tq-ch1", 1, "Thống kê", tight_top=True)
     _render_stats_cards()
-    sec_chapter("sach-tq-ch2", 2, None, "Nhật ký đọc")
+    sec_chapter("sach-tq-ch2", 2, "Nhật ký đọc")
     _render_journal("sach", "phần hoàn thành hay phiên đọc")
-    sec_chapter("sach-tq-ch3", 3, None, "Trích dẫn &amp; Ghi chú")
+    sec_chapter("sach-tq-ch3", 3, "Trích dẫn &amp; Ghi chú")
     _render_reading_quotes_teaser()
-    sec_chapter("sach-tq-ch4", 4, None, "Bảng số liệu")
+    sec_chapter("sach-tq-ch4", 4, "Bảng số liệu")
     _render_stats_table(show_quotes=True)
 
 
@@ -4299,7 +4299,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     if _detail_sel.startswith(_KINDLE_INDEP_PREFIX):
         _src = _detail_sel[len(_KINDLE_INDEP_PREFIX):]
         _kh_src = _kh_all[_kh_all['Cuốn sách'] == _src]
-        sec_chapter(f"{_anchor_ns}-quote", None, None, "Trích dẫn &amp; Ghi chú")
+        sec_chapter(f"{_anchor_ns}-quote", None, "Trích dẫn &amp; Ghi chú")
         with st.container(border=True, key="jcard_reading_detail_indep"):
             _render_reading_kindle_days(reading_log_df.iloc[0:0], _kh_src)
         return
@@ -4346,7 +4346,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
          (f"{_anchor_ns}-ch3", f"3 · {_journal_label}"), (f"{_anchor_ns}-ch4", "4 · Bảng số liệu")],
         key="bc_billboard_detail")
 
-    sec_chapter(f"{_anchor_ns}-ch1", 1, None, "Số liệu", tight_top=True)
+    sec_chapter(f"{_anchor_ns}-ch1", 1, "Số liệu", tight_top=True)
     _secs = [{"label": "Mốc thời gian", "chips": [
         {"k": "Bắt đầu", "v": pd.Timestamp(_row['Bắt đầu']).strftime('%d/%m/%Y')},
         {"k": "Gần nhất", "v": pd.Timestamp(_row['Gần nhất']).strftime('%d/%m/%Y')},
@@ -4377,13 +4377,13 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     # (xác nhận với người dùng, cùng cách đã sửa ở "2. Nhật ký đọc").
     _book_forest_ct = df_books[df_books['Dự án'] == _detail_sel] if not df_books.empty else df_books
 
-    sec_chapter(f"{_anchor_ns}-ch2", 2, None, "Biểu đồ lịch")
+    sec_chapter(f"{_anchor_ns}-ch2", 2, "Biểu đồ lịch")
     if not _rl_detail.empty or not _book_forest_ct.empty:
         render_reading_calendar_grid(_rl_detail, labels, book_forest_df=_book_forest_ct)
     else:
         st.caption("Chưa có dữ liệu để vẽ biểu đồ lịch.")
 
-    sec_chapter(f"{_anchor_ns}-ch3", 3, None, _journal_label)
+    sec_chapter(f"{_anchor_ns}-ch3", 3, _journal_label)
     # Trích dẫn/ghi chú Kindle (nếu cuốn/series này đã được ghép qua kindle_book_map, xem
     # "Tải trích dẫn Kindle" ở tab Tuỳ biến) gộp thẳng vào cùng dòng thời gian này, không còn
     # là mục riêng -- xem _render_reading_kindle_days(). _kh_book đã tính sẵn ở trên (dùng chung
@@ -4393,7 +4393,7 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
     else:
         st.caption(f"Chưa có {labels['days_label'].lower()} nào từ Reminders cho mục này.")
 
-    sec_chapter(f"{_anchor_ns}-ch4", 4, None, "Bảng số liệu")
+    sec_chapter(f"{_anchor_ns}-ch4", 4, "Bảng số liệu")
     if not _rl_detail.empty or not _book_forest_ct.empty:
         _parts_by_day = (_rl_detail.assign(_d=_rl_detail['Ngày hoàn thành'].dt.normalize())
                           .groupby('_d').size() if not _rl_detail.empty else pd.Series(dtype=int))
@@ -5262,7 +5262,7 @@ def _render_health_report(df_health):
     render_period_billboard("Số sức khoẻ", f"{_ok_score}/{_total_score}", "chỉ số trong ngưỡng",
                              f"Lần khám gần nhất {_latest_date:%d/%m/%Y}", _right_html, _toc)
 
-    sec_chapter("hm-bc-ch1", 1, None, "Chỉ số bất thường",
+    sec_chapter("hm-bc-ch1", 1, "Chỉ số bất thường",
                 badge=f"Lần khám {_latest_date:%d/%m/%Y}", tight_top=True)
     if _latest_num.empty:
         st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
@@ -5282,7 +5282,7 @@ def _render_health_report(df_health):
                 f"<div class='hbn-delta'>{arrow} {_ref_txt}</div></div>")
         st.markdown(f"<div class='hbn-grid'>{_cards}</div>", unsafe_allow_html=True)
 
-    sec_chapter("hm-bc-ch2", 2, None, "Diễn biến chỉ số")
+    sec_chapter("hm-bc-ch2", 2, "Diễn biến chỉ số")
     _trend_keys = _health_trend_candidates(df_health, n=4)
     if not _trend_keys:
         st.caption("Chưa có chỉ số nào đủ ít nhất 2 lần đo để vẽ xu hướng.")
@@ -5398,7 +5398,7 @@ def _render_health_report(df_health):
         st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
     render_health_log_table(s_num, is_abn)
 
-    sec_chapter("hm-bc-ch3", 3, None, "Bảng xét nghiệm đầy đủ", badge=f"Lần khám {_latest_date:%d/%m/%Y}")
+    sec_chapter("hm-bc-ch3", 3, "Bảng xét nghiệm đầy đủ", badge=f"Lần khám {_latest_date:%d/%m/%Y}")
     render_health_full_table(_latest_panel)
 
 
@@ -5597,7 +5597,7 @@ def _render_health_input(df_health):
     def _hm_json_example_dialog():
         st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
 
-    sec_chapter("hm-in-ch1", 1, None, "Import hàng loạt", tight_top=True)
+    sec_chapter("hm-in-ch1", 1, "Import hàng loạt", tight_top=True)
     st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
                 "nhiều lần khám cũ cùng lúc.")
     # Khối JSON mẫu để trong popup (st.dialog(), cùng khuôn "Khôi phục dữ liệu"/"Xoá toàn bộ dữ
@@ -5647,7 +5647,7 @@ def _render_health_input(df_health):
     # ==========================================
     # 2. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
     # ==========================================
-    sec_chapter("hm-in-ch2", 2, None, "Nhập kết quả xét nghiệm")
+    sec_chapter("hm-in-ch2", 2, "Nhập kết quả xét nghiệm")
     existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
     cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
     ic1, ic2 = st.columns(2)
@@ -7039,22 +7039,15 @@ def sec_table(headers, rows):
             f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
 
 
-def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=None):
+def sec_chapter(anchor, num, title, lead=None, tight_top=False, badge=None):
     """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
     báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): ô vuông số thứ tự nhỏ + tiêu đề +
-    badge tuỳ chọn + kẻ ngang mở + kicker tuỳ chọn, tất cả trên CÙNG 1 hàng canh giữa dọc (đúng
-    khuôn mockup hiện hành -- không còn số lớn mờ chồng góc phải của bản trước). anchor là id cho
+    badge tuỳ chọn + kẻ ngang mở, tất cả trên CÙNG 1 hàng canh giữa dọc. anchor là id cho
     chip mục lục nhảy tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của
     Streamlit khỏi che tiêu đề).
 
     num=None -> bỏ hẳn ô số thứ tự (mục không đánh số, dùng cho panel tham khảo không nằm trong 1
     chuỗi đếm thật sự).
-
-    kicker=None/"" -> bỏ hẳn nhãn kicker cuối hàng (dùng khi kicker chỉ lặp lại đúng tên trang
-    đang đứng, vd "Hôm nay" ở tiêu đề "Tổng quan ngày" của chính trang Hôm nay -- dư thừa, hero đã
-    nói rõ đang ở trang nào rồi; chỉ giữ kicker khi nó bổ sung ngữ cảnh thật sự mới, như "Universal
-    Century"/"Dự án → Nhóm" trong mockup). Kicker đứng SAU kẻ ngang (cuối hàng), không phải
-    trước tiêu đề.
 
     tight_top=True -> bỏ margin-top mặc định của .sec-ch. CHỈ dùng cho chương ĐẦU TIÊN ngay sau 1
     billboard (render_period_billboard()): margin-top đó cộng dồn với margin-bottom sẵn có của
@@ -7068,13 +7061,12 @@ def sec_chapter(anchor, num, kicker, title, lead=None, tight_top=False, badge=No
     thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề, trước kẻ ngang."""
     _num_html = f"<span class='sec-ch-num'>{num}</span>" if num is not None else ""
     _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
-    _kicker_html = f"<span class='sec-ch-kicker'>{kicker}</span>" if kicker else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
     st.markdown(
         f"<div class='{_cls}' id='{anchor}'>"
         f"<div class='sec-ch-row'>{_num_html}<span class='sec-ch-title'>{title}</span>{_badge_html}"
-        f"<span class='sec-ch-rule'></span>{_kicker_html}</div>{_lead}</div>",
+        f"<span class='sec-ch-rule'></span></div>{_lead}</div>",
         unsafe_allow_html=True)
 
 
@@ -8778,27 +8770,22 @@ _MAIN_CSS = """
     .sec-ch.sec-ch-tight { margin-top: 0; }
     /* Header chương kiểu mockup hiện hành: 1 hàng ngang canh giữa dọc, không còn số lớn mờ chồng
        góc phải (bản cũ) -- ô vuông teal chứa số nhỏ + tiêu đề + badge tuỳ chọn + kẻ ngang mở
-       (flex:1, lấp hết chỗ trống còn lại) + kicker tuỳ chọn (đặt SAU kẻ ngang, không phải trước
-       tiêu đề như bản cũ -- xem ví dụ "Universal Century"/"Dự án → Nhóm" trong mockup). */
+       (flex:1, lấp hết chỗ trống còn lại). Không còn kicker cuối hàng (đã bỏ -- trên mobile hàng
+       này quá hẹp, kicker flex:none ép tiêu đề phải wrap nhiều dòng). */
     .sec-ch-row { display: flex; align-items: center; gap: 10px; }
     .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
         color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
         justify-content: center; }
-    /* .sec-ch-title/.sec-ch-kicker/.sec-ch-lead nằm TRỰC TIẾP trên var(--bg) (chương mở đầu 1
+    /* .sec-ch-title/.sec-ch-lead nằm TRỰC TIẾP trên var(--bg) (chương mở đầu 1
        trang cuộn dọc, không lồng trong .sec-card) nên PHẢI đọc var(--text-on-bg)/var(--text-on-
        bg-2), cùng lý do với .pbill-* ở trên -- .sec-ch-badge KHÔNG đổi vì có nền riêng var(--chip)
-       (giống 1 chip nhỏ, var(--text-2) vẫn đúng vì đọc trên nền chip chứ không phải nền trang).
-       .sec-ch-kicker dùng var(--text-on-bg-2) (không phải -3, token đó không có bản "trên nền
-       trang" riêng) -- đậm hơn 1 chút so với --text-3 gốc nhưng vẫn đọc được, ưu tiên hơn để mất
-       hẳn trên 2 bảng nền đậm. */
+       (giống 1 chip nhỏ, var(--text-2) vẫn đúng vì đọc trên nền chip chứ không phải nền trang). */
     .sec-ch-title { font-size: 19px; font-weight: 750; color: var(--text-on-bg); }
     /* Chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026") -- tách thông tin ĐỘNG theo dữ liệu ra
        khỏi văn bản tiêu đề cố định, xem docstring sec_chapter() tham số badge. */
     .sec-ch-badge { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-2);
         background: var(--chip); border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
     .sec-ch-rule { flex: 1; height: 1px; background: var(--divider-2); min-width: 24px; }
-    .sec-ch-kicker { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--text-on-bg-2); }
     .sec-ch-lead { font-size: 14px; color: var(--text-on-bg-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
     .sec-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
         box-shadow: var(--card-shadow); padding: var(--card-pad); margin: var(--card-gap);
@@ -10083,12 +10070,12 @@ def render_day_report(df):
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
 
     if day_df.empty:
-        sec_chapter("today-ch1", 1, None, "Ghi chú ngày", tight_top=True)
+        sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
-        sec_chapter("today-ch2", 2, None, "Ngày này năm trước")
+        sec_chapter("today-ch2", 2, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
-        sec_chapter("today-ch1", 1, None, "Tổng quan ngày", tight_top=True)
+        sec_chapter("today-ch1", 1, "Tổng quan ngày", tight_top=True)
         d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
         d_sess = len(day_df)
         d_avg = _avg_session_min(day_df)
@@ -10142,13 +10129,13 @@ def render_day_report(df):
 
         render_project_rhythm(day_df)
 
-        sec_chapter("today-ch2", 2, None, "Phân bổ thời gian")
+        sec_chapter("today-ch2", 2, "Phân bổ thời gian")
         frag_category_bars(day_df, "rad_day", "Dự án")
 
-        sec_chapter("today-ch3", 3, None, "Ghi chú ngày")
+        sec_chapter("today-ch3", 3, "Ghi chú ngày")
         render_note_editor(sel, sel_day_badges)
 
-        sec_chapter("today-ch4", 4, None, "Danh sách phiên")
+        sec_chapter("today-ch4", 4, "Danh sách phiên")
         _day_sorted = day_df.sort_values('Thời gian bắt đầu').reset_index(drop=True)
         _start, _end, _num_pages, _paged = _table_page_slice(len(_day_sorted), "today_sess_tbl_page")
         rows_html = ''
@@ -10176,7 +10163,7 @@ def render_day_report(df):
             _render_table_pagination(_num_pages, "today_sess_tbl_page",
                                        f"Hiển thị phiên {_start + 1}–{_end} / {len(_day_sorted)}")
 
-        sec_chapter("today-ch5", 5, None, "Ngày này năm trước")
+        sec_chapter("today-ch5", 5, "Ngày này năm trước")
         render_on_this_day(sel, df)
 
 
@@ -10259,7 +10246,7 @@ def _render_tuybien_giao_dien():
                 save_setting(_k, random.choice(_choices))
             st.rerun()
 
-    sec_chapter("tbgd-ch1", 1, None, "Màu accent",
+    sec_chapter("tbgd-ch1", 1, "Màu accent",
                 lead="Một màu duy nhất, lan toả khắp biểu đồ, nút bấm và điểm nhấn.", tight_top=True)
     with st.container(border=True, key="tbgd_accent_card"):
         def _accent_css(name, hexcode, selected):
@@ -10273,7 +10260,7 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(ACCENT_PRESETS.items()), 4, lambda n, h: h == ACCENT,
                       "accent_hex", "accent_sw", _accent_css, value_for=lambda n, h: h)
 
-    sec_chapter("tbgd-ch2", 2, None, "Bảng màu nền",
+    sec_chapter("tbgd-ch2", 2, "Bảng màu nền",
                 lead="Bộ trọn gói nền, thẻ và viền — không lệch tông khi đổi.")
     with st.container(border=True, key="tbgd_palette_card"):
         def _pal_css(name, tok, selected):
@@ -10290,7 +10277,7 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(BG_PALETTES.items()), 4, lambda n, t: n == BG_PALETTE,
                       "bg_palette", "bgpal_sw", _pal_css)
 
-    sec_chapter("tbgd-ch3", 3, None, "Kiểu nền trang",
+    sec_chapter("tbgd-ch3", 3, "Kiểu nền trang",
                 lead="Hoạ tiết lặp phủ nhẹ lên nền trang, đứng sau mọi nội dung.")
     with st.container(border=True, key="tbgd_pattern_card"):
         def _bgpat_css(name, cfg, selected):
@@ -10306,7 +10293,7 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(BG_PRESETS.items()), 4, lambda n, c: n == BG_STYLE,
                       "bg_style", "bg_sw", _bgpat_css)
 
-    sec_chapter("tbgd-ch4", 4, None, "Kiểu thẻ", lead="Mỗi kiểu là một chất liệu bề mặt khác nhau.")
+    sec_chapter("tbgd-ch4", 4, "Kiểu thẻ", lead="Mỗi kiểu là một chất liệu bề mặt khác nhau.")
     with st.container(border=True, key="tbgd_cardstyle_card"):
         def _cs_css(name, cfg, selected):
             _ring = "var(--accent)" if selected else "var(--border)"
@@ -10319,7 +10306,7 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(CARD_STYLES.items()), 4, lambda n, c: n == CARD_STYLE,
                       "card_style", "cardstyle_sw", _cs_css)
 
-    sec_chapter("tbgd-ch5", 5, None, "Mật độ bố cục",
+    sec_chapter("tbgd-ch5", 5, "Mật độ bố cục",
                 lead="Khoảng đệm và khoảng cách giữa các thẻ nội dung.")
     with st.container(border=True, key="tbgd_density_card"):
         def _density_css(name, cfg, selected):
@@ -10333,7 +10320,7 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(CARD_DENSITY.items()), 3, lambda n, c: n == CARD_DENSITY_NAME,
                       "card_density", "carddensity_sw", _density_css)
 
-    sec_chapter("tbgd-ch6", 6, None, "Font thân chữ",
+    sec_chapter("tbgd-ch6", 6, "Font thân chữ",
                 lead="Chỉ áp cho thân/nhãn/nút — bảng số liệu và trích dẫn giữ font riêng.")
     with st.container(border=True, key="tbgd_font_card"):
         def _bf_css(name, cfg, selected):
@@ -10400,7 +10387,7 @@ elif nav == "Báo cáo":
                 + _nudge_html,
                 [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
                  ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
-            sec_chapter("bc-tq-ch1", 1, None, "Tổng quan", tight_top=True)
+            sec_chapter("bc-tq-ch1", 1, "Tổng quan", tight_top=True)
 
             by_wd = _weekday_avg(df)
             overall_top3 = _top_days(df, 3)
@@ -10438,9 +10425,9 @@ elif nav == "Báo cáo":
             with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
-            sec_chapter("bc-tq-ch2", 2, None, "Biểu đồ lịch")
+            sec_chapter("bc-tq-ch2", 2, "Biểu đồ lịch")
             frag_calendar(df, "range_cal")
-            sec_chapter("bc-tq-ch3", 3, None, "Xu hướng")
+            sec_chapter("bc-tq-ch3", 3, "Xu hướng")
             _tq_trend_view = st.segmented_control(
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
                 key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
@@ -10448,7 +10435,7 @@ elif nav == "Báo cáo":
                 frag_trend(df, "trend_main", "Nhóm")
             else:
                 frag_hourly(df, "hour_main", "Nhóm")
-            sec_chapter("bc-tq-ch4", 4, None, "Bảng số liệu")
+            sec_chapter("bc-tq-ch4", 4, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
@@ -10534,13 +10521,13 @@ elif nav == "Báo cáo":
                                               lbl_prev_w, lbl_avg_w, _clip_note_w,
                                               "Ngày nổi bật trong tuần", show_top3=False,
                                               anchor_prefix="bc-tuan", show_footer=False)
-                sec_chapter("bc-tuan-ch2", 2, None, "Nhóm & dự án")
+                sec_chapter("bc-tuan-ch2", 2, "Nhóm & dự án")
                 frag_category_bars(df_w, "rad_tab4", "Nhóm")
-                sec_chapter("bc-tuan-ch3", 3, None, "Theo ngày")
+                sec_chapter("bc-tuan-ch3", 3, "Theo ngày")
                 frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-                sec_chapter("bc-tuan-ch4", 4, None, "Nhật ký")
+                sec_chapter("bc-tuan-ch4", 4, "Nhật ký")
                 render_notes_journal(selected_week, 'week', df)
-                sec_chapter("bc-tuan-ch5", 5, None, "Bảng số liệu")
+                sec_chapter("bc-tuan-ch5", 5, "Bảng số liệu")
                 render_period_day_table(df_w, all_days=[_week_start + timedelta(days=i) for i in range(7)])
     elif bc_sub == "Tháng":
         if not df.empty:
@@ -10622,16 +10609,16 @@ elif nav == "Báo cáo":
                 # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
 
-                sec_chapter("bc-thang-ch2", 2, None, "Lịch tháng")
+                sec_chapter("bc-thang-ch2", 2, "Lịch tháng")
                 # Truyền CÙNG df_m cho cả 2 tham số -- đúng pattern lịch năm đã có
                 # (render_calendar_grid(df_y, df_y) ở nhánh Năm), lưới tự bó gọn theo đúng phạm vi
                 # tháng đang chọn, không kéo dài tới ngày hiện tại như khi truyền full df.
                 render_calendar_grid(df_m, df_m)
 
-                sec_chapter("bc-thang-ch3", 3, None, "Phân bổ nhóm")
+                sec_chapter("bc-thang-ch3", 3, "Phân bổ nhóm")
                 frag_category_bars(df_m, "rad_tab3", "Nhóm")
 
-                sec_chapter("bc-thang-ch4", 4, None, "Xu hướng")
+                sec_chapter("bc-thang-ch4", 4, "Xu hướng")
                 _thang_trend_view = st.segmented_control(
                     "Xem theo", ["Theo tuần", "Theo ngày", "Theo khung giờ"], default="Theo tuần",
                     key="bc_thang_trend_view", label_visibility="collapsed") or "Theo tuần"
@@ -10642,9 +10629,9 @@ elif nav == "Báo cáo":
                 else:
                     frag_hourly(df_m, "hour_m", "Nhóm", with_range=False)
 
-                sec_chapter("bc-thang-ch5", 5, None, "Nhật ký")
+                sec_chapter("bc-thang-ch5", 5, "Nhật ký")
                 render_notes_journal(selected_month, 'month', df)
-                sec_chapter("bc-thang-ch6", 6, None, "Bảng số liệu")
+                sec_chapter("bc-thang-ch6", 6, "Bảng số liệu")
                 render_detail_table(df_m, "bc_thang_tbl")
     elif bc_sub == "Năm":
         if not df.empty:
@@ -10717,20 +10704,20 @@ elif nav == "Báo cáo":
                 # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Nhóm cả năm/Theo
                 # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
                 # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
-                sec_chapter("bc-nam-ch2", 2, None, "Biểu đồ lịch")
+                sec_chapter("bc-nam-ch2", 2, "Biểu đồ lịch")
                 # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
                 # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
                 # để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
                 # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
                 render_calendar_grid(df_y, df_y)
 
-                sec_chapter("bc-nam-ch3", 3, None, "Nhóm cả năm")
+                sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
 
-                sec_chapter("bc-nam-ch4", 4, None, "Theo tháng")
+                sec_chapter("bc-nam-ch4", 4, "Theo tháng")
                 render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch5", 5, None, "Bảng số liệu")
+                sec_chapter("bc-nam-ch5", 5, "Bảng số liệu")
                 render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
@@ -10881,7 +10868,7 @@ elif nav == "Báo cáo":
                     + [("bc-duan-ch2", "2 · Biểu đồ lịch"), ("bc-duan-ch3", "3 · Xu hướng"),
                        ("bc-duan-ch4", "4 · Phiên gần đây"), ("bc-duan-ch5", "5 · Bảng số liệu")])
 
-                sec_chapter("bc-duan-ch1", 1, None, "Tổng quan", tight_top=True)
+                sec_chapter("bc-duan-ch1", 1, "Tổng quan", tight_top=True)
                 wd_g = _weekday_avg(df_g)
 
                 _grp_sections = [
@@ -10941,15 +10928,15 @@ elif nav == "Báo cáo":
                 render_project_rhythm(df_g)
 
                 if not _rl_book.empty:
-                    sec_chapter("bc-duan-chrl", None, None, "Nhật ký đọc")
+                    sec_chapter("bc-duan-chrl", None, "Nhật ký đọc")
                     with st.container(border=True, key="jcard_reading_proj"):
                         st.markdown(f"<div class='jrows'>{_reading_rows_html(_rl_book, label_book=False)}</div>",
                                     unsafe_allow_html=True)
 
-                sec_chapter("bc-duan-ch2", 2, None, "Biểu đồ lịch")
+                sec_chapter("bc-duan-ch2", 2, "Biểu đồ lịch")
                 frag_calendar(df_g, "range_grp_cal")
 
-                sec_chapter("bc-duan-ch3", 3, None, "Xu hướng")
+                sec_chapter("bc-duan-ch3", 3, "Xu hướng")
                 _duan_trend_view = st.segmented_control(
                     "Xem theo", ["12 tuần gần nhất", "Toàn thời gian"], default="12 tuần gần nhất",
                     key="bc_duan_trend_view", label_visibility="collapsed") or "12 tuần gần nhất"
@@ -10958,9 +10945,9 @@ elif nav == "Báo cáo":
                 else:
                     frag_trend(df_g, "trend_grp", "Dự án")
 
-                sec_chapter("bc-duan-ch4", 4, "30 ngày gần nhất", "Phiên gần đây")
+                sec_chapter("bc-duan-ch4", 4, "Phiên gần đây")
                 render_project_recent_sessions(df_g)
-                sec_chapter("bc-duan-ch5", 5, None, "Bảng số liệu")
+                sec_chapter("bc-duan-ch5", 5, "Bảng số liệu")
                 frag_period_table(df_g, "view_grp")
 elif nav == "Nhật ký đọc sách":
     # KHÔNG bắt buộc df (Forest) khác rỗng nữa -- trang này giờ gộp 2 nguồn, vẫn hoạt động được
@@ -11087,7 +11074,7 @@ elif nav == "Tuỳ biến":
              ("tb-ch3", "3 · Quản lý hệ thống"), ("tb-ch4", "4 · Dữ liệu làm việc hiện tại")],
             key="tb_billboard")
 
-        sec_chapter("tb-ch1", 1, None, "Dữ liệu đầu vào", tight_top=True)
+        sec_chapter("tb-ch1", 1, "Dữ liệu đầu vào", tight_top=True)
         with st.container(border=True, key="tb_quick_sync_card"):
             _qmsg = st.session_state.pop('quick_sync_msg', None)
             if _qmsg:
@@ -11378,7 +11365,7 @@ elif nav == "Tuỳ biến":
                             st.session_state['kindle_map_save_msg'] = "Đã lưu ánh xạ mới."
                             st.rerun()
 
-        sec_chapter("tb-ch2", 2, None, "Phân loại")
+        sec_chapter("tb-ch2", 2, "Phân loại")
         with st.container(border=True, key="tb_mapping_card"):
             # Trước đây có 2 tab con "Nhóm"/"Sách" (tab "Sách" là gán tay Dự án Forest -> Cuốn
             # sách cho tên lệch) -- đã BỎ tab "Sách" cùng bảng book_project_map: mọi sách cũ đã có tên
@@ -11453,7 +11440,7 @@ elif nav == "Tuỳ biến":
                                            ignore_index=True)
                             save_mapping(nm[["Dự án", "Nhóm"]].reset_index(drop=True))
                             st.rerun()
-        sec_chapter("tb-ch3", 3, None, "Quản lý hệ thống")
+        sec_chapter("tb-ch3", 3, "Quản lý hệ thống")
         # 3 thẻ rút gọn về ĐÚNG 1 nhãn + 1 nút (không còn help text/checkbox lộ ngay trên thẻ, theo
         # phản hồi thực tế) -- 2 thao tác phá huỷ dữ liệu (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch
         # toàn bộ) chuyển hết phần xác nhận (upload/preview/checkbox/nút xác nhận cuối) vào popup
@@ -11680,7 +11667,7 @@ elif nav == "Tuỳ biến":
         # Chương "5. Dữ liệu làm việc hiện tại" -- KHÔNG có trong mockup (chỉ vẽ 4 chương), xác nhận
         # với người dùng giữ làm chương riêng cuối cùng thay vì gộp vào "1. Dữ liệu đầu vào" (xem
         # đầu khối "elif nav == "Tuỳ biến":").
-        sec_chapter("tb-ch4", 4, None, "Dữ liệu làm việc hiện tại")
+        sec_chapter("tb-ch4", 4, "Dữ liệu làm việc hiện tại")
         with st.container(border=True, key="tb_rawdata_card"):
             # Nút xoá hàng loạt cũng dùng màu cảnh báo -- xem chú thích ở "4. Quản lý hệ thống".
             st.markdown(
@@ -11739,7 +11726,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12357
+    _help_latest_date, _help_latest_lines = "22/07/2026", 12380
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -11763,7 +11750,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 1: BUỔI SÁNG
     # ==========================================
     sec_chapter(
-        "help-ch1", 1, "Hôm nay · trước phiên đầu tiên", "Buổi sáng — định hướng bằng những gì đã qua",
+        "help-ch1", 1, "Buổi sáng — định hướng bằng những gì đã qua",
         tight_top=True)
     # Minh hoạ dòng thời gian trong ngày: mỗi khối là 1 phiên đặt đúng vị trí giờ nó diễn ra
     _daybar = "".join(
@@ -11797,7 +11784,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 2: TRONG NGÀY
     # ==========================================
     sec_chapter(
-        "help-ch2", 2, "Ghi chú nhanh · phím tắt", "Trong ngày — cứ để ứng dụng đó, đừng bận tâm mở ra")
+        "help-ch2", 2, "Trong ngày — cứ để ứng dụng đó, đừng bận tâm mở ra")
     sec_block(
         "<h4>Ghi chú nhanh — một hộp thư nháp mang theo trong túi quần</h4>"
         "Có một Shortcut trên iPhone (gọi qua Siri, Action Button, hay biểu tượng ngoài Màn hình chính, "
@@ -11830,7 +11817,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 3: CUỐI NGÀY
     # ==========================================
     sec_chapter(
-        "help-ch3", 3, "Nghi thức đóng ngày", "Cuối ngày — năm phút, thói quen đáng giá nhất trong ứng dụng")
+        "help-ch3", 3, "Cuối ngày — năm phút, thói quen đáng giá nhất trong ứng dụng")
     sec_block(
         "<h4>Ba bước nhỏ, làm đúng thứ tự là xong</h4>"
         "<ol>"
@@ -11868,7 +11855,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 4: CUỐI TUẦN & CUỐI THÁNG
     # ==========================================
     sec_chapter(
-        "help-ch4", 4, "Báo cáo · Tuần / Tháng / Năm", "Cuối tuần &amp; cuối tháng — nhìn lại với một câu hỏi trong đầu")
+        "help-ch4", 4, "Cuối tuần &amp; cuối tháng — nhìn lại với một câu hỏi trong đầu")
     _q_rows = [
         ["Thời gian đang dồn vào đâu nhiều nhất?", "Phân bổ thời gian (Tháng: biểu đồ tròn · Tuần: Nhóm &amp; dự án dạng thanh xếp hạng)", "Báo cáo → Tháng / Tuần"],
         ["Mình thường tập trung tốt nhất vào lúc mấy giờ?", "Xu hướng theo khung giờ", "Báo cáo → Tổng quan / Tháng"],
@@ -11944,7 +11931,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 5: SÁCH, GUNDAM & SỨC KHOẺ
     # ==========================================
     sec_chapter(
-        "help-ch5", 5, "Nguồn dữ liệu phụ", "Sách, Gundam &amp; Sức khoẻ")
+        "help-ch5", 5, "Sách, Gundam &amp; Sức khoẻ")
     sec_block(
         "<h4>Quy ước đặt tên trong Apple Reminders</h4>"
         "Mỗi <b>Reminder List</b> trên điện thoại ứng với một cuốn sách hoặc một series, đặt tên theo "
@@ -12019,7 +12006,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 6: NẠP DỮ LIỆU & ĐỒNG BỘ
     # ==========================================
     sec_chapter(
-        "help-ch6", 6, "Tuỳ biến → 1. Dữ liệu đầu vào", "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn")
+        "help-ch6", 6, "Nạp dữ liệu &amp; đồng bộ — luật chơi của từng nguồn")
     sec_block(
         "<h4>Đường đi của dữ liệu — từ điện thoại tới màn hình bạn đang xem</h4>"
         "<div class='sec-flow'>"
@@ -12073,7 +12060,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 7: TUỲ BIẾN & GIAO DIỆN
     # ==========================================
     sec_chapter(
-        "help-ch7", 7, "Màu · dark mode · sao lưu", "Tuỳ biến &amp; giao diện")
+        "help-ch7", 7, "Tuỳ biến &amp; giao diện")
     sec_block(
         "<h4>Một màu accent duy nhất, lan ra ba nơi bằng ba cơ chế khác nhau</h4>"
         "<ul>"
@@ -12116,7 +12103,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 8: CÂU HỎI THƯỜNG GẶP
     # ==========================================
     sec_chapter(
-        "help-ch8", 8, "FAQ", "Câu hỏi thường gặp")
+        "help-ch8", 8, "Câu hỏi thường gặp")
     with st.container(key="help_faq"):
         help_faq_item(
             "Nạp lại một file Forest CSV cũ có làm dữ liệu nhân đôi lên không?",
@@ -12212,7 +12199,7 @@ elif nav == "Hướng dẫn":
     # CHƯƠNG 9: NHẬT KÝ PHÁT TRIỂN
     # ==========================================
     sec_chapter(
-        "help-ch9", 9, "Changelog", "Nhật ký phát triển")
+        "help-ch9", 9, "Nhật ký phát triển")
     # Mỗi mục gộp TẤT CẢ PR có ý nghĩa với người dùng cuối merge trong CÙNG 1 ngày thành 1 entry
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
     # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
@@ -12220,9 +12207,12 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="264-269", date="22/07/2026", pr_lines=50, total_lines=12357,
-             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng",
+        dict(pr="264-271", date="22/07/2026", pr_lines=163, total_lines=12380,
+             title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading",
              bullets=[
+                 "**Bỏ nhãn kicker bên phải tiêu đề mỗi chương** (`sec_chapter`) — trên màn hình mobile "
+                 "hẹp, dòng chữ này ép tiêu đề phải xuống dòng nhiều lần; giờ mỗi chương chỉ còn số thứ "
+                 "tự + tiêu đề + kẻ ngang.",
                  "**Nhật ký đọc/xem (Sách/Gundam → Tổng quan) đổi từ danh sách phân trang sang lịch "
                  "tháng dạng bản đồ nhiệt** — mỗi ngày là 1 ô trong lưới tháng, đậm nhạt theo thời gian "
                  "đọc/xem, kèm chip phần đã đọc/số trích dẫn, hover xem chi tiết, có nút điều hướng "
