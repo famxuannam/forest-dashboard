@@ -4527,13 +4527,17 @@ RLCAL_CSS = """
 .rlcal-top { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
 .rlcal-time { font-size:10.5px; font-weight:800; color:var(--accent); background:rgba(var(--accent-rgb),0.13);
     border-radius:999px; padding:1.5px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
-.rlcal-daynum { font-size:11px; font-weight:600; border-radius:999px; min-width:19px; height:19px;
+.rlcal-daynum { font-size:17px; font-weight:800; border-radius:999px; min-width:28px; height:28px;
     display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .rlcal-done { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
 .rlcal-donechip { font-size:10.5px; font-weight:600; color:var(--text); background:var(--chip);
     border-radius:6px; padding:2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rlcal-more { font-size:10.5px; color:var(--text-3); }
 .rlcal-quote { font-size:10px; font-weight:700; color:var(--accent); margin-top:4px; opacity:.85; }
+/* Bản gọn "chỉ số lượng" (✓N phần/tập, ❝N trích dẫn) -- CHỈ hiện ở mobile, thay cho .rlcal-done/
+   .rlcal-quote đầy đủ (tên phần/nội dung trích dẫn, quá dài cho ô hẹp trên điện thoại) -- ẩn ở
+   desktop (đã có bản đầy đủ + hover xem chi tiết) để không lặp thông tin 2 lần. */
+.rlcal-counts { display:none; }
 .rlcal-link { position:absolute; inset:0; display:block; text-decoration:none; color:inherit; border-radius:inherit; }
 .rlcal-tip { display:none; position:absolute; width:250px; background:var(--card); border:1px solid var(--border);
     border-radius:12px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,0.22); z-index:40;
@@ -4549,11 +4553,13 @@ RLCAL_CSS = """
 .rlcal-tip-ql { font-size:11.5px; font-style:italic; line-height:1.4; color:var(--text-2); margin-top:3px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 @media (max-width: 640px) {
-    .rlcal-cell { min-height:64px; padding:4px 5px; }
+    .rlcal-cell { min-height:74px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
     .rlcal-tip { display:none !important; }
     .rlcal-time { font-size:9px; padding:1px 4px; }
-    .rlcal-daynum { font-size:10px; min-width:16px; height:16px; }
+    .rlcal-daynum { font-size:14px; min-width:24px; height:24px; }
+    .rlcal-counts { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
+    .rlcal-cnt { font-size:9px; font-weight:700; color:var(--text-2); white-space:nowrap; }
 }
 </style>
 """
@@ -4695,6 +4701,12 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
                 _done_html += f"<span class='rlcal-more'>+{len(d_done) - 2} khác</span>"
             _done_html += "</div>"
         _quote_html = f"<div class='rlcal-quote'>❝ {len(d_quotes)} trích dẫn</div>" if d_quotes else ""
+        _count_parts = []
+        if d_done:
+            _count_parts.append(f"<span class='rlcal-cnt'>✓ {len(d_done)}</span>")
+        if d_quotes:
+            _count_parts.append(f"<span class='rlcal-cnt'>❝ {len(d_quotes)}</span>")
+        _count_html = f"<div class='rlcal-counts'>{''.join(_count_parts)}</div>" if _count_parts else ""
         _tip_html = ""
         _link_html = ""
         if has:
@@ -4725,7 +4737,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             f"{_link_html}"
             f"<div class='rlcal-top'>{_time_html}"
             f"<span class='rlcal-daynum' style='background:{_dn_bg};color:{_dn_color};'>{day_num if in_month else ''}</span></div>"
-            f"{_done_html}{_quote_html}{_tip_html}</div>"
+            f"{_done_html}{_quote_html}{_count_html}{_tip_html}</div>"
         )
 
     st.markdown(RLCAL_CSS + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>", unsafe_allow_html=True)
