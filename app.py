@@ -4516,7 +4516,7 @@ def _reading_cal_lvl(mins):
 
 RLCAL_CSS = """
 <style>
-.rlcal-title { font-size:15px; font-weight:700; min-width:120px; text-align:center; white-space:nowrap; }
+.rlcal-title { font-size:15px; font-weight:700; text-align:left; white-space:nowrap; }
 .rlcal-summary { font-size:12.5px; color:var(--text-2); text-align:right; margin:-4px 0 10px; }
 .rlcal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
 .rlcal-dow { text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.6px;
@@ -4561,6 +4561,29 @@ RLCAL_CSS = """
 .rlcal-tip-qt { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
 .rlcal-tip-ql { font-size:11.5px; font-style:italic; line-height:1.4; color:var(--text-2); margin-top:3px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+/* Cụm nút ‹/Hôm nay/› (rlcal_stepper_sach/rlcal_stepper_gundam) dồn thành 1 khối liền ở bên phải,
+   tiêu đề tháng chiếm phần còn lại bên trái -- xác nhận với người dùng qua ảnh chụp (bản trước đó
+   tách ‹› 2 đầu + Hôm nay riêng 1 góc trông rời rạc, không rõ 3 nút cùng 1 nhóm điều hướng). Tỉ lệ
+   cột [6,1,1.4,1] truyền ở Python KHÔNG đủ để 3 nút dính sát nhau -- mỗi cột vẫn rộng >100px, nút
+   36-90px chỉ đứng CĂN GIỮA trong đó nên vẫn cách xa nhau (đo bằng Playwright: ~70px giữa 2 nút,
+   dù gap flex đã ép 6px). Ép thẳng flex-basis TỪNG CỘT về đúng bề rộng nút cần (giống cách
+   .st-key-stepper_/day_stepper đã làm) -- cột 1 (title) ăn hết phần dư (flex:1 1 auto), 3 cột nút
+   co khít theo đúng nội dung (flex:0 0 auto). */
+[class*="st-key-rlcal_stepper_"] [data-testid="stHorizontalBlock"] { gap: 6px !important; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"] { display:flex; align-items:center; justify-content:center; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(1) {
+    flex: 1 1 auto !important; width: auto !important; justify-content:flex-start;
+}
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(2),
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(3),
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(4) {
+    flex: 0 0 auto !important; width: auto !important;
+}
+[class*="st-key-rlcal_stepper_"] button { height:36px !important; min-height:0 !important; }
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(2) button,
+[class*="st-key-rlcal_stepper_"] [data-testid="stColumn"]:nth-child(4) button {
+    width:36px !important; padding:0 !important;
+}
 @media (max-width: 640px) {
     .rlcal-cell { min-height:74px; padding:4px 5px; }
     .rlcal-done, .rlcal-quote { display:none; }
@@ -4627,18 +4650,18 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
     cur_y, cur_m = st.session_state[_skey]
 
     with st.container(key=f"rlcal_stepper_{ns}"):
-        c1, c2, c3, c4 = st.columns([1, 1, 6, 2], vertical_alignment="center")
+        c1, c2, c3, c4 = st.columns([6, 1, 1.4, 1], vertical_alignment="center")
         with c1:
-            st.button("", icon=":material/chevron_left:", key=f"rlcal_prev_{ns}", on_click=_shift,
-                       args=(-1,), disabled=(cur_y, cur_m) <= _lo_ym, use_container_width=True)
-        with c2:
-            st.button("", icon=":material/chevron_right:", key=f"rlcal_next_{ns}", on_click=_shift,
-                       args=(1,), disabled=(cur_y, cur_m) >= _hi_ym, use_container_width=True)
-        with c3:
             st.markdown(f"<div class='rlcal-title'>Tháng {cur_m}, {cur_y}</div>", unsafe_allow_html=True)
-        with c4:
+        with c2:
+            st.button("", icon=":material/chevron_left:", key=f"rlcal_prev_{ns}", on_click=_shift,
+                       args=(-1,), disabled=(cur_y, cur_m) <= _lo_ym)
+        with c3:
             st.button("Hôm nay", key=f"rlcal_today_{ns}", on_click=_goto_today,
-                       disabled=(cur_y, cur_m) == _hi_ym, use_container_width=True)
+                       disabled=(cur_y, cur_m) == _hi_ym)
+        with c4:
+            st.button("", icon=":material/chevron_right:", key=f"rlcal_next_{ns}", on_click=_shift,
+                       args=(1,), disabled=(cur_y, cur_m) >= _hi_ym)
 
     _in_m = lambda s: (s.dt.year == cur_y) & (s.dt.month == cur_m)
     _sess_by_day = {}
@@ -5096,6 +5119,40 @@ def render_notes_journal(period_key, kind, df_all):
     if not days:
         st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong kỳ này.")
         return
+
+    # Bộ lọc "theo tuần" -- CHỈ cho kind='month' (kind='week' đã tự nhiên chỉ có 7 ngày, đủ ngắn,
+    # không cần lọc thêm). Nhật ký cả tháng dài hơn hẳn Nhật ký tuần (tối đa 31 dòng so với 7),
+    # xác nhận với người dùng: cần nút lọc theo tuần ở đầu để không phải cuộn qua cả tháng mỗi lần.
+    # Tính đủ các tuần ISO PHỦ hết tháng (không chỉ tuần có dữ liệu) để nút lọc khớp đúng cấu trúc
+    # lịch tháng, dù tuần đó trống -- chọn vào vẫn hiện được caption "trống" thay vì biến mất nút.
+    # Mặc định: tuần chứa hôm nay nếu tháng đang xem là tháng hiện tại, ngược lại tuần đầu tháng --
+    # giải quyết đúng lời phàn nàn "phải nhìn cả tháng quá dài" ngay từ lần vẽ đầu, không cần bấm
+    # thêm bước nào.
+    if kind == 'month':
+        _month_first = pd.Timestamp(int(period_key[:4]), int(period_key[5:7]), 1)
+        _month_last = _month_first + pd.offsets.MonthEnd(0)
+        _weeks_in_month = list(dict.fromkeys(
+            d.strftime('%G-W%V') for d in pd.date_range(_month_first, _month_last)))
+        if len(_weeks_in_month) > 1:
+            _today_wk = _today_vn().strftime('%G-W%V')
+            _default_wk = _today_wk if _today_wk in _weeks_in_month else _weeks_in_month[0]
+            _wk_labels = {w: fmt_week(w) for w in _weeks_in_month}
+            _wk_opts = ["Cả tháng"] + [_wk_labels[w] for w in _weeks_in_month]
+            _wk_key = f"jrn_wk_{period_key}"
+            if _wk_key not in st.session_state:
+                st.session_state[_wk_key] = _wk_labels[_default_wk]
+            _wk_pick = st.segmented_control(
+                "Lọc theo tuần", _wk_opts, default=st.session_state[_wk_key],
+                key=f"{_wk_key}_picker", label_visibility="collapsed")
+            if _wk_pick and _wk_pick != st.session_state[_wk_key]:
+                st.session_state[_wk_key] = _wk_pick
+            _wk_sel = st.session_state[_wk_key]
+            if _wk_sel != "Cả tháng":
+                _wk_target = next(w for w, lbl in _wk_labels.items() if lbl == _wk_sel)
+                days = [d for d in days if d.strftime('%G-W%V') == _wk_target]
+            if not days:
+                st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong tuần này.")
+                return
 
     rows_html = ''
     for d in days:
@@ -8572,9 +8629,16 @@ _MAIN_CSS = """
     /* Lịch Nhật ký đọc/xem (jcard_sach_journal/jcard_gundam_journal) KHÔNG dùng .jrows nhiều hàng
        tự đệm dọc như các jcard khác -- nội dung là 1 lưới .rlcal-grid không có padding đáy riêng,
        nên 6px của rule chung ở trên khiến hàng ngày cuối tháng gần như dính viền đáy card (ảnh
-       chụp người dùng gửi). Nới đáy 16px cho cân với 18px 2 bên, chỉ áp cho đúng 2 card lịch này. */
+       chụp người dùng gửi, xác nhận lại lần 2 vẫn còn -- 16px trước đó chưa đủ). Đo thật bằng
+       Playwright: khối bọc .stMarkdown của Streamlit tự báo cáo chiều cao NGẮN HƠN chiều cao thật
+       đã render của .rlcal-grid khoảng 15-16px (kể cả khi đặt padding-bottom:0, card vẫn kết thúc
+       TRƯỚC khi lưới lịch render hết, đo được -15px) -- cùng loại lỗi "scrollHeight thật >
+       offsetHeight" Streamlit đã gặp ở nơi khác trong file này (xem day_stepper). Không sửa được
+       tận gốc (chiều cao đó Streamlit tự đo, không lộ ra CSS var/inline style để ép lại), nên bù
+       thêm đúng phần hụt đó vào padding mong muốn (16px hiển thị + ~16px hụt = 32px khai báo) --
+       đã đo lại bằng Playwright xác nhận khoảng cách hiển thị ra đúng ~16px sau khi bù. */
     [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"] {
-        padding-bottom: 16px !important;
+        padding-bottom: 32px !important;
     }
 
     /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
