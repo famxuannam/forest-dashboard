@@ -4534,9 +4534,16 @@ RLCAL_CSS = """
     border-radius:6px; padding:2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rlcal-more { font-size:10.5px; color:var(--text-3); }
 .rlcal-quote { font-size:10px; font-weight:700; color:var(--accent); margin-top:4px; opacity:.85; }
-/* Bản gọn "chỉ số lượng" (✓N phần/tập, ❝N trích dẫn) -- CHỈ hiện ở mobile, thay cho .rlcal-done/
-   .rlcal-quote đầy đủ (tên phần/nội dung trích dẫn, quá dài cho ô hẹp trên điện thoại) -- ẩn ở
-   desktop (đã có bản đầy đủ + hover xem chi tiết) để không lặp thông tin 2 lần. */
+/* Icon Material Symbols (font Streamlit đã tự load sẵn, xem .jchip.book::before) thay ký hiệu chữ
+   trần "✓"/"❝" cũ -- xác nhận với người dùng: nhìn "đẹp" hơn hẳn 2 ký tự đó. */
+.rlcal-quote::before, .rlcal-cnt-done::before, .rlcal-cnt-quote::before {
+    font-family:'Material Symbols Rounded'; font-size:11px; vertical-align:-1px; margin-right:2px;
+}
+.rlcal-quote::before, .rlcal-cnt-quote::before { content:"format_quote"; }
+.rlcal-cnt-done::before { content:"task_alt"; font-size:10px; }
+/* Bản gọn "chỉ số lượng" (icon+N phần/tập, icon+N trích dẫn) -- CHỈ hiện ở mobile, thay cho
+   .rlcal-done/.rlcal-quote đầy đủ (tên phần/nội dung trích dẫn, quá dài cho ô hẹp trên điện
+   thoại) -- ẩn ở desktop (đã có bản đầy đủ + hover xem chi tiết) để không lặp thông tin 2 lần. */
 .rlcal-counts { display:none; }
 .rlcal-link { position:absolute; inset:0; display:block; text-decoration:none; color:inherit; border-radius:inherit; }
 .rlcal-tip { display:none; position:absolute; width:250px; background:var(--card); border:1px solid var(--border);
@@ -4566,6 +4573,7 @@ RLCAL_CSS = """
     .rlcal-counts { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
     .rlcal-cnt { font-size:9px; font-weight:700; color:var(--text-2); white-space:nowrap; }
     .rlcal-cnt-time { color:var(--accent); }
+    .rlcal-cnt-done::before, .rlcal-cnt-quote::before { font-size:9px; }
 }
 </style>
 """
@@ -4706,14 +4714,14 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             if len(d_done) > 2:
                 _done_html += f"<span class='rlcal-more'>+{len(d_done) - 2} khác</span>"
             _done_html += "</div>"
-        _quote_html = f"<div class='rlcal-quote'>❝ {len(d_quotes)} trích dẫn</div>" if d_quotes else ""
+        _quote_html = f"<div class='rlcal-quote'>{len(d_quotes)} trích dẫn</div>" if d_quotes else ""
         _count_parts = []
         if d_min > 0:
             _count_parts.append(f"<span class='rlcal-cnt rlcal-cnt-time'>{_fmt_hours_short(d_min / 60)}</span>")
         if d_done:
-            _count_parts.append(f"<span class='rlcal-cnt'>✓ {len(d_done)}</span>")
+            _count_parts.append(f"<span class='rlcal-cnt rlcal-cnt-done'>{len(d_done)}</span>")
         if d_quotes:
-            _count_parts.append(f"<span class='rlcal-cnt'>❝ {len(d_quotes)}</span>")
+            _count_parts.append(f"<span class='rlcal-cnt rlcal-cnt-quote'>{len(d_quotes)}</span>")
         _count_html = f"<div class='rlcal-counts'>{''.join(_count_parts)}</div>" if _count_parts else ""
         _tip_html = ""
         _link_html = ""
