@@ -592,11 +592,27 @@ CARD_STYLES = {
 # Mật độ bố cục thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --card-pad/--card-gap
 # CHỈ cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (xem các vị trí đã đổi sang
 # var() cạnh --card-radius) -- KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
-# (.quotes-card, .dtl-track...). "Vừa" PHẢI giữ đúng giá trị gốc hiện tại.
+# (.quotes-card, .dtl-track...). "Vừa" PHẢI giữ đúng giá trị gốc hiện tại. "Rất thoáng" thêm vào
+# sau để 4 mức (đồng bộ với trục "Độ rộng nội dung" cũng 4 mức), tiếp tục đúng cấp số cộng đã có
+# giữa 3 mức gốc (+4px/+6px pad, +4px gap mỗi bước).
 CARD_DENSITY = {
     "Gọn": {"pad": "12px 14px", "gap": "6px 0"},
     "Vừa": {"pad": "16px 18px", "gap": "10px 0"},
     "Thoáng": {"pad": "20px 24px", "gap": "14px 0"},
+    "Rất thoáng": {"pad": "24px 30px", "gap": "18px 0"},
+}
+
+# Độ rộng cột nội dung (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --content-max-w cho
+# .block-container (xem _MAIN_CSS). "Rộng" 1700px là mặc định, khớp hiện trạng trước khi có trục
+# này (màn 27" 5K/32" 4K trước đó bị khoá cứng 1200px, chỉ dùng ~23-31% chiều ngang). Biên độ
+# 1000-1800px (xác nhận với người dùng: 1000 tối thiểu, 1800 tối đa). 2 nút nổi "về đầu trang"/
+# "Đồng bộ nhanh" định vị theo --content-half-w (nửa giá trị đang chọn) để luôn bám đúng mép cột
+# bất kể mức nào đang được chọn.
+CONTENT_WIDTHS = {
+    "Hẹp": 1000,
+    "Vừa": 1450,
+    "Rộng": 1700,
+    "Rất rộng": 1800,
 }
 
 # Font thân chữ (tab Tuỳ biến -> sub-page "Giao diện") -- trục độc lập, CHỈ áp cho vai trò "thân/
@@ -786,6 +802,12 @@ if _body_font_name not in BODY_FONTS:
     _body_font_name = "Manrope"
 BODY_FONT_NAME = _body_font_name
 BODY_FONT = BODY_FONTS[BODY_FONT_NAME]["family"]
+
+_content_width_name = _cached_settings().get("content_width", "Rộng")
+if _content_width_name not in CONTENT_WIDTHS:
+    _content_width_name = "Rộng"
+CONTENT_WIDTH_NAME = _content_width_name
+CONTENT_WIDTH_PX = CONTENT_WIDTHS[CONTENT_WIDTH_NAME]
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
@@ -7874,6 +7896,7 @@ st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
+    f"--content-max-w:{CONTENT_WIDTH_PX}px;--content-half-w:{CONTENT_WIDTH_PX // 2}px;"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -7926,8 +7949,11 @@ _MAIN_CSS = """
        nội dung nằm trong 60px đầu trang, "che" mất (không phải bị cắt bởi overflow) logo/wordmark
        nếu padding-top nhỏ hơn ~60px + đệm an toàn. Đã đo lại bằng Playwright (bounding box thật
        của stHeader) sau khi bị che thật ở cả mobile lẫn desktop hẹp -- ĐỪNG giảm số này xuống dưới
-       ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước. */
-    .block-container { max-width: 1700px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
+       ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước.
+       max-width đọc từ --content-max-w (trục "Độ rộng nội dung", tab Tuỳ biến -> "4. Giao diện",
+       xem CONTENT_WIDTHS) thay vì literal cố định -- 4 mức Hẹp/Vừa/Rộng/Rất rộng người dùng tự
+       chọn, "Rộng" (1700px) là mặc định. */
+    .block-container { max-width: var(--content-max-w) !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
     /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng thử 0.6rem (quá sát) rồi 0.9rem
        (trung dung), nay đổi hẳn về 10px theo ĐÚNG mockup hiện hành (mọi trang cuộn dọc kiểu
        chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
@@ -9464,16 +9490,18 @@ _MAIN_CSS = """
        st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
        class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
        che nhau nếu cùng hiện 1 lúc.
-       Vị trí: .block-container tối đa 1700px và tự canh giữa màn hình (xem rule phía trên) -- màn
-       hình rộng hơn 1700px+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ trôi ra xa hẳn cột nội
-       dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right: max(22px, calc(50vw - 850px +
-       22px)) để nút luôn bám đúng mép phải của cột 1700px đó khi màn hình đủ rộng, còn màn hình hẹp
-       hơn 1700px (calc ra âm) thì max() tự chọn lại 22px sát mép trình duyệt như bình thường.
+       Vị trí: .block-container tối đa --content-max-w và tự canh giữa màn hình (xem rule phía
+       trên) -- màn hình rộng hơn --content-max-w+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ
+       trôi ra xa hẳn cột nội dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right:
+       max(22px, calc(50vw - var(--content-half-w) + 22px)) để nút luôn bám đúng mép phải của cột
+       đó khi màn hình đủ rộng, còn màn hình hẹp hơn --content-max-w (calc ra âm) thì max() tự chọn
+       lại 22px sát mép trình duyệt như bình thường. --content-half-w tự đổi theo mức "Độ rộng nội
+       dung" người dùng chọn (xem CONTENT_WIDTHS) nên nút luôn bám đúng mép bất kể mức nào.
        Mobile đổi hẳn sang mép TRÁI (không còn cùng phía bên phải) -- bên phải dưới cùng trên
        Streamlit Cloud là chỗ huy hiệu "Hosted with Streamlit" tự chèn, nút bên phải sẽ bị che mất
        một phần bởi huy hiệu đó (lỗi thật đã gặp, xem ảnh chụp), sang trái tránh hẳn xung đột này. */
     #app-scroll-top-btn {
-        position: fixed; right: max(22px, calc(50vw - 850px + 22px)); bottom: 22px; z-index: 99980;
+        position: fixed; right: max(22px, calc(50vw - var(--content-half-w) + 22px)); bottom: 22px; z-index: 99980;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -9501,7 +9529,7 @@ _MAIN_CSS = """
        (display:none ở .st-key-nav_sync_fab bên dưới), nút JS này proxy click sang nút thật bằng
        .click() (không cần hiển thị/hit-test, click() lập trình vẫn kích hoạt handler bình thường). */
     #app-sync-fab-btn {
-        position: fixed; right: max(22px, calc(50vw - 850px + 22px)); bottom: 76px; z-index: 99979;
+        position: fixed; right: max(22px, calc(50vw - var(--content-half-w) + 22px)); bottom: 76px; z-index: 99979;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -10335,16 +10363,20 @@ def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for
 def _render_tuybien_giao_dien():
     """Sub-page "Giao diện" của tab Tuỳ biến -- theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app
     (Báo cáo/Sách/Gundam): billboard mở đầu (KHÔNG phải panel 2 cột riêng như bản mockup .dc.html
-    gốc -- xác nhận với người dùng đổi lại cho nhất quán) + chip TOC nhảy neo + chuỗi 6 chương
+    gốc -- xác nhận với người dùng đổi lại cho nhất quán) + chip TOC nhảy neo + chuỗi 7 chương
     sec_chapter() bên dưới, mỗi chương 1 trục cá nhân hoá độc lập. Billboard ĐÓNG LUÔN VAI TRÒ
     "xem trước trực tiếp" -- không dựng panel/state giả lập riêng như bản .dc.html gốc (component
     React, state độc lập với trang thật): ở đây toàn trang ĐÃ tự re-render đúng token đang chọn
     mỗi lần bấm 1 lựa chọn (save_setting() + st.rerun()), nên billboard chỉ cần đọc thẳng
-    ACCENT/BG_PALETTE/... hiện hành -- SỐ THẬT (đếm 6 trục), không bịa số liệu phiên/giờ giả như
-    bản mockup gốc (app thuần hồi cứu, billboard mọi nơi khác trong app đều là số liệu thật)."""
+    ACCENT/BG_PALETTE/... hiện hành -- SỐ THẬT (đếm 7 trục), không bịa số liệu phiên/giờ giả như
+    bản mockup gốc (app thuần hồi cứu, billboard mọi nơi khác trong app đều là số liệu thật).
+    "Độ rộng nội dung" (chương 5) đứng NGAY TRƯỚC "Mật độ bố cục" (chương 6, xác nhận với người
+    dùng) -- cả 2 đều là trục "không gian bố cục" (chiều ngang cột / khoảng đệm bên trong thẻ),
+    đứng cạnh nhau hợp lý hơn tách rời."""
     _accent_name = next((n for n, h in ACCENT_PRESETS.items() if h == ACCENT), "")
     _chip_defs = [("Accent", _accent_name), ("Nền", BG_PALETTE), ("Hoạ tiết", BG_STYLE),
-                  ("Thẻ", CARD_STYLE), ("Mật độ", CARD_DENSITY_NAME), ("Font", BODY_FONT_NAME)]
+                  ("Thẻ", CARD_STYLE), ("Độ rộng", CONTENT_WIDTH_NAME), ("Mật độ", CARD_DENSITY_NAME),
+                  ("Font", BODY_FONT_NAME)]
     _chips_html = "".join(
         f"<span class='chip'><span class='ck'>{_k}</span><span class='cv'>{html_escape(str(_v))}</span></span>"
         for _k, _v in _chip_defs)
@@ -10354,18 +10386,20 @@ def _render_tuybien_giao_dien():
         "bất kỳ bên dưới.</div>"
         f"<div class='pbill-chips'>{_chips_html}</div>")
     render_period_billboard(
-        "Giao diện", "6", "trục cá nhân hoá", "Kết hợp tự do, không giới hạn",
+        "Giao diện", "7", "trục cá nhân hoá", "Kết hợp tự do, không giới hạn",
         _right_html,
         [("tbgd-ch1", "1 · Màu accent"), ("tbgd-ch2", "2 · Bảng màu nền"),
          ("tbgd-ch3", "3 · Kiểu nền trang"), ("tbgd-ch4", "4 · Kiểu thẻ"),
-         ("tbgd-ch5", "5 · Mật độ bố cục"), ("tbgd-ch6", "6 · Font thân chữ")],
+         ("tbgd-ch5", "5 · Độ rộng nội dung"), ("tbgd-ch6", "6 · Mật độ bố cục"),
+         ("tbgd-ch7", "7 · Font thân chữ")],
         key="tbgd_billboard")
 
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
         if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
             for _k, _v in [("accent_hex", "#2f5fa3"), ("bg_palette", "Giấy ấm"), ("bg_style", "Sương mai"),
-                           ("card_style", "Bo mềm"), ("card_density", "Vừa"), ("body_font", "Manrope")]:
+                           ("card_style", "Bo mềm"), ("content_width", "Rộng"), ("card_density", "Vừa"),
+                           ("body_font", "Manrope")]:
                 save_setting(_k, _v)
             st.rerun()
     with _random_col:
@@ -10373,6 +10407,7 @@ def _render_tuybien_giao_dien():
             for _k, _choices in [("accent_hex", list(ACCENT_PRESETS.values())),
                                   ("bg_palette", list(BG_PALETTES.keys())),
                                   ("bg_style", list(BG_PRESETS.keys())),
+                                  ("content_width", list(CONTENT_WIDTHS.keys())),
                                   ("card_style", list(CARD_STYLES.keys())),
                                   ("card_density", list(CARD_DENSITY.keys())),
                                   ("body_font", list(BODY_FONTS.keys()))]:
@@ -10439,7 +10474,22 @@ def _render_tuybien_giao_dien():
         _tb_axis_grid(list(CARD_STYLES.items()), 4, lambda n, c: n == CARD_STYLE,
                       "card_style", "cardstyle_sw", _cs_css)
 
-    sec_chapter("tbgd-ch5", 5, "Mật độ bố cục",
+    sec_chapter("tbgd-ch5", 5, "Độ rộng nội dung",
+                lead="Chiều ngang cột nội dung chính — hữu ích trên màn hình rộng (4K/5K).")
+    with st.container(border=True, key="tbgd_width_card"):
+        def _width_css(name, px, selected):
+            _bg = "color-mix(in srgb, var(--accent) 6%, var(--card))" if selected else "var(--card)"
+            _border = "var(--accent)" if selected else "var(--border)"
+            return (f"background:{_bg} !important; color: var(--text) !important; "
+                    f"border:1px solid {_border} !important; border-radius:var(--card-radius) !important; "
+                    f"width:100% !important; height:auto !important; min-height:52px !important; "
+                    f"padding:12px 10px !important; font-weight:600 !important; font-size:13px !important; "
+                    f"white-space:normal !important; line-height:1.3 !important;")
+        _tb_axis_grid(list(CONTENT_WIDTHS.items()), 4, lambda n, px: n == CONTENT_WIDTH_NAME,
+                      "content_width", "contentwidth_sw", _width_css,
+                      label_for=lambda n: f"{n} · {CONTENT_WIDTHS[n]}px")
+
+    sec_chapter("tbgd-ch6", 6, "Mật độ bố cục",
                 lead="Khoảng đệm và khoảng cách giữa các thẻ nội dung.")
     with st.container(border=True, key="tbgd_density_card"):
         def _density_css(name, cfg, selected):
@@ -10450,10 +10500,10 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:52px !important; "
                     f"padding:12px 10px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.3 !important;")
-        _tb_axis_grid(list(CARD_DENSITY.items()), 3, lambda n, c: n == CARD_DENSITY_NAME,
+        _tb_axis_grid(list(CARD_DENSITY.items()), 4, lambda n, c: n == CARD_DENSITY_NAME,
                       "card_density", "carddensity_sw", _density_css)
 
-    sec_chapter("tbgd-ch6", 6, "Font thân chữ",
+    sec_chapter("tbgd-ch7", 7, "Font thân chữ",
                 lead="Chỉ áp cho thân/nhãn/nút — bảng số liệu và trích dẫn giữ font riêng.")
     with st.container(border=True, key="tbgd_font_card"):
         def _bf_css(name, cfg, selected):
