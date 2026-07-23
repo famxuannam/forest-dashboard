@@ -9044,7 +9044,7 @@ _MAIN_CSS = """
        không bị "đứng yên" lạc tông khi đổi bảng màu nền/kiểu thẻ. */
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
+    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
     .st-key-tb_account_card, .st-key-kq_daily_card {
         background: var(--card) !important;
@@ -9561,7 +9561,7 @@ _MAIN_CSS = """
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
+    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
     .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
     [class*="st-key-kqgroup_fav_"] {
