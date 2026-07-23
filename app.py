@@ -604,14 +604,15 @@ CARD_DENSITY = {
 
 # Độ rộng cột nội dung (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --content-max-w cho
 # .block-container (xem _MAIN_CSS). "Rộng" 1700px là mặc định, khớp hiện trạng trước khi có trục
-# này (màn 27" 5K/32" 4K trước đó bị khoá cứng 1200px, chỉ dùng ~23-31% chiều ngang). 2 nút nổi "về
-# đầu trang"/"Đồng bộ nhanh" định vị theo --content-half-w (nửa giá trị đang chọn) để luôn bám đúng
-# mép cột bất kể mức nào đang được chọn.
+# này (màn 27" 5K/32" 4K trước đó bị khoá cứng 1200px, chỉ dùng ~23-31% chiều ngang). Biên độ
+# 1000-1800px (xác nhận với người dùng: 1000 tối thiểu, 1800 tối đa). 2 nút nổi "về đầu trang"/
+# "Đồng bộ nhanh" định vị theo --content-half-w (nửa giá trị đang chọn) để luôn bám đúng mép cột
+# bất kể mức nào đang được chọn.
 CONTENT_WIDTHS = {
-    "Hẹp": 1200,
+    "Hẹp": 1000,
     "Vừa": 1450,
     "Rộng": 1700,
-    "Rất rộng": 2000,
+    "Rất rộng": 1800,
 }
 
 # Font thân chữ (tab Tuỳ biến -> sub-page "Giao diện") -- trục độc lập, CHỈ áp cho vai trò "thân/
