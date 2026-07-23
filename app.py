@@ -2348,33 +2348,11 @@ def add_record_marker(fig, scope_df):
     return fig
 
 
-def add_calendar_markers(fig, grouped, x_col, marker_cats):
-    """Chấm nhỏ phía trên cột cho các hạng mục trục x có lịch hẹn Work (marker_cats: set/list tên
-    hạng mục, vd tên Thứ) -- chỉ dùng ở biểu đồ Tuần (trục 'Thứ'), nơi add_total_labels đã ghi
-    tổng giờ lên đỉnh mỗi cột nên chấm marker dùng add_annotation + yshift (thay vì 1 Scatter text
-    trace khác cùng y như tổng giờ, sẽ đè lên đúng chữ số đó) để nằm CAO HƠN hẳn con số đó."""
-    if not marker_cats:
-        return fig
-    totals = grouped.groupby(x_col)['Số giờ'].sum()
-    xs = [c for c in marker_cats if c in totals.index]
-    if not xs:
-        return fig
-    for c in xs:
-        fig.add_annotation(
-            x=c, y=totals[c], yshift=30, text="●", showarrow=False,
-            font=dict(size=9, color=ACCENT_DARK), hovertext="Có lịch hẹn", captureevents=True,
-        )
-    fig.update_layout(yaxis=dict(range=[0, totals.max() * 1.32]))
-    return fig
-
-
-def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None, marker_cats=None):
+def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
     """Biểu đồ xu hướng dạng cột chồng theo thời gian.
     grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
     ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày + đánh dấu ngày kỷ lục.
-    cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần).
-    marker_cats: nếu truyền (chỉ dùng ở biểu đồ Tuần) -> đánh dấu chấm nhỏ cho các hạng mục có
-    lịch hẹn Work, xem add_calendar_markers()."""
+    cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
     co = {time_col: cat_order} if cat_order else None
     fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
     if time_col == "Ngày":
@@ -2384,7 +2362,6 @@ def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x
             fig = add_record_marker(fig, ma_df)
     else:
         fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
-        fig = add_calendar_markers(fig, grouped, time_col, marker_cats)
     fig.update_layout(xaxis_title=x_title or time_col, yaxis_title="Số giờ")
     return format_plotly_fig(fig)
 
@@ -4493,28 +4470,6 @@ def _render_reading_detail(t, reading_log_df, labels, page_name, df_books):
         hero_items=[],
         sections=_secs,
     )
-
-    # Nhịp trích dẫn Kindle theo ngày -- chỉ hiện khi có >=2 ngày có trích dẫn/ghi chú (1 ngày
-    # duy nhất thì sparkline không có gì để so sánh). Tái dùng đúng cơ chế cột-chiều-cao HTML/CSS
-    # của mini-card "Diễn biến chỉ số" trang Sức khoẻ (`.htrend-bar*`, xem _render_health_report())
-    # thay vì tạo kiểu vẽ mới -- không truyền class 'abn' vì không có ngữ nghĩa bất thường ở đây.
-    if not _kh_book.empty:
-        _kh_by_day = (_kh_book.dropna(subset=['Ngày thêm'])
-                      .assign(_d=lambda x: x['Ngày thêm'].dt.normalize())
-                      .groupby('_d').size().sort_index().tail(14))
-        if len(_kh_by_day) >= 2:
-            _kmax = _kh_by_day.max()
-            _kbars = ''
-            for _d, _c in _kh_by_day.items():
-                _pct = 15 + (_c / _kmax) * 85 if _kmax else 15
-                _kbars += (f"<div class='htrend-bar-col'><span class='htrend-bar-val'>{_c}</span>"
-                           f"<div class='htrend-bar' style='height:{_pct:.0f}%;'></div>"
-                           f"<span class='htrend-bar-date'>{_d:%d/%m}</span></div>")
-            st.markdown(
-                "<div class='glass-card' style='padding:14px 18px;margin-top:12px;'>"
-                "<span class='rl-book'>Nhịp trích dẫn</span>"
-                f"<div class='htrend-bars' style='margin-top:8px;'>{_kbars}</div>"
-                "</div>", unsafe_allow_html=True)
 
     # _book_forest_ct: phiên Forest đúng cuốn này -- dùng chung cho cả 3 mục còn lại (Biểu đồ
     # lịch/Nhật ký/Bảng số liệu) để những ngày CHỈ có phiên Forest (chưa tick hoàn thành phần
@@ -7459,11 +7414,11 @@ def frag_category_bars(scope_df, key, default_color):
 
 
 @st.fragment
-def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None, marker_cats=None):
+def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
     Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig). Bọc trong
     container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
-    ngay dưới. marker_cats: chỉ truyền ở biểu đồ Tuần, xem add_calendar_markers()."""
+    ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
@@ -7471,8 +7426,7 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
         g['Số giờ'] = g['Thời lượng (Phút)'] / 60
         if group_col == 'Ngày':
             g['Ngày'] = pd.to_datetime(g['Ngày'])
-        fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title,
-                                marker_cats=marker_cats)
+        fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
         _ver = st.session_state.get(f"{key}_sel_ver", 0)
         _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
                                 on_select="rerun", selection_mode="points",
@@ -10840,20 +10794,7 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-tuan-ch2", 2, "Nhóm & dự án")
                 frag_category_bars(df_w, "rad_tab4", "Nhóm")
                 sec_chapter("bc-tuan-ch3", 3, "Theo ngày")
-                # Chấm nhỏ trên cột Thứ nào có lịch hẹn Work trong đúng tuần này -- trả lời "hôm đó
-                # ít giờ tập trung vì bận họp hay vì lười?" ngay trong biểu đồ có sẵn, không thêm
-                # chương/bảng mới (work_calendar không lưu giờ kết thúc sự kiện nên chỉ đánh dấu
-                # có/không, không đo thời lượng họp -- xem add_calendar_markers()).
-                _wc_w = load_work_calendar()
-                if not _wc_w.empty:
-                    _wc_in_week = _wc_w[(_wc_w['Thời gian bắt đầu'].dt.date >= _week_start)
-                                        & (_wc_w['Thời gian bắt đầu'].dt.date <= _week_end)]
-                    _wc_marker_cats = set(VN_DAYS.get(d.day_name(), "")
-                                           for d in _wc_in_week['Thời gian bắt đầu'])
-                else:
-                    _wc_marker_cats = None
-                frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần",
-                                   cat_order=DAYS_ORDER, marker_cats=_wc_marker_cats)
+                frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
                 sec_chapter("bc-tuan-ch4", 4, "Nhật ký")
                 render_notes_journal(selected_week, 'week', df)
                 sec_chapter("bc-tuan-ch5", 5, "Bảng số liệu")
