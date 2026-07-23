@@ -7927,7 +7927,7 @@ _MAIN_CSS = """
        nếu padding-top nhỏ hơn ~60px + đệm an toàn. Đã đo lại bằng Playwright (bounding box thật
        của stHeader) sau khi bị che thật ở cả mobile lẫn desktop hẹp -- ĐỪNG giảm số này xuống dưới
        ~4rem chỉ vì "trông có vẻ dư" trên màn hình rộng, hãy đo lại bounding box stHeader trước. */
-    .block-container { max-width: 1200px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
+    .block-container { max-width: 1700px !important; margin: 0 auto !important; padding-top: 4.5rem !important; }
     /* Khoảng cách GIỮA các thành phần Streamlit xếp dọc -- từng thử 0.6rem (quá sát) rồi 0.9rem
        (trung dung), nay đổi hẳn về 10px theo ĐÚNG mockup hiện hành (mọi trang cuộn dọc kiểu
        chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
@@ -9464,16 +9464,16 @@ _MAIN_CSS = """
        st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
        class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
        che nhau nếu cùng hiện 1 lúc.
-       Vị trí: .block-container tối đa 1200px và tự canh giữa màn hình (xem rule phía trên) -- màn
-       hình rộng hơn 1200px+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ trôi ra xa hẳn cột nội
-       dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right: max(22px, calc(50vw - 600px +
-       22px)) để nút luôn bám đúng mép phải của cột 1200px đó khi màn hình đủ rộng, còn màn hình hẹp
-       hơn 1200px (calc ra âm) thì max() tự chọn lại 22px sát mép trình duyệt như bình thường.
+       Vị trí: .block-container tối đa 1700px và tự canh giữa màn hình (xem rule phía trên) -- màn
+       hình rộng hơn 1700px+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ trôi ra xa hẳn cột nội
+       dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right: max(22px, calc(50vw - 850px +
+       22px)) để nút luôn bám đúng mép phải của cột 1700px đó khi màn hình đủ rộng, còn màn hình hẹp
+       hơn 1700px (calc ra âm) thì max() tự chọn lại 22px sát mép trình duyệt như bình thường.
        Mobile đổi hẳn sang mép TRÁI (không còn cùng phía bên phải) -- bên phải dưới cùng trên
        Streamlit Cloud là chỗ huy hiệu "Hosted with Streamlit" tự chèn, nút bên phải sẽ bị che mất
        một phần bởi huy hiệu đó (lỗi thật đã gặp, xem ảnh chụp), sang trái tránh hẳn xung đột này. */
     #app-scroll-top-btn {
-        position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 22px; z-index: 99980;
+        position: fixed; right: max(22px, calc(50vw - 850px + 22px)); bottom: 22px; z-index: 99980;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -9501,7 +9501,7 @@ _MAIN_CSS = """
        (display:none ở .st-key-nav_sync_fab bên dưới), nút JS này proxy click sang nút thật bằng
        .click() (không cần hiển thị/hit-test, click() lập trình vẫn kích hoạt handler bình thường). */
     #app-sync-fab-btn {
-        position: fixed; right: max(22px, calc(50vw - 600px + 22px)); bottom: 76px; z-index: 99979;
+        position: fixed; right: max(22px, calc(50vw - 850px + 22px)); bottom: 76px; z-index: 99979;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -9998,7 +9998,7 @@ _inject_reading_calendar_tap_tip()
 
 
 def _inject_scroll_to_top_button():
-    """Nút tròn nổi "về đầu trang" (góc dưới-phải trên desktop, bám mép cột nội dung 1200px thay
+    """Nút tròn nổi "về đầu trang" (góc dưới-phải trên desktop, bám mép cột nội dung 1700px thay
     vì mép trình duyệt; góc dưới-trái trên mobile để tránh huy hiệu Streamlit -- xem CSS
     `#app-scroll-top-btn`) -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện, bấm cuộn mượt về đầu.
     Tạo bằng JS (components.html) y hệt bảng phím tắt ở
