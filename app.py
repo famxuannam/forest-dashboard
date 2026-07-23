@@ -723,7 +723,7 @@ def _cached_settings():
 def save_setting(key, value):
     try:
         _get_supabase().table("settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
-        st.cache_data.clear()
+        _cached_settings.clear()
         return True
     except Exception:
         return False
@@ -965,7 +965,25 @@ def save_db(df):
     ]
     for i in range(0, len(recs), 500):  # chèn theo lô, tránh request quá lớn
         sb.table("sessions").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_db.clear()
+    prep_analysis_data.clear()
+
+def _merge_forest_into_db(df_new):
+    """Cộng df_new (đã lọc phiên đã xoá) vào sessions hiện có, bỏ trùng theo khoá (Thời gian bắt
+    đầu, Thời gian kết thúc), ghi đè toàn bộ qua save_db(). Dùng chung cho cả luồng "Đồng bộ nhanh"
+    (sync_from_storage) và tải tay 1 file CSV Forest (tab "Tải lên từ Forest" ở Tuỳ biến) -- 2 nơi
+    khác nhau ở BƯỚC LỌC phiên đã xoá trước đó (mỗi nơi cần thời điểm/thông tin khác nhau cho UI
+    riêng), chỉ giống hệt nhau từ bước này trở đi. _fmt_ts ở CẢ 2 vế so sánh (không .astype(str)
+    thô) -- db cũ đã là chuỗi "YYYY-MM-DD HH:MM:SS" (không giây lẻ), df_new mới parse thường CÓ
+    giây lẻ, so thô sẽ luôn lệch nhau, làm trùng lặp không bị nhận ra. Trả về số phiên mới thêm."""
+    db = load_db()
+    before = len(db)
+    combined = pd.concat([db, df_new])
+    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
+    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
+    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
+    save_db(combined)
+    return len(combined) - before
 
 @st.cache_data
 def load_mapping():
@@ -978,7 +996,8 @@ def save_mapping(df):
     if not df.empty:
         recs = [{"project": str(r["Dự án"]), "category": str(r["Nhóm"])} for r in df.to_dict("records")]
         sb.table("mapping").insert(recs).execute()
-    st.cache_data.clear()
+    load_mapping.clear()
+    prep_analysis_data.clear()
 
 @st.cache_data
 def load_deleted():
@@ -1002,7 +1021,7 @@ def add_deleted(keys_df):
             for r in keys.to_dict("records")]
     if recs:
         sb.table("deleted_sessions").upsert(recs, on_conflict="start_time,end_time").execute()
-    st.cache_data.clear()
+    load_deleted.clear()
 
 def save_deleted(df):
     """Ghi đè toàn bộ danh sách đã xoá (dùng khi Khôi phục từ bản sao lưu)."""
@@ -1013,7 +1032,7 @@ def save_deleted(df):
                 for r in df.to_dict("records")]
         for i in range(0, len(recs), 500):
             sb.table("deleted_sessions").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_deleted.clear()
 
 @st.cache_data
 def load_notes():
@@ -1039,7 +1058,7 @@ def save_note(day, text):
         sb.table("notes").upsert({"note_date": key, "note": text}, on_conflict="note_date").execute()
     else:
         sb.table("notes").delete().eq("note_date", key).execute()
-    st.cache_data.clear()
+    load_notes.clear()
 
 def save_notes_bulk(df):
     """Ghi đè toàn bộ ghi chú (dùng khi Khôi phục từ bản sao lưu)."""
@@ -1050,7 +1069,7 @@ def save_notes_bulk(df):
                 if str(r["Ghi chú"]).strip()]
         if recs:
             sb.table("notes").insert(recs).execute()
-    st.cache_data.clear()
+    load_notes.clear()
 
 
 @st.cache_data(ttl=30)
@@ -1060,9 +1079,9 @@ def load_quick_notes():
     "Gộp" ở render_note_editor() để người dùng chủ động chọn lúc nào tổng hợp (xem docstring hàm
     đó) -- 2 bảng vẫn tách biệt, chỉ có 1 thao tác 1 chiều nối nội dung + xoá quick note gốc.
     ttl=30 (khác load_notes() cache vô hạn) vì bảng này có thể bị thay đổi từ NGOÀI vòng save_*/
-    xoá của app -- vòng đó tự gọi st.cache_data.clear(), nhưng 1 INSERT từ Shortcut thì không, nên
-    phải tự hết hạn theo thời gian để quick note mới hiện ra mà không cần chờ 1 thao tác lưu khác
-    trong app."""
+    xoá của app -- vòng đó tự gọi load_quick_notes.clear(), nhưng 1 INSERT từ Shortcut thì không,
+    nên phải tự hết hạn theo thời gian để quick note mới hiện ra mà không cần chờ 1 thao tác lưu
+    khác trong app."""
     sb = _get_supabase()
     data = _sb_select_all(lambda: sb.table("quick_notes").select("id,ts,note_text").order("ts").order("id"))
     cols = ["id", "Thời gian", "Nội dung"]
@@ -1076,7 +1095,7 @@ def load_quick_notes():
 def delete_quick_note(note_id):
     """Xoá 1 quick note lẻ (vd gõ nhầm trên Shortcut) -- nút xoá trên từng chip ở render_note_editor()."""
     _get_supabase().table("quick_notes").delete().eq("id", int(note_id)).execute()
-    st.cache_data.clear()
+    load_quick_notes.clear()
 
 
 def update_quick_note(note_id, text):
@@ -1088,7 +1107,7 @@ def update_quick_note(note_id, text):
         delete_quick_note(note_id)
         return
     _get_supabase().table("quick_notes").update({"note_text": text}).eq("id", int(note_id)).execute()
-    st.cache_data.clear()
+    load_quick_notes.clear()
 
 
 def save_quick_notes_bulk(df):
@@ -1099,7 +1118,7 @@ def save_quick_notes_bulk(df):
         recs = [{"ts": _fmt_ts(r["Thời gian"]), "note_text": str(r["Nội dung"])} for r in df.to_dict("records")]
         if recs:
             sb.table("quick_notes").insert(recs).execute()
-    st.cache_data.clear()
+    load_quick_notes.clear()
 
 
 def save_settings_bulk(df):
@@ -1110,7 +1129,7 @@ def save_settings_bulk(df):
         recs = [{"key": str(r["key"]), "value": str(r["value"])} for r in df.to_dict("records")]
         if recs:
             sb.table("settings").insert(recs).execute()
-    st.cache_data.clear()
+    _cached_settings.clear()
 
 
 # --- ĐỒNG BỘ LỊCH WORK (Apple Calendar qua CalDAV) ---
@@ -1196,7 +1215,7 @@ def sync_work_calendar(start_date, end_date):
     # khoá chính do lệch thời điểm xoá/chèn (đồng bộ 2 lần gần nhau, v.v.).
     for i in range(0, len(recs), 500):
         sb.table("work_calendar").upsert(recs[i:i + 500], on_conflict="uid,start_time").execute()
-    st.cache_data.clear()
+    load_work_calendar.clear()
     return len(recs), None
 
 @st.cache_data
@@ -1227,7 +1246,7 @@ def save_work_calendar_bulk(df):
                 for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề"]).strip()]
         for i in range(0, len(recs), 500):
             sb.table("work_calendar").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_work_calendar.clear()
 
 
 # --- ĐỌC SÁCH / GUNDAM (từ Apple Reminders qua Shortcuts, xem parse_reading_log_shortcut_csv) ---
@@ -1292,7 +1311,8 @@ def save_reading_log_bulk(df):
                 for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()]
         for i in range(0, len(recs), 500):
             sb.table("reading_log").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_reading_log.clear()
+    prep_analysis_data.clear()
 
 
 # --- KINDLE: TRÍCH DẪN & GHI CHÚ (từ My Clippings.txt, xem parse_kindle_clippings) ---
@@ -1331,7 +1351,8 @@ def save_kindle_book_map_upsert(df):
                  "project": (str(r["Dự án"]) if pd.notna(r.get("Dự án")) and str(r["Dự án"]).strip() else None),
                  "label": str(r["Nhãn"])} for r in df.to_dict("records")]
         sb.table("kindle_book_map").upsert(recs, on_conflict="kindle_title").execute()
-    st.cache_data.clear()
+    load_kindle_book_map.clear()
+    load_kindle_highlights.clear()  # JOIN với kindle_book_map ngay trong hàm đó, xem docstring
 
 
 @st.cache_data
@@ -1352,13 +1373,15 @@ def save_gundam_override(day, series):
     """Gán tay 1 ngày cụ thể vào series (upsert theo session_date)."""
     _get_supabase().table("gundam_overrides").upsert(
         {"session_date": day.isoformat(), "series": series}, on_conflict="session_date").execute()
-    st.cache_data.clear()
+    load_gundam_overrides.clear()
+    prep_analysis_data.clear()
 
 
 def delete_gundam_override(day):
     """Bỏ gán tay 1 ngày, quay lại dùng suy luận tự động."""
     _get_supabase().table("gundam_overrides").delete().eq("session_date", day.isoformat()).execute()
-    st.cache_data.clear()
+    load_gundam_overrides.clear()
+    prep_analysis_data.clear()
 
 
 def save_gundam_overrides_bulk(df):
@@ -1368,7 +1391,8 @@ def save_gundam_overrides_bulk(df):
     if not df.empty:
         recs = [{"session_date": str(r["Ngày"]), "series": str(r["Series"])} for r in df.to_dict("records")]
         sb.table("gundam_overrides").insert(recs).execute()
-    st.cache_data.clear()
+    load_gundam_overrides.clear()
+    prep_analysis_data.clear()
 
 
 @st.cache_data
@@ -1387,13 +1411,15 @@ def save_book_override(day, book):
     """Gán tay 1 ngày cụ thể vào 1 cuốn sách (upsert theo session_date)."""
     _get_supabase().table("book_overrides").upsert(
         {"session_date": day.isoformat(), "book": book}, on_conflict="session_date").execute()
-    st.cache_data.clear()
+    load_book_overrides.clear()
+    prep_analysis_data.clear()
 
 
 def delete_book_override(day):
     """Bỏ gán tay 1 ngày, quay lại dùng suy luận tự động."""
     _get_supabase().table("book_overrides").delete().eq("session_date", day.isoformat()).execute()
-    st.cache_data.clear()
+    load_book_overrides.clear()
+    prep_analysis_data.clear()
 
 
 def save_book_overrides_bulk(df):
@@ -1403,7 +1429,8 @@ def save_book_overrides_bulk(df):
     if not df.empty:
         recs = [{"session_date": str(r["Ngày"]), "book": str(r["Sách"])} for r in df.to_dict("records")]
         sb.table("book_overrides").insert(recs).execute()
-    st.cache_data.clear()
+    load_book_overrides.clear()
+    prep_analysis_data.clear()
 
 
 @st.cache_data
@@ -1435,17 +1462,18 @@ def load_kindle_highlights():
         "content": "Nội dung", "location": "Vị trí", "added_at": "Ngày thêm", "is_favorite": "Yêu thích"})
     df["Ngày thêm"] = pd.to_datetime(df["Ngày thêm"], format='ISO8601', errors='coerce')
     df["Yêu thích"] = df["Yêu thích"].fillna(False).astype(bool)
+    # JOIN vectorized qua merge() (thay vì .apply() lookup từng dòng) -- kindle_book_map khoá theo
+    # Tên Kindle (unique) nên merge 1-1 an toàn, không nhân dòng.
     bm = load_kindle_book_map()
-    bm_idx = bm.set_index("Tên Kindle")[["Dự án", "Nhãn"]] if not bm.empty else pd.DataFrame(columns=["Dự án", "Nhãn"])
-
-    def _resolve(t):
-        if t in bm_idx.index:
-            proj, label = bm_idx.loc[t, "Dự án"], bm_idx.loc[t, "Nhãn"]
-            proj = proj if pd.notna(proj) and str(proj).strip() else None
-            return pd.Series({"Cuốn sách": proj or label, "Dự án": proj})
-        return pd.Series({"Cuốn sách": t, "Dự án": None})
-
-    df = df.join(df["Tên Kindle"].apply(_resolve))
+    if not bm.empty:
+        df = df.merge(bm[["Tên Kindle", "Dự án", "Nhãn"]], on="Tên Kindle", how="left")
+        _proj_valid = df["Dự án"].notna() & (df["Dự án"].astype(str).str.strip() != "")
+        df["Dự án"] = df["Dự án"].where(_proj_valid, None)
+        df["Cuốn sách"] = df["Dự án"].where(_proj_valid, df["Nhãn"]).fillna(df["Tên Kindle"])
+        df = df.drop(columns=["Nhãn"])
+    else:
+        df["Dự án"] = float("nan")  # NaN (không phải None) -- khớp dtype cột "Dự án" khi bm CÓ dữ liệu
+        df["Cuốn sách"] = df["Tên Kindle"]
     return df[cols]
 
 
@@ -1476,7 +1504,7 @@ def save_kindle_highlights_bulk(df):
         for i in range(0, len(recs), 500):
             sb.table("kindle_highlights").upsert(
                 recs[i:i + 500], on_conflict="dedupe_hash", ignore_duplicates=True).execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 def save_kindle_highlights_raw_bulk(df):
@@ -1504,7 +1532,7 @@ def save_kindle_highlights_raw_bulk(df):
         } for r in df.to_dict("records")]
         for i in range(0, len(recs), 500):
             sb.table("kindle_highlights").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 def update_kindle_highlight_content(dedupe_hash, content):
@@ -1517,7 +1545,7 @@ def update_kindle_highlight_content(dedupe_hash, content):
         return
     sb = _get_supabase()
     sb.table("kindle_highlights").update({"content": content}).eq("dedupe_hash", dedupe_hash).execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 def set_kindle_highlight_favorite(dedupe_hash, is_favorite):
@@ -1525,7 +1553,7 @@ def set_kindle_highlight_favorite(dedupe_hash, is_favorite):
     thẻ "Trích dẫn hôm nay" gọi thẳng hàm này. Không đụng dedupe_hash/nội dung, chỉ đổi 1 cột."""
     sb = _get_supabase()
     sb.table("kindle_highlights").update({"is_favorite": bool(is_favorite)}).eq("dedupe_hash", dedupe_hash).execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 def delete_kindle_highlight(dedupe_hash):
@@ -1542,7 +1570,7 @@ def delete_kindle_highlight(dedupe_hash):
     add_deleted_kindle(hashes)
     for h in hashes:
         sb.table("kindle_highlights").delete().eq("dedupe_hash", h).execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 def add_kindle_note(parent_row, content):
@@ -1565,7 +1593,7 @@ def add_kindle_note(parent_row, content):
         "parent_hash": parent_row["dedupe_hash"],
     }
     sb.table("kindle_highlights").upsert([rec], on_conflict="dedupe_hash").execute()
-    st.cache_data.clear()
+    load_kindle_highlights.clear()
 
 
 @st.cache_data
@@ -1580,7 +1608,7 @@ def add_deleted_kindle(hashes):
     recs = [{"dedupe_hash": h} for h in hashes]
     if recs:
         sb.table("deleted_kindle_highlights").upsert(recs, on_conflict="dedupe_hash").execute()
-    st.cache_data.clear()
+    load_deleted_kindle.clear()
 
 
 def save_deleted_kindle(df):
@@ -1591,7 +1619,7 @@ def save_deleted_kindle(df):
         recs = [{"dedupe_hash": str(h)} for h in df["dedupe_hash"]]
         for i in range(0, len(recs), 500):
             sb.table("deleted_kindle_highlights").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_deleted_kindle.clear()
 
 
 def _kindle_location_sort_key(loc):
@@ -1782,14 +1810,14 @@ def save_health_metrics_bulk(panels):
         for i in range(0, len(recs), 500):
             sb.table("health_metrics").upsert(
                 recs[i:i + 500], on_conflict="test_date,category,indicator").execute()
-    st.cache_data.clear()
+    load_health_metrics.clear()
 
 
 def delete_health_metric_panel(test_date, category):
     """Xoá toàn bộ 1 lần xét nghiệm (mọi chỉ số cùng ngày lấy mẫu + nhóm)."""
     sb = _get_supabase()
     sb.table("health_metrics").delete().eq("test_date", str(test_date)).eq("category", category).execute()
-    st.cache_data.clear()
+    load_health_metrics.clear()
 
 
 def save_health_metrics_raw_bulk(df):
@@ -1811,7 +1839,7 @@ def save_health_metrics_raw_bulk(df):
         } for r in df.to_dict("records")]
         for i in range(0, len(recs), 500):
             sb.table("health_metrics").insert(recs[i:i + 500]).execute()
-    st.cache_data.clear()
+    load_health_metrics.clear()
 
 
 def parse_reading_log_shortcut_csv(uploaded):
@@ -2019,12 +2047,23 @@ def _sync_bucket_name():
 def _list_sync_files():
     """Liệt kê file trong bucket Storage dùng cho Đồng bộ nhanh, mới nhất trước (theo created_at).
     Trả về [] nếu bucket chưa tạo/chưa cấu hình -- tính năng tuỳ chọn, không chặn phần còn lại của
-    tab Dữ liệu đầu vào khi chưa dùng tới."""
+    tab Dữ liệu đầu vào khi chưa dùng tới. KHÔNG cache -- dùng khi bấm nút đồng bộ thật
+    (sync_from_storage()), cần thấy đúng trạng thái bucket mới nhất tại thời điểm bấm. Muốn kiểm
+    tra "có gì mới chưa" ở mọi trang (mỗi lần render) thì gọi bản cache _list_sync_files_cached()."""
     try:
         files = _get_supabase().storage.from_(_sync_bucket_name()).list()
     except Exception:
         return []
     return sorted((f for f in files if f.get("name")), key=lambda f: f.get("created_at") or "", reverse=True)
+
+
+@st.cache_data(ttl=60)
+def _list_sync_files_cached():
+    """Bản cache TTL=60s của _list_sync_files() -- dùng RIÊNG cho _has_pending_forest_sync(), hàm
+    bị gọi lại ở MỌI trang/mỗi lần rerun (qua _render_nav_sync_fab()) chỉ để biết có file Forest
+    mới hơn lần đồng bộ gần nhất hay không. Không cache thẳng _list_sync_files() (dùng chung cho cả
+    lúc bấm nút thật) vì lúc đó cần dữ liệu bucket mới nhất, không được trễ tới 60s."""
+    return _list_sync_files()
 
 def _latest_sync_file(files, prefix):
     """files đã sort mới nhất trước (xem _list_sync_files) -> file khớp ĐẦU TIÊN chính là mới nhất."""
@@ -2043,7 +2082,8 @@ def sync_from_storage(cal_start, cal_end):
     cột, để còn nguyên đó cho lần thử lại sau khi đã sửa Shortcut. Trả về dict kết quả để hiển thị,
     không raise ra ngoài UI."""
     result = {"forest": None, "forest_error": None, "reading": None, "reading_error": None,
-              "calendar": None, "calendar_error": None, "error": None, "forest_file": None}
+              "calendar": None, "calendar_error": None, "error": None, "forest_file": None,
+              "cleanup_error": None}
     try:
         bucket = _get_supabase().storage.from_(_sync_bucket_name())
         files = _list_sync_files()
@@ -2076,14 +2116,7 @@ def sync_from_storage(cal_start, cal_end):
                     keep = [(s, e) not in del_keys for s, e in
                             zip(df_new['Thời gian bắt đầu'].map(_fmt_ts), df_new['Thời gian kết thúc'].map(_fmt_ts))]
                     df_new = df_new[keep]
-                db = load_db()
-                before = len(db)
-                combined = pd.concat([db, df_new])
-                combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
-                combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
-                combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-                save_db(combined)
-                result["forest"] = len(combined) - before
+                result["forest"] = _merge_forest_into_db(df_new)
             if not result["forest_error"]:
                 to_delete += [f["name"] for f in files
                               if f["name"].lower().startswith("forest") and f["name"] != forest_meta["name"]]
@@ -2110,8 +2143,10 @@ def sync_from_storage(cal_start, cal_end):
     if to_delete:
         try:
             bucket.remove(to_delete)
-        except Exception:
-            pass
+        except Exception as e:
+            # Best-effort: dọn file cũ thất bại không chặn kết quả đồng bộ (đã nạp xong dữ liệu) --
+            # nhưng phải BÁO lại thay vì nuốt lỗi im lặng, để người dùng biết bucket có thể còn rác.
+            result["cleanup_error"] = str(e)
 
     n_cal, err_cal = sync_work_calendar(cal_start, cal_end)
     result["calendar"] = n_cal
@@ -2141,6 +2176,10 @@ def _do_quick_sync():
         _parts.append(f"lịch lỗi ({_qres['calendar_error']})"); _has_err = True
     elif _qres["calendar"] is not None:
         _parts.append(f"{_qres['calendar']} appointment lịch")
+    if _qres["cleanup_error"]:
+        # Không set _has_err -- dữ liệu đã nạp thành công, chỉ dọn file cũ trong bucket thất bại
+        # (best-effort), báo để người dùng biết bucket có thể còn rác chứ không chặn kết quả sync.
+        _parts.append(f"dọn file cũ lỗi ({_qres['cleanup_error']})")
     # Chỉ đánh dấu "đã đồng bộ" file Forest này khi KHÔNG lỗi (file lỗi coi như CHƯA nạp thật, phải
     # còn tính là "đang chờ" để nút tròn nổi tiếp tục hiện, nhắc thử lại sau khi sửa Shortcut) --
     # dùng bởi _has_pending_forest_sync() để quyết định hiện/ẩn nút, xem _render_nav_sync_fab().
@@ -2159,8 +2198,11 @@ def _has_pending_forest_sync():
     không phải theo "đã bấm trong phiên này chưa" (xem _render_nav_sync_fab()). So theo TÊN file
     (không phải created_at) -- Shortcut iOS luôn đặt tên file mới kèm timestamp mỗi lần xuất, nên
     tên khác nhau là tín hiệu đủ tin cậy để biết có bản mới. Không tải/parse file (chỉ .list()
-    bucket, rẻ) -- việc nạp thật vẫn chỉ chạy khi bấm nút, ở _do_quick_sync()."""
-    files = _list_sync_files()
+    bucket, rẻ) -- việc nạp thật vẫn chỉ chạy khi bấm nút, ở _do_quick_sync(). Gọi bản CACHE
+    (_list_sync_files_cached(), TTL=60s) vì hàm này chạy lại ở MỌI trang mỗi lần rerun (xem
+    _render_nav_sync_fab()) -- gọi thẳng .list() không cache ở đây sẽ tốn 1 round-trip Storage
+    network trên MỌI tương tác của người dùng, dù bucket hiếm khi đổi giữa các lần."""
+    files = _list_sync_files_cached()
     forest_meta = _latest_sync_file(files, "forest")
     if not forest_meta:
         return False
@@ -2669,7 +2711,7 @@ def _delta_t(delta, label):
     """Trả về (chuỗi, màu) cho một delta, hoặc None nếu không có."""
     if delta is None:
         return None
-    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
+    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "var(--text-2)"
     return (f"{_fmt_delta(delta)} {label}", c)
 
 
@@ -2712,7 +2754,7 @@ def _delta_t_hours(delta, label):
     thập phân '+1.5'/'−0.8'."""
     if delta is None:
         return None
-    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "#86868b"
+    c = "#34c759" if delta > 0 else "#ff3b30" if delta < 0 else "var(--text-2)"
     return (f"{_fmt_hours_delta(delta)} {label}", c)
 
 
@@ -3088,6 +3130,26 @@ def _avg_session_min(df):
     n = len(df)
     return (df['Thời lượng (Phút)'].sum() / n) if n else 0.0
 
+def _session_flow_stats(day_df, gap_min=15):
+    """Khối tập trung liền mạch dài nhất (các phiên cách nhau < gap_min phút gộp làm 1 khối) +
+    khoảng nghỉ dài nhất giữa 2 khối, tính từ Thời gian bắt đầu/kết thúc của 1 ngày. Trả
+    (longest_block_min, longest_gap_min); gap là None nếu chỉ có 1 khối (không có gì để so)."""
+    d = day_df.sort_values('Thời gian bắt đầu')
+    starts = pd.to_datetime(d['Thời gian bắt đầu']).tolist()
+    ends = pd.to_datetime(d['Thời gian kết thúc']).tolist()
+    blocks = [[starts[0], ends[0]]]
+    for s, e in zip(starts[1:], ends[1:]):
+        if (s - blocks[-1][1]).total_seconds() / 60 < gap_min:
+            blocks[-1][1] = max(blocks[-1][1], e)
+        else:
+            blocks.append([s, e])
+    block_mins = [(b[1] - b[0]).total_seconds() / 60 for b in blocks]
+    longest_block = max(block_mins)
+    if len(blocks) < 2:
+        return longest_block, None
+    gaps = [(blocks[i][0] - blocks[i - 1][1]).total_seconds() / 60 for i in range(1, len(blocks))]
+    return longest_block, max(gaps)
+
 # Dải buổi trong ngày (nền biểu đồ khung giờ): tên, giờ bắt đầu, giờ kết thúc, màu nền
 BUOI_BANDS = [
     ("Khuya", 0, 5, "rgba(88,86,214,0.05)"),
@@ -3341,9 +3403,10 @@ def _compute_alltime_records(df):
     RECORD_MIN_DAYS ngày có dữ liệu (project_records/category_records, dùng bởi Bảng số liệu
     trang Dự án). day_badges là bảng tra ngược ngày -> danh sách badge, dựng sẵn 1 lần để các
     điểm gắn chip trên Timeline (render_note_editor/render_notes_journal/render_on_this_day)
-    không phải lặp lại groupby. Cache theo st.cache_data (như prep_analysis_data()) -> tự làm
-    mới ngay khi dữ liệu đổi (mọi save_*/xoá dữ liệu đã gọi st.cache_data.clear() sẵn), không
-    bao giờ outdate."""
+    không phải lặp lại groupby. Cache theo st.cache_data, nhận thẳng df (kết quả prep_analysis_data())
+    làm tham số -> khoá cache tự đổi theo nội dung df, nên chỉ cần prep_analysis_data.clear() được
+    gọi đúng chỗ (mọi save_*/xoá ảnh hưởng sessions/mapping/reading_log/overrides) là hàm này tự
+    tính lại theo df mới, không bao giờ outdate."""
     day_badges = {}
 
     def _add_badge(d, badge):
@@ -5474,7 +5537,7 @@ def _render_health_report(df_health):
     deltas = []
     if len(s_num) > 1:
         d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
-        dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "#86868b"
+        dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "var(--text-2)"
         deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
     hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
                    "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
@@ -6337,11 +6400,16 @@ def render_on_this_day(sel, df_all):
     chờ → nhãn "Ghi chú chính" + ghi chú, nhất quán với render_note_editor()/render_notes_journal()."""
     day_badges = _compute_alltime_records(df_all)["day_badges"]
     m, d = sel.month, sel.day
-    # Số liệu phiên theo từng năm trước (cùng ngày/tháng)
-    sess = df_all[df_all['Ngày'].apply(lambda x: x.month == m and x.day == d and x.year < sel.year)]
+    # Số liệu phiên theo từng năm trước (cùng ngày/tháng) -- 'Ngày' là cột date thô (không phải
+    # datetime64) nên không có sẵn .dt, phải pd.to_datetime() 1 lần rồi so sánh vectorized bằng
+    # .dt.month/day/year thay vì apply() từng dòng trên toàn bộ df_all (có thể rất lớn qua nhiều
+    # năm dùng app).
+    _ngay_dt = pd.to_datetime(df_all['Ngày'])
+    _mask = (_ngay_dt.dt.month == m) & (_ngay_dt.dt.day == d) & (_ngay_dt.dt.year < sel.year)
+    sess = df_all[_mask]
     stats = {}  # year -> (hours, sessions)
     if not sess.empty:
-        for y, g in sess.groupby(sess['Ngày'].apply(lambda x: x.year)):
+        for y, g in sess.groupby(_ngay_dt[_mask].dt.year):
             stats[int(y)] = (g['Thời lượng (Phút)'].sum() / 60, len(g))
     # Ghi chú cùng ngày/tháng ở các năm trước
     notes = {}  # year -> text
@@ -10300,7 +10368,7 @@ def render_day_report(df):
         pw = df[df['Ngày'] == (sel - timedelta(days=7))]
         if not pw.empty:
             pw_h, pw_s = pw['Thời lượng (Phút)'].sum() / 60, len(pw)
-            _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "#86868b"
+            _c = "#34c759" if d_hrs > pw_h else "#ff3b30" if d_hrs < pw_h else "var(--text-2)"
             cmp_chips.append({"k": f"vs {vn_dow} tuần trước", "v": f"{_fmt_hours_short(pw_h)}",
                               "delta": (f"{_fmt_hours_delta(d_hrs - pw_h)} · {_fmt_delta(d_sess - pw_s)} phiên", _c)})
         else:
@@ -10309,7 +10377,7 @@ def render_day_report(df):
                   & (df['Ngày'] != sel)]
         if same['Ngày'].nunique():
             avg_h = (same.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60).mean()
-            _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "#86868b"
+            _c = "#34c759" if d_hrs > avg_h else "#ff3b30" if d_hrs < avg_h else "var(--text-2)"
             cmp_chips.append({"k": f"vs TB các {vn_dow}", "v": f"{_fmt_hours_short(avg_h)}",
                               "delta": (f"{_fmt_hours_delta(d_hrs - avg_h)}", _c)})
 
@@ -10329,6 +10397,14 @@ def render_day_report(df):
                      {"k": "Trải dài", "v": span_str}]}]
         if buoi_chips:
             _secs.append({"label": "Theo buổi", "chips": buoi_chips})
+        if d_sess >= 2:
+            _longest_block, _longest_gap = _session_flow_stats(day_df)
+            _flow_chips = [{"k": "Khối liền mạch dài nhất",
+                             "v": f"{int(_longest_block // 60)}h{int(_longest_block % 60):02d}"}]
+            if _longest_gap is not None:
+                _flow_chips.append({"k": "Khoảng nghỉ dài nhất",
+                                     "v": f"{int(_longest_gap // 60)}h{int(_longest_gap % 60):02d}"})
+            _secs.append({"label": "Liền mạch", "chips": _flow_chips})
         render_stat_panel(hero_items=[
             {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
             {"label": "Số phiên", "value": f"{d_sess}"},
@@ -10642,9 +10718,13 @@ elif nav == "Báo cáo":
                 ]},
             ]
             if len(by_wd) and by_wd.max() > 0:
+                # "Yếu nhất" chỉ xét trong các thứ THỰC SỰ có giờ (>0) -- by_wd.max()>0 đảm bảo
+                # luôn còn ít nhất 1 thứ ở đây, tránh trường hợp hiếm 1 thứ có phiên nhưng tổng
+                # thời lượng đúng bằng 0 phút bị hiểu lầm thành "yếu nhất" theo nghĩa có hoạt động.
+                _by_wd_pos = by_wd[by_wd > 0]
                 _sections.append({"label": "Theo thứ", "chips": [
                     {"k": "Mạnh nhất", "v": f"{by_wd.idxmax()} ({_fmt_hours_short(by_wd.max())})"},
-                    {"k": "Yếu nhất", "v": f"{by_wd.idxmin()} ({_fmt_hours_short(by_wd.min())})"},
+                    {"k": "Yếu nhất", "v": f"{_by_wd_pos.idxmin()} ({_fmt_hours_short(_by_wd_pos.min())})"},
                 ]})
             if overall_top3:
                 _sections.append({"label": "Ngày nổi bật", "chips": _top_days_chips(overall_top3)})
@@ -11401,20 +11481,9 @@ elif nav == "Tuỳ biến":
                                 preview['Thời gian kết thúc'] = preview['Thời gian kết thúc'].dt.strftime('%Y-%m-%d %H:%M')
                                 st.dataframe(preview, width='stretch', hide_index=True)
                                 if st.button("Xác nhận cập nhật dữ liệu", type="primary", key="tbtn_import_confirm"):
-                                    db = load_db()
-                                    before = len(db)
                                     rng = f" · {df_new['Thời gian bắt đầu'].min():%d/%m/%Y}–{df_new['Thời gian kết thúc'].max():%d/%m/%Y}"
-                                    combined = pd.concat([db, df_new])
-                                    # _fmt_ts (không phải .astype(str) thô) -> chuẩn hoá về cùng 1 định dạng
-                                    # "YYYY-MM-DD HH:MM:SS" bất kể cột đang là chuỗi (từ db cũ) hay Timestamp
-                                    # (từ df_new mới parse) -> drop_duplicates nhận đúng phiên trùng dù nguồn
-                                    # gốc có/không giây lẻ, tránh chèn trùng khi nạp lại cùng file Forest.
-                                    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
-                                    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
-                                    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-                                    added = len(combined) - before
+                                    added = _merge_forest_into_db(df_new)
                                     dup = stats['valid'] - skipped_deleted - added
-                                    save_db(combined)
                                     st.session_state['import_msg'] = (
                                         f"Đã thêm {added} phiên mới (bỏ {dup} trùng, {stats['failed']} thất bại, "
                                         f"{stats['unset']} unset{_extra}){rng if added else ''}.")
