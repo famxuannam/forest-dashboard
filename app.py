@@ -807,6 +807,12 @@ if _content_width_name not in CONTENT_WIDTHS:
 CONTENT_WIDTH_NAME = _content_width_name
 CONTENT_WIDTH_PX = CONTENT_WIDTHS[CONTENT_WIDTH_NAME]
 
+# Trích dẫn/ghi chú (Sách -> Tổng quan "3. Trích dẫn & Ghi chú"/_render_reading_quotes_teaser(),
+# trang "Trích dẫn"/_render_kindle_quotes_tab()) chia 2 cột khi "Độ rộng nội dung" ở mức lớn (Rộng/
+# Rất rộng, xem CONTENT_WIDTHS) -- câu trích dẫn kéo dài hết cỡ chiều ngang cột mới rất khó theo
+# dõi, xác nhận với người dùng chỉ cần chia cột khi thật sự rộng, không cần ở Hẹp/Vừa.
+QUOTES_WIDE = CONTENT_WIDTH_PX >= 1500
+
 
 def _teal_shades(n, l_lo=None, l_hi=None):
     """Sinh n sắc độ (cùng hue VÀ saturation với ACCENT đang chọn -- tên hàm/biến "teal" giữ lại
@@ -3712,17 +3718,21 @@ def _render_kindle_quotes_tab():
     visible_books = book_order if show_all else book_order[:3]
     hidden_books = [] if show_all else book_order[3:]
 
-    _rendered_i = 0
+    # Gom dữ liệu render của mỗi cuốn TRƯỚC, chưa vẽ vội -- cần biết "khối lượng" (visible_n) của
+    # TỪNG cuốn để chia cột cân bằng bên dưới (xem QUOTES_WIDE), không thể vẽ luôn trong lúc duyệt
+    # như bản trước.
+    book_jobs = []
     for book in visible_books:
         grp = view[view['Cuốn sách'] == book]
-        # Lồng ghi chú xuống dưới đúng highlight nó thuộc về -- CÙNG thuật toán với "2. Nhật ký
-        # đọc" (_render_kindle_day_quotes()), nhưng khoanh vùng theo CUỐN SÁCH (grp) thay vì theo
-        # NGÀY: (a) parent_hash trỏ thẳng (ghi chú tự thêm trong app, quan hệ CHẮC CHẮN lưu DB),
-        # (b) SUY LUẬN qua "Vị trí" trùng với 1 highlight cùng cuốn (ghi chú gốc từ Kindle,
-        # parent_hash luôn NULL). KHÁC "2. Nhật ký đọc": ghi chú KHÔNG khớp được highlight nào bị
-        # ẨN HẲN ở đây thay vì hiện đứng riêng -- xác nhận với người dùng, 1 ghi chú không gắn với
-        # trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách TRÍCH DẪN (khác "2. Nhật
-        # ký đọc" là nhật ký theo NGÀY nên vẫn cần hiện đủ, không được phép "mất" dữ liệu).
+        # Lồng ghi chú xuống dưới đúng highlight nó thuộc về -- CÙNG thuật toán với "2. Nhật
+        # ký đọc" (_render_kindle_day_quotes()), nhưng khoanh vùng theo CUỐN SÁCH (grp) thay
+        # vì theo NGÀY: (a) parent_hash trỏ thẳng (ghi chú tự thêm trong app, quan hệ CHẮC
+        # CHẮN lưu DB), (b) SUY LUẬN qua "Vị trí" trùng với 1 highlight cùng cuốn (ghi chú gốc
+        # từ Kindle, parent_hash luôn NULL). KHÁC "2. Nhật ký đọc": ghi chú KHÔNG khớp được
+        # highlight nào bị ẨN HẲN ở đây thay vì hiện đứng riêng -- xác nhận với người dùng, 1
+        # ghi chú không gắn với trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách
+        # TRÍCH DẪN (khác "2. Nhật ký đọc" là nhật ký theo NGÀY nên vẫn cần hiện đủ, không
+        # được phép "mất" dữ liệu).
         by_hash = {r['dedupe_hash']: r for _, r in grp.iterrows()}
         children = {}
         is_child = set()
@@ -3746,29 +3756,64 @@ def _render_kindle_quotes_tab():
         visible_n = len(grp) - len(orphan_notes)
         if visible_n == 0:
             continue
-
         author = _reading_author_of(kh, book)
-        _mt = "0" if _rendered_i == 0 else "26px"
-        st.markdown(
-            f"<div class='fav-book-head' style='margin-top:{_mt}'>"
-            f"<div class='fav-book-titles'><span class='pbill-booktitle'>{html_escape(str(book))}</span>"
-            + (f"<span class='pbill-author'>{html_escape(str(author))}</span>" if author else "")
-            + f"</div><span class='fav-count-badge'>{visible_n}</span></div>",
-            unsafe_allow_html=True)
-        for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
-            if r['dedupe_hash'] in is_child or r['dedupe_hash'] in orphan_notes:
-                continue
-            # Trích dẫn + ghi chú lồng của nó BỌC CHUNG 1 container (key "kqgroup_fav_<hash>")
-            # để card nền/viền (CSS [class*="st-key-kqgroup_fav_"]) áp cho CẢ CỤM -- trước đó mỗi
-            # dòng (kqrow_fav_/kqreply_fav_) tự có card riêng, khiến ghi chú lồng "trần" tách hẳn
-            # khỏi card highlight cha (không khớp selector "kqrow_fav_"). Xác nhận với người
-            # dùng: phương án A trong mockup so sánh 4 kiểu (kẻ đứt + thụt lề, KHÔNG kèm nhãn
-            # kicker "Ghi chú của bạn").
-            with st.container(key=f"kqgroup_fav_{r['dedupe_hash']}"):
-                _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
-                for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
-                    _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
+        book_jobs.append((book, grp, children, is_child, orphan_notes, visible_n, author))
+
+    _rendered_i = 0
+
+    def _render_book_job(job):
+        nonlocal _rendered_i
+        book, grp, children, is_child, orphan_notes, visible_n, author = job
+        with st.container(key=f"kq_book_{_rendered_i}"):
+            st.markdown(
+                "<div class='fav-book-head'>"
+                f"<div class='fav-book-titles'><span class='pbill-booktitle'>{html_escape(str(book))}</span>"
+                + (f"<span class='pbill-author'>{html_escape(str(author))}</span>" if author else "")
+                + f"</div><span class='fav-count-badge'>{visible_n}</span></div>",
+                unsafe_allow_html=True)
+            for _, r in grp.sort_values('Ngày thêm', ascending=ascending, kind='stable').iterrows():
+                if r['dedupe_hash'] in is_child or r['dedupe_hash'] in orphan_notes:
+                    continue
+                # Trích dẫn + ghi chú lồng của nó BỌC CHUNG 1 container (key
+                # "kqgroup_fav_<hash>") để card nền/viền (CSS
+                # [class*="st-key-kqgroup_fav_"]) áp cho CẢ CỤM -- trước đó mỗi dòng
+                # (kqrow_fav_/kqreply_fav_) tự có card riêng, khiến ghi chú lồng "trần" tách
+                # hẳn khỏi card highlight cha (không khớp selector "kqrow_fav_"). Xác nhận
+                # với người dùng: phương án A trong mockup so sánh 4 kiểu (kẻ đứt + thụt lề,
+                # KHÔNG kèm nhãn kicker "Ghi chú của bạn").
+                with st.container(key=f"kqgroup_fav_{r['dedupe_hash']}"):
+                    _render_kindle_quote_row(r, is_reply=False, key_suffix="fav_", show_added_date=True)
+                    for child in sorted(children.get(r['dedupe_hash'], []), key=lambda c: str(c.get('Ngày thêm'))):
+                        _render_kindle_quote_row(child, is_reply=True, key_suffix="fav_", show_added_date=True)
         _rendered_i += 1
+
+    if QUOTES_WIDE and len(book_jobs) > 1:
+        # Chia 2 cột theo "khối lượng" (visible_n, số trích dẫn + ghi chú lồng của mỗi cuốn) thay
+        # vì xen kẽ trái-phải theo thứ tự cứng nhắc -- xen kẽ khiến 1 cuốn ít trích dẫn (vd 1 câu)
+        # đứng cạnh 1 cuốn nhiều trích dẫn (vd 5 câu) sinh khoảng trống rất rộng ở cột ngắn hơn
+        # (bug thật đã gặp, xem ảnh chụp người dùng gửi). Thuật toán tham lam: xếp LẦN LƯỢT từng
+        # cuốn (giữ nguyên thứ tự Mới lưu nhất/Cũ nhất đang chọn) vào cột đang nhẹ hơn -- đơn giản
+        # hơn hẳn so với đo chiều cao render thật (cần JS), và đủ tốt vì các dòng trích dẫn có
+        # chiều cao khá đồng đều với nhau.
+        col_a, col_b = [], []
+        weight_a = weight_b = 0
+        for job in book_jobs:
+            if weight_a <= weight_b:
+                col_a.append(job)
+                weight_a += job[5]
+            else:
+                col_b.append(job)
+                weight_b += job[5]
+        c1, c2 = st.columns(2, gap="medium")
+        with c1:
+            for job in col_a:
+                _render_book_job(job)
+        with c2:
+            for job in col_b:
+                _render_book_job(job)
+    else:
+        for job in book_jobs:
+            _render_book_job(job)
 
     if hidden_books:
         hidden_n = sum(len(view[view['Cuốn sách'] == b]) for b in hidden_books)
@@ -7895,6 +7940,7 @@ st.markdown(
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
     f"--content-max-w:{CONTENT_WIDTH_PX}px;--content-half-w:{CONTENT_WIDTH_PX // 2}px;"
+    f"--quotes-cols:{2 if QUOTES_WIDE else 1};"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -8830,13 +8876,24 @@ _MAIN_CSS = """
     .fav-book-titles { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .fav-count-badge { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
         border-radius: 20px; padding: 3px 11px; white-space: nowrap; }
+    /* .fav-book-head nằm TRỰC TIẾP trên nền trang (var(--bg), KHÔNG có card riêng bao quanh chính
+       nó -- chỉ các cụm trích dẫn bên dưới mới có card) -- .pbill-booktitle/.pbill-author mặc định
+       dùng var(--text)/var(--text-2) (màu chữ TRONG card, xem khối token BG_PALETTES) vì lớp dùng
+       chung với billboard (luôn có nền sáng cố định). Ở đây phải ghi đè bằng var(--text-on-bg)/
+       var(--text-on-bg-2) (màu chữ NGOÀI card) -- thiếu ghi đè này khiến dòng tên sách/tác giả gần
+       như biến mất trên "Bầu trời sao"/"Rừng đêm" (nền trang cố định đậm dù đang ở light theme,
+       bug thật đã gặp, xem ảnh chụp người dùng gửi). */
+    .fav-book-head .pbill-booktitle { color: var(--text-on-bg); }
+    .fav-book-head .pbill-author { color: var(--text-on-bg-2); }
     /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
        card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
        (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
-       trái có vạch màu (giống nháp tay viết cạnh câu trích). */
+       trái có vạch màu (giống nháp tay viết cạnh câu trích). column-count đọc --quotes-cols (1
+       hoặc 2 tuỳ "Độ rộng nội dung", xem QUOTES_WIDE) -- câu trích dẫn ở cột content rộng (1500px+)
+       kéo dài hết chiều ngang rất khó theo dõi, chia 2 cột kiểu báo in để dòng ngắn lại. */
     .quotes-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
-        padding: 6px 18px; box-shadow: var(--card-shadow); }
-    .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+        padding: 6px 18px; box-shadow: var(--card-shadow); column-count: var(--quotes-cols); column-gap: 28px; }
+    .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); break-inside: avoid; }
     .quote-item:last-child { border-bottom: none; }
     .quote-text { font-size: 14.5px; line-height: 1.6; color: var(--text); }
     .quote-meta { font-size: 11.5px; color: var(--text-3); }
@@ -9044,7 +9101,7 @@ _MAIN_CSS = """
        không bị "đứng yên" lạc tông khi đổi bảng màu nền/kiểu thẻ. */
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
+    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
     .st-key-tb_account_card, .st-key-kq_daily_card {
         background: var(--card) !important;
@@ -9561,7 +9618,7 @@ _MAIN_CSS = """
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
+    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
     .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
     [class*="st-key-kqgroup_fav_"] {
