@@ -1,6 +1,6 @@
 # Component & quy ước UI dùng lại
 
-Đối tượng đọc: Codex/ChatGPT cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
+Đối tượng đọc: Claude Code cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
 
 ## Quy ước đánh số `sec_chapter(anchor, num, title, tight_top=False, badge=None)`
 

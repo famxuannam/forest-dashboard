@@ -1,6 +1,6 @@
 # Tầng dữ liệu: Supabase, timezone, và luồng đồng bộ
 
-Đối tượng đọc: Codex/ChatGPT cần thêm 1 nguồn dữ liệu mới, sửa logic tổng hợp, hoặc chạm vào bất kỳ chỗ
+Đối tượng đọc: Claude Code cần thêm 1 nguồn dữ liệu mới, sửa logic tổng hợp, hoặc chạm vào bất kỳ chỗ
 nào đọc/ghi Supabase.
 
 ## Quy tắc bất biến: Supabase là nơi lưu trữ DUY NHẤT

@@ -1,6 +1,6 @@
 # Phím tắt bàn phím: 1 blob JS tiêm vào trang
 
-Đối tượng đọc: Codex/ChatGPT cần thêm/sửa 1 phím tắt, hoặc debug vì sao phím tắt không hoạt động ở 1 chỗ
+Đối tượng đọc: Claude Code cần thêm/sửa 1 phím tắt, hoặc debug vì sao phím tắt không hoạt động ở 1 chỗ
 cụ thể (đặc biệt bên trong ô ghi chú).
 
 ## Toàn bộ phím tắt toàn cục sống trong `_inject_keyboard_shortcuts()`

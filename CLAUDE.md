@@ -1,6 +1,6 @@
-# Forest Dashboard — hướng dẫn cho Codex/ChatGPT
+# Forest Dashboard — hướng dẫn cho Claude Code
 
-Đây là tài liệu định hướng cho Codex/ChatGPT làm việc trong repository Forest Dashboard. Repository
+Đây là tài liệu định hướng cho Claude Code làm việc trong repository Forest Dashboard. Repository
 là nguồn chân lý: trước khi sửa, đọc phần code liên quan và tài liệu trong `docs/`; chỉ dùng best
 practice bên ngoài khi repository không quy định.
 

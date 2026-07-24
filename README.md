@@ -27,8 +27,8 @@ không lặp lại nội dung đó, chỉ ghi lại vài điểm kiến trúc ch
   `book_overrides`; đồng thời khai báo bucket Storage `sync-uploads`.
 - `.streamlit/config.toml` — theme sáng/tối; `.streamlit/secrets.toml.example` — mẫu các biến
   cần điền (chỉ `SUPABASE_URL`/`SUPABASE_KEY` là bắt buộc, còn lại đều tuỳ chọn).
-- `AGENTS.md` và `docs/` — hướng dẫn phát triển, kiến trúc, data layer, UI và kiểm thử cho
-  Codex/ChatGPT.
+- `CLAUDE.md` và `docs/` — hướng dẫn phát triển, kiến trúc, data layer, UI và kiểm thử cho
+  Claude Code.
 
 ## Lưu ý
 

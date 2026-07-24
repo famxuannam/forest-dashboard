@@ -1,6 +1,6 @@
 # Git workflow của repo này
 
-Đối tượng đọc: Codex/ChatGPT chuẩn bị commit/push/mở PR trên repo `famxuannam/forest-dashboard`.
+Đối tượng đọc: Claude Code chuẩn bị commit/push/mở PR trên repo `famxuannam/forest-dashboard`.
 
 ## Nhánh làm việc là theo phiên, không cố định
 
