@@ -1,6 +1,6 @@
 # Theming: CSS custom properties, không phải 2 bộ stylesheet
 
-Đối tượng đọc: Codex/ChatGPT cần thêm UI mới, sửa màu sắc, hoặc đụng vào khối CSS lớn trong `app.py`.
+Đối tượng đọc: Claude Code cần thêm UI mới, sửa màu sắc, hoặc đụng vào khối CSS lớn trong `app.py`.
 
 ## `IS_DARK` + `--token` CSS variables
 
