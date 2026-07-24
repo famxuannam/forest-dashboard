@@ -9283,12 +9283,11 @@ _MAIN_CSS = """
        tận gốc (chiều cao đó Streamlit tự đo, không lộ ra CSS var/inline style để ép lại), nên bù
        thêm đúng phần hụt đó vào padding mong muốn (16px hiển thị + ~16px hụt = 32px khai báo) --
        đã đo lại bằng Playwright xác nhận khoảng cách hiển thị ra đúng ~16px sau khi bù. */
-    /* Lịch "Lịch tháng" ở Báo cáo Tổng quan/Tháng/Năm (frag_report_calendar_month/
-       _render_report_calendar_month) dùng CHUNG .rlcal-grid -- cùng lỗi/cùng cách bù hụt chiều
+    /* Lịch "Lịch tháng" ở Báo cáo Tháng/Năm (_render_report_calendar_month/
+       frag_report_calendar_month) dùng CHUNG .rlcal-grid -- cùng lỗi/cùng cách bù hụt chiều
        cao như trên. */
     [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"],
-    [class*="st-key-jcard_bctq_cal"], [class*="st-key-jcard_bcthang_cal"],
-    [class*="st-key-jcard_bcnam_cal"] {
+    [class*="st-key-jcard_bcthang_cal"], [class*="st-key-jcard_bcnam_cal"] {
         padding-bottom: 32px !important;
     }
 
@@ -11125,8 +11124,8 @@ elif nav == "Báo cáo":
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
                 + _nudge_html,
-                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Lịch tháng"),
-                 ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
+                [("bc-tq-ch1", "1 · Tổng quan"),
+                 ("bc-tq-ch2", "2 · Xu hướng"), ("bc-tq-ch3", "3 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, "Tổng quan", tight_top=True)
 
             by_wd = _weekday_avg(df)
@@ -11173,10 +11172,7 @@ elif nav == "Báo cáo":
             with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
-            sec_chapter("bc-tq-ch2", 2, "Lịch tháng")
-            with st.container(border=True, key="jcard_bctq_cal"):
-                frag_report_calendar_month("bctq", df, _rc_wc, _rc_rl, _rc_notes)
-            sec_chapter("bc-tq-ch3", 3, "Xu hướng")
+            sec_chapter("bc-tq-ch2", 2, "Xu hướng")
             _tq_trend_view = st.segmented_control(
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
                 key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
@@ -11184,7 +11180,7 @@ elif nav == "Báo cáo":
                 frag_trend(df, "trend_main", "Nhóm")
             else:
                 frag_hourly(df, "hour_main", "Nhóm")
-            sec_chapter("bc-tq-ch4", 4, "Bảng số liệu")
+            sec_chapter("bc-tq-ch3", 3, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
