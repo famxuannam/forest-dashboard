@@ -115,6 +115,14 @@ cách này, không chỉ tin `background` chung là đủ):
 - `[data-testid="stFileUploaderDropzone"] button[kind="secondary"]` (nút "Upload" bên trong
   dropzone) — nút này KHÔNG nằm trong `div[data-testid="stButton"]` như mọi nút secondary khác
   trong app (đứng trực tiếp trong dropzone), nên cũng lọt lưới rule chung — cần rule riêng.
+- `st.pagination` (nút phân trang mọi bảng `.dtbl`, xem `_render_table_pagination()` ở
+  `ui-components.md`) — 4 phần tử `[data-testid="stPaginationPrev"]`/`"stPaginationNext"`/
+  `"stPaginationPage"`/`"stPaginationPageActive"` tô `color`/`border-color` TĨNH theo `textColor`
+  của `config.toml` — đọc được trên nền "Giấy ấm" gốc nhưng gần như biến mất trên Bảng màu nền đậm
+  (vd "Rượu vang") ở light theme vì màu chữ/viền tối gần bằng màu nền đậm (phát hiện qua ảnh chụp
+  người dùng gửi). Ép lại `color`/`border-color` qua `var(--text-2)`/`var(--border)` (3 nút thường)
+  và `var(--text)`/`var(--chip)`/`var(--text-3)` (nút trang đang chọn) — icon mũi tên `‹`/`›` không
+  cần rule riêng, tự ăn theo `color` của nút cha như icon Material khác.
 
 **Giới hạn KHÔNG vá được bằng CSS:** `st.dataframe` (bảng "5. Dữ liệu làm việc hiện tại" ở Tuỳ
 biến, `db_view`) vẽ bằng canvas (glide-data-grid) nội bộ của Streamlit, không phải DOM/CSS thường

@@ -8601,6 +8601,24 @@ _MAIN_CSS = """
     [class*="st-key-"][class*="_pag"] [data-testid="stPagination"] { justify-content: center !important; }
     [class*="st-key-"][class*="_pag"] { margin-top: 14px; }
 
+    /* st.pagination (nút </>, số trang, trang đang chọn) tô màu TĨNH theo textColor/primaryColor
+       của config.toml (xem bẫy chung "chrome/widget NATIVE của Streamlit" ở theming.md) -- đọc
+       rõ trên nền "Giấy ấm" gốc nhưng gần như biến mất trên Bảng màu nền đậm (vd "Rượu vang") ở
+       light theme, vì màu chữ/viền tĩnh đó tối gần bằng màu nền đậm. Ép lại toàn bộ qua var(--token)
+       để luôn tự đổi theo bảng màu nền đang chọn, giống mọi nút khác trong app. Icon mũi tên
+       </> KHÔNG cần rule riêng -- render bằng font icon nên tự ăn theo `color` của nút cha (button)
+       như mọi icon Material khác trong app.*/
+    [data-testid="stPaginationPrev"], [data-testid="stPaginationNext"],
+    [data-testid="stPaginationPage"] {
+        color: var(--text-2) !important;
+        border-color: var(--border) !important;
+    }
+    [data-testid="stPaginationPageActive"] {
+        color: var(--text) !important;
+        background-color: var(--chip) !important;
+        border-color: var(--text-3) !important;
+    }
+
     /* Bộ chọn kỳ/ngày (period_stepper key="stepper_x", day_picker key="day_stepper"): luôn 1
        hàng, co vừa cả mobile -- chọn theo substring "stepper" (không phải tiền tố "st-key-
        stepper") để khớp được cả 2 kiểu key, vì "day_stepper" không có "stepper" ngay sau
