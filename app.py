@@ -10639,17 +10639,20 @@ _inject_scroll_to_top_button()
 _render_nav_sync_fab()
 
 
-def _kindle_quote_of_day():
-    """Chọn 1 trích dẫn/ghi chú Kindle ngẫu nhiên nhưng CỐ ĐỊNH trong ngày -- seed theo ngày THẬT
-    hôm nay (_today_vn(), không phải "sel", ngày đang xem trên trang Hôm nay) nên tải lại trang hay
-    lùi/tiến xem ngày khác vẫn ra đúng 1 câu suốt cả ngày hôm nay, đúng cảm giác "quote of the
-    day" thật -- chỉ đổi khi sang ngày mới (hoặc người dùng tự bấm nút xáo -- xem
-    _shuffle_daily_quote()). Trả None nếu chưa import trích dẫn nào (tính năng tuỳ chọn, không
-    chặn phần còn lại của trang).
+def _kindle_quote_of_day(sel):
+    """Chọn 1 trích dẫn/ghi chú Kindle ngẫu nhiên nhưng CỐ ĐỊNH theo NGÀY ĐANG XEM ("sel", ngày
+    trên trang Hôm nay -- KHÔNG phải _today_vn()) -- seed random bằng chính ISO string của "sel"
+    nên mỗi ngày lịch gắn vĩnh viễn với đúng 1 câu (không đổi qua các lần mở lại app), và bấm nút
+    lùi/tiến ngày (day_picker) tự động đổi sang câu của ngày đó -- không cần lưu bảng ánh xạ
+    ngày->trích dẫn nào trên Supabase, seed tất định (random.Random(iso_string)) đã tự đảm bảo
+    cùng 1 ngày luôn ra cùng 1 chỉ số. Trả None nếu chưa import trích dẫn nào (tính năng tuỳ chọn,
+    không chặn phần còn lại của trang).
 
-    Chỉ số đang chọn (kq_daily_idx) lưu trong session_state để nút xáo có chỗ ghi đè -- ngày đổi
-    (kq_daily_date lệch _today_vn()) thì tính lại theo seed như cũ, đè mất lựa chọn xáo tay của
-    ngày hôm trước (đúng ý "quote of the day" -- xáo tay chỉ có tác dụng trong ngày đang xem).
+    Chỉ số đang chọn (kq_daily_idx) lưu trong session_state để nút xáo có chỗ ghi đè -- đổi sang
+    ngày khác (kq_daily_date lệch sel) thì tính lại theo seed như cũ, đè mất lựa chọn xáo tay của
+    ngày trước đó (xáo tay chỉ có tác dụng trong lượt xem hiện tại của đúng 1 ngày, quay lại ngày
+    đó ở lượt xem SAU -- rerun mới/tab mới -- vẫn ra lại đúng câu cố định theo seed, không nhớ lần
+    xáo cũ).
 
     CHỈ chọn trong các dòng Loại == 'highlight' -- bug thật đã gặp: không lọc thì có thể rơi vào
     1 dòng 'note' (ghi chú cá nhân gắn dưới 1 highlight), khiến card "Trích dẫn hôm nay" (có dấu
@@ -10658,20 +10661,21 @@ def _kindle_quote_of_day():
     kh = kh[kh['Loại'] == 'highlight'] if not kh.empty else kh
     if kh.empty:
         return None
-    today_iso = _today_vn().isoformat()
-    if st.session_state.get("kq_daily_date") != today_iso:
-        st.session_state["kq_daily_date"] = today_iso
-        st.session_state["kq_daily_idx"] = random.Random(today_iso).randrange(len(kh))
+    sel_iso = pd.Timestamp(sel).date().isoformat()
+    if st.session_state.get("kq_daily_date") != sel_iso:
+        st.session_state["kq_daily_date"] = sel_iso
+        st.session_state["kq_daily_idx"] = random.Random(sel_iso).randrange(len(kh))
     # modulo phòng trường hợp kh co lại (xoá bớt trích dẫn) khiến idx cũ vượt quá độ dài mới.
     idx = st.session_state["kq_daily_idx"] % len(kh)
     return kh.iloc[idx]
 
 
 def _shuffle_daily_quote():
-    """Đổi trích dẫn hôm nay sang 1 trích dẫn NGẪU NHIÊN KHÁC (không lặp lại đúng câu đang hiện
-    nếu có từ 2 trích dẫn trở lên) -- callback của nút xáo bên cạnh nút ⭐ Yêu thích, xem
+    """Đổi trích dẫn của ngày đang xem sang 1 trích dẫn NGẪU NHIÊN KHÁC (không lặp lại đúng câu
+    đang hiện nếu có từ 2 trích dẫn trở lên) -- callback của nút xáo bên cạnh nút ⭐ Yêu thích, xem
     _render_today_billboard(). Chỉ ghi vào session_state, _kindle_quote_of_day() ở lần rerun kế
-    tiếp sẽ đọc lại đúng chỉ số này. Đếm/random CÙNG phạm vi Loại == 'highlight' như
+    tiếp sẽ đọc lại đúng chỉ số này -- CHỈ có tác dụng trong lượt xem hiện tại của đúng ngày đang
+    mở (xem docstring _kindle_quote_of_day()). Đếm/random CÙNG phạm vi Loại == 'highlight' như
     _kindle_quote_of_day(), không tính dòng 'note' -- giữ 2 hàm luôn đồng bộ đúng 1 danh sách."""
     kh = load_kindle_highlights()
     kh = kh[kh['Loại'] == 'highlight'] if not kh.empty else kh
@@ -10799,7 +10803,7 @@ def render_day_report(df):
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
                     ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này năm trước")])
-    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(), _hero_chips)
+    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(sel), _hero_chips)
 
     if day_df.empty:
         sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
