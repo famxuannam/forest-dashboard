@@ -5043,7 +5043,9 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
             if len(d_done) > 2:
                 _done_html += f"<span class='rlcal-more'>+{len(d_done) - 2} khác</span>"
             _done_html += "</div>"
-        _quote_html = f"<div class='rlcal-quote'>{len(d_quotes)} trích dẫn</div>" if d_quotes else ""
+        # Chỉ icon + số (bỏ nhãn "trích dẫn") -- xác nhận với người dùng qua mockup: gọn hơn, khớp
+        # kiểu hàng icon mới dùng cho lịch Báo cáo (_render_report_calendar_month).
+        _quote_html = f"<div class='rlcal-quote'>{len(d_quotes)}</div>" if d_quotes else ""
         _count_parts = []
         if d_min > 0:
             _count_parts.append(f"<span class='rlcal-cnt rlcal-cnt-time'>{_fmt_hours_short(d_min / 60)}</span>")
@@ -5086,6 +5088,230 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
         )
 
     st.markdown(RLCAL_CSS + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>", unsafe_allow_html=True)
+
+
+REPCAL_CSS = """
+<style>
+.repcal-icons { display:flex; gap:7px; margin-top:5px; flex-wrap:wrap; }
+.repcal-ic { font-size:9.5px; font-weight:700; color:var(--text-2); white-space:nowrap; }
+.repcal-ic::before { font-family:'Material Symbols Rounded'; font-size:10.5px; vertical-align:-1px; margin-right:2px; }
+.repcal-ic.appt::before { content:"event"; }
+.repcal-ic.book::before { content:"menu_book"; }
+.repcal-ic.gundam::before { content:"tv"; }
+.repcal-ic.note::before { content:"edit_note"; }
+@media (max-width: 640px) {
+    .repcal-icons { margin-top:3px; gap:5px; }
+    .repcal-ic { font-size:8.5px; }
+}
+</style>
+"""
+
+
+def _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df):
+    """Lịch tháng cho chương "Biểu đồ lịch" của Báo cáo Tổng quan/Tháng/Năm -- adapt từ
+    _render_reading_calendar_month() (dùng lại nguyên .rlcal-cell/.rlcal-grid/.rlcal-tip qua
+    RLCAL_CSS, chỉ thêm REPCAL_CSS cho hàng icon riêng). Mỗi ô ngày: tổng thời gian tập trung
+    (góc trên trái, chip .rlcal-time) + số ngày (góc trên phải) + tối đa 2 chip Dự án nhiều giờ
+    nhất trong ngày (tái dùng .rlcal-done/.rlcal-donechip, chỉ 1 chip nếu ngày đó có đúng 1 dự
+    án) + 1 hàng icon LUÔN hiện (khác .rlcal-counts chỉ hiện ở mobile của lịch Sách/Gundam): số
+    lịch hẹn / số phần sách đã đọc / số phần Gundam đã xem / số từ Ghi chú chính, ẩn từng icon
+    nếu bằng 0. Nền heat-tint theo _reading_cal_lvl() -- CÙNG thang màu cố định với lịch Sách/
+    Gundam, không co giãn riêng theo tháng đang xem.
+
+    KHÔNG tự điều hướng tháng -- (cur_y, cur_m) do caller truyền vào. Nhánh Tháng của Báo cáo gọi
+    thẳng hàm này với tháng đang chọn sẵn (không cần thêm điều hướng); Tổng quan/Năm gọi qua
+    frag_report_calendar_month() (có stepper) bên dưới."""
+    _today = _today_vn()
+    _in_m = lambda s: (s.dt.year == cur_y) & (s.dt.month == cur_m)
+
+    _min_by_day, _top_by_day = {}, {}
+    if not df_all.empty:
+        _sd = pd.to_datetime(df_all['Ngày'])
+        _sm = df_all.loc[_in_m(_sd)]
+        if not _sm.empty:
+            _sm_day = pd.to_datetime(_sm['Ngày']).dt.day
+            _min_by_day = _sm.groupby(_sm_day)['Thời lượng (Phút)'].sum().to_dict()
+            for day, g in _sm.groupby(_sm_day):
+                _top = g.groupby('Dự án')['Thời lượng (Phút)'].sum().sort_values(ascending=False)
+                _top_by_day[day] = list(_top.index[:2])
+
+    _appt_by_day = {}
+    if wc_df is not None and not wc_df.empty:
+        _wm = wc_df.loc[_in_m(wc_df['Thời gian bắt đầu'])]
+        if not _wm.empty:
+            _appt_by_day = _wm.groupby(_wm['Thời gian bắt đầu'].dt.day).size().to_dict()
+
+    _book_by_day, _gundam_by_day = {}, {}
+    if rl_df is not None and not rl_df.empty:
+        _rm = rl_df.loc[_in_m(rl_df['Ngày hoàn thành'])]
+        if not _rm.empty:
+            _is_gd = _rm['Sách (gốc)'].map(_is_gundam_list)
+            _rm_day = _rm['Ngày hoàn thành'].dt.day
+            _book_by_day = _rm.loc[~_is_gd].groupby(_rm_day[~_is_gd]).size().to_dict()
+            _gundam_by_day = _rm.loc[_is_gd].groupby(_rm_day[_is_gd]).size().to_dict()
+
+    _wc_by_day = {}
+    if notes_df is not None and not notes_df.empty:
+        _nd = pd.to_datetime(notes_df['Ngày'], errors='coerce')
+        _nm = notes_df.loc[_in_m(_nd)]
+        if not _nm.empty:
+            _nm_day = _nd.loc[_nm.index].dt.day
+            _wc_by_day = {d: len(_note_plain_text(t).split()) for d, t in zip(_nm_day, _nm['Ghi chú'])}
+
+    _total_min = sum(_min_by_day.values())
+    _active_days = len(_min_by_day)
+    if _active_days:
+        _summary = f"{_fmt_hours_short(_total_min / 60)} · {_active_days} ngày hoạt động"
+    else:
+        _summary = "Chưa có hoạt động trong tháng này"
+    st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
+
+    first = pd.Timestamp(cur_y, cur_m, 1)
+    lead = first.dayofweek
+    days_in = (first + pd.offsets.MonthEnd(0)).day
+    total_cells = -(-(lead + days_in) // 7) * 7
+
+    _l_lo, _l_hi = (0.24, 0.32) if IS_DARK else (0.94, 0.68)
+    LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5, _l_lo, _l_hi)
+    weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+    dow_html = "".join(f"<div class='rlcal-dow'>{w}</div>" for w in weekdays)
+
+    cells_html = ""
+    for i in range(total_cells):
+        day_num = i - lead + 1
+        in_month = 1 <= day_num <= days_in
+        row, col = divmod(i, 7)
+        d_min = _min_by_day.get(day_num, 0) if in_month else 0
+        d_top = _top_by_day.get(day_num, []) if in_month else []
+        d_appt = _appt_by_day.get(day_num, 0) if in_month else 0
+        d_book = _book_by_day.get(day_num, 0) if in_month else 0
+        d_gundam = _gundam_by_day.get(day_num, 0) if in_month else 0
+        d_wc = _wc_by_day.get(day_num, 0) if in_month else 0
+        has = in_month and (d_min > 0 or d_appt or d_book or d_gundam or d_wc)
+        lvl = _reading_cal_lvl(d_min) if in_month else 0
+        bg = LVL_COLORS[lvl] if in_month else "transparent"
+        is_today = in_month and (cur_y, cur_m, day_num) == (_today.year, _today.month, _today.day)
+        _cell_border = "border:1.5px solid var(--accent);" if is_today else ""
+        _dn_bg = "var(--accent)" if is_today else "transparent"
+        _dn_color = "#fff" if is_today else ("var(--text)" if in_month else "transparent")
+        _time_html = f"<span class='rlcal-time'>{_fmt_hours_short(d_min / 60)}</span>" if d_min > 0 else "<span></span>"
+        _top_html = ""
+        if d_top:
+            _top_html = "<div class='rlcal-done'>" + "".join(
+                f"<span class='rlcal-donechip'>{html_escape(str(p))}</span>" for p in d_top) + "</div>"
+        _ic_parts = []
+        if d_appt:
+            _ic_parts.append(f"<span class='repcal-ic appt'>{d_appt}</span>")
+        if d_book:
+            _ic_parts.append(f"<span class='repcal-ic book'>{d_book}</span>")
+        if d_gundam:
+            _ic_parts.append(f"<span class='repcal-ic gundam'>{d_gundam}</span>")
+        if d_wc:
+            _ic_parts.append(f"<span class='repcal-ic note'>{d_wc}</span>")
+        _ic_html = f"<div class='repcal-icons'>{''.join(_ic_parts)}</div>" if _ic_parts else ""
+        _tip_html = ""
+        _link_html = ""
+        if has:
+            _tip_lines = "".join(
+                f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
+                f"<span>{html_escape(str(p))}</span></div>" for p in d_top)
+            _tip_extra = []
+            if d_appt:
+                _tip_extra.append(f"{d_appt} lịch hẹn")
+            if d_book:
+                _tip_extra.append(f"{d_book} phần sách")
+            if d_gundam:
+                _tip_extra.append(f"{d_gundam} phần Gundam")
+            if d_wc:
+                _tip_extra.append(f"{d_wc} từ ghi chú")
+            if _tip_extra:
+                _tip_lines += (f"<div class='rlcal-tip-line'><span class='rlcal-tip-dot'></span>"
+                                f"<span>{', '.join(_tip_extra)}</span></div>")
+            _anchor_h = "top:calc(100% + 8px);bottom:auto;" if row == 0 else "bottom:calc(100% + 8px);top:auto;"
+            _anchor_v = "right:-6px;left:auto;" if col >= 5 else "left:-6px;right:auto;"
+            _tip_html = (f"<div class='rlcal-tip' style='{_anchor_h}{_anchor_v}'>"
+                         f"<div class='rlcal-tip-hd'><span class='rlcal-tip-date'>{day_num:02d}/{cur_m:02d}/{cur_y}</span>"
+                         f"<span class='rlcal-tip-time'>{_fmt_hours_short(d_min / 60) if d_min > 0 else ''}</span></div>"
+                         f"{_tip_lines}</div>")
+            _href = f"?nav={quote('Hôm nay')}&day={cur_y:04d}-{cur_m:02d}-{day_num:02d}"
+            _link_html = f"<a class='rlcal-link' href='{_href}' target='_self'></a>"
+        cells_html += (
+            f"<div class='rlcal-cell{' has' if has else ''}' style='background:{bg};{_cell_border}'>"
+            f"{_link_html}"
+            f"<div class='rlcal-top'>{_time_html}"
+            f"<span class='rlcal-daynum' style='background:{_dn_bg};color:{_dn_color};'>{day_num if in_month else ''}</span></div>"
+            f"{_top_html}{_ic_html}{_tip_html}</div>"
+        )
+
+    st.markdown(RLCAL_CSS + REPCAL_CSS + f"<div class='rlcal-grid'>{dow_html}{cells_html}</div>", unsafe_allow_html=True)
+
+
+def frag_report_calendar_month(ns, df_all, wc_df, rl_df, notes_df, lo_ym=None, hi_ym=None, default_ym=None):
+    """Bản có stepper tháng (‹/mặc định/›) của _render_report_calendar_month(), dùng cho Báo cáo
+    Tổng quan/Năm -- nhánh Tháng gọi thẳng hàm kia vì đã có tháng chọn sẵn, không cần thêm điều
+    hướng. Cùng cơ chế session_state (khoá repcal_ym_<ns>) + tái dùng CSS .st-key-rlcal_stepper_
+    (khớp qua [class*=] nên áp được cho mọi ns) như _render_reading_calendar_month().
+
+    lo_ym/hi_ym mặc định None -> tự tính từ khoảng dữ liệu thật của 4 nguồn (df_all/wc_df/rl_df/
+    notes_df), kẹp trên bởi tháng hiện tại -- dùng cho Tổng quan (không giới hạn theo 1 năm cụ
+    thể). Nhánh Năm truyền lo_ym=(năm,1)/hi_ym=(năm, tháng cuối có nghĩa) để bó gọn điều hướng
+    đúng trong năm đang xem. default_ym mặc định None -> hi_ym."""
+    _today = _today_vn()
+    if lo_ym is None or hi_ym is None:
+        _all_dates = []
+        if not df_all.empty:
+            _all_dates += list(pd.to_datetime(df_all['Ngày']).dropna())
+        if wc_df is not None and not wc_df.empty:
+            _all_dates += list(wc_df['Thời gian bắt đầu'].dropna())
+        if rl_df is not None and not rl_df.empty:
+            _all_dates += list(rl_df['Ngày hoàn thành'].dropna())
+        if notes_df is not None and not notes_df.empty:
+            _all_dates += list(pd.to_datetime(notes_df['Ngày'], errors='coerce').dropna())
+        _ym = lambda d: (d.year, d.month)
+        _auto_lo = min((_ym(pd.Timestamp(d)) for d in _all_dates), default=_ym(_today))
+        _auto_hi = max([_ym(pd.Timestamp(d)) for d in _all_dates] + [_ym(_today)])
+        lo_ym = lo_ym or _auto_lo
+        hi_ym = hi_ym or _auto_hi
+    if default_ym is None:
+        default_ym = hi_ym
+
+    _skey = f"repcal_ym_{ns}"
+    if _skey not in st.session_state:
+        st.session_state[_skey] = default_ym
+    else:
+        st.session_state[_skey] = max(lo_ym, min(st.session_state[_skey], hi_ym))
+
+    def _clamp(ym):
+        return max(lo_ym, min(ym, hi_ym))
+
+    def _shift(delta):
+        y, m = st.session_state[_skey]
+        m += delta
+        if m < 1: y, m = y - 1, 12
+        elif m > 12: y, m = y + 1, 1
+        st.session_state[_skey] = _clamp((y, m))
+
+    def _goto_default():
+        st.session_state[_skey] = default_ym
+
+    cur_y, cur_m = st.session_state[_skey]
+    _default_label = "Hôm nay" if default_ym == (_today.year, _today.month) else "Mới nhất"
+
+    with st.container(key=f"rlcal_stepper_{ns}"):
+        c1, c2, c3, c4 = st.columns([6, 1, 1.4, 1], vertical_alignment="center")
+        with c1:
+            st.markdown(f"<div class='rlcal-title'>Tháng {cur_m}, {cur_y}</div>", unsafe_allow_html=True)
+        with c2:
+            st.button("", icon=":material/chevron_left:", key=f"repcal_prev_{ns}", on_click=_shift,
+                       args=(-1,), disabled=(cur_y, cur_m) <= lo_ym)
+        with c3:
+            st.button(_default_label, key=f"repcal_today_{ns}", on_click=_goto_default,
+                       disabled=(cur_y, cur_m) == default_ym)
+        with c4:
+            st.button("", icon=":material/chevron_right:", key=f"repcal_next_{ns}", on_click=_shift,
+                       args=(1,), disabled=(cur_y, cur_m) >= hi_ym)
+
+    _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df)
 
 
 def render_day_timeline(day_df):
@@ -6641,10 +6867,15 @@ def render_on_this_day(sel, df_all):
         qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
         note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
                       if notes.get(y) else '')
+        # Năm/Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó -- cùng pattern .jdate-link đã
+        # dùng ở Nhật ký tuần/tháng (xem render_notes_journal()), để sửa lại ghi chú năm cũ ngay từ
+        # đây thay vì phải tự gõ lại ngày ở trang Hôm nay.
+        _href = f"?nav={quote('Hôm nay')}&day={date(y, m, d):%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
+            f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
-            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
+            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div></a>"
             f"<div>{rec_html}{cal_html}{read_html}{chips_html}{qnote_html}{note_block}</div>"
             "</div>"
         )
@@ -10853,6 +11084,13 @@ elif nav == "Báo cáo":
     bc_sub = st.session_state["bc_sub"]
     st.query_params["sub"] = bc_sub
 
+    # Tải chung cho chương "Biểu đồ lịch" của Tổng quan/Tháng/Năm (frag_report_calendar_month/
+    # _render_report_calendar_month) -- cả 3 @st.cache_data nên gọi ở đây 1 lần không tốn thêm
+    # truy vấn thật dù sub-tab Tuần/Dự án không dùng tới.
+    _rc_wc = load_work_calendar()
+    _rc_rl = load_reading_log()
+    _rc_notes = load_notes()
+
     if bc_sub == "Tổng quan":
         if not df.empty:
             # Thẻ "Cập nhật gần nhất" đã dời sang trang Hôm nay (đuôi của card "Ngày đang
@@ -10882,7 +11120,7 @@ elif nav == "Báo cáo":
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
                 + _nudge_html,
-                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Biểu đồ lịch"),
+                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Lịch tháng"),
                  ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, "Tổng quan", tight_top=True)
 
@@ -10930,8 +11168,8 @@ elif nav == "Báo cáo":
             with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
-            sec_chapter("bc-tq-ch2", 2, "Biểu đồ lịch")
-            frag_calendar(df, "range_cal")
+            sec_chapter("bc-tq-ch2", 2, "Lịch tháng")
+            frag_report_calendar_month("bctq", df, _rc_wc, _rc_rl, _rc_notes)
             sec_chapter("bc-tq-ch3", 3, "Xu hướng")
             _tq_trend_view = st.segmented_control(
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
@@ -11115,10 +11353,9 @@ elif nav == "Báo cáo":
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
 
                 sec_chapter("bc-thang-ch2", 2, "Lịch tháng")
-                # Truyền CÙNG df_m cho cả 2 tham số -- đúng pattern lịch năm đã có
-                # (render_calendar_grid(df_y, df_y) ở nhánh Năm), lưới tự bó gọn theo đúng phạm vi
-                # tháng đang chọn, không kéo dài tới ngày hiện tại như khi truyền full df.
-                render_calendar_grid(df_m, df_m)
+                # Không cần stepper riêng (khác Tổng quan/Năm) -- tháng hiển thị LUÔN khớp tháng
+                # trang đang xem (y, m), người dùng đổi tháng qua period_stepper ở đầu trang.
+                _render_report_calendar_month(y, m, df, _rc_wc, _rc_rl, _rc_notes)
 
                 sec_chapter("bc-thang-ch3", 3, "Phân bổ nhóm")
                 frag_category_bars(df_m, "rad_tab3", "Nhóm")
@@ -11194,7 +11431,7 @@ elif nav == "Báo cáo":
                     (f"tính đến {_today_vn():%d/%m}" if _is_current_year_y else "tổng thời gian năm này"),
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
-                    [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Biểu đồ lịch"),
+                    [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Lịch tháng"),
                      ("bc-nam-ch3", "3 · Nhóm cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
                      ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
@@ -11209,12 +11446,15 @@ elif nav == "Báo cáo":
                 # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Nhóm cả năm/Theo
                 # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
                 # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
-                sec_chapter("bc-nam-ch2", 2, "Biểu đồ lịch")
-                # Truyền CÙNG df_y cho cả 2 tham số (không frag_calendar/range_radio) -- cùng
-                # pattern với chương "Lịch tháng" ở nhánh Tháng (render_calendar_grid(df_m, df_m))
-                # để lưới tự bó gọn theo đúng phạm vi năm đang chọn,
-                # không tự kéo dài tới ngày hiện tại như khi truyền full df làm full_df.
-                render_calendar_grid(df_y, df_y)
+                sec_chapter("bc-nam-ch2", 2, "Lịch tháng")
+                # Bó gọn điều hướng trong ĐÚNG năm đang xem (lo=tháng 1, hi=tháng 12 -- hoặc
+                # tháng hiện tại nếu đang xem năm nay, tránh hiện các tháng tương lai trống trơn),
+                # mặc định mở ngay ở hi (tháng cuối có nghĩa của năm đó).
+                _rc_y = int(selected_year)
+                _rc_hi_m = _today_vn().month if _rc_y == _today_vn().year else 12
+                frag_report_calendar_month(
+                    f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
+                    lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
 
                 sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
