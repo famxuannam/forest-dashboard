@@ -1,6 +1,6 @@
 -- Chạy 1 lần trong Supabase Dashboard -> SQL Editor -> New query -> Run.
--- Tạo 4 bảng lưu dữ liệu app (sessions/mapping/deleted_sessions/notes), cộng RLS mở
--- (app không có đăng nhập, chỉ dựa vào URL không công khai).
+-- Tạo toàn bộ bảng dữ liệu, RLS policy và bucket Storage của Forest Dashboard. App không có đăng
+-- nhập mặc định; các policy anon full CRUD bên dưới là quyết định dành riêng cho dashboard cá nhân.
 
 -- Lưu ý: dùng "timestamp" (KHÔNG timezone), không phải "timestamptz". Dữ liệu xuất từ Forest
 -- là giờ theo đồng hồ treo tường (wall-clock), không mang thông tin múi giờ -- app coi chuỗi

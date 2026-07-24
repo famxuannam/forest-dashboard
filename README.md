@@ -21,10 +21,14 @@ không lặp lại nội dung đó, chỉ ghi lại vài điểm kiến trúc ch
 ## Cấu trúc
 
 - `app.py` — toàn bộ ứng dụng.
-- `supabase_schema.sql` — schema các bảng (`sessions`, `mapping`, `deleted_sessions`, `notes`,
-  `work_calendar`, `reading_log`, `settings`).
+- `supabase_schema.sql` — schema đầy đủ: `sessions`, `mapping`, `deleted_sessions`, `notes`,
+  `quick_notes`, `work_calendar`, `reading_log`, `kindle_highlights`, `kindle_book_map`,
+  `deleted_kindle_highlights`, `settings`, `health_metrics`, `gundam_overrides`, và
+  `book_overrides`; đồng thời khai báo bucket Storage `sync-uploads`.
 - `.streamlit/config.toml` — theme sáng/tối; `.streamlit/secrets.toml.example` — mẫu các biến
   cần điền (chỉ `SUPABASE_URL`/`SUPABASE_KEY` là bắt buộc, còn lại đều tuỳ chọn).
+- `AGENTS.md` và `docs/` — hướng dẫn phát triển, kiến trúc, data layer, UI và kiểm thử cho
+  Codex/ChatGPT.
 
 ## Lưu ý
 
