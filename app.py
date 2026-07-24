@@ -1910,6 +1910,162 @@ def parse_forest_csv(uploaded):
     return df, stats, []
 
 
+_DAYONE_EMBED_RE = re.compile(r'!\[\]\(dayone-moment:[^)]*\)')  # ảnh/video/pdf đính kèm, xem docstring dưới
+_DAYONE_ESCAPE_RE = re.compile(r'\\([\\`*_{}\[\]()#+\-.!])')  # markdown escape Day One tự thêm (vd "\.", "\-")
+_DAYONE_OL_RE = re.compile(r'^(\t*)(\d+)\.\s+(.*)$')  # dòng list đánh số, \t đầu dòng = mức thụt lề
+_DAYONE_UL_RE = re.compile(r'^(\t*)[-*]\s+(.*)$')  # dòng list gạch đầu dòng, cùng quy ước thụt lề
+
+
+def _dayone_lines_to_blocks(lines):
+    """Gộp các dòng list liên tiếp (đánh số "1. ", gạch đầu dòng "- "/"\\* ", thụt lề bằng \\t) thành
+    khối <ol>/<ul> THẬT (khớp đúng HTML mà Quill dùng cho list, kể cả class "ql-indent-N" cho thụt
+    lề) thay vì chỉ hiện số/gạch đầu dòng như CHỮ THƯỜNG -- xác nhận với người dùng sau khi thấy bản
+    đầu (chỉ nối dòng bằng <br>) không ra list "chuẩn" (không thụt lề/định dạng như Quill vẫn dùng
+    cho ghi chú viết tay trong app). Dòng KHÔNG khớp list gộp thành 1 đoạn <p> nối bằng <br> như cũ.
+    Đổi loại list (ol<->ul) hoặc gặp dòng thường đều TỰ ngắt khối list đang gộp dở, không trộn lẫn
+    2 loại vào chung 1 <ol>/<ul>."""
+    blocks = []
+    buf_type = None  # 'ol' | 'ul' | 'p'
+    buf_items = []
+
+    def _flush():
+        nonlocal buf_type, buf_items
+        if not buf_items:
+            return
+        if buf_type == 'p':
+            blocks.append('<p>' + '<br>'.join(buf_items) + '</p>')
+        else:
+            lis = ''.join(f'<li class="ql-indent-{lvl}">{txt}</li>' if lvl else f'<li>{txt}</li>'
+                          for lvl, txt in buf_items)
+            blocks.append(f'<{buf_type}>{lis}</{buf_type}>')
+        buf_type, buf_items = None, []
+
+    for line in lines:
+        m_ol = _DAYONE_OL_RE.match(line)
+        m_ul = None if m_ol else _DAYONE_UL_RE.match(line)
+        if m_ol:
+            if buf_type != 'ol':
+                _flush()
+                buf_type = 'ol'
+            buf_items.append((len(m_ol.group(1)), m_ol.group(3)))
+        elif m_ul:
+            if buf_type != 'ul':
+                _flush()
+                buf_type = 'ul'
+            buf_items.append((len(m_ul.group(1)), m_ul.group(2)))
+        else:
+            if buf_type != 'p':
+                _flush()
+                buf_type = 'p'
+            buf_items.append(line)
+    _flush()
+    return ''.join(blocks)
+
+
+def _dayone_text_to_html(text):
+    """Chuyển trường "text" (markdown thô, ký tự đặc biệt đã được Day One tự escape bằng "\\") của
+    1 entry Day One sang HTML gọn để nhét thẳng vào ô ghi chú Quill, GIỮ ĐÚNG đậm/nghiêng/list. CHỈ
+    xử lý CHỮ -- ảnh/video/pdf đính kèm nhúng dạng "![](dayone-moment://...)" bị bỏ hẳn (đúng yêu
+    cầu chỉ nhập nội dung chữ, không nhập ảnh/file đính kèm); vị trí/thời tiết nằm ở trường JSON
+    riêng, không đọc tới nên không cần lọc ở đây.
+
+    THỨ TỰ xử lý trong mỗi đoạn CỐ Ý: (1) escape HTML thật (&/</>) -- không đụng `\`/`*`/`#`/`[]()`
+    nên an toàn làm trước; (2) bỏ link markdown `[chữ](url)` -- chỉ giữ lại phần chữ, bỏ hẳn URL
+    (thường là link nội bộ craftdocs://... không mở được ngoài app gốc, không có giá trị gì khi
+    nhập vào Ghi chú); (3) heading/**đậm**/*nghiêng* nhận diện dựa vào `*`/`#` KHÔNG có `\` phía
+    trước (markdown thật Day One không tự escape) -- làm TRƯỚC bước bỏ escape; (4) bỏ escape (`\.`,
+    `\-`, `\*`...) làm SAU CÙNG; (5) tách dòng, gộp list đánh số/gạch đầu dòng liên tiếp thành
+    <ol>/<ul> thật qua _dayone_lines_to_blocks() -- PHẢI làm SAU bước (4) vì list gạch đầu dòng
+    trong dữ liệu thật của Day One thường bị escape thành "\\- " (xem hàm đó). Đảo ngược thứ tự bước
+    (4) lên trước bước (3) sẽ biến 1 dấu `*` thoát nghĩa thật sự (vd chú thích chân trang `*text\*`)
+    thành ký tự markdown "trần", bị hiểu nhầm thành in nghiêng (bug đã gặp khi thử với dữ liệu mẫu
+    thật -- 1 số câu trích dẫn có dấu `*` cuối câu kiểu chú thích bị tô nghiêng sai). KHÔNG parse
+    đầy đủ CommonMark (bảng, list lồng nhiều cấp phức tạp...), đủ dùng cho nhật ký cá nhân chứ không
+    cần render y hệt app Day One."""
+    if not text:
+        return ''
+    text = _DAYONE_EMBED_RE.sub('', text)
+    text = text.replace('​', '')
+    text = text.strip()
+    if not text:
+        return ''
+    html_parts = []
+    for para in re.split(r'\n\s*\n', text):
+        para = para.strip('\n')
+        if not para.strip():
+            continue
+        para = html_escape(para)
+        para = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', para)
+        para = re.sub(r'^#{1,6}\s+(.+)$', r'<strong>\1</strong>', para, flags=re.MULTILINE)
+        para = re.sub(r'(?<!\\)\*\*(.+?)(?<!\\)\*\*', r'<strong>\1</strong>', para)
+        para = re.sub(r'(?<!\\)(?<!\*)\*(?!\*)(.+?)(?<!\\)(?<!\*)\*(?!\*)', r'<em>\1</em>', para)
+        para = _DAYONE_ESCAPE_RE.sub(r'\1', para)
+        html_parts.append(_dayone_lines_to_blocks(para.split('\n')))
+    return ''.join(html_parts)
+
+
+def parse_dayone_json(uploaded):
+    """Đọc file JSON xuất từ Day One (app Day One -> Export -> JSON). Trả về (dict {date: html},
+    error_msg). Gộp mọi entry CÙNG NGÀY (theo giờ Việt Nam, quy đổi từ "creationDate" UTC qua
+    APP_TZ -- đã đối chiếu với bản xuất Markdown của cùng dữ liệu mẫu để xác nhận quy đổi UTC->giờ
+    VN cho ra đúng ngày Day One hiển thị, kể cả entry "cả ngày" không giờ cụ thể) thành 1 khối, mỗi
+    entry có nhãn giờ nhỏ để phân biệt nếu 1 ngày có ≥2 entry. CHỈ lấy trường "text" (nội dung chữ)
+    -- bỏ hẳn ảnh/video/pdf đính kèm, vị trí, thời tiết (đúng yêu cầu chỉ nhập nội dung chữ)."""
+    try:
+        data = json.load(uploaded)
+    except Exception as e:
+        return None, f"File không đúng định dạng JSON: {e}"
+    entries = data.get("entries") if isinstance(data, dict) else None
+    if entries is None:
+        return None, "File JSON không có mục 'entries' -- không giống định dạng Day One xuất ra."
+    by_day = {}
+    for e in entries:
+        cd = e.get("creationDate")
+        if not cd:
+            continue
+        try:
+            ts = pd.Timestamp(cd)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            ts = ts.tz_convert(APP_TZ)
+        except Exception:
+            continue
+        html = _dayone_text_to_html(e.get("text") or "")
+        if not html:
+            continue
+        by_day.setdefault(ts.date(), []).append((ts.strftime("%H:%M"), html))
+    result = {}
+    for day, parts in by_day.items():
+        if len(parts) == 1:
+            result[day] = parts[0][1]
+        else:
+            result[day] = "".join(f"<p><strong>{t}</strong></p>{h}" for t, h in
+                                   sorted(parts, key=lambda p: p[0]))
+    return result, None
+
+
+def save_dayone_notes_bulk(day_texts):
+    """Upsert ghi chú cho đúng các ngày có trong day_texts (dict {date: html}) -- KHÁC
+    save_notes_bulk() (ghi đè TOÀN BỘ bảng notes, chỉ dùng cho Khôi phục): hàm này CHỈ đụng tới các
+    ngày đang import, mọi ngày khác trong bảng notes giữ nguyên. Nếu ngày đó đã có sẵn Ghi chú
+    (thường từ Forest) thì NỐI THÊM nội dung Day One vào cuối (không ghi đè) -- đúng yêu cầu người
+    dùng, tránh mất ghi chú cũ. Import 1 lần (không phải sync định kỳ như Reminder/Forest) nên
+    không cần cơ chế chống trùng phức tạp -- lỡ import 2 lần cùng file sẽ nối thêm 1 lần nữa, tự
+    sửa tay qua nút "Sửa" ở Ghi chú ngày nếu cần."""
+    sb = _get_supabase()
+    existing = load_notes()
+    existing_map = dict(zip(existing['Ngày'].astype(str), existing['Ghi chú'])) if not existing.empty else {}
+    recs = []
+    for day, html in day_texts.items():
+        key = str(day)
+        cur = existing_map.get(key, "")
+        merged = f"{cur}<p><br></p>{html}" if cur.strip() else html
+        recs.append({"note_date": key, "note": merged})
+    for i in range(0, len(recs), 500):
+        sb.table("notes").upsert(recs[i:i + 500], on_conflict="note_date").execute()
+    load_notes.clear()
+
+
 def parse_kindle_clippings(raw):
     """Đọc "My Clippings.txt" (định dạng xuất mặc định của mọi Kindle, xem "Cách xuất Clippings"
     trong tab Hướng dẫn) -- mỗi entry cách nhau bởi 1 dòng đúng 10 dấu "=", gồm: dòng 1 "Tên sách
@@ -10349,7 +10505,16 @@ def render_day_report(df):
         st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
         return
     active_days = sorted(df['Ngày'].dropna().unique())
-    sel = day_picker(active_days)
+    # day_picker() điều hướng theo "nav_days" RỘNG HƠN active_days -- gộp thêm mọi ngày CÓ ghi chú
+    # (vd Nhật ký Day One nhập cho các năm trước khi dùng Forest) để lịch chọn ngày/nút ◀▶ đi được
+    # tới cả những ngày chỉ có ghi chú, không có phiên. active_days (hẹp, chỉ ngày có phiên) vẫn
+    # giữ NGUYÊN cho billboard/nhãn "ngày hoạt động X/Y" bên dưới -- KHÔNG truyền nav_days vào đó,
+    # tránh làm sai lệch ý nghĩa "hoạt động" (có phiên tập trung) của con số đó.
+    _notes_all = load_notes()
+    _note_days = (set(pd.to_datetime(_notes_all['Ngày'], errors='coerce').dt.date.dropna())
+                  if not _notes_all.empty else set())
+    nav_days = sorted(set(active_days) | _note_days)
+    sel = day_picker(nav_days)
     day_df = df[df['Ngày'] == sel]
     vn_dow = VN_DAYS.get(pd.Timestamp(sel).day_name(), "")
     # Tính 1 lần ở đây (ngoài render_note_editor) rồi truyền list badge của đúng "sel" xuống --
@@ -11461,8 +11626,9 @@ elif nav == "Tuỳ biến":
                 st.rerun()
 
             with st.expander("Dự phòng", expanded=False):
-                _tab_forest, _tab_cal, _tab_rem, _tab_kindle = st.tabs(
-                    ["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder", "Tải trích dẫn Kindle"])
+                _tab_forest, _tab_cal, _tab_rem, _tab_kindle, _tab_dayone = st.tabs(
+                    ["Tải lên từ Forest", "Đồng bộ lịch", "Tải lên từ Reminder", "Tải trích dẫn Kindle",
+                     "Nhập Nhật ký Day One"])
                 with _tab_forest:
                     _msg = st.session_state.pop('import_msg', None)
                     if _msg:
@@ -11697,6 +11863,47 @@ elif nav == "Tuỳ biến":
                             save_kindle_book_map_upsert(_kmap_save)
                             st.session_state['kindle_map_save_msg'] = "Đã lưu ánh xạ mới."
                             st.rerun()
+
+                with _tab_dayone:
+                    _dmsg = st.session_state.pop('dayone_import_msg', None)
+                    if _dmsg:
+                        st.success(_dmsg)
+                    st.caption("Xuất từ Day One: mở entry bất kỳ → chọn Tất cả (Select All) → Chia sẻ → "
+                               "Xuất JSON. Chỉ đọc nội dung chữ (trường 'text') -- bỏ qua ảnh/video/file "
+                               "đính kèm, vị trí, thời tiết.")
+                    dayone_file = st.file_uploader("Tải lên file JSON từ Day One", type=["json"], key="dayone_file")
+                    if dayone_file:
+                        day_texts, _dayone_err = parse_dayone_json(dayone_file)
+                        if _dayone_err:
+                            st.error(_dayone_err)
+                        elif not day_texts:
+                            st.warning("Không đọc được nội dung chữ nào trong file (có thể toàn ảnh/video/file đính kèm).")
+                        else:
+                            _existing_notes = load_notes()
+                            _existing_days = set(_existing_notes['Ngày'].astype(str)) if not _existing_notes.empty else set()
+                            _days_sorted = sorted(day_texts.keys())
+                            _n_append = sum(1 for d in _days_sorted if str(d) in _existing_days)
+                            _n_new = len(_days_sorted) - _n_append
+                            st.caption(f"Đọc được nội dung cho **{len(_days_sorted)}** ngày "
+                                       f"({_days_sorted[0]:%d/%m/%Y} – {_days_sorted[-1]:%d/%m/%Y}) — "
+                                       f"**{_n_new}** ngày chưa có ghi chú, **{_n_append}** ngày đã có Ghi chú "
+                                       "sẵn (sẽ nối thêm nội dung Day One vào cuối, không ghi đè). Xem trước:")
+                            _strip_tags = re.compile(r'<[^>]+>')
+                            def _dayone_plain_preview(html, n=150):
+                                t = re.sub(r'\s+', ' ', _strip_tags.sub(' ', html)).strip()
+                                return t if len(t) <= n else t[:n] + '…'
+                            _dprev = pd.DataFrame({
+                                "Ngày": [f"{d:%d/%m/%Y}" for d in _days_sorted[:8]],
+                                "Trạng thái": ["Nối thêm" if str(d) in _existing_days else "Mới" for d in _days_sorted[:8]],
+                                "Xem trước": [_dayone_plain_preview(day_texts[d]) for d in _days_sorted[:8]],
+                            })
+                            st.dataframe(_dprev, width='stretch', hide_index=True)
+                            if st.button("Xác nhận nạp Nhật ký Day One", type="primary", key="tbtn_dayone_confirm"):
+                                save_dayone_notes_bulk(day_texts)
+                                st.session_state['dayone_import_msg'] = (
+                                    f"Đã nạp Nhật ký cho {len(_days_sorted)} ngày ({_n_new} ngày mới, "
+                                    f"{_n_append} ngày nối thêm vào ghi chú đã có).")
+                                st.rerun()
 
         sec_chapter("tb-ch2", 2, "Phân loại")
         with st.container(border=True, key="tb_mapping_card"):
