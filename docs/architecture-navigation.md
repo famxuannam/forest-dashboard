@@ -46,29 +46,16 @@ set trực tiếp từ phía JS.
   chuyển sang sub-tab B — xem gotcha `StreamlitAPIException` + cách fix đúng (cờ chờ xử lý, set
   TRƯỚC khi widget `segmented_control` instantiate) ở `ui-components.md`.
 
-## Nút "← Quay lại" (Báo cáo ngày/Báo cáo → Dự án): `from` mã hoá trong chính link nguồn
+## Link nhảy ngày/Dự án dùng chung 2 helper, không tự ghép chuỗi query riêng
 
-Trình duyệt Back không dùng được ở đây vì mọi link nội bộ (`.jdate-link`, `_entity_link_html()`)
-đều `target='_self'` nên mỗi cú click là 1 lượt điều hướng URL đầy đủ, không phải push-state kiểu
-SPA. Thay vì dựa vào lịch sử trình duyệt hay 1 ngăn xếp `session_state` (dễ vỡ khi mở tab mới/chia
-sẻ link/rerun do widget khác), giải pháp là để LINK NGUỒN tự mang theo "nơi nó đứng":
+- `_day_link_href(d)` — helper DUY NHẤT dựng href nhảy sang "Hôm nay" của ngày `d`; mọi nơi có
+  link nhảy ngày (ô lịch tháng, `.jdate-link` ở Nhật ký/"Ngày này năm trước") PHẢI gọi qua đây,
+  không tự ghép chuỗi `?nav=Hôm nay&day=...` riêng nữa.
+- `_entity_link_html(name, kind)` — 4 kind `"cat"`/`"proj"` (trỏ sang Báo cáo → Dự án) và
+  `"book"`/`"gundam"` (trỏ sang trang Sách/Gundam) — dùng chung cho MỌI nơi hiện tên có thể bấm.
 
-- `_from_param()` — đọc `st.query_params` hiện tại (trừ khoá `from` cũ nếu có, tránh lồng chuỗi
-  qua nhiều lượt click liên tiếp), mã hoá thành 1 giá trị `&from=...` gắn thêm vào href.
-- `_day_link_href(d)` — helper DUY NHẤT dựng href nhảy sang "Hôm nay" của ngày `d`, đã tự gắn
-  `from`; mọi nơi có link nhảy ngày (ô lịch tháng, `.jdate-link` ở Nhật ký/"Ngày này năm trước")
-  PHẢI gọi qua đây, không tự ghép chuỗi `?nav=Hôm nay&day=...` riêng nữa.
-- `_entity_link_html(name, kind)` — 2 kind `"cat"`/`"proj"` (trỏ sang Báo cáo → Dự án) tự gắn
-  `from`; 2 kind `"book"`/`"gundam"` (trỏ sang trang Sách/Gundam) KHÔNG gắn, vì 2 trang đó chưa có
-  nút Quay lại (chỉ 2 đích "Báo cáo ngày"/"Báo cáo → Dự án" mới cần, theo đúng yêu cầu ban đầu).
-- `_back_link_html()` — gọi ở ĐẦU `render_day_report()` và nhánh `bc_sub == "Dự án"`: đọc lại
-  `st.query_params.get("from")`, không có thì trả `""` (không đổi gì, giữ hành vi cũ khi vào thẳng
-  qua menu nav); có thì trả 1 thẻ `<a class='back-crumb'>← Quay lại <nav gốc>[· <sub gốc>]</a>` trỏ
-  thẳng về `from` — nhãn tự đọc lại `nav`/`sub` từ chính chuỗi `from` (không cần bảng ánh xạ tên
-  riêng), luôn đặt trên cùng nội dung trang, trước cả billboard/stepper.
-
-Thêm 1 link mới nhảy sang "Hôm nay" hoặc "Báo cáo → Dự án": dùng lại `_day_link_href()`/
-`_entity_link_html()` sẵn có — không tự ghép `&from=` tay ở nơi gọi.
+App từng có nút "← Quay lại" (breadcrumb) ở đầu Báo cáo ngày/Báo cáo → Dự án khi tới từ 1 link nội
+bộ — đã bỏ vì phá bố cục trang; không còn `from`/`_back_link_html()` trong code.
 
 ## Việc cần làm khi thêm 1 trang/sub-tab mới
 

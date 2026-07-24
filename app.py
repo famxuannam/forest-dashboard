@@ -3616,44 +3616,11 @@ def _chip_row_html(heading, chips_html):
     return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
 
 
-def _from_param():
-    """Chuỗi query string (đã mã hoá 1 lớp qua quote(..., safe="")) đại diện cho trang HIỆN TẠI --
-    gắn vào link nhảy sang Báo cáo ngày/Báo cáo → Dự án dưới dạng "&from=..." để trang đích hiện
-    được nút "← Quay lại" (xem _back_link_html()). Đọc thẳng st.query_params tại thời điểm trang
-    NGUỒN render nên luôn phản ánh đúng vị trí đang đứng, kể cả sau khi vài widget trong trang đã
-    tự đồng bộ thêm query_params riêng (vd bc_sub/month_pick) -- loại bỏ "from" cũ (nếu có, tới
-    từ 1 cú nhảy trước đó) để không lồng nhau ngày càng dài qua nhiều lượt bấm link liên tiếp."""
-    _qp = {k: v for k, v in st.query_params.items() if k != "from"}
-    _qs = "&".join(f"{quote(k)}={quote(str(v))}" for k, v in _qp.items())
-    return quote(f"?{_qs}", safe="")
-
-
-def _back_link_html():
-    """Nút "← Quay lại" đặt trên cùng Báo cáo ngày (trang Hôm nay)/Báo cáo → Dự án -- chỉ hiện
-    khi tới từ 1 link có gắn "&from=" (xem _from_param()), vào thẳng qua menu thì không có gì đổi.
-    Nhãn lấy từ chính nav/sub của trang nguồn (luôn có sẵn trong "from", không cần 1 bảng ánh xạ
-    tên riêng) -- vd "← Quay lại Báo cáo · Tuần"."""
-    _from = st.query_params.get("from")
-    if not _from:
-        return ""
-    try:
-        _origin = parse_qs(_from.lstrip("?"))
-        _label = _origin.get("nav", [""])[0]
-        _sub = _origin.get("sub", [""])[0]
-    except Exception:
-        return ""
-    if not _label:
-        return ""
-    if _sub:
-        _label += f" · {_sub}"
-    return f"<a class='back-crumb' href='{_from}' target='_self'>← Quay lại {html_escape(_label)}</a>"
-
-
 def _day_link_href(d):
-    """URL nhảy tới Báo cáo ngày (trang "Hôm nay") của ngày d (date/Timestamp), kèm "&from=" (xem
-    _from_param()) để trang đích hiện được nút "← Quay lại" -- dùng chung cho MỌI nơi có link
-    nhảy ngày kiểu .jdate-link/ô lịch tháng trong app, thay vì mỗi nơi tự dựng chuỗi riêng."""
-    return f"?nav={quote('Hôm nay')}&day={pd.Timestamp(d):%Y-%m-%d}&from={_from_param()}"
+    """URL nhảy tới Báo cáo ngày (trang "Hôm nay") của ngày d (date/Timestamp) -- dùng chung
+    cho MỌI nơi có link nhảy ngày kiểu .jdate-link/ô lịch tháng trong app, thay vì mỗi nơi tự
+    dựng chuỗi riêng."""
+    return f"?nav={quote('Hôm nay')}&day={pd.Timestamp(d):%Y-%m-%d}"
 
 
 def _entity_link_html(name, kind, label=None):
@@ -3667,9 +3634,9 @@ def _entity_link_html(name, kind, label=None):
     _label = label if label is not None else html_escape(str(name))
     _n = quote(str(name))
     if kind == "cat":
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=cat&grp={_n}&from={_from_param()}"
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=cat&grp={_n}"
     elif kind == "proj":
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=proj&grp={_n}&from={_from_param()}"
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=proj&grp={_n}"
     elif kind == "book":
         _href = f"?nav={quote('Nhật ký đọc sách')}&book={_n}"
     elif kind == "gundam":
@@ -9585,12 +9552,6 @@ _MAIN_CSS = """
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     .jdate { text-align: center; }
-    /* Nút "← Quay lại" đầu Báo cáo ngày/Báo cáo → Dự án khi tới từ 1 link có &from= (xem
-       _back_link_html()) -- breadcrumb chữ nhỏ, KHÔNG viền/nền, đứng trên cùng nội dung trang,
-       trước cả stepper ngày/billboard, để không cạnh tranh với điều hướng đã có sẵn của trang. */
-    .back-crumb { display: inline-flex; align-items: center; gap: 5px; font-size: 13px;
-        font-weight: 600; color: var(--text-2); text-decoration: none; margin-bottom: 12px; }
-    .back-crumb:hover { color: var(--accent); }
     .jdate { text-align: center; }
     /* Tên Dự án/Nhóm/Sách/Gundam có thể bấm (Bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline,
        chip Kỷ lục, bảng Phân loại) -- nhảy tới đúng trang chi tiết đã chọn sẵn (xem
@@ -10786,9 +10747,6 @@ def render_day_report(df):
     if df.empty:
         st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
         return
-    _back_html = _back_link_html()
-    if _back_html:
-        st.markdown(_back_html, unsafe_allow_html=True)
     active_days = sorted(df['Ngày'].dropna().unique())
     # day_picker() điều hướng theo "nav_days" RỘNG HƠN active_days -- gộp thêm mọi ngày CÓ ghi chú
     # (vd Nhật ký Day One nhập cho các năm trước khi dùng Forest) để lịch chọn ngày/nút ◀▶ đi được
@@ -11520,9 +11478,6 @@ elif nav == "Báo cáo":
                 render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
-            _back_html = _back_link_html()
-            if _back_html:
-                st.markdown(_back_html, unsafe_allow_html=True)
             # Gom dự án theo nhóm (Nhóm) và phân biệt rõ Nhóm vs Dự án trong dropdown
             proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
             # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách hoặc ĐÃ là 1 series Gundam theo dõi
