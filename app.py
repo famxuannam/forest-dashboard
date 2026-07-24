@@ -18,7 +18,7 @@ import random
 from itertools import groupby
 from html import escape as html_escape, unescape as html_unescape
 from datetime import date, datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, parse_qs
 from zoneinfo import ZoneInfo
 from streamlit_quill import st_quill
 from supabase import create_client
@@ -3616,6 +3616,46 @@ def _chip_row_html(heading, chips_html):
     return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
 
 
+def _from_param():
+    """Chuỗi query string (đã mã hoá 1 lớp qua quote(..., safe="")) đại diện cho trang HIỆN TẠI --
+    gắn vào link nhảy sang Báo cáo ngày/Báo cáo → Dự án dưới dạng "&from=..." để trang đích hiện
+    được nút "← Quay lại" (xem _back_link_html()). Đọc thẳng st.query_params tại thời điểm trang
+    NGUỒN render nên luôn phản ánh đúng vị trí đang đứng, kể cả sau khi vài widget trong trang đã
+    tự đồng bộ thêm query_params riêng (vd bc_sub/month_pick) -- loại bỏ "from" cũ (nếu có, tới
+    từ 1 cú nhảy trước đó) để không lồng nhau ngày càng dài qua nhiều lượt bấm link liên tiếp."""
+    _qp = {k: v for k, v in st.query_params.items() if k != "from"}
+    _qs = "&".join(f"{quote(k)}={quote(str(v))}" for k, v in _qp.items())
+    return quote(f"?{_qs}", safe="")
+
+
+def _back_link_html():
+    """Nút "← Quay lại" đặt trên cùng Báo cáo ngày (trang Hôm nay)/Báo cáo → Dự án -- chỉ hiện
+    khi tới từ 1 link có gắn "&from=" (xem _from_param()), vào thẳng qua menu thì không có gì đổi.
+    Nhãn lấy từ chính nav/sub của trang nguồn (luôn có sẵn trong "from", không cần 1 bảng ánh xạ
+    tên riêng) -- vd "← Quay lại Báo cáo · Tuần"."""
+    _from = st.query_params.get("from")
+    if not _from:
+        return ""
+    try:
+        _origin = parse_qs(_from.lstrip("?"))
+        _label = _origin.get("nav", [""])[0]
+        _sub = _origin.get("sub", [""])[0]
+    except Exception:
+        return ""
+    if not _label:
+        return ""
+    if _sub:
+        _label += f" · {_sub}"
+    return f"<a class='back-crumb' href='{_from}' target='_self'>← Quay lại {html_escape(_label)}</a>"
+
+
+def _day_link_href(d):
+    """URL nhảy tới Báo cáo ngày (trang "Hôm nay") của ngày d (date/Timestamp), kèm "&from=" (xem
+    _from_param()) để trang đích hiện được nút "← Quay lại" -- dùng chung cho MỌI nơi có link
+    nhảy ngày kiểu .jdate-link/ô lịch tháng trong app, thay vì mỗi nơi tự dựng chuỗi riêng."""
+    return f"?nav={quote('Hôm nay')}&day={pd.Timestamp(d):%Y-%m-%d}&from={_from_param()}"
+
+
 def _entity_link_html(name, kind, label=None):
     """1 thẻ <a target=_self> nhảy tới đúng trang chi tiết Nhóm/Dự án/Sách/Gundam -- dùng chung
     cho MỌI nơi hiện tên có thể bấm (bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline...). Đích
@@ -3627,9 +3667,9 @@ def _entity_link_html(name, kind, label=None):
     _label = label if label is not None else html_escape(str(name))
     _n = quote(str(name))
     if kind == "cat":
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=cat&grp={_n}"
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=cat&grp={_n}&from={_from_param()}"
     elif kind == "proj":
-        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=proj&grp={_n}"
+        _href = f"?nav={quote('Báo cáo')}&sub={quote('Dự án')}&kind=proj&grp={_n}&from={_from_param()}"
     elif kind == "book":
         _href = f"?nav={quote('Nhật ký đọc sách')}&book={_n}"
     elif kind == "gundam":
@@ -5077,7 +5117,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
                          f"<div class='rlcal-tip-hd'><span class='rlcal-tip-date'>{day_num:02d}/{cur_m:02d}/{cur_y}</span>"
                          f"<span class='rlcal-tip-time'>{_fmt_hours_short(d_min / 60) if d_min > 0 else ''}</span></div>"
                          f"{_tip_lines}{_tip_q}</div>")
-            _href = f"?nav={quote('Hôm nay')}&day={cur_y:04d}-{cur_m:02d}-{day_num:02d}"
+            _href = _day_link_href(date(cur_y, cur_m, day_num))
             _link_html = f"<a class='rlcal-link' href='{_href}' target='_self'></a>"
         cells_html += (
             f"<div class='rlcal-cell{' has' if has else ''}' style='background:{bg};{_cell_border}'>"
@@ -5233,7 +5273,7 @@ def _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df):
                          f"<div class='rlcal-tip-hd'><span class='rlcal-tip-date'>{day_num:02d}/{cur_m:02d}/{cur_y}</span>"
                          f"<span class='rlcal-tip-time'>{_fmt_hours_short(d_min / 60) if d_min > 0 else ''}</span></div>"
                          f"{_tip_lines}</div>")
-            _href = f"?nav={quote('Hôm nay')}&day={cur_y:04d}-{cur_m:02d}-{day_num:02d}"
+            _href = _day_link_href(date(cur_y, cur_m, day_num))
             _link_html = f"<a class='rlcal-link' href='{_href}' target='_self'></a>"
         cells_html += (
             f"<div class='rlcal-cell{' has' if has else ''}' style='background:{bg};{_cell_border}'>"
@@ -5753,7 +5793,7 @@ def render_notes_journal(period_key, kind, df_all):
                          else _note_body)
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
-        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
+        _href = _day_link_href(d)
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -6397,7 +6437,7 @@ def render_search():
         note_html = ''
         if not nd.empty and d in set(nd['_d']):
             note_html = f"<div class='note-html'>{_highlight(_note_snippet(nd[nd['_d'] == d].iloc[0]['Ghi chú'], qq), qq)}</div>"
-        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
+        _href = _day_link_href(d)
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -6520,7 +6560,7 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
             if _mins > 0:
                 chips_html += (f"<span class='jchip'><span class='ck'>Thời gian</span>"
                               f"<span class='cv'>{int(_mins)}′</span></span>")
-        _href = f"?nav={quote('Hôm nay')}&day={d:%Y-%m-%d}"
+        _href = _day_link_href(d)
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -6870,7 +6910,7 @@ def render_on_this_day(sel, df_all):
         # Năm/Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó -- cùng pattern .jdate-link đã
         # dùng ở Nhật ký tuần/tháng (xem render_notes_journal()), để sửa lại ghi chú năm cũ ngay từ
         # đây thay vì phải tự gõ lại ngày ở trang Hôm nay.
-        _href = f"?nav={quote('Hôm nay')}&day={date(y, m, d):%Y-%m-%d}"
+        _href = _day_link_href(date(y, m, d))
         rows_html += (
             "<div class='jrow'>"
             f"<a class='jdate-link' href='{_href}' target='_self'>"
@@ -9283,12 +9323,11 @@ _MAIN_CSS = """
        tận gốc (chiều cao đó Streamlit tự đo, không lộ ra CSS var/inline style để ép lại), nên bù
        thêm đúng phần hụt đó vào padding mong muốn (16px hiển thị + ~16px hụt = 32px khai báo) --
        đã đo lại bằng Playwright xác nhận khoảng cách hiển thị ra đúng ~16px sau khi bù. */
-    /* Lịch "Lịch tháng" ở Báo cáo Tổng quan/Tháng/Năm (frag_report_calendar_month/
-       _render_report_calendar_month) dùng CHUNG .rlcal-grid -- cùng lỗi/cùng cách bù hụt chiều
+    /* Lịch "Lịch tháng" ở Báo cáo Tháng/Năm (_render_report_calendar_month/
+       frag_report_calendar_month) dùng CHUNG .rlcal-grid -- cùng lỗi/cùng cách bù hụt chiều
        cao như trên. */
     [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"],
-    [class*="st-key-jcard_bctq_cal"], [class*="st-key-jcard_bcthang_cal"],
-    [class*="st-key-jcard_bcnam_cal"] {
+    [class*="st-key-jcard_bcthang_cal"], [class*="st-key-jcard_bcnam_cal"] {
         padding-bottom: 32px !important;
     }
 
@@ -9545,6 +9584,13 @@ _MAIN_CSS = """
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
+    .jdate { text-align: center; }
+    /* Nút "← Quay lại" đầu Báo cáo ngày/Báo cáo → Dự án khi tới từ 1 link có &from= (xem
+       _back_link_html()) -- breadcrumb chữ nhỏ, KHÔNG viền/nền, đứng trên cùng nội dung trang,
+       trước cả stepper ngày/billboard, để không cạnh tranh với điều hướng đã có sẵn của trang. */
+    .back-crumb { display: inline-flex; align-items: center; gap: 5px; font-size: 13px;
+        font-weight: 600; color: var(--text-2); text-decoration: none; margin-bottom: 12px; }
+    .back-crumb:hover { color: var(--accent); }
     .jdate { text-align: center; }
     /* Tên Dự án/Nhóm/Sách/Gundam có thể bấm (Bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline,
        chip Kỷ lục, bảng Phân loại) -- nhảy tới đúng trang chi tiết đã chọn sẵn (xem
@@ -10740,6 +10786,9 @@ def render_day_report(df):
     if df.empty:
         st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
         return
+    _back_html = _back_link_html()
+    if _back_html:
+        st.markdown(_back_html, unsafe_allow_html=True)
     active_days = sorted(df['Ngày'].dropna().unique())
     # day_picker() điều hướng theo "nav_days" RỘNG HƠN active_days -- gộp thêm mọi ngày CÓ ghi chú
     # (vd Nhật ký Day One nhập cho các năm trước khi dùng Forest) để lịch chọn ngày/nút ◀▶ đi được
@@ -11125,8 +11174,8 @@ elif nav == "Báo cáo":
                 "<div class='pbill-title'>Nhìn lại tất cả thời gian đã trồng</div>"
                 "<div class='pbill-sub'>Số liệu tổng hợp từ ngày đầu dùng Forest tới nay.</div>"
                 + _nudge_html,
-                [("bc-tq-ch1", "1 · Tổng quan"), ("bc-tq-ch2", "2 · Lịch tháng"),
-                 ("bc-tq-ch3", "3 · Xu hướng"), ("bc-tq-ch4", "4 · Bảng số liệu")])
+                [("bc-tq-ch1", "1 · Tổng quan"),
+                 ("bc-tq-ch2", "2 · Xu hướng"), ("bc-tq-ch3", "3 · Bảng số liệu")])
             sec_chapter("bc-tq-ch1", 1, "Tổng quan", tight_top=True)
 
             by_wd = _weekday_avg(df)
@@ -11173,10 +11222,7 @@ elif nav == "Báo cáo":
             with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
-            sec_chapter("bc-tq-ch2", 2, "Lịch tháng")
-            with st.container(border=True, key="jcard_bctq_cal"):
-                frag_report_calendar_month("bctq", df, _rc_wc, _rc_rl, _rc_notes)
-            sec_chapter("bc-tq-ch3", 3, "Xu hướng")
+            sec_chapter("bc-tq-ch2", 2, "Xu hướng")
             _tq_trend_view = st.segmented_control(
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
                 key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
@@ -11184,7 +11230,7 @@ elif nav == "Báo cáo":
                 frag_trend(df, "trend_main", "Nhóm")
             else:
                 frag_hourly(df, "hour_main", "Nhóm")
-            sec_chapter("bc-tq-ch4", 4, "Bảng số liệu")
+            sec_chapter("bc-tq-ch3", 3, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
             st.info("Chưa có dữ liệu nào cả. Xin sang tab 'Tuỳ biến' để tải dữ liệu lên trước.")
@@ -11474,6 +11520,9 @@ elif nav == "Báo cáo":
                 render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
+            _back_html = _back_link_html()
+            if _back_html:
+                st.markdown(_back_html, unsafe_allow_html=True)
             # Gom dự án theo nhóm (Nhóm) và phân biệt rõ Nhóm vs Dự án trong dropdown
             proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
             # Dự án nào ĐÃ là 1 cuốn sách theo dõi ở trang Sách hoặc ĐÃ là 1 series Gundam theo dõi
@@ -12514,7 +12563,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12539
+    _help_latest_date, _help_latest_lines = "24/07/2026", 13281
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -12995,6 +13044,52 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
+        dict(pr="281-285", date="24/07/2026", pr_lines=297, total_lines=13281,
+             title="Nhập Nhật ký Day One, Lịch tháng mới ở Báo cáo, nút Quay lại + cập nhật tài liệu",
+             bullets=[
+                 "**Nhập Nhật ký Day One** (Tuỳ biến → Dữ liệu đầu vào → Dự phòng) — đọc file JSON "
+                 "xuất từ Day One, giữ đúng định dạng **đậm**/*nghiêng*/list (kể cả lồng cấp), bỏ "
+                 "ảnh/link nội bộ, gộp nhiều mục cùng ngày, nối vào ghi chú Forest đã có nếu trùng "
+                 "ngày thay vì ghi đè. Mở khoá luôn việc chọn/gõ ghi chú cho ngày quá khứ chưa từng "
+                 "có phiên Forest nào (trang Hôm nay).",
+                 "**\"Biểu đồ lịch\" ở Báo cáo Tháng/Năm đổi thành \"Lịch tháng\" dạng lưới** (cùng "
+                 "kiểu component với Nhật ký đọc Sách/Gundam) — mỗi ô ngày hiện tổng thời gian tập "
+                 "trung, tối đa 2 chip Dự án nhiều giờ nhất, và 1 hàng icon số lịch hẹn/phần sách/"
+                 "phần Gundam/số từ ghi chú chính. Bỏ hẳn khỏi Báo cáo Tổng quan (dư thừa ở trang "
+                 "tổng hợp toàn thời gian).",
+                 "**Mỗi năm ở \"Ngày này năm trước\" giờ là link nhảy thẳng tới Báo cáo ngày** của "
+                 "đúng ngày đó, để sửa lại ghi chú cũ không cần tự tìm lại.",
+                 "**Nút \"← Quay lại\" cho Báo cáo ngày/Báo cáo → Dự án** — click 1 link nội bộ (tên "
+                 "Dự án, ngày trong Nhật ký...) tới 2 trang này giờ hiện được đường quay lại đúng nơi "
+                 "xuất phát, không phụ thuộc nút Back trình duyệt (vốn không hoạt động vì mọi link "
+                 "nội bộ đều tải lại toàn trang).",
+                 "Cùng 1 sửa lỗi: màu phân trang (`st.pagination`) đọc được trên Bảng màu nền đậm ở "
+                 "light theme; và rà soát lại CLAUDE.md/tài liệu `.claude/docs/` cho khớp code hiện "
+                 "tại.",
+             ]),
+        dict(pr="276-280", date="23/07/2026", pr_lines=237, total_lines=12713,
+             title="Trục \"Độ rộng nội dung\" cho màn hình lớn, chip Liền mạch, tối ưu backend + dọn lỗi nhỏ",
+             bullets=[
+                 "**Thêm trục \"Độ rộng nội dung\"** (Tuỳ biến → Giao diện, 4 mức 1100/1300/1500/"
+                 "1700px) — màn hình lớn (27\"/32\" 4K–5K) trước đây cột nội dung chỉ chiếm ~23–31% "
+                 "chiều ngang; đồng bộ luôn vị trí 2 nút nổi \"Về đầu trang\"/\"Đồng bộ nhanh\" theo "
+                 "đúng mép cột mới.",
+                 "**Chia 2 cột Trích dẫn/Ghi chú ở độ rộng lớn** (≥1500px) — trang Trích dẫn chia "
+                 "theo khối lượng (thuật toán tham lam) thay vì xen kẽ trái-phải cứng nhắc, tránh "
+                 "khoảng trống rộng; sửa màu chữ tên sách/tác giả bị lẫn nền trên các Bảng màu nền "
+                 "tối cố định.",
+                 "**Chip \"Liền mạch\" ở trang Hôm nay** (ngày có ≥2 phiên) — khối tập trung liền "
+                 "mạch dài nhất + khoảng nghỉ dài nhất trong ngày, tính từ giờ kết thúc phiên đã có "
+                 "sẵn.",
+                 "**Tối ưu backend**: mọi lệnh lưu/sửa/xoá giờ chỉ xoá cache đúng bảng liên quan thay "
+                 "vì xoá sạch cache cả 14 bảng; thêm cache 60 giây cho việc kiểm tra file Đồng bộ "
+                 "nhanh đang chờ (bớt 1 round-trip Supabase Storage mỗi lần tương tác); gộp logic "
+                 "merge CSV Forest dùng chung cho Đồng bộ nhanh và tải tay; vectorize 2 chỗ tính theo "
+                 "từng dòng dữ liệu.",
+                 "Cùng vài sửa nhỏ: lỗi dọn file đồng bộ cũ bị nuốt im lặng giờ báo lại qua kết quả "
+                 "đồng bộ, thống nhất màu delta trung tính theo theme, \"Yếu nhất theo thứ\" chỉ xét "
+                 "thứ có giờ hoạt động thật.",
+             ]),
         dict(pr="264-275", date="22/07/2026", pr_lines=62, total_lines=12539,
              title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 5 sửa tương phản/spacing/tooltip/ghi chú nhanh",
              bullets=[
