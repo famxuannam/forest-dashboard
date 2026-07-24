@@ -4383,13 +4383,17 @@ def _render_reading_quotes_teaser(n=3):
         else:
             col_b.append(card_html)
             weight_b += weight
-    c1, c2 = st.columns(2, gap="medium")
-    with c1:
-        for card_html in col_a:
-            st.markdown(card_html, unsafe_allow_html=True)
-    with c2:
-        for card_html in col_b:
-            st.markdown(card_html, unsafe_allow_html=True)
+    # key="kq_teaser_cols" -- neo cho rule CSS [class*="st-key-kq_teaser_cols"] (khối CSS chính,
+    # nhánh @media max-width:640px) ép khoảng cách ĐỀU giữa mọi thẻ khi 2 cột nhập thành 1 trên
+    # mobile, xem rule đó để biết vì sao cần ép tay.
+    with st.container(key="kq_teaser_cols"):
+        c1, c2 = st.columns(2, gap="medium")
+        with c1:
+            for card_html in col_a:
+                st.markdown(card_html, unsafe_allow_html=True)
+        with c2:
+            for card_html in col_b:
+                st.markdown(card_html, unsafe_allow_html=True)
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
@@ -9226,6 +9230,16 @@ _MAIN_CSS = """
         /* Khi cột xếp dọc trên mobile, bỏ giãn đều chiều cao và tạo khoảng cách giữa các ô */
         [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
         [data-testid="stColumn"] { margin-bottom: 12px !important; }
+        /* "kq_teaser_cols" (2 cột Trích dẫn & Ghi chú ở Sách -> Tổng quan, xem
+           _render_reading_quotes_teaser()) -- rule margin-bottom:12px chung ở trên CỘNG THÊM
+           row-gap 32px của chính st.columns(gap="medium") (Streamlit tự set trên
+           stHorizontalBlock, đổi thành row-gap khi flex-wrap xuống 1 cột) ra tổng 44px giữa 2
+           THẺ Ở RANH GIỚI CỘT, trong khi 2 thẻ CÙNG 1 cột chỉ cách nhau 10px (gap mặc định của
+           stVerticalBlock, xem rule [data-testid="stVerticalBlock"] { gap:10px } phía dưới) --
+           khoảng cách không đều giữa các thẻ trích dẫn khi 2 cột nhập 1 (bug thật đã gặp, xem ảnh
+           chụp người dùng gửi). Ép cả 2 nguồn khoảng cách về đúng 10px cho khớp. */
+        [class*="st-key-kq_teaser_cols"] [data-testid="stHorizontalBlock"] { row-gap: 0 !important; }
+        [class*="st-key-kq_teaser_cols"] [data-testid="stColumn"] { margin-bottom: 10px !important; }
 
         /* Bảng tổng quan gọn: hero xếp 2 cột, bỏ vạch ngăn dọc */
         .stat-panel .sp-hi { border-right: none !important; min-width: 45% !important; padding: 6px 8px !important; }
@@ -9396,7 +9410,9 @@ _MAIN_CSS = """
        trích dẫn 1 thẻ .quotes-card riêng (nền/viền/bo góc/bóng dùng chung với các card thanh ngang
        khác như .catbars-card), ghi chú cá nhân lồng dưới thụt lề trái có vạch màu (giống nháp tay
        viết cạnh câu trích). Desktop chia 2 thẻ vào 2 st.columns() theo thuật toán tham lam (xem
-       Python), mobile st.columns() tự co về 1 cột -- không cần column-count/media query riêng. */
+       Python), mobile st.columns() tự co về 1 cột -- không cần column-count riêng, nhưng CẦN 1
+       rule khoảng cách riêng (key "kq_teaser_cols", xem @media max-width:640px phía trên) để đều
+       khoảng cách giữa các thẻ khi 2 cột nhập 1. */
     .quotes-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
         padding: 6px 18px; box-shadow: var(--card-shadow); }
     .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); break-inside: avoid; }
