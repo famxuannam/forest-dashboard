@@ -9283,7 +9283,12 @@ _MAIN_CSS = """
        tận gốc (chiều cao đó Streamlit tự đo, không lộ ra CSS var/inline style để ép lại), nên bù
        thêm đúng phần hụt đó vào padding mong muốn (16px hiển thị + ~16px hụt = 32px khai báo) --
        đã đo lại bằng Playwright xác nhận khoảng cách hiển thị ra đúng ~16px sau khi bù. */
-    [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"] {
+    /* Lịch "Lịch tháng" ở Báo cáo Tổng quan/Tháng/Năm (frag_report_calendar_month/
+       _render_report_calendar_month) dùng CHUNG .rlcal-grid -- cùng lỗi/cùng cách bù hụt chiều
+       cao như trên. */
+    [class*="st-key-jcard_sach_journal"], [class*="st-key-jcard_gundam_journal"],
+    [class*="st-key-jcard_bctq_cal"], [class*="st-key-jcard_bcthang_cal"],
+    [class*="st-key-jcard_bcnam_cal"] {
         padding-bottom: 32px !important;
     }
 
@@ -11169,7 +11174,8 @@ elif nav == "Báo cáo":
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
 
             sec_chapter("bc-tq-ch2", 2, "Lịch tháng")
-            frag_report_calendar_month("bctq", df, _rc_wc, _rc_rl, _rc_notes)
+            with st.container(border=True, key="jcard_bctq_cal"):
+                frag_report_calendar_month("bctq", df, _rc_wc, _rc_rl, _rc_notes)
             sec_chapter("bc-tq-ch3", 3, "Xu hướng")
             _tq_trend_view = st.segmented_control(
                 "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
@@ -11355,7 +11361,8 @@ elif nav == "Báo cáo":
                 sec_chapter("bc-thang-ch2", 2, "Lịch tháng")
                 # Không cần stepper riêng (khác Tổng quan/Năm) -- tháng hiển thị LUÔN khớp tháng
                 # trang đang xem (y, m), người dùng đổi tháng qua period_stepper ở đầu trang.
-                _render_report_calendar_month(y, m, df, _rc_wc, _rc_rl, _rc_notes)
+                with st.container(border=True, key="jcard_bcthang_cal"):
+                    _render_report_calendar_month(y, m, df, _rc_wc, _rc_rl, _rc_notes)
 
                 sec_chapter("bc-thang-ch3", 3, "Phân bổ nhóm")
                 frag_category_bars(df_m, "rad_tab3", "Nhóm")
@@ -11452,9 +11459,10 @@ elif nav == "Báo cáo":
                 # mặc định mở ngay ở hi (tháng cuối có nghĩa của năm đó).
                 _rc_y = int(selected_year)
                 _rc_hi_m = _today_vn().month if _rc_y == _today_vn().year else 12
-                frag_report_calendar_month(
-                    f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
-                    lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
+                with st.container(border=True, key="jcard_bcnam_cal"):
+                    frag_report_calendar_month(
+                        f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
+                        lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
 
                 sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
