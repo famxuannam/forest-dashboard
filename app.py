@@ -1912,24 +1912,76 @@ def parse_forest_csv(uploaded):
 
 _DAYONE_EMBED_RE = re.compile(r'!\[\]\(dayone-moment:[^)]*\)')  # ảnh/video/pdf đính kèm, xem docstring dưới
 _DAYONE_ESCAPE_RE = re.compile(r'\\([\\`*_{}\[\]()#+\-.!])')  # markdown escape Day One tự thêm (vd "\.", "\-")
+_DAYONE_OL_RE = re.compile(r'^(\t*)(\d+)\.\s+(.*)$')  # dòng list đánh số, \t đầu dòng = mức thụt lề
+_DAYONE_UL_RE = re.compile(r'^(\t*)[-*]\s+(.*)$')  # dòng list gạch đầu dòng, cùng quy ước thụt lề
+
+
+def _dayone_lines_to_blocks(lines):
+    """Gộp các dòng list liên tiếp (đánh số "1. ", gạch đầu dòng "- "/"\\* ", thụt lề bằng \\t) thành
+    khối <ol>/<ul> THẬT (khớp đúng HTML mà Quill dùng cho list, kể cả class "ql-indent-N" cho thụt
+    lề) thay vì chỉ hiện số/gạch đầu dòng như CHỮ THƯỜNG -- xác nhận với người dùng sau khi thấy bản
+    đầu (chỉ nối dòng bằng <br>) không ra list "chuẩn" (không thụt lề/định dạng như Quill vẫn dùng
+    cho ghi chú viết tay trong app). Dòng KHÔNG khớp list gộp thành 1 đoạn <p> nối bằng <br> như cũ.
+    Đổi loại list (ol<->ul) hoặc gặp dòng thường đều TỰ ngắt khối list đang gộp dở, không trộn lẫn
+    2 loại vào chung 1 <ol>/<ul>."""
+    blocks = []
+    buf_type = None  # 'ol' | 'ul' | 'p'
+    buf_items = []
+
+    def _flush():
+        nonlocal buf_type, buf_items
+        if not buf_items:
+            return
+        if buf_type == 'p':
+            blocks.append('<p>' + '<br>'.join(buf_items) + '</p>')
+        else:
+            lis = ''.join(f'<li class="ql-indent-{lvl}">{txt}</li>' if lvl else f'<li>{txt}</li>'
+                          for lvl, txt in buf_items)
+            blocks.append(f'<{buf_type}>{lis}</{buf_type}>')
+        buf_type, buf_items = None, []
+
+    for line in lines:
+        m_ol = _DAYONE_OL_RE.match(line)
+        m_ul = None if m_ol else _DAYONE_UL_RE.match(line)
+        if m_ol:
+            if buf_type != 'ol':
+                _flush()
+                buf_type = 'ol'
+            buf_items.append((len(m_ol.group(1)), m_ol.group(3)))
+        elif m_ul:
+            if buf_type != 'ul':
+                _flush()
+                buf_type = 'ul'
+            buf_items.append((len(m_ul.group(1)), m_ul.group(2)))
+        else:
+            if buf_type != 'p':
+                _flush()
+                buf_type = 'p'
+            buf_items.append(line)
+    _flush()
+    return ''.join(blocks)
+
 
 def _dayone_text_to_html(text):
     """Chuyển trường "text" (markdown thô, ký tự đặc biệt đã được Day One tự escape bằng "\\") của
-    1 entry Day One sang HTML gọn để nhét thẳng vào ô ghi chú Quill, GIỮ ĐÚNG đậm/nghiêng. CHỈ xử
-    lý CHỮ -- ảnh/video/pdf đính kèm nhúng dạng "![](dayone-moment://...)" bị bỏ hẳn (đúng yêu cầu
-    chỉ nhập nội dung chữ, không nhập ảnh/file đính kèm); vị trí/thời tiết nằm ở trường JSON riêng,
-    không đọc tới nên không cần lọc ở đây.
+    1 entry Day One sang HTML gọn để nhét thẳng vào ô ghi chú Quill, GIỮ ĐÚNG đậm/nghiêng/list. CHỈ
+    xử lý CHỮ -- ảnh/video/pdf đính kèm nhúng dạng "![](dayone-moment://...)" bị bỏ hẳn (đúng yêu
+    cầu chỉ nhập nội dung chữ, không nhập ảnh/file đính kèm); vị trí/thời tiết nằm ở trường JSON
+    riêng, không đọc tới nên không cần lọc ở đây.
 
     THỨ TỰ xử lý trong mỗi đoạn CỐ Ý: (1) escape HTML thật (&/</>) -- không đụng `\`/`*`/`#`/`[]()`
     nên an toàn làm trước; (2) bỏ link markdown `[chữ](url)` -- chỉ giữ lại phần chữ, bỏ hẳn URL
     (thường là link nội bộ craftdocs://... không mở được ngoài app gốc, không có giá trị gì khi
     nhập vào Ghi chú); (3) heading/**đậm**/*nghiêng* nhận diện dựa vào `*`/`#` KHÔNG có `\` phía
     trước (markdown thật Day One không tự escape) -- làm TRƯỚC bước bỏ escape; (4) bỏ escape (`\.`,
-    `\-`, `\*`...) làm SAU CÙNG. Đảo ngược thứ tự bước (4) lên trước bước (3) sẽ biến 1 dấu `*`
-    thoát nghĩa thật sự (vd chú thích chân trang `*text\*`) thành ký tự markdown "trần", bị hiểu
-    nhầm thành in nghiêng (bug đã gặp khi thử với dữ liệu mẫu thật -- 1 số câu trích dẫn có dấu `*`
-    cuối câu kiểu chú thích bị tô nghiêng sai). KHÔNG parse đầy đủ CommonMark (bảng/list lồng
-    nhau...), đủ dùng cho nhật ký cá nhân chứ không cần render y hệt app Day One."""
+    `\-`, `\*`...) làm SAU CÙNG; (5) tách dòng, gộp list đánh số/gạch đầu dòng liên tiếp thành
+    <ol>/<ul> thật qua _dayone_lines_to_blocks() -- PHẢI làm SAU bước (4) vì list gạch đầu dòng
+    trong dữ liệu thật của Day One thường bị escape thành "\\- " (xem hàm đó). Đảo ngược thứ tự bước
+    (4) lên trước bước (3) sẽ biến 1 dấu `*` thoát nghĩa thật sự (vd chú thích chân trang `*text\*`)
+    thành ký tự markdown "trần", bị hiểu nhầm thành in nghiêng (bug đã gặp khi thử với dữ liệu mẫu
+    thật -- 1 số câu trích dẫn có dấu `*` cuối câu kiểu chú thích bị tô nghiêng sai). KHÔNG parse
+    đầy đủ CommonMark (bảng, list lồng nhiều cấp phức tạp...), đủ dùng cho nhật ký cá nhân chứ không
+    cần render y hệt app Day One."""
     if not text:
         return ''
     text = _DAYONE_EMBED_RE.sub('', text)
@@ -1948,8 +2000,7 @@ def _dayone_text_to_html(text):
         para = re.sub(r'(?<!\\)\*\*(.+?)(?<!\\)\*\*', r'<strong>\1</strong>', para)
         para = re.sub(r'(?<!\\)(?<!\*)\*(?!\*)(.+?)(?<!\\)(?<!\*)\*(?!\*)', r'<em>\1</em>', para)
         para = _DAYONE_ESCAPE_RE.sub(r'\1', para)
-        para = para.replace('\n', '<br>')
-        html_parts.append(f'<p>{para}</p>')
+        html_parts.append(_dayone_lines_to_blocks(para.split('\n')))
     return ''.join(html_parts)
 
 
