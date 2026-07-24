@@ -1,6 +1,6 @@
 # Kiểm thử: không có test suite, dùng harness giả lập
 
-Đối tượng đọc: AI agent cần xác minh 1 thay đổi có chạy đúng không, trong môi trường sandbox thường
+Đối tượng đọc: Codex/ChatGPT cần xác minh 1 thay đổi có chạy đúng không, trong môi trường sandbox thường
 KHÔNG có mạng ra `*.supabase.co` hay `caldav.icloud.com`.
 
 Không có bước build/lint/test tự động nào trong repo. Quy trình xác minh thay đổi là chạy *chính*

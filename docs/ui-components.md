@@ -1,6 +1,6 @@
 # Component & quy ước UI dùng lại
 
-Đối tượng đọc: AI agent cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
+Đối tượng đọc: Codex/ChatGPT cần thêm 1 mục/trang báo cáo mới, hoặc chỉnh sửa layout 1 trang hiện có.
 
 ## Quy ước đánh số `sec_chapter(anchor, num, title, tight_top=False, badge=None)`
 
@@ -18,7 +18,7 @@ hay không.
 
 ## Thứ tự chương chuẩn cho trang báo cáo (đã chốt qua đợt tái cấu trúc UX)
 
-Mọi trang họ Báo cáo/Sách/Gundam/Dự án theo cùng 1 thứ tự luồng, xem thêm ở CLAUDE.md mục 5:
+Mọi trang họ Báo cáo/Sách/Gundam/Dự án theo cùng 1 thứ tự luồng, xem thêm ở `AGENTS.md`:
 **Tổng quan → Lịch tháng (nếu trang có, luôn vị trí 2) → Phân bổ Danh mục/Dự án → Xu hướng theo
 thời gian → Nhật ký/ghi chú → Bảng số liệu (luôn cuối cùng)**. Chương "Lịch tháng" (trước gọi "Biểu
 đồ lịch") hiện chỉ còn ở Báo cáo Tháng/Năm — đã bỏ khỏi Tổng quan (xác nhận với người dùng: trang

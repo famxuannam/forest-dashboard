@@ -1,13 +1,13 @@
 # Git workflow của repo này
 
-Đối tượng đọc: AI agent chuẩn bị commit/push/mở PR trên repo `famxuannam/forest-dashboard`.
+Đối tượng đọc: Codex/ChatGPT chuẩn bị commit/push/mở PR trên repo `famxuannam/forest-dashboard`.
 
 ## Nhánh làm việc là theo phiên, không cố định
 
-Mỗi phiên làm việc được giao 1 nhánh cụ thể (khai báo trong system prompt/task instruction của
-phiên đó, dạng `claude/<mô-tả-việc>-<mã-ngẫu-nhiên>`) — **không hardcode tên nhánh cụ thể ở đây**,
-vì tên đổi theo từng task và sẽ lỗi thời ngay khi ghi cứng. Luôn lấy tên nhánh thật từ chỉ dẫn của
-phiên hiện tại, không suy đoán từ lịch sử git hay từ tài liệu này.
+Mỗi phiên làm việc có thể được giao một nhánh cụ thể qua task instruction — **không hardcode tên
+nhánh ở đây**, vì tên đổi theo từng task và sẽ lỗi thời ngay khi ghi cứng. Luôn lấy tên nhánh thật
+từ chỉ dẫn hiện tại; nếu không có chỉ dẫn, giữ nguyên branch đang làm việc hoặc hỏi trước khi tạo
+branch mới.
 
 ## PR được squash-merge từng cái một
 

@@ -1,6 +1,6 @@
 # Điều hướng & dispatch trang
 
-Đối tượng đọc: AI agent chưa từng thấy `app.py`, cần biết cách 1 lượt click nav biến thành 1 trang
+Đối tượng đọc: Codex/ChatGPT chưa từng thấy `app.py`, cần biết cách 1 lượt click nav biến thành 1 trang
 render ra sao, và cách thêm/sửa 1 trang mà không phá deep-link.
 
 ## Cơ chế: 1 dict + 1 chuỗi if/elif, không router riêng

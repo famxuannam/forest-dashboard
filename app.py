@@ -3499,7 +3499,7 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ('Tuần'/'Tháng'/'Năm') PHẢI khớp đúng cột `_period_comparison()` đã dùng để tính prev/avg --
     dùng làm period_col cho _smart_digest() luôn, không tính lại.
     anchor_prefix ('bc-tuan'/'bc-thang'/'bc-nam') -- tự vẽ chương "1. Tổng quan" (sec_chapter),
-    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem CLAUDE.md mục bố cục "chương").
+    không còn nhận expander đã mở sẵn từ caller như bản cũ (xem AGENTS.md mục bố cục "chương").
 
     show_footer=False (Tuần/Tháng/Năm) -- billboard riêng của từng trang (render_period_billboard)
     đã có câu nhận định tự tính bao gồm đúng nội dung của _smart_digest (so kỳ trước) ở cột phải,
@@ -6131,7 +6131,7 @@ def _render_health_history(df_health):
 
 
 def _render_health_input(df_health):
-    """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ Claude
+    """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ ChatGPT
     đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi).
 
     ĐỔI SANG khuôn "chương" của Hôm nay/Báo cáo (billboard + sec_chapter đánh số) thay vì
@@ -6152,7 +6152,7 @@ def _render_health_input(df_health):
     đã instantiate).
 
     Mockup còn có nút "Tải lên PDF" (trích số liệu từ file kết quả) -- app không có khả năng đọc
-    PDF (luồng chính là dán JSON do Claude đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
+    PDF (luồng chính là dán JSON do ChatGPT đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
     (đã xác nhận với người dùng). Mục "Ngưỡng tham chiếu" (tự đặt ngưỡng cảnh báo riêng, chặt hơn
     mức lab in trên phiếu) cũng bỏ qua -- là tính năng nghiệp vụ MỚI ngoài phạm vi "chỉ sửa giao
     diện" của yêu cầu này, chưa có nơi lưu/logic nào tương ứng."""
@@ -6213,7 +6213,7 @@ def _render_health_input(df_health):
         st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
 
     sec_chapter("hm-in-ch1", 1, "Import hàng loạt", tight_top=True)
-    st.caption("Dán JSON do Claude xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
+    st.caption("Dán JSON do ChatGPT xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
                 "nhiều lần khám cũ cùng lúc.")
     # Khối JSON mẫu để trong popup (st.dialog(), cùng khuôn "Khôi phục dữ liệu"/"Xoá toàn bộ dữ
     # liệu" ở Tuỳ biến) thay vì hiện trực tiếp -- xác nhận với người dùng: chỉ để tra cứu/copy khi
@@ -6303,7 +6303,7 @@ def render_health_page():
     """Trang "Sức khoẻ": theo dõi chỉ số xét nghiệm máu định kỳ. Khác với phần còn lại của app
     (thuần retrospective, đọc lại dữ liệu Forest) -- trang này CÓ nhập liệu tay, vì không có
     nguồn tự động nào xuất dữ liệu xét nghiệm ra file: người dùng chụp ảnh phiếu xét nghiệm, nhờ
-    Claude đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE), hoặc gõ tay từng lần
+    ChatGPT đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE), hoặc gõ tay từng lần
     khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
     SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
     df_health = load_health_metrics()
@@ -12824,7 +12824,7 @@ elif nav == "Hướng dẫn":
     sec_block(
         "<h4>Sức khoẻ — nhập liệu từ ảnh chụp phiếu xét nghiệm</h4>"
         "Quy trình gợi ý để đỡ mất công gõ tay: chụp lại hai phiếu xét nghiệm (Huyết học và Sinh hoá) mỗi "
-        "lần đi khám, đưa ảnh cho Claude đọc và xuất đúng khuôn JSON như bên dưới, rồi dán thẳng vào mục "
+        "lần đi khám, đưa ảnh cho ChatGPT đọc và xuất đúng khuôn JSON như bên dưới, rồi dán thẳng vào mục "
         "<b>Import hàng loạt</b> (Sức khoẻ → Dữ liệu đầu vào) — có sẵn một bước Xem trước để "
         "soát lại trước khi bấm Xác nhận lưu, tránh nhập nhầm mà không hay biết. Mỗi lần mở trang Báo cáo "
         "sẽ thấy ngay mục <b>“Chỉ số bất thường”</b> của lần khám gần nhất hiện sẵn, không "
@@ -12833,7 +12833,7 @@ elif nav == "Hướng dẫn":
         "kiểu “4.2 - 5.4”, chỉ có trần trên như “&lt; 5”, hay chỉ có sàn dưới như "
         "“&gt; 10” — dạng khác (chẳng hạn kết quả định tính như “Âm tính”) vẫn lưu "
         "được bình thường, chỉ không vẽ lên biểu đồ xu hướng được.")
-    with st.expander("Xem định dạng JSON mẫu để nhờ Claude xuất từ ảnh"):
+    with st.expander("Xem định dạng JSON mẫu để nhờ ChatGPT xuất từ ảnh"):
         st.markdown(
             "Mỗi phần tử trong danh sách là một phiếu (một nhóm chỉ số) của một lần khám — một lần khám "
             "có hai phiếu Huyết học và Sinh hoá thì ra hai phần tử cùng `test_date` khác `category`:")
@@ -13064,7 +13064,7 @@ elif nav == "Hướng dẫn":
                  "xuất phát, không phụ thuộc nút Back trình duyệt (vốn không hoạt động vì mọi link "
                  "nội bộ đều tải lại toàn trang).",
                  "Cùng 1 sửa lỗi: màu phân trang (`st.pagination`) đọc được trên Bảng màu nền đậm ở "
-                 "light theme; và rà soát lại CLAUDE.md/tài liệu `.claude/docs/` cho khớp code hiện "
+                 "light theme; và rà soát lại tài liệu phát triển cho khớp code hiện "
                  "tại.",
              ]),
         dict(pr="276-280", date="23/07/2026", pr_lines=237, total_lines=12713,

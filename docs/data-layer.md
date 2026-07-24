@@ -1,6 +1,6 @@
 # Tầng dữ liệu: Supabase, timezone, và luồng đồng bộ
 
-Đối tượng đọc: AI agent cần thêm 1 nguồn dữ liệu mới, sửa logic tổng hợp, hoặc chạm vào bất kỳ chỗ
+Đối tượng đọc: Codex/ChatGPT cần thêm 1 nguồn dữ liệu mới, sửa logic tổng hợp, hoặc chạm vào bất kỳ chỗ
 nào đọc/ghi Supabase.
 
 ## Quy tắc bất biến: Supabase là nơi lưu trữ DUY NHẤT
@@ -49,7 +49,7 @@ có thể chưa từng bật CalDAV hay chưa từng tải file Reminder.
 
 Toàn bộ phần còn lại của app thuần hồi cứu (đọc lại dữ liệu Forest/CalDAV/Reminders), nhưng không có
 nguồn tự động nào xuất được kết quả xét nghiệm máu ra file -- người dùng chụp ảnh phiếu xét nghiệm,
-nhờ Claude đọc rồi dán JSON, hoặc gõ tay trực tiếp trong app. Vài điểm khác biệt so với các bảng
+nhờ ChatGPT đọc rồi dán JSON, hoặc gõ tay trực tiếp trong app. Vài điểm khác biệt so với các bảng
 khác cần nhớ khi sửa:
 
 - **Long format, không phải 1 cột/chỉ số**: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm (`test_date`,
