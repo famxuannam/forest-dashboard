@@ -56,7 +56,7 @@ timezone và luồng đồng bộ dữ liệu) ở [`.claude/docs/data-layer.md`
 Các quy tắc dưới đây là bất biến của dự án — **không tự ý thay đổi hay giả định khác đi** khi chưa
 xác nhận với người dùng:
 
-- **Kiến trúc 1 file**: toàn bộ app nằm trong `app.py` (~12.700 dòng). Không tách frontend/backend,
+- **Kiến trúc 1 file**: toàn bộ app nằm trong `app.py` (~13.300 dòng). Không tách frontend/backend,
   không tạo module component riêng — đây là quyết định kiến trúc đã chốt, không phải nợ kỹ thuật
   cần dọn.
 - **Giờ luôn qua `_today_vn()`**, không bao giờ `date.today()` trần — server có thể chạy UTC, lệch
@@ -79,12 +79,15 @@ xác nhận với người dùng:
   Báo cáo của Sức khoẻ): mức đó cần tự đặt 1 ngưỡng % không có cơ sở dữ liệu thật. Nếu 1 mockup
   sau này lại vẽ mức thứ 3 kiểu vậy, hỏi lại chứ không tự thêm.
 - **Thứ tự chương chuẩn cho mọi trang báo cáo** (Báo cáo mọi sub-tab, Sách/Gundam, Dự án — đã áp
-  dụng nhất quán qua đợt tái cấu trúc UX, xác nhận với người dùng): Tổng quan → Biểu đồ lịch (luôn
-  đúng vị trí 2 nếu trang có) → Phân bổ Danh mục/Dự án → Xu hướng theo thời gian → Nhật ký/ghi chú
-  định tính → Bảng số liệu (LUÔN là chương cuối cùng). Hero của chương Tổng quan KHÔNG được lặp lại
-  đúng con số billboard đã hiện phía trên (xem `hero_items=[]` hoặc hero rút gọn ở Dự án/Sách/Gundam
-  Chi tiết/Gundam Tổng quan trong `ui-components.md`) — chỉ giữ số liệu bổ sung. Đổi thứ tự này ở 1
-  trang cụ thể cần hỏi lại trước, vì mục tiêu là nhất quán xuyên suốt mọi trang cùng họ.
+  dụng nhất quán qua đợt tái cấu trúc UX, xác nhận với người dùng): Tổng quan → Lịch tháng (nếu
+  trang có, luôn đúng vị trí 2) → Phân bổ Danh mục/Dự án → Xu hướng theo thời gian → Nhật ký/ghi chú
+  định tính → Bảng số liệu (LUÔN là chương cuối cùng). "Lịch tháng" (trước gọi "Biểu đồ lịch") chỉ
+  còn ở Báo cáo Tháng/Năm — Tổng quan đã bỏ hẳn chương này (xác nhận với người dùng: dư thừa, không
+  đáng để chỗ ở trang tổng hợp toàn thời gian), không phải trang nào "có thể có chương này" cũng
+  bắt buộc phải giữ. Hero của chương Tổng quan KHÔNG được lặp lại đúng con số billboard đã hiện phía
+  trên (xem `hero_items=[]` hoặc hero rút gọn ở Dự án/Sách/Gundam Chi tiết/Gundam Tổng quan trong
+  `ui-components.md`) — chỉ giữ số liệu bổ sung. Đổi thứ tự này ở 1 trang cụ thể cần hỏi lại trước,
+  vì mục tiêu là nhất quán xuyên suốt mọi trang cùng họ.
 
 ## 6. Tài liệu bổ sung
 

@@ -12563,7 +12563,7 @@ elif nav == "Hướng dẫn":
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "22/07/2026", 12539
+    _help_latest_date, _help_latest_lines = "24/07/2026", 13281
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -13044,6 +13044,52 @@ elif nav == "Hướng dẫn":
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
+        dict(pr="281-285", date="24/07/2026", pr_lines=297, total_lines=13281,
+             title="Nhập Nhật ký Day One, Lịch tháng mới ở Báo cáo, nút Quay lại + cập nhật tài liệu",
+             bullets=[
+                 "**Nhập Nhật ký Day One** (Tuỳ biến → Dữ liệu đầu vào → Dự phòng) — đọc file JSON "
+                 "xuất từ Day One, giữ đúng định dạng **đậm**/*nghiêng*/list (kể cả lồng cấp), bỏ "
+                 "ảnh/link nội bộ, gộp nhiều mục cùng ngày, nối vào ghi chú Forest đã có nếu trùng "
+                 "ngày thay vì ghi đè. Mở khoá luôn việc chọn/gõ ghi chú cho ngày quá khứ chưa từng "
+                 "có phiên Forest nào (trang Hôm nay).",
+                 "**\"Biểu đồ lịch\" ở Báo cáo Tháng/Năm đổi thành \"Lịch tháng\" dạng lưới** (cùng "
+                 "kiểu component với Nhật ký đọc Sách/Gundam) — mỗi ô ngày hiện tổng thời gian tập "
+                 "trung, tối đa 2 chip Dự án nhiều giờ nhất, và 1 hàng icon số lịch hẹn/phần sách/"
+                 "phần Gundam/số từ ghi chú chính. Bỏ hẳn khỏi Báo cáo Tổng quan (dư thừa ở trang "
+                 "tổng hợp toàn thời gian).",
+                 "**Mỗi năm ở \"Ngày này năm trước\" giờ là link nhảy thẳng tới Báo cáo ngày** của "
+                 "đúng ngày đó, để sửa lại ghi chú cũ không cần tự tìm lại.",
+                 "**Nút \"← Quay lại\" cho Báo cáo ngày/Báo cáo → Dự án** — click 1 link nội bộ (tên "
+                 "Dự án, ngày trong Nhật ký...) tới 2 trang này giờ hiện được đường quay lại đúng nơi "
+                 "xuất phát, không phụ thuộc nút Back trình duyệt (vốn không hoạt động vì mọi link "
+                 "nội bộ đều tải lại toàn trang).",
+                 "Cùng 1 sửa lỗi: màu phân trang (`st.pagination`) đọc được trên Bảng màu nền đậm ở "
+                 "light theme; và rà soát lại CLAUDE.md/tài liệu `.claude/docs/` cho khớp code hiện "
+                 "tại.",
+             ]),
+        dict(pr="276-280", date="23/07/2026", pr_lines=237, total_lines=12713,
+             title="Trục \"Độ rộng nội dung\" cho màn hình lớn, chip Liền mạch, tối ưu backend + dọn lỗi nhỏ",
+             bullets=[
+                 "**Thêm trục \"Độ rộng nội dung\"** (Tuỳ biến → Giao diện, 4 mức 1100/1300/1500/"
+                 "1700px) — màn hình lớn (27\"/32\" 4K–5K) trước đây cột nội dung chỉ chiếm ~23–31% "
+                 "chiều ngang; đồng bộ luôn vị trí 2 nút nổi \"Về đầu trang\"/\"Đồng bộ nhanh\" theo "
+                 "đúng mép cột mới.",
+                 "**Chia 2 cột Trích dẫn/Ghi chú ở độ rộng lớn** (≥1500px) — trang Trích dẫn chia "
+                 "theo khối lượng (thuật toán tham lam) thay vì xen kẽ trái-phải cứng nhắc, tránh "
+                 "khoảng trống rộng; sửa màu chữ tên sách/tác giả bị lẫn nền trên các Bảng màu nền "
+                 "tối cố định.",
+                 "**Chip \"Liền mạch\" ở trang Hôm nay** (ngày có ≥2 phiên) — khối tập trung liền "
+                 "mạch dài nhất + khoảng nghỉ dài nhất trong ngày, tính từ giờ kết thúc phiên đã có "
+                 "sẵn.",
+                 "**Tối ưu backend**: mọi lệnh lưu/sửa/xoá giờ chỉ xoá cache đúng bảng liên quan thay "
+                 "vì xoá sạch cache cả 14 bảng; thêm cache 60 giây cho việc kiểm tra file Đồng bộ "
+                 "nhanh đang chờ (bớt 1 round-trip Supabase Storage mỗi lần tương tác); gộp logic "
+                 "merge CSV Forest dùng chung cho Đồng bộ nhanh và tải tay; vectorize 2 chỗ tính theo "
+                 "từng dòng dữ liệu.",
+                 "Cùng vài sửa nhỏ: lỗi dọn file đồng bộ cũ bị nuốt im lặng giờ báo lại qua kết quả "
+                 "đồng bộ, thống nhất màu delta trung tính theo theme, \"Yếu nhất theo thứ\" chỉ xét "
+                 "thứ có giờ hoạt động thật.",
+             ]),
         dict(pr="264-275", date="22/07/2026", pr_lines=62, total_lines=12539,
              title="Nhật ký đọc/xem đổi sang lịch tháng, thêm bộ lọc theo tuần, tách trang Giao diện riêng, bỏ kicker heading, 5 sửa tương phản/spacing/tooltip/ghi chú nhanh",
              bullets=[

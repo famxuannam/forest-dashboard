@@ -33,21 +33,21 @@ lan ra 3 nơi bằng 3 cơ chế khác nhau, phải nhớ cả 3 khi thêm 1 UI 
    trang chính (kể cả `:root` var) KHÔNG lan vào được. App tự tiêm 1 đoạn `<style>` riêng vào BÊN
    TRONG iframe đó (lặp lại theo interval để chống Streamlit dựng lại iframe làm mất style).
 
-## 6 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
+## 7 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
 
 "Giao diện" là 1 sub-page riêng của tab Tuỳ biến (`TUYBIEN_SUBS`, query param `?tsub=`, xem
 `architecture-navigation.md`) -- KHÔNG còn là 1 chương trong chuỗi cuộn dọc "Tổng quan" như trước.
 Khác bố cục 2 cột của mockup gốc "Tuỳ Chỉnh Giao Diện.dc.html" -- xác nhận với người dùng đổi lại
 theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app (Báo cáo/Sách/Gundam): billboard mở đầu (đóng
-LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 6 trục, số to bên trái là
-"6" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
+LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 7 trục, số to bên trái là
+"7" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
 thuần hồi cứu) + chip TOC nhảy neo xuống từng chương, rồi tới hàng 2 nút "Đặt lại mặc định"/"Ngẫu
-nhiên" (random hoá cả 6 setting cùng lúc), rồi 6 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
+nhiên" (random hoá cả 7 setting cùng lúc), rồi 7 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
 `st.container(border=True)` dựng qua helper dùng chung `_tb_axis_grid()`). Billboard KHÔNG mô
 phỏng token bằng state/JS riêng như bản `.dc.html` gốc, chỉ đọc thẳng `var(--token)`/`ACCENT`/
 `BG_PALETTE`... hiện hành vì toàn trang đã tự re-render đúng lựa chọn mới sau mỗi `st.rerun()`.
 
-Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 3 trục CSS-variable độc lập, kết hợp tự do với
+Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 4 trục CSS-variable độc lập, kết hợp tự do với
 nhau và với accent:
 
 1. **Bảng màu nền** (`BG_PALETTES`, setting `bg_palette`) — bundle ĐỦ 7 token `(light, dark)`
@@ -61,15 +61,24 @@ nhau và với accent:
    `box-shadow:0 1px 1px rgba(0,0,0,0.02)` — nếu không, thẻ đó sẽ "quên" đổi khi người dùng chọn
    kiểu thẻ khác. KHÔNG áp cho radius/border có ngôn ngữ hình khác cố ý (badge `999px`/`6-9px`,
    avatar tròn `50%`, input/button `7px`).
-3. **Mật độ bố cục** (`CARD_DENSITY`, setting `card_density`) — 2 token `--card-pad`/`--card-gap`,
+3. **Độ rộng nội dung** (`CONTENT_WIDTHS`, setting `content_width`) — 4 mức 1100/1300/1500/1700px
+   (mặc định "Rộng" = 1500px), áp trực tiếp vào 2 token `--content-max-w`/`--content-half-w`. 2 token
+   này quyết định CẢ `max-width` của `.block-container` LẪN vị trí 2 nút nổi "về đầu trang"/"Đồng bộ
+   nhanh" (`right: max(22px, calc(50vw - var(--content-half-w) + 22px))`) — đổi mức mới hoặc thêm 1
+   phần tử định vị theo mép cột nội dung PHẢI đọc lại 2 token này, không hardcode `600px`/`850px`.
+4. **Mật độ bố cục** (`CARD_DENSITY`, setting `card_density`) — 2 token `--card-pad`/`--card-gap`,
    CHỈ áp cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (`16px 18px`/`margin 10px
    0`, ví dụ `.sec-card`). KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
    (`.quotes-card`, `.help-tl-item`, `.dtl-card`, `.dtl-track`...) — những nơi đó giữ nguyên giá
    trị padding literal.
 
-Cả 3 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
+Cả 4 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
 bỏ → rơi về mặc định đầu tiên, không crash) và đúng pattern UI nút-preview + `save_setting()` +
-`st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới.
+`st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới. Mọi `st.container(key=...,
+border=True)` mới thêm vào sub-page này (kể cả trục mới) PHẢI được liệt kê vào rule CSS nền/viền
+gộp chung của tab Tuỳ biến (xem bẫy `st.container(border=True)` đọc `config.toml` tĩnh bên dưới) —
+quên bước này khiến thẻ trong suốt khác hẳn 6 thẻ còn lại (bug thật đã gặp với thẻ "Độ rộng nội
+dung" lúc mới thêm).
 
 **Bẫy chung: chrome/widget NATIVE của Streamlit đọc `.streamlit/config.toml` TĨNH, không đọc được
 `--token` runtime.** `config.toml` chỉ load 1 lần lúc server khởi động, không có cách nào đọc lại

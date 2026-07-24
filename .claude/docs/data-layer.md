@@ -13,7 +13,7 @@ cặp hàm:
 | `sessions`         | `load_db()`           | `save_db()`                        | CSV xuất từ Forest               |
 | `mapping`          | `load_mapping()`      | `save_mapping()`                   | Người dùng gán tay trong app      |
 | `deleted_sessions` | `load_deleted()`      | `add_deleted()` (cộng dồn khi xoá phiên trong app) · `save_deleted()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá phiên trong app)  |
-| `notes`            | `load_notes()`        | `save_note(day, text)` (lưu/sửa 1 ngày, gọi trong hàm render ghi chú; rỗng = xoá) · `save_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng gõ trong app           |
+| `notes`            | `load_notes()`        | `save_note(day, text)` (lưu/sửa 1 ngày, gọi trong hàm render ghi chú; rỗng = xoá) · `save_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) · `save_dayone_notes_bulk(day_texts)` (upsert CHỈ đúng các ngày trong `day_texts`, nối vào cuối ghi chú Forest đã có thay vì ghi đè — dùng cho import Nhật ký Day One, xem mục riêng bên dưới) | Người dùng gõ trong app, hoặc import từ file JSON Day One |
 | `quick_notes`      | `load_quick_notes()`  | (Shortcut iOS tự INSERT qua REST API) · `update_quick_note()`/`delete_quick_note()` (sửa/xoá lẻ trong app) · `save_quick_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Shortcut iOS (không qua app) |
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
@@ -26,8 +26,16 @@ cặp hàm:
 | `book_overrides` | `load_book_overrides()` (trả `dict {date: book}`) | `save_book_override()`/`delete_book_override()` (gán/bỏ gán 1 ngày trong app) · `save_book_overrides_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng sửa tay ở trang Sách → "Sửa gán sách tự động" |
 
 Mỗi `load_*` bọc 1 lần đọc bảng Supabase, cache bằng `@st.cache_data`; `save_*`/`sync_*` tương ứng
-ghi xong rồi **bắt buộc** gọi `st.cache_data.clear()` — quên bước này là bug kinh điển (UI hiện dữ
-liệu cũ sau khi lưu thành công).
+ghi xong rồi **bắt buộc** gọi `.clear()` để UI không hiện dữ liệu cũ sau khi lưu thành công. Chỉ
+clear ĐÚNG loader liên quan (`load_notes.clear()` sau `save_note()`, `load_db.clear()` +
+`prep_analysis_data.clear()` sau `save_db()`...) — KHÔNG gọi `st.cache_data.clear()` toàn cục:
+trước đây mọi `save_*` đều clear toàn cục, khiến 1 thao tác nhỏ (lưu 1 ghi chú, bật 1 sao yêu
+thích) nạp lại cả 14 bảng ở lần render kế tiếp; đã đổi sang clear theo đúng loader liên quan (mỗi
+`save_*`/`sync_*` biết chính xác nó đụng bảng nào). Thêm 1 `save_*` mới: chỉ `.clear()` các
+`load_*`/`prep_analysis_data` thực sự đọc dữ liệu vừa ghi, không clear rộng hơn "cho chắc". Chỉ còn
+đúng 2 nơi HỢP LỆ dùng `st.cache_data.clear()` toàn cục (Tuỳ biến → "Khôi phục từ bản sao lưu" và
+"Xoá toàn bộ dữ liệu") — cả 2 đều đụng MỌI bảng cùng lúc nên clear rộng là đúng ngữ nghĩa, không
+phải chỗ cần thu hẹp theo quy tắc trên.
 
 **Thêm 1 bảng mới bắt buộc phải làm cả 2 việc**: viết cặp `load_*`/`save_*` VÀ cập nhật
 `supabase_schema.sql` (file này là nguồn chân lý duy nhất cho schema — kể cả bucket Storage, xem
@@ -219,11 +227,36 @@ request; app chỉ cần quét bucket đó.
 - `_list_sync_files()` / `_latest_sync_file(files, prefix)` — liệt kê + tìm file mới nhất theo
   tiền tố tên file (`forest`/`reminder`, KHÔNG phân biệt hoa/thường). Quy ước đặt tên file do
   Shortcut tải lên là hợp đồng duy nhất giữa app và Shortcut — đổi 1 bên phải đổi bên kia.
+  `_list_sync_files_cached()` — bản `@st.cache_data(ttl=60)` của `_list_sync_files()`, dùng RIÊNG
+  cho `_has_pending_forest_sync()` (gọi lại ở MỌI trang/mỗi lần rerun qua `_render_nav_sync_fab()`
+  chỉ để biết có file mới hơn lần đồng bộ gần nhất hay không) — tránh 1 round-trip Supabase Storage
+  thật trên mọi tương tác. Bấm nút "Đồng bộ nhanh" thật vẫn gọi thẳng `_list_sync_files()` bản
+  không cache để luôn thấy đúng trạng thái bucket mới nhất.
+- `_merge_forest_into_db(df_new)` — helper DÙNG CHUNG cho cả luồng "Đồng bộ nhanh" lẫn nút tải CSV
+  tay ở Tuỳ biến (trước đây 2 nơi tự lặp y hệt logic `load_db()` → `concat` → chuẩn hoá giờ →
+  `drop_duplicates` → `save_db()`) — thêm 1 nguồn nạp CSV Forest mới thì gọi qua đây, không tự viết
+  lại chuỗi merge/dedupe.
 - `sync_from_storage(cal_start, cal_end)` — hàm điều phối: tải file Forest mới nhất → nạp qua
-  `parse_forest_csv()` (cộng thêm + bỏ trùng/đã xoá, y hệt luồng tải tay); tải file Reminder mới
-  nhất → nạp qua `parse_reading_log_shortcut_csv()` (**thay thế toàn bộ**, không cộng dồn); gọi
+  `parse_forest_csv()` rồi `_merge_forest_into_db()`; tải file Reminder mới nhất → nạp qua
+  `parse_reading_log_shortcut_csv()` (**thay thế toàn bộ**, không cộng dồn); gọi
   `sync_work_calendar()`; cuối cùng xoá các file CŨ HƠN cùng loại trong bucket (giữ đúng 1 file mới
   nhất mỗi loại) — **chỉ xoá sau khi nạp thành công**, để file lỗi/thiếu cột còn nguyên cho lần thử
-  lại. Không raise exception ra UI — mọi lỗi trả về trong dict kết quả để hiển thị.
+  lại. Không raise exception ra UI — mọi lỗi (kể cả lỗi dọn file cũ trong bucket, trả về qua khoá
+  riêng `cleanup_error` thay vì bị `except: pass` nuốt im lặng) trả về trong dict kết quả để hiển
+  thị.
 - Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file), cùng khuôn "anon
   full access" như các bảng khác — app không có lớp đăng nhập theo lựa chọn đã chốt.
+
+## Nhập Nhật ký Day One (Tuỳ biến → Dữ liệu đầu vào → Dự phòng)
+
+`parse_dayone_json(uploaded)` đọc file JSON xuất từ app Day One (`{"entries": [...]}`), CHỈ lấy nội
+dung chữ (bỏ ảnh/vị trí/thời tiết), gộp nhiều entry cùng ngày (theo giờ local sau khi quy đổi
+UTC→`APP_TZ`) thành 1 khối, trả `(dict {date: html}, error_msg)`. `_dayone_text_to_html(text)` xử
+lý markdown Day One theo ĐÚNG thứ tự: escape HTML → bỏ link markdown → nhận diện heading/**đậm**/
+*nghiêng* (dùng `(?<!\\)` để KHÔNG khớp dấu `*` đã bị escape bằng `\*`, PHẢI làm bước này TRƯỚC khi
+unescape backslash, không thì `\*` literal sẽ bị hiểu nhầm thành markdown thật) → unescape backslash
+sau cùng → `_dayone_lines_to_blocks()` gom các dòng đánh số/gạch đầu dòng liên tiếp (kể cả lồng cấp
+qua tab) thành `<ol>`/`<ul>` + `<li class="ql-indent-N">` HTML thật, khớp định dạng Quill (không
+phải nối `<br>` như text thường). `save_dayone_notes_bulk(day_texts)` (xem bảng `notes` ở trên)
+upsert CHỈ đúng các ngày trong `day_texts`, nối vào cuối ghi chú Forest đã có (qua `"<p><br></p>"`)
+thay vì ghi đè — khác `save_notes_bulk()` (ghi đè TOÀN BỘ bảng, chỉ dùng khi Khôi phục).
