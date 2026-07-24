@@ -6641,10 +6641,15 @@ def render_on_this_day(sel, df_all):
         qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
         note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
                       if notes.get(y) else '')
+        # Năm/Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó -- cùng pattern .jdate-link đã
+        # dùng ở Nhật ký tuần/tháng (xem render_notes_journal()), để sửa lại ghi chú năm cũ ngay từ
+        # đây thay vì phải tự gõ lại ngày ở trang Hôm nay.
+        _href = f"?nav={quote('Hôm nay')}&day={date(y, m, d):%Y-%m-%d}"
         rows_html += (
             "<div class='jrow'>"
+            f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
-            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div>"
+            f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div></a>"
             f"<div>{rec_html}{cal_html}{read_html}{chips_html}{qnote_html}{note_block}</div>"
             "</div>"
         )
