@@ -807,10 +807,11 @@ if _content_width_name not in CONTENT_WIDTHS:
 CONTENT_WIDTH_NAME = _content_width_name
 CONTENT_WIDTH_PX = CONTENT_WIDTHS[CONTENT_WIDTH_NAME]
 
-# Trích dẫn/ghi chú (Sách -> Tổng quan "3. Trích dẫn & Ghi chú"/_render_reading_quotes_teaser(),
-# trang "Trích dẫn"/_render_kindle_quotes_tab()) chia 2 cột khi "Độ rộng nội dung" ở mức lớn (Rộng/
-# Rất rộng, xem CONTENT_WIDTHS) -- câu trích dẫn kéo dài hết cỡ chiều ngang cột mới rất khó theo
-# dõi, xác nhận với người dùng chỉ cần chia cột khi thật sự rộng, không cần ở Hẹp/Vừa.
+# Trang "Trích dẫn" (_render_kindle_quotes_tab(), nhóm theo cuốn) chia 2 cột khi "Độ rộng nội dung"
+# ở mức lớn (Rộng/Rất rộng, xem CONTENT_WIDTHS) -- câu trích dẫn kéo dài hết cỡ chiều ngang cột mới
+# rất khó theo dõi, xác nhận với người dùng chỉ cần chia cột khi thật sự rộng, không cần ở Hẹp/Vừa.
+# Chương "3. Trích dẫn & Ghi chú" ở Sách -> Tổng quan (_render_reading_quotes_teaser()) KHÔNG dùng
+# biến này -- chia 2 cột theo desktop/mobile (st.columns() tự co ở màn hẹp) thay vì theo cấu hình.
 QUOTES_WIDE = CONTENT_WIDTH_PX >= 1500
 
 
@@ -4347,25 +4348,48 @@ def _render_reading_quotes_teaser(n=3):
     """Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan): N trích dẫn gần đây nhất (mọi cuốn), kèm
     ghi chú cá nhân lồng dưới nếu có (parent_hash trỏ về, xem add_kindle_note()) -- bản CHỈ ĐỌC
     (không Sửa/Xoá/+ Ghi chú như _render_kindle_day_quotes() ở tab Chi tiết -- tránh trùng key
-    widget khi cùng 1 trích dẫn render ở cả 2 nơi cùng lúc)."""
+    widget khi cùng 1 trích dẫn render ở cả 2 nơi cùng lúc).
+    Desktop: mỗi trích dẫn 1 thẻ .quotes-card riêng, chia vào 2 st.columns() theo thuật toán tham
+    lam (cân bằng theo tổng độ dài văn bản mỗi cột, cùng cách tiếp cận với book_jobs ở trang Trích
+    dẫn -- xem dòng ~4016 -- chỉ khác đơn vị cân bằng là độ dài văn bản thay vì số lượng). Mobile:
+    st.columns() tự co về 1 cột dưới ngưỡng ~640px, không cần nhánh CSS/Python riêng."""
     kh_all = load_kindle_highlights()
     highlights = (kh_all[kh_all['Loại'] == 'highlight'].sort_values('Ngày thêm', ascending=False).head(n)
                   if not kh_all.empty else kh_all)
     if highlights.empty:
         st.caption("Chưa có trích dẫn nào.")
         return
-    rows_html = ''
+    cards = []
     for _, r in highlights.iterrows():
         notes = kh_all[(kh_all['Loại'] == 'note') & (kh_all['parent_hash'] == r['dedupe_hash'])]
-        note_html = ''
-        if len(notes):
-            note_html = f"<div class='quote-note'>✎ {html_escape(str(notes.iloc[0]['Nội dung']))}</div>"
-        rows_html += (
-            "<div class='quote-item'>"
-            f"<div class='quote-text'>&ldquo;{html_escape(str(r['Nội dung']))} "
+        note_text = str(notes.iloc[0]['Nội dung']) if len(notes) else ''
+        note_html = f"<div class='quote-note'>✎ {html_escape(note_text)}</div>" if note_text else ''
+        quote_text = str(r['Nội dung'])
+        card_html = (
+            "<div class='quotes-card'><div class='quote-item'>"
+            f"<div class='quote-text'>&ldquo;{html_escape(quote_text)} "
             f"<span class='quote-meta'>Vị trí {html_escape(str(r['Vị trí']))} · {_entity_link_html(r['Cuốn sách'], 'book')}</span></div>"
-            f"{note_html}</div>")
-    st.markdown(f"<div class='quotes-card'>{rows_html}</div>", unsafe_allow_html=True)
+            f"{note_html}</div></div>")
+        cards.append((card_html, len(quote_text) + len(note_text)))
+    if len(cards) == 1:
+        st.markdown(cards[0][0], unsafe_allow_html=True)
+        return
+    col_a, col_b = [], []
+    weight_a = weight_b = 0
+    for card_html, weight in cards:
+        if weight_a <= weight_b:
+            col_a.append(card_html)
+            weight_a += weight
+        else:
+            col_b.append(card_html)
+            weight_b += weight
+    c1, c2 = st.columns(2, gap="medium")
+    with c1:
+        for card_html in col_a:
+            st.markdown(card_html, unsafe_allow_html=True)
+    with c2:
+        for card_html in col_b:
+            st.markdown(card_html, unsafe_allow_html=True)
 
 
 def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
@@ -8402,7 +8426,6 @@ st.markdown(
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
     f"--content-max-w:{CONTENT_WIDTH_PX}px;--content-half-w:{CONTENT_WIDTH_PX // 2}px;"
-    f"--quotes-cols:{2 if QUOTES_WIDE else 1};"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -9369,14 +9392,13 @@ _MAIN_CSS = """
        bug thật đã gặp, xem ảnh chụp người dùng gửi). */
     .fav-book-head .pbill-booktitle { color: var(--text-on-bg); }
     .fav-book-head .pbill-author { color: var(--text-on-bg-2); }
-    /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- thẻ
-       card ngoài dùng chung giá trị nền/viền/bo góc/bóng với các card thanh ngang khác
-       (.catbars-card), mỗi trích dẫn 1 mục có đường kẻ ngăn, ghi chú cá nhân lồng dưới thụt lề
-       trái có vạch màu (giống nháp tay viết cạnh câu trích). column-count đọc --quotes-cols (1
-       hoặc 2 tuỳ "Độ rộng nội dung", xem QUOTES_WIDE) -- câu trích dẫn ở cột content rộng (1500px+)
-       kéo dài hết chiều ngang rất khó theo dõi, chia 2 cột kiểu báo in để dòng ngắn lại. */
+    /* Chương "Trích dẫn & Ghi chú" (Sách -> Tổng quan, _render_reading_quotes_teaser()) -- mỗi
+       trích dẫn 1 thẻ .quotes-card riêng (nền/viền/bo góc/bóng dùng chung với các card thanh ngang
+       khác như .catbars-card), ghi chú cá nhân lồng dưới thụt lề trái có vạch màu (giống nháp tay
+       viết cạnh câu trích). Desktop chia 2 thẻ vào 2 st.columns() theo thuật toán tham lam (xem
+       Python), mobile st.columns() tự co về 1 cột -- không cần column-count/media query riêng. */
     .quotes-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
-        padding: 6px 18px; box-shadow: var(--card-shadow); column-count: var(--quotes-cols); column-gap: 28px; }
+        padding: 6px 18px; box-shadow: var(--card-shadow); }
     .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); break-inside: avoid; }
     .quote-item:last-child { border-bottom: none; }
     .quote-text { font-size: 14.5px; line-height: 1.6; color: var(--text); }
