@@ -1,4 +1,4 @@
-# Forest Dashboard — hướng dẫn cho Codex
+# Forest Dashboard — hướng dẫn cho Claude Code
 
 Repository là nguồn chân lý: trước khi sửa, đọc phần code liên quan và tài liệu trong `docs/`; chỉ dùng best practice bên ngoài khi repository không quy định.
 
