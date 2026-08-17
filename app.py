@@ -8449,14 +8449,15 @@ _MAIN_CSS = """
         flex-grow: 0 !important;
     }
     /* Bộ chọn kỳ (period_stepper key="stepper_week"/"stepper_month"/"stepper_year", Báo cáo ->
-       Tuần/Tháng/Năm) thu gọn + canh giữa CÙNG kiểu day_stepper (Hôm nay) -- xem lại thấy đồng bộ
-       đẹp hơn để full-width như trước (ghi chú cũ ở rule [class*="stepper"] phía trên vẫn đúng lý
-       do LÚC ĐÓ, chỉ là đổi quyết định thẩm mỹ). 4 cột (lùi/chọn kỳ/tiến/về hiện tại) -- 3 cột nút
+       Tuần/Tháng/Năm) thu gọn CÙNG kiểu day_stepper (Hôm nay) thay vì full-width như trước (ghi
+       chú cũ ở rule [class*="stepper"] phía trên vẫn đúng lý do LÚC ĐÓ, chỉ là đổi quyết định
+       thẩm mỹ) -- CĂN TRÁI (không còn canh giữa như bản trước, xác nhận với người dùng đổi lại,
+       cùng đợt với day_stepper/sub-tab picker). 4 cột (lùi/chọn kỳ/tiến/về hiện tại) -- 3 cột nút
        cố định 44px (chọn theo :not(:nth-child(2)), không phải :first-child/:last-child như
        day_stepper 3 cột, vì period_stepper có thêm cột nút "về hiện tại" thứ 4), cột selectbox co
        theo nội dung. */
     [class*="st-key-stepper_"] [data-testid="stHorizontalBlock"] {
-        width: fit-content !important; margin: 0 auto !important;
+        width: fit-content !important; margin: 0 !important;
     }
     [class*="st-key-stepper_"] [data-testid="stColumn"]:not(:nth-child(2)) {
         flex: 0 0 44px !important; width: 44px !important;
