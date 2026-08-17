@@ -9194,7 +9194,8 @@ _MAIN_CSS = """
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
     /* Mọi cột KHÔNG PHẢI cột đầu (badge/tờ lịch) trong hàng billboard -- đệm trái 24px + đường kẻ
@@ -9202,12 +9203,14 @@ _MAIN_CSS = """
        docstring render_period_billboard()/_render_today_billboard()). Trước đây chỉ đệm trái
        ĐÚNG cột CUỐI (khi billboard chỉ có 2 cột) -- đổi `:last-child` thành `:not(:first-child)`
        để áp đúng CẢ 2 cột khi billboard có 3 cột (nội dung GIỮA cũng cần đệm/kẻ, không chỉ mục
-       lục cột cuối). */
+       lục cột cuối). Trang Trợ giúp (key="help_billboard") từng bị SÓT khỏi danh sách này (bug
+       thật đã gặp, ảnh chụp người dùng gửi thiếu hẳn đường kẻ dọc) -- đã thêm help_billboard_row. */
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
-    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
         padding-left: 24px !important;
         border-left: 1px solid var(--divider);
     }

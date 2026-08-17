@@ -20,15 +20,16 @@ def render_help_page(*, st, json, health_metrics_json_example, render_period_bil
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
-        "<div class='pbill-sub'>Trước hết, xin nói để bạn an tâm: ứng dụng này chỉ là một tấm gương để "
-        "nhìn lại chính mình, không phải một người giám sát đứng sau nhắc việc — không đặt mục tiêu, "
-        "không thúc ép, cũng không có thanh tiến độ nào đòi hỏi bạn phải hoàn tất. Ứng dụng chỉ lặng lẽ "
-        "ghi lại những gì Forest đã lưu, rồi chờ bạn quay lại xem khi thuận tiện. Chính vì lẽ đó, hướng "
-        "dẫn này cũng không bắt bạn học từng trang một cách máy móc, mà kể theo đúng nhịp một ngày bình "
-        "thường: buổi sáng xem qua để định hướng, trong ngày cứ để ứng dụng đó mà làm việc, buổi tối "
-        "dành năm phút khép lại ngày hôm đó — rồi từ đó mở rộng dần ra thành tuần, tháng, năm. Đọc trọn "
-        "từ đầu đến cuối có lẽ mất chừng một khoảng trà; nếu muốn, bạn cũng có thể chỉ lướt qua mục lục "
-        "dưới đây rồi vào thẳng phần đang cần.</div>",
+        # Rút gọn từ 1 đoạn văn dài ~7 câu xuống 3 câu ngắn (xác nhận với người dùng: billboard
+        # cần gọn, không phải nơi đọc văn xuôi) -- giữ đúng 3 ý cốt lõi cũ: (1) app chỉ hồi cứu,
+        # không giám sát/thúc ép, (2) hướng dẫn đi theo nhịp 1 ngày rồi mở rộng ra tuần/tháng/năm,
+        # (3) đọc nhanh hoặc lướt mục lục vào thẳng phần cần. Nội dung đầy đủ hơn đã có sẵn trong
+        # từng chương bên dưới, billboard không cần lặp lại chi tiết.
+        "<div class='pbill-sub'>Đây không phải một người giám sát nhắc việc — không mục tiêu, không "
+        "thúc ép, chỉ lặng lẽ ghi lại những gì Forest đã lưu để bạn xem lại khi thuận tiện. Hướng dẫn "
+        "đi theo đúng nhịp một ngày: sáng định hướng, trong ngày cứ làm việc, tối khép lại — rồi mở "
+        "rộng dần ra tuần, tháng, năm. Đọc hết mất chừng một khoảng trà, hoặc lướt mục lục bên phải "
+        "để vào thẳng phần đang cần.</div>",
         [("help-ch1", "1 · Buổi sáng"), ("help-ch2", "2 · Trong ngày"),
          ("help-ch3", "3 · Cuối ngày"), ("help-ch4", "4 · Tuần &amp; tháng"),
          ("help-ch5", "5 · Sách · Gundam · Sức khoẻ"), ("help-ch6", "6 · Dữ liệu &amp; đồng bộ"),
