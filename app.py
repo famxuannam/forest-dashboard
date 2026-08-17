@@ -6994,17 +6994,23 @@ def sec_block(html):
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
     """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
-    -> Tổng quan/Chi tiết): số to bên trái đóng khung như tờ giấy lịch bàn + nội dung tự do bên
-    phải, style (kính mờ/frosted glass) dùng chung y hệt billboard Hôm nay -- xem docstring
-    _render_today_billboard() và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng
-    nguyên khối `.tbill-tab`/`.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/
-    nhãn vì cỡ chữ khác billboard Hôm nay (64px so với 76px, do đây là số nhiều chữ số hơn số
-    ngày).
+    -> Tổng quan/Chi tiết, Sức khoẻ, Tuỳ biến, Trợ giúp): số to bên trái đóng khung như tờ giấy
+    lịch bàn + nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi
+    đường kẻ dọc) -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired, đồng bộ với
+    `_render_today_billboard()`). Style nền (kính mờ/frosted glass) dùng chung y hệt billboard Hôm
+    nay -- xem CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng nguyên khối
+    `.tbill-tab`/`.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/nhãn vì cỡ
+    chữ khác billboard Hôm nay (64px so với 76px, do đây là số nhiều chữ số hơn số ngày). Mục lục
+    dùng chung `.tbill-toccol`/`.sec-toc-chip` với billboard Hôm nay -- KHÔNG còn xếp hàng ngang
+    bên dưới (`.sec-toc` cũ) nữa.
 
-    right_html: HTML THÔ cho cột phải -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
+    right_html: HTML THÔ cho cột giữa -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
     cáo dùng tiêu đề+mô tả câu văn (.pbill-title/.pbill-sub), Sách dùng kicker+tên sách/tác giả
     (.pbill-kicker/.pbill-booktitle/.pbill-author) + hàng chip riêng (.pbill-chips) -- tham số hoá
     thẳng bằng HTML thay vì cố nhét đủ loại nội dung vào tham số text/subtitle cố định.
+
+    chips: rỗng -> chỉ 2 cột (badge | nội dung), không có cột mục lục thứ 3 (vd trang không đủ
+    chương để cần mục lục).
 
     key: PHẢI đổi khi 1 trang có >1 lời gọi hàm này CÓ THỂ CÙNG NẰM TRONG 1 LẦN CHẠY SCRIPT --
     bug thật đã gặp: st.tabs() render TOÀN BỘ nội dung mọi tab (kể cả tab không active, chỉ ẩn
@@ -7021,14 +7027,19 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
         f"<div class='tbill-meta'>{meta}</div></div>")
     with st.container(key=key, border=True):
         with st.container(key=f"{key}_row"):
-            c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+            if chips:
+                c_left, c_right, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
+            else:
+                c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+                c_toc = None
             with c_left:
                 st.markdown(_left_html, unsafe_allow_html=True)
             with c_right:
                 st.markdown(right_html, unsafe_allow_html=True)
-        if chips:
-            _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
-            st.markdown(f"<div class='sec-toc' style='margin-top:18px;'>{_chips_html}</div>", unsafe_allow_html=True)
+            if c_toc is not None:
+                with c_toc:
+                    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+                    st.markdown(f"<div class='tbill-toccol'>{_chips_html}</div>", unsafe_allow_html=True)
 
 
 def help_faq_item(question, answer_md):
@@ -9154,7 +9165,10 @@ _MAIN_CSS = """
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
     .st-key-tbgd_billboard, .st-key-help_billboard {
         border-color: var(--border) !important;
-        padding: 20px 28px 16px !important;
+        /* padding-bottom 16px -> 24px: cột mục lục dọc (.tbill-toccol) thường cao hơn 2 cột badge/
+           nội dung bên cạnh (canh giữa theo chiều cao hàng), nên mép dưới billboard cần dư dả hơn
+           để chip mục lục cuối cùng không sát viền (bug thật đã gặp, xem screenshot người dùng). */
+        padding: 20px 28px 24px !important;
         border-radius: 12px !important;
         margin: 0 0 6px !important;
     }
@@ -9172,16 +9186,23 @@ _MAIN_CSS = """
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
-    /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
-       columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
-       đã tự có mark "" làm khoảng đệm thị giác riêng. */
-    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    /* Mọi cột KHÔNG PHẢI cột đầu (badge/tờ lịch) trong hàng billboard -- đệm trái 24px + đường kẻ
+       dọc ngăn cách, khớp mockup (nội dung ở giữa, mục lục dọc bên phải khi có `chips`, xem
+       docstring render_period_billboard()/_render_today_billboard()). Trước đây chỉ đệm trái
+       ĐÚNG cột CUỐI (khi billboard chỉ có 2 cột) -- đổi `:last-child` thành `:not(:first-child)`
+       để áp đúng CẢ 2 cột khi billboard có 3 cột (nội dung GIỮA cũng cần đệm/kẻ, không chỉ mục
+       lục cột cuối). */
+    [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
         padding-left: 24px !important;
+        border-left: 1px solid var(--divider);
     }
     /* Cột ngày (nhãn tháng/năm + số to + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng cảm
        giác 1 tờ lịch bàn xé hằng ngày. Từ đợt redesign Apple/macOS-inspired, khối "tờ lịch xé" này
@@ -9216,16 +9237,16 @@ _MAIN_CSS = """
         opacity: 0.9; margin-top: 2px; }
     .tbcircle-dow { font-size: 14.5px; font-weight: 700; color: var(--text); margin-top: 12px; }
     .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
-    /* Cột mục lục DỌC của billboard Hôm nay (khác .sec-toc hàng-ngang-wrap dùng ở nơi khác) --
-       tái dùng nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. */
-    .tbill-toccol { display: flex; flex-direction: column; gap: 6px; }
+    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ
+       giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
+       nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
+       padding-left của CHÍNH cột này đã xử lý ở rule gộp ":not(:first-child)" phía trên -- không
+       cần lặp lại ở đây. padding-bottom để chip cuối không sát mép dưới billboard khi cột này cao
+       hơn 2 cột còn lại (badge/nội dung được vertical_alignment="center" canh giữa, tự thấp hơn
+       cột mục lục nếu có ≥4 chip) -- bug thật đã gặp (screenshot người dùng gửi), thiếu bước này
+       khiến chip cuối gần như dính viền dưới billboard. */
+    .tbill-toccol { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
     .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left; }
-    /* 2-3 cột billboard Hôm nay (badge | trích dẫn | mục lục) ngăn cách bởi đường kẻ dọc, khớp
-       mockup -- cột đầu không có viền, các cột sau có border-left + đệm trái thay cho gap flex
-       thường của st.columns. */
-    .st-key-tbill_daterow [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
-        border-left: 1px solid var(--divider); padding-left: 24px;
-    }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
