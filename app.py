@@ -4727,6 +4727,7 @@ def render_day_timeline(day_df):
     if day_df.empty:
         return
 
+    st.markdown(_RHYTHM_TIP_CSS, unsafe_allow_html=True)
     line_html = ''.join(f'<div class="dtl-line" style="left:{b/24*100:.3f}%;"></div>' for b in (5, 11, 17, 22))
     label_html = ''.join(
         f'<span class="dtl-bl" style="left:{(s + e) / 2 / 24 * 100:.3f}%;">{nm.strip().upper()}</span>'
@@ -4745,9 +4746,14 @@ def render_day_timeline(day_df):
         # cần vá thêm logic giới hạn theo phiên kế tiếp hay viền phân tách giữa các thanh.
         left = s_min / 1440 * 100
         width = min(float(r['Thời lượng (Phút)']), 1440 - s_min) / 1440 * 100
-        proj = str(r['Dự án'])
+        proj = str(r['Dự án']); grp = str(r['Nhóm'])
         lab = f'<span class="dtl-bar-lbl">{html_escape(proj)}</span>' if width > 5.5 else ''
-        bars_html += (f'<div class="dtl-bar" title="{html_escape(proj)}: {s:%H:%M}–{e:%H:%M}" '
+        # data-tip + .rhythm-seg (xem _RHYTHM_TIP_CSS) thay cho title= gốc -- tooltip trình duyệt
+        # mặc định có độ trễ ~1s và không theo được theme/font app; data-tip hiện ngay lập tức.
+        # Nội dung gộp thêm Nhóm + thời lượng thật (không chỉ khung giờ) vì đây là thứ người dùng
+        # hay cần tra khi rê chuột qua từng phiên (không phải chỉ để phân biệt phiên nào là phiên nào).
+        _tip = f"{proj} · {grp}\n{s:%H:%M}–{e:%H:%M} · {_fmt_hours_long(r['Thời lượng (Phút)'] / 60)}"
+        bars_html += (f'<div class="dtl-bar rhythm-seg dtl-tip" data-tip="{html_escape(_tip)}" '
                       f'style="left:{left:.3f}%;width:{width:.3f}%;background:{COLOR_MAP.get(proj, "#8e8e93")};">'
                       f'{lab}</div>')
 
@@ -4772,14 +4778,42 @@ def render_day_timeline(day_df):
 .dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:12px 16px;margin:4px 0;}}
 .dtl-strip{{position:relative;height:13px;margin-bottom:2px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
-.dtl-track{{position:relative;height:26px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
+/* KHÔNG overflow:hidden ở đây nữa (khác bản trước) -- từng dùng để cắt góc vuông của .dtl-bar ở
+   sát mép track, nhưng cũng cắt luôn tooltip data-tip (position:absolute, xem _RHYTHM_TIP_CSS)
+   của các phiên nằm sát mép trái/phải (đúng bẫy đã ghi ở ui-components.md cho catbar-stack). Bản
+   thân .dtl-bar đã có border-radius riêng nên không cần track clip theo -- không mất gì khi bỏ.*/
+.dtl-track{{position:relative;height:26px;border-radius:6px;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:3px;height:20px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:10.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+/* KHÔNG overflow:hidden ở .dtl-bar (khác bản trước) -- .dtl-bar-lbl bên trong đã tự ellipsis rồi
+   (overflow:hidden riêng của nó), đặt thêm ở .dtl-bar chỉ để clip label nhưng lại clip LUÔN
+   tooltip ::after của .dtl-tip (con của chính .dtl-bar) vì pseudo-element nằm trong box của cha.
+   Bug thật đã gặp: tooltip hoàn toàn không hiện dù CSS/DOM đều đúng, chỉ do overflow:hidden này. */
+/* Chọn .dtl-bar.rhythm-seg (2 class) thay vì .dtl-bar 1 class -- bug thật đã gặp: dùng chung class
+   "rhythm-seg" để tái dùng cơ chế tooltip data-tip cũng kéo theo rule đặt position:relative của
+   _RHYTHM_TIP_CSS (được st.markdown() lại nhiều lần trên cùng trang Hôm nay bởi
+   render_project_rhythm/frag_category_bars nằm dưới, có thể xuất hiện SAU trong DOM). Cùng độ đặc
+   hiệu 1 class thì rule sau thắng, ĐÈ MẤT position:absolute của thanh phiên -> mọi thanh rơi về
+   position:relative, xếp chồng dọc theo flow thay vì đặt đúng toạ độ giờ -- toàn bộ trục giờ vỡ.
+   2 class luôn thắng theo độ đặc hiệu, không phụ thuộc thứ tự CSS trong trang. */
+.dtl-bar.rhythm-seg{{position:absolute;top:3px;height:20px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:10.5px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:14px;margin-top:3px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
 .dtl-legend{{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12px;color:var(--text);}}
 .dtl-legend i{{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px;}}
+/* .dtl-bar.dtl-tip đè lên .rhythm-seg:hover::after dùng chung (xem _RHYTHM_TIP_CSS) -- tip ở đây
+   gồm 2 dòng (Dự án · Nhóm / khung giờ · thời lượng) nên cần pre-line thay vì nowrap 1 dòng như
+   mọi nơi khác đang dùng data-tip. Chọn 2 class (.dtl-bar.dtl-tip) để CHẮC CHẮN thắng bất kể thứ
+   tự CSS trong trang -- _RHYTHM_TIP_CSS được st.markdown() nhiều lần (mỗi lần gọi
+   render_project_rhythm/frag_category_bars đều tự chèn lại), có thể xuất hiện SAU khối này trong
+   DOM nếu đặt cùng độ đặc hiệu 1 class thì rule sau sẽ thắng và đè mất pre-line. */
+/* width:max-content BẮT BUỘC -- .dtl-bar chính là containing block của ::after (position:relative
+   trên .rhythm-seg), phiên ngắn có .dtl-bar chỉ vài chục px nên nếu để width auto mặc định,
+   thuật toán shrink-to-fit của trình duyệt tính "available width" theo bề rộng .dtl-bar (trừ
+   luôn offset left:50%) chứ KHÔNG theo độ dài chữ thật -- tooltip vỡ thành 1 từ/dòng dù còn thừa
+   chỗ ngang. max-content bỏ qua containing block, tự co theo nội dung; max-width chặn tooltip quá
+   dài (vd tên Dự án dài) tràn ra ngoài màn hình. */
+.dtl-bar.dtl-tip:hover::after{{white-space:pre-line;text-align:center;line-height:1.5;width:max-content;max-width:240px;}}
 </style>
 <div class="dtl-card">
 <span class="rl-book">Dòng thời gian trong ngày</span>
