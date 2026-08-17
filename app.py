@@ -2514,7 +2514,7 @@ def _clip_card(note):
     st.caption() trần trụi lạc quẻ giữa các thẻ số liệu. Icon đồng hồ cát (khác icon lịch sử của
     thẻ "Cập nhật gần nhất") vì ý nghĩa gần với "đang tính" hơn."""
     st.markdown(
-        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:4px; display:flex; "
         f"align-items:center; flex-wrap:wrap; gap:6px 10px;'>"
         f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;"
         f"letter-spacing:0.5px;white-space:nowrap;'>"
@@ -2901,14 +2901,13 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None,
-        # margin-bottom -- card_style mặc định ("") không có margin, khiến khoảng cách xuống 2 thẻ
-        # "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), cũng không tự có margin)
-        # chỉ còn đúng gap 10px của khối cha thay vì 14px+10px như mọi cặp thẻ khác (cùng lỗi đã
-        # sửa ở Sách/Gundam -> Tổng quan, áp dụng nhất quán sang Báo cáo). KHÔNG còn "padding:18px"
-        # ở đây (bản trước đây, khi .sp-wrap là 1 div CHỈ để margin -- không phải thẻ hiển thị
-        # được nữa từ khi tách hero/list thành thẻ riêng) -- padding đó vô tình ép .sp-listcard
-        # bên trong hẹp hơn 36px so với thẻ khác trên trang (bug thật đã gặp, ảnh chụp người dùng).
-        card_style="margin-bottom:14px;")
+        # margin-bottom 4px CỘNG gap flex 10px chung = 14px, đúng khoảng cách chuẩn giữa 2 thẻ
+        # nội dung trong app -- card_style mặc định ("") không margin sẽ chỉ ra 10px, hẹp hơn mọi
+        # cặp thẻ khác trên cùng trang (đo bằng Playwright, xem đợt chuẩn hoá spacing 14px).
+        # KHÔNG có "padding:18px" ở đây: .sp-wrap chỉ là div canh margin, không phải thẻ hiển thị
+        # (hero/list đã tách thành 2 thẻ riêng) -- padding đó từng ép .sp-listcard bên trong hẹp
+        # hơn 36px so với thẻ khác trên trang (bug thật đã gặp, ảnh chụp người dùng gửi).
+        card_style="margin-bottom:4px;")
     render_project_rhythm(df_period)
     if show_top3:
         st.write("")
@@ -3819,14 +3818,12 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                     {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
                 ]},
             ],
-            # margin ĐỐI XỨNG (không chỉ margin-top) -- thiếu margin-bottom khiến khoảng cách
-            # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), không tự
-            # có margin riêng) chỉ còn đúng gap 10px của khối cha thay vì 24px như mọi cặp thẻ
-            # khác trong chương này (bug thật đã gặp, ảnh chụp người dùng gửi ở tab Sách/Gundam).
-            # KHÔNG còn "padding:18px" (bug khác đã gặp: ép .sp-listcard bên trong hẹp hơn 36px so
-            # với thẻ "Đang đọc" ngay phía trên -- .sp-wrap giờ chỉ là div canh margin, không phải
-            # thẻ hiển thị có padding riêng như bản render_stat_panel cũ).
-            card_style="margin:14px 0;",
+            # margin ĐỐI XỨNG 4px (không chỉ margin-top) -- cộng gap flex 10px chung ra đúng 14px
+            # ở CẢ 2 phía, khớp khoảng cách chuẩn giữa mọi cặp thẻ trong app. KHÔNG có
+            # "padding:18px" (bug đã gặp: ép .sp-listcard bên trong hẹp hơn 36px so với thẻ "Đang
+            # đọc" ngay phía trên -- .sp-wrap chỉ là div canh margin, không phải thẻ hiển thị có
+            # padding riêng như bản render_stat_panel cũ).
+            card_style="margin:4px 0;",
         )
 
         render_project_rhythm(df_books)
@@ -4761,7 +4758,10 @@ def render_day_timeline(day_df):
    trục/legend cùng thu lại) -- dòng thời gian chỉ cần đọc được NHỊP phiên trong ngày, thanh cao
    44px chiếm chỗ ngang 1 thẻ số liệu mà không thêm thông tin gì. Nhãn tên Dự án trong thanh vẫn
    giữ (chỉ hiện khi thanh đủ rộng, xem `width > 5.5` ở Python) -- 20px vẫn đủ chỗ cho chữ 10.5px. */
-.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:12px 16px;margin:10px 0;}}
+/* margin 4px CỘNG gap flex 10px chung của khối cha = 14px -- đúng khoảng cách chuẩn giữa 2 thẻ
+   nội dung trong app (xem chú thích "khoảng cách chuẩn 14px" ở rule [data-testid="stVerticalBlock"]).
+   KHÔNG đặt 10px như trước: cộng dồn ra 20px, rộng gấp rưỡi mọi cặp thẻ khác trên cùng trang. */
+.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:12px 16px;margin:4px 0;}}
 .dtl-strip{{position:relative;height:13px;margin-bottom:2px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 .dtl-track{{position:relative;height:26px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
@@ -7928,6 +7928,14 @@ _MAIN_CSS = """
        chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
        khớp pixel chính xác, không còn là ước lượng "trung dung" như trước. */
     [data-testid="stVerticalBlock"] { gap: 10px !important; }
+    /* KHOẢNG CÁCH CHUẨN GIỮA 2 THẺ NỘI DUNG = 14px (đã đo bằng Playwright và chuẩn hoá đồng loạt
+       -- trước đó rải rác 4px/20px/24px/26px tuỳ nơi, xác nhận qua ảnh chụp người dùng gửi: thẻ
+       "Dòng thời gian trong ngày" dính sát thẻ số liệu ngay trên). Cách đạt 14px: gap flex 10px ở
+       trên CỘNG margin 4px của chính thẻ (`.dtl-card`, `card_style="margin-bottom:4px"`...).
+       Thêm 1 thẻ mới xếp dọc trong cùng container: KHÔNG đặt margin (ra 10px, hẹp hơn phần còn
+       lại) và cũng KHÔNG đặt 10px/14px/16px (ra 20-26px, rộng hơn) -- đặt đúng 4px.
+       2 thẻ nằm TRONG CÙNG 1 st.markdown (vd .sp-herogrid -> .sp-listcard) không có gap flex nào
+       giữa chúng nên margin đặt thẳng 14px. */
     /* Streamlit bọc MỌI st.markdown(html) trong [data-testid="stMarkdownContainer"] có sẵn
        margin-bottom:-16px (bù trừ margin mặc định của <p> cuối cùng trong Markdown thật) -- các
        khối HTML tự viết ở đây đều là <div> thuần, không có <p> nào để bù, nên -16px này ăn thẳng
@@ -7939,6 +7947,7 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .sec-ch),
     [data-testid="stMarkdownContainer"]:has(> .sec-toc),
     [data-testid="stMarkdownContainer"]:has(> .glass-card),
+    [data-testid="stMarkdownContainer"]:has(> .sp-wrap),
     [data-testid="stMarkdownContainer"]:has(> .dtl-card),
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
     [data-testid="stMarkdownContainer"]:has(> .catbars-card),
@@ -10796,12 +10805,10 @@ elif nav == "Báo cáo":
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
-                # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm, Dự án và Sách/
-                # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG còn
-                # "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang -- xem chú thích chỗ
-                # gọi tương tự ở Báo cáo/Sách).
-                card_style="margin-bottom:14px;",
+                # margin-bottom 4px + gap flex 10px = 14px, cùng chuẩn spacing với mọi cặp thẻ
+                # khác (xem chú thích chỗ gọi tương tự ở Báo cáo/Sách). KHÔNG có "padding:18px"
+                # (ép .sp-listcard hẹp hơn thẻ khác trên trang).
+                card_style="margin-bottom:4px;",
             )
             render_project_rhythm(df)
 
@@ -11310,11 +11317,9 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
-                    # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm và Sách/
-                    # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                    # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG
-                    # còn "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang).
-                    card_style="margin-bottom:14px;",
+                    # margin-bottom 4px + gap flex 10px = 14px, cùng chuẩn spacing với mọi cặp
+                    # thẻ khác. KHÔNG có "padding:18px" (ép .sp-listcard hẹp hơn thẻ trên trang).
+                    card_style="margin-bottom:4px;",
                 )
                 # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
                 # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
