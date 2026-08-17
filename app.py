@@ -8289,17 +8289,18 @@ _MAIN_CSS = """
         gap: 4px !important;
     }
 
-    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo),
-       "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem
-       render_reading_log() -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông
-       lệch hẳn so với các sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác
-       nhận với người dùng qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục
-       giống hệt .st-key-nav ở trên. Dáng nút tab gạch chân (không phải nền đặc teal như nav
-       chính) -- gap:0 để huỷ gap chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0
-       14px của từng nút bên dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá
-       lớn). [class*="st-key-rl_view_tabs"] (substring, KHÔNG phải class chính xác) vì Sách dùng
-       key "rl_view_tabs_picker", Gundam "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ
-       khớp 1 trong 2 trang. */
+    /* Thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo), "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng
+       quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log() -- trước đây dùng st.tabs()
+       riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các sub-tab picker khác, đổi hẳn
+       sang segmented_control cho đồng bộ, xác nhận với người dùng qua ảnh chụp) -- label đã ẩn
+       (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav ở trên NGOẠI TRỪ căn lề:
+       CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người dùng đổi lại) -- khớp cảm
+       giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống trải khi ít mục. Dáng nút
+       tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để huỷ gap chung 6px ở trên
+       (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên dưới, không phải gap
+       của container, cộng cả 2 sẽ ra khoảng cách quá lớn). [class*="st-key-rl_view_tabs"]
+       (substring, KHÔNG phải class chính xác) vì Sách dùng key "rl_view_tabs_picker", Gundam
+       "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp 1 trong 2 trang. */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker, .st-key-tb_sub_picker,
     [class*="st-key-rl_view_tabs"] { width: 100% !important; }
     /* Không override -> mặc định margin-bottom:10px của stButtonGroup cộng gap flex 10px ra
@@ -8307,11 +8308,11 @@ _MAIN_CSS = """
        ở trên) dù nhìn sơ tưởng đã đều -- đo thật bằng Playwright phát hiện lệch hẳn 4px/20px. Đặt
        cùng 2px để 2 khoảng bằng nhau (12px), khớp phương án B đã chọn trong mockup. Tuỳ biến
        (`.st-key-tb_sub_picker`) dùng lại ĐÚNG rule này (xác nhận với người dùng: sub-tab
-       "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn giữa như Báo cáo/Sức khoẻ, không
+       "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn trái như Báo cáo/Sức khoẻ, không
        phải dáng nút pill của nav chính). */
     .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"],
     .st-key-tb_sub_picker [data-testid="stButtonGroup"],
-    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
+    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: flex-start !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
@@ -9890,7 +9891,16 @@ def _inject_note_editor_shortcuts():
     gắn ổn định vào window.parent.document xuyên suốt qua các lần rerun) -- nên phải lặp lại
     việc gắn định kỳ, giống hệt cách style_quill() lặp lại applyQuillCss mỗi 400ms; đánh dấu
     qua thuộc tính tự đặt trên chính document của iframe đó để không gắn trùng nhiều listener
-    lên cùng 1 iframe còn sống."""
+    lên cùng 1 iframe còn sống.
+
+    Cùng lượt PHÁT HIỆN iframe MỚI (đúng thời điểm set __noteShortcutsBound lần đầu) cũng tự
+    focus() thẳng vào .ql-editor + dời con trỏ về CUỐI nội dung -- bug thật đã gặp: bấm nút "Sửa
+    ghi chú"/"Thêm ghi chú" xong, con trỏ chuột KHÔNG tự nằm trong ô soạn (khác lối vào qua phím
+    tắt "n", vốn đã tự focus sẵn -- xem _inject_keyboard_shortcuts()), nên phím ↑/↓ gõ ngay sau đó
+    bị trình duyệt hiểu là cuộn trang (không phần tử nào đang focus) thay vì di chuyển con trỏ
+    trong ô soạn. Chỉ focus ĐÚNG 1 LẦN khi iframe mới mount (cùng điều kiện với việc gắn listener,
+    không lặp lại mỗi 400ms) -- lặp lại sẽ liên tục cướp focus/con trỏ khỏi tay người dùng đang gõ
+    dở, dù họ đã bấm ra ngoài ô soạn để đọc phần khác của trang."""
     js = (
         "<script>\n"
         "function bindNoteShortcuts(){\n"
@@ -9914,6 +9924,16 @@ def _inject_note_editor_shortcuts():
         "        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); clickByLabel('Cập nhật'); }\n"
         "        else if (e.key === 'Escape') { e.preventDefault(); clickByLabel('Huỷ'); }\n"
         "      });\n"
+        "      const ed = d.querySelector('.ql-editor');\n"
+        "      ed.focus();\n"
+        "      try {\n"
+        "        const range = d.createRange();\n"
+        "        range.selectNodeContents(ed);\n"
+        "        range.collapse(false);\n"
+        "        const sel = f.contentWindow.getSelection();\n"
+        "        sel.removeAllRanges();\n"
+        "        sel.addRange(range);\n"
+        "      } catch (err) {}\n"
         "    });\n"
         "  }catch(e){}\n"
         "}\n"
