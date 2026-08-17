@@ -2463,61 +2463,78 @@ def _clip_card(note):
     )
 
 
-def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style="padding:18px;"):
-    """Bảng tổng quan gọn: 1 thẻ gồm hàng số lớn (hero) + các nhóm 'chip' phụ.
+def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style=""):
+    """Bảng tổng quan gọn: hero (nếu có) là 1 LƯỚI thẻ riêng biệt (mỗi số to 1 thẻ), các nhóm
+    "section" xếp thành DÒNG có gạch ngăn (label trái/giá trị phải, khác chip-pill trước đây) gộp
+    trong 1 thẻ list riêng bên dưới -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired,
+    áp dụng chung cho MỌI trang gọi hàm này, xác nhận với người dùng: ưu tiên khớp mockup hơn giữ
+    nguyên bản chip cũ).
 
-    hero_items: list dict {label, value, deltas?: [(text, color)]}; rỗng -> bỏ hàng hero.
-    sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]}
-    footer:     (text, bg, fg) -> dòng nhắn nằm cuối thẻ (vd lời nhắc chuỗi)
-    groups:     list dict {label?: str, sections: [...]} — nhóm nhiều sections với divider;
+    hero_items: list dict {label, value, deltas?: [(text, color)]}; rỗng -> bỏ lưới hero.
+    sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]} -- "chips" là
+                tên tham số cũ (giữ nguyên để không phải sửa mọi nơi gọi), giờ render thành DÒNG
+                chứ không phải chip pill nữa. hl=True -> tô đậm màu accent cho cả k/v của dòng đó
+                (trước đây là nền chip riêng).
+    footer:     (text, bg, fg) -> dòng nhắn nằm cuối thẻ list (vd lời nhắc chuỗi)
+    groups:     list dict {label?: str, sections: [...]} — nhóm nhiều sections, mỗi group cách
+                nhau 1 khoảng trắng riêng (thẻ list tách hẳn) thay vì gạch chia trong cùng 1 thẻ;
                 nếu truyền thì sections bị bỏ qua.
-    card_style: style inline cho thẻ ngoài (vd thêm margin-top để tách thẻ).
+    card_style: style inline cho khối bọc ngoài CÙNG (không còn là 1 "thẻ" -- hero/list đã tự có
+                nền/viền/bóng riêng -- chỉ dùng cho margin tách với phần tử kế tiếp).
     Toàn bộ HTML viết sát lề trái để Streamlit không hiểu nhầm là code block.
     """
-    def _render_sec(sec):
+    def _render_row(c):
+        cls = "sp-lrow hl" if c.get('hl') else "sp-lrow"
+        out = f"<div class='{cls}'><span class='sp-lrow-k'>{c['k']}</span><span class='sp-lrow-v'>{c['v']}"
+        if c.get('delta'):
+            dt, dc = c['delta']
+            out += f" <span class='sp-lrow-d' style='color:{dc};'>{dt}</span>"
+        out += "</span></div>"
+        return out
+
+    def _render_sec_rows(sec, is_first):
         chips = sec.get('chips') or []
         if not chips:
             return ''
-        out = f"<div class='sp-row'><div class='sp-sub'>{sec['label']}</div><div class='sp-chips'>"
-        for c in chips:
-            cls = "chip tw" if c.get('hl') else "chip"
-            out += f"<span class='{cls}'><span class='ck'>{c['k']}</span><span class='cv'>{c['v']}</span>"
-            if c.get('delta'):
-                dt, dc = c['delta']
-                out += f"<span class='cd' style='color:{dc};'>{dt}</span>"
-            out += "</span>"
-        out += "</div></div>"
+        head_cls = "sp-lsec-head first" if is_first else "sp-lsec-head"
+        out = f"<div class='{head_cls}'>{sec['label']}</div>"
+        out += "".join(_render_row(c) for c in chips)
         return out
 
-    h = f"<div class='glass-card stat-panel' style='{card_style}'>"
+    def _render_listcard(secs, with_footer):
+        inner = ''
+        first = True
+        for sec in secs:
+            rows = _render_sec_rows(sec, first)
+            if rows:
+                inner += rows
+                first = False
+        if with_footer and footer:
+            f_txt, f_bg, f_fg = footer
+            inner += ("<div style='margin:14px 20px 16px;padding-top:14px;border-top:1px solid var(--divider);text-align:center;'>"
+                      f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
+        return f"<div class='glass-card sp-listcard'>{inner}</div>" if inner else ''
+
+    h = f"<div class='sp-wrap' style='{card_style}'>"
     if hero_items:
-        h += "<div class='sp-hero'>"
+        h += "<div class='sp-herogrid'>"
         for it in hero_items:
-            h += f"<div class='sp-hi'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
+            h += f"<div class='glass-card sp-tile'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
             for txt, col in it.get('deltas', []) or []:
                 h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
             h += "</div>"
         h += "</div>"
     if groups is not None:
-        first = True
-        for grp in groups:
+        # footer chỉ gắn vào group CUỐI CÙNG có nội dung -- tránh lặp lại nếu >1 group.
+        _nonempty = [g for g in groups if [s for s in (g.get('sections') or []) if s.get('chips')]]
+        for i, grp in enumerate(_nonempty):
             grp_secs = [s for s in (grp.get('sections') or []) if s.get('chips')]
-            if not grp_secs:
-                continue
-            if not first:
-                h += "<div class='sp-divider'></div>"
-            first = False
+            card = _render_listcard(grp_secs, with_footer=(i == len(_nonempty) - 1))
             if grp.get('label'):
                 h += f"<div class='sp-glabel'>{grp['label']}</div>"
-            for sec in grp_secs:
-                h += _render_sec(sec)
+            h += card
     else:
-        for sec in (sections or []):
-            h += _render_sec(sec)
-    if footer:
-        f_txt, f_bg, f_fg = footer
-        h += ("<div style='margin-top:16px;padding-top:14px;border-top:1px solid var(--divider);text-align:center;'>"
-              f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
+        h += _render_listcard(sections or [], with_footer=True)
     h += "</div>"
     st.markdown(h, unsafe_allow_html=True)
 
@@ -5461,8 +5478,8 @@ def _render_health_input(df_health):
             _right_html = "<div class='pbill-title'>Tất cả chỉ số trong khoảng tham chiếu</div>"
         _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
         # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
-        # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
-        # đọc lẫn với khuôn "tờ lịch hôm nay" của billboard Hôm nay (cùng CSS .tbill-date/.pbill-num
+        # chú thích cho biết số to trong badge tròn bên trái là ngày LẤY MẪU gần nhất, không phải
+        # hôm nay, tránh đọc lẫn với badge tròn của billboard Hôm nay (cùng CSS .tbcircle-*
         # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi tháng/năm CHỮ ĐẦY ĐỦ (không chỉ số
         # to + thứ ở trên) + số ngày đã trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác
         # format_relative() dùng cho mốc giờ thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu
@@ -6977,17 +6994,26 @@ def sec_block(html):
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
     """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
-    -> Tổng quan/Chi tiết): số to bên trái đóng khung như tờ giấy lịch bàn + nội dung tự do bên
-    phải, style (kính mờ/frosted glass) dùng chung y hệt billboard Hôm nay -- xem docstring
-    _render_today_billboard() và CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng
-    nguyên khối `.tbill-tab`/`.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/
-    nhãn vì cỡ chữ khác billboard Hôm nay (64px so với 76px, do đây là số nhiều chữ số hơn số
-    ngày).
+    -> Tổng quan/Chi tiết, Sức khoẻ, Tuỳ biến, Trợ giúp): badge TRÒN bên trái (số to + nhãn kỳ) +
+    nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi đường kẻ dọc).
+    Badge tròn dùng chung `.tbcircle-*` với billboard Hôm nay (`_render_today_billboard()`) -- xác
+    nhận với người dùng đổi hẳn khỏi khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.pbill-num`/`.pbill-label`
+    /`.tbill-date`, đã bỏ) để MỌI billboard trong app đồng bộ 1 kiểu badge, không riêng Hôm nay.
+    Style nền (kính mờ/frosted glass) dùng chung y hệt billboard Hôm nay -- xem CSS
+    `.st-key-today_billboard, .st-key-bc_billboard`. Mục lục dùng chung `.tbill-toccol`/
+    `.sec-toc-chip` với billboard Hôm nay.
 
-    right_html: HTML THÔ cho cột phải -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
+    big_num ở đây thường NHIỀU CHỮ SỐ hơn số ngày (Hôm nay luôn 1-2 chữ số) -- vd "9h30′"/"13281"/
+    "0" -- cỡ chữ trong badge tự co theo độ dài chuỗi (`_tbcircle_num_fs()`) để không tràn khỏi
+    vòng tròn 96px, KHÔNG dùng cỡ cố định 34px như Hôm nay.
+
+    right_html: HTML THÔ cho cột giữa -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
     cáo dùng tiêu đề+mô tả câu văn (.pbill-title/.pbill-sub), Sách dùng kicker+tên sách/tác giả
     (.pbill-kicker/.pbill-booktitle/.pbill-author) + hàng chip riêng (.pbill-chips) -- tham số hoá
     thẳng bằng HTML thay vì cố nhét đủ loại nội dung vào tham số text/subtitle cố định.
+
+    chips: rỗng -> chỉ 2 cột (badge | nội dung), không có cột mục lục thứ 3 (vd trang không đủ
+    chương để cần mục lục).
 
     key: PHẢI đổi khi 1 trang có >1 lời gọi hàm này CÓ THỂ CÙNG NẰM TRONG 1 LẦN CHẠY SCRIPT --
     bug thật đã gặp: st.tabs() render TOÀN BỘ nội dung mọi tab (kể cả tab không active, chỉ ẩn
@@ -6996,22 +7022,32 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
     nếu dùng chung key mặc định. CSS `.st-key-bc_billboard*`/`[class*="st-key-bc_billboard_row"...]`
     phải liệt kê thêm MỌI key mới thêm vào đây (khớp chính xác, không dùng prefix chung vì
     "..._detail_row" không còn chứa nguyên vẹn chuỗi con "billboard_row")."""
+    def _tbcircle_num_fs(v):
+        # 1-2 ký tự (số ngày kiểu Hôm nay) giữ nguyên 34px gốc; chuỗi dài hơn (giờ/phút, số phiên,
+        # số dòng mã nguồn...) tự thu nhỏ dần để không tràn khỏi vòng tròn 96px.
+        n = len(str(v))
+        return 34 if n <= 2 else 28 if n == 3 else 22 if n == 4 else 18
     _left_html = (
-        "<div class='tbill-date'>"
-        f"<div class='tbill-tab'><span class='tbill-tab-label'>{tab_label}</span></div>"
-        f"<div class='pbill-num'>{big_num}</div>"
-        f"<div class='pbill-label'>{big_label}</div>"
-        f"<div class='tbill-meta'>{meta}</div></div>")
+        "<div class='tbcircle-wrap'>"
+        f"<div class='tbcircle-tab'>{tab_label}</div>"
+        f"<div class='tbcircle'><div class='tbcircle-num' style='font-size:{_tbcircle_num_fs(big_num)}px;'>{big_num}</div></div>"
+        f"<div class='tbcircle-dow'>{big_label}</div>"
+        f"<div class='tbcircle-meta'>{meta}</div></div>")
     with st.container(key=key, border=True):
         with st.container(key=f"{key}_row"):
-            c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+            if chips:
+                c_left, c_right, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
+            else:
+                c_left, c_right = st.columns([1, 2], vertical_alignment="center")
+                c_toc = None
             with c_left:
                 st.markdown(_left_html, unsafe_allow_html=True)
             with c_right:
                 st.markdown(right_html, unsafe_allow_html=True)
-        if chips:
-            _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
-            st.markdown(f"<div class='sec-toc' style='margin-top:18px;'>{_chips_html}</div>", unsafe_allow_html=True)
+            if c_toc is not None:
+                with c_toc:
+                    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+                    st.markdown(f"<div class='tbill-toccol'>{_chips_html}</div>", unsafe_allow_html=True)
 
 
 def help_faq_item(question, answer_md):
@@ -8035,36 +8071,43 @@ _MAIN_CSS = """
 
     [data-testid="stMetric"] { display: none; }
 
-    /* ===== Bảng tổng quan gọn (hero + chip) ===== */
-    .stat-panel .sp-hero { display: flex; flex-wrap: wrap; }
-    .stat-panel .sp-hi { flex: 1; min-width: 130px; padding: 2px 14px; border-right: 1px solid var(--divider); }
-    .stat-panel .sp-hi:first-child { padding-left: 2px; }
-    .stat-panel .sp-hi:last-child { border-right: none; }
-    .stat-panel .sp-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-panel .sp-v { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
-    .stat-panel .sp-d { font-size: 13px; font-weight: 500; margin-top: 2px; }
-    /* Mỗi nhóm = 1 hàng: nhãn bên trái, các chip cùng hàng -> tiết kiệm chiều cao */
-    .stat-panel .sp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 12px; }
-    .stat-panel .sp-sub { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; flex: 0 0 160px; }
-    .stat-panel .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
-    @media (max-width: 640px) { .stat-panel .sp-sub { flex-basis: 100%; } }
-    /* white-space KHÔNG nowrap (khác vẻ ngoài "viên thuốc" gọn thường thấy) -- vài chip mang giá
-       trị tự do dài (vd "Phần gần nhất" là tên chương/tập, không có độ dài cố định) sẽ tràn ra
-       ngoài khung thẻ trên màn hẹp nếu ép 1 dòng; max-width + word-break đảm bảo chip luôn co
-       vừa bề rộng thẻ, xuống dòng bên TRONG chip thay vì tràn ra ngoài. Chip giá trị ngắn (đa số)
-       không bị ảnh hưởng vì nội dung đã ngắn hơn 1 dòng sẵn. */
+    /* ===== Bảng tổng quan gọn (render_stat_panel()) -- lưới thẻ hero + 1 thẻ list dòng bên dưới,
+       khớp Hôm nay.dc.html (đợt redesign Apple/macOS-inspired), THAY cho khuôn chip-pill cũ. Áp
+       dụng chung cho MỌI trang gọi hàm này (Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ). ===== */
+    .sp-herogrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .sp-tile { padding: 18px 20px !important; }
+    .sp-l { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+    .sp-v { font-size: 27px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sp-v span { font-size: 15px; font-weight: 600; color: var(--text-2); }
+    .sp-d { font-size: 13px; font-weight: 500; margin-top: 4px; }
+    /* Thẻ list: mỗi "section" = 1 tiêu đề nhỏ in hoa (border-top ĐẬM ngăn với section trước) +
+       các dòng label/giá trị (border-top MỜ ngăn giữa các dòng) -- không còn chip-pill. */
+    .sp-listcard { padding: 0 !important; overflow: hidden; }
+    .sp-lsec-head { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
+        letter-spacing: 0.4px; padding: 14px 20px 4px; border-top: 1px solid var(--border); }
+    .sp-lsec-head.first { border-top: none; }
+    .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 10px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+    .sp-listcard > .sp-lrow:last-child { padding-bottom: 14px; }
+    .sp-lrow-v { font-variant-numeric: tabular-nums; text-align: right; }
+    .sp-lrow-d { font-weight: 700; margin-left: 4px; }
+    .sp-lrow.hl .sp-lrow-k, .sp-lrow.hl .sp-lrow-v { color: var(--accent-dark); font-weight: 700; }
+    .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;
+        letter-spacing: 0.6px; margin: 14px 0 6px; }
+    .sp-wrap > .sp-glabel:first-child { margin-top: 0; }
+    @media (max-width: 640px) { .sp-lrow { flex-wrap: wrap; } }
     /* .maprow .chip: badge Nhóm ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
-       tái dùng nguyên class chip/ck/cv của .stat-panel/.pbill-chips, chỉ thêm vào phạm vi scope
-       vì không phải billboard/stat-panel. */
-    .stat-panel .chip, .pbill-chips .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
+       tái dùng nguyên class chip/ck/cv của .pbill-chips (billboard Sách/Gundam/Dự án), chỉ thêm
+       vào phạm vi scope vì không phải billboard. */
+    .pbill-chips .chip, .maprow .chip { border-radius: 9px; padding: 6px 10px; font-size: 12.5px; white-space: normal;
         max-width: 100%; overflow-wrap: break-word; word-break: break-word; background: var(--chip); }
-    .stat-panel .chip .ck, .pbill-chips .chip .ck { color: var(--text-2); }
-    .stat-panel .chip .cv, .pbill-chips .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
-    .stat-panel .chip .cd, .pbill-chips .chip .cd { font-weight: 500; margin-left: 6px; }
-    .stat-panel .chip.tw, .pbill-chips .chip.tw { background: rgba(var(--accent-rgb),0.10); }
-    /* Hàng chip billboard Sách (Cùng lúc/Phần đọc gần nhất/trích dẫn đã lưu...) -- tái dùng
-       nguyên class chip/ck/cv/tw của .stat-panel (giá trị CSS giống hệt mockup), chỉ đổi phạm vi
-       scope sang .pbill-chips vì billboard không phải .stat-panel. */
+    .pbill-chips .chip .ck, .maprow .chip .ck { color: var(--text-2); }
+    .pbill-chips .chip .cv, .maprow .chip .cv { font-weight: 600; color: var(--text); margin-left: 5px; }
+    .pbill-chips .chip .cd, .maprow .chip .cd { font-weight: 500; margin-left: 6px; }
+    .pbill-chips .chip.tw, .maprow .chip.tw { background: rgba(var(--accent-rgb),0.10); }
+    .pbill-chips .chip.tw .ck, .maprow .chip.tw .ck { color: var(--accent-dark); }
+    .pbill-chips .chip.tw .cv, .maprow .chip.tw .cv { color: var(--accent); }
+    /* Hàng chip billboard Sách/Gundam/Dự án (Cùng lúc/Phần đọc gần nhất/trích dẫn đã lưu...). */
     .pbill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
     /* Badge trạng thái "Đang hoạt động"/"Không hoạt động" cạnh tên Dự án/Nhóm ở billboard Báo
        cáo -> Dự án (mockup) -- đặt cạnh .pbill-booktitle nên dùng vertical-align để canh giữa
@@ -8073,15 +8116,6 @@ _MAIN_CSS = """
         border-radius: 20px; margin-left: 10px; vertical-align: middle; }
     .pbill-status.active { background: rgba(var(--accent-rgb),0.10); color: var(--accent-dark); }
     .pbill-status.inactive { background: var(--chip); color: var(--text-3); }
-    .stat-panel .sp-divider { border-top: 1px solid var(--divider); margin: 10px 0 2px; }
-    .stat-panel .sp-glabel { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
-    .stat-panel > .sp-glabel:first-child { margin-top: 0; }
-    /* .sp-row có margin-top để tách với .sp-hero phía trên -- khi KHÔNG có hero (vd panel
-       "Tham khảo cho lên kế hoạch" chỉ có sections, không hero_items), .sp-row là con đầu tiên
-       nên margin đó cộng dồn với padding của card, làm lề trên dày hơn lề dưới rõ rệt. */
-    .stat-panel > .sp-row:first-child { margin-top: 0; }
-    .stat-panel .chip.tw .ck { color: var(--accent-dark); }
-    .stat-panel .chip.tw .cv { color: var(--accent); }
     .section-hd { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 18px 0 8px; letter-spacing: -0.2px; }
 
     /* ===== Mục dạng gập/mở (expander) trông như tiêu đề mục ===== */
@@ -8255,17 +8289,18 @@ _MAIN_CSS = """
         gap: 4px !important;
     }
 
-    /* Cùng ý căn giữa như thanh nav chính, áp cho thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo),
-       "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem
-       render_reading_log() -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông
-       lệch hẳn so với các sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác
-       nhận với người dùng qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục
-       giống hệt .st-key-nav ở trên. Dáng nút tab gạch chân (không phải nền đặc teal như nav
-       chính) -- gap:0 để huỷ gap chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0
-       14px của từng nút bên dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá
-       lớn). [class*="st-key-rl_view_tabs"] (substring, KHÔNG phải class chính xác) vì Sách dùng
-       key "rl_view_tabs_picker", Gundam "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ
-       khớp 1 trong 2 trang. */
+    /* Thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo), "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng
+       quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log() -- trước đây dùng st.tabs()
+       riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các sub-tab picker khác, đổi hẳn
+       sang segmented_control cho đồng bộ, xác nhận với người dùng qua ảnh chụp) -- label đã ẩn
+       (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav ở trên NGOẠI TRỪ căn lề:
+       CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người dùng đổi lại) -- khớp cảm
+       giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống trải khi ít mục. Dáng nút
+       tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để huỷ gap chung 6px ở trên
+       (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên dưới, không phải gap
+       của container, cộng cả 2 sẽ ra khoảng cách quá lớn). [class*="st-key-rl_view_tabs"]
+       (substring, KHÔNG phải class chính xác) vì Sách dùng key "rl_view_tabs_picker", Gundam
+       "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp 1 trong 2 trang. */
     .st-key-bc_sub_picker, .st-key-hm_sub_picker, .st-key-tb_sub_picker,
     [class*="st-key-rl_view_tabs"] { width: 100% !important; }
     /* Không override -> mặc định margin-bottom:10px của stButtonGroup cộng gap flex 10px ra
@@ -8273,11 +8308,11 @@ _MAIN_CSS = """
        ở trên) dù nhìn sơ tưởng đã đều -- đo thật bằng Playwright phát hiện lệch hẳn 4px/20px. Đặt
        cùng 2px để 2 khoảng bằng nhau (12px), khớp phương án B đã chọn trong mockup. Tuỳ biến
        (`.st-key-tb_sub_picker`) dùng lại ĐÚNG rule này (xác nhận với người dùng: sub-tab
-       "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn giữa như Báo cáo/Sức khoẻ, không
+       "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn trái như Báo cáo/Sức khoẻ, không
        phải dáng nút pill của nav chính). */
     .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"],
     .st-key-tb_sub_picker [data-testid="stButtonGroup"],
-    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: center !important; width: 100% !important; }
+    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: flex-start !important; width: 100% !important; }
     .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
@@ -8559,9 +8594,11 @@ _MAIN_CSS = """
         [class*="st-key-kq_teaser_cols"] [data-testid="stHorizontalBlock"] { row-gap: 0 !important; }
         [class*="st-key-kq_teaser_cols"] [data-testid="stColumn"] { margin-bottom: 10px !important; }
 
-        /* Bảng tổng quan gọn: hero xếp 2 cột, bỏ vạch ngăn dọc */
-        .stat-panel .sp-hi { border-right: none !important; min-width: 45% !important; padding: 6px 8px !important; }
-        .stat-panel .sp-v { font-size: 26px !important; }
+        /* Bảng tổng quan gọn: ép lưới hero về đúng 2 cột trên mobile (auto-fit mặc định có thể ra
+           3 cột hẹp dính chữ nếu màn hình vừa đủ 3× minmax). */
+        .sp-herogrid { grid-template-columns: repeat(2, 1fr) !important; }
+        .sp-tile { padding: 14px 16px !important; }
+        .sp-v { font-size: 24px !important; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
@@ -8680,16 +8717,15 @@ _MAIN_CSS = """
         -webkit-backdrop-filter: var(--billboard-backdrop);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
-    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
-       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard).
-       Màu chữ ở đây dùng var(--text)/var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) --
-       billboard LUÔN có nền hiệu ứng SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền
-       nào đang chọn: 6 bảng "nhạt" là kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố
-       định" (BG_PALETTES_DARK_BG) đổi hẳn sang nền đặc phớt accent lên var(--card) -- billboard
-       PHẢI là 1 "thẻ" sáng/chữ tối như light theme bình thường (xác nhận với người dùng, chỉ nền
-       NGOÀI billboard/thẻ mới được phép đậm), nên var(--text) luôn đúng ở đây. */
-    .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- badge tròn dùng chung .tbcircle-*
+       với billboard Hôm nay (xem CSS gần _render_today_billboard/docstring render_period_billboard),
+       tiêu đề/mô tả cột giữa dùng riêng .pbill-title/.pbill-sub. Màu chữ ở đây dùng var(--text)/
+       var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) -- billboard LUÔN có nền hiệu ứng
+       SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền nào đang chọn: 6 bảng "nhạt" là
+       kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) đổi
+       hẳn sang nền đặc phớt accent lên var(--card) -- billboard PHẢI là 1 "thẻ" sáng/chữ tối như
+       light theme bình thường (xác nhận với người dùng, chỉ nền NGOÀI billboard/thẻ mới được
+       phép đậm), nên var(--text) luôn đúng ở đây. */
     .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
     .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
         margin-top: 8px; }
@@ -9137,7 +9173,10 @@ _MAIN_CSS = """
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
     .st-key-tbgd_billboard, .st-key-help_billboard {
         border-color: var(--border) !important;
-        padding: 20px 28px 16px !important;
+        /* padding-bottom 16px -> 24px: cột mục lục dọc (.tbill-toccol) thường cao hơn 2 cột badge/
+           nội dung bên cạnh (canh giữa theo chiều cao hàng), nên mép dưới billboard cần dư dả hơn
+           để chip mục lục cuối cùng không sát viền (bug thật đã gặp, xem screenshot người dùng). */
+        padding: 20px 28px 24px !important;
         border-radius: 12px !important;
         margin: 0 0 6px !important;
     }
@@ -9155,37 +9194,59 @@ _MAIN_CSS = """
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
-    /* Cột phải (tiêu đề/mô tả) billboard Báo cáo -- đệm trái 24px khớp mockup (grid-template-
-       columns:1fr 2fr;padding-left:24px), billboard Hôm nay không cần vì cột phải là trích dẫn
-       đã tự có mark "" làm khoảng đệm thị giác riêng. */
-    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
-    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    /* Mọi cột KHÔNG PHẢI cột đầu (badge/tờ lịch) trong hàng billboard -- đệm trái 24px + đường kẻ
+       dọc ngăn cách, khớp mockup (nội dung ở giữa, mục lục dọc bên phải khi có `chips`, xem
+       docstring render_period_billboard()/_render_today_billboard()). Trước đây chỉ đệm trái
+       ĐÚNG cột CUỐI (khi billboard chỉ có 2 cột) -- đổi `:last-child` thành `:not(:first-child)`
+       để áp đúng CẢ 2 cột khi billboard có 3 cột (nội dung GIỮA cũng cần đệm/kẻ, không chỉ mục
+       lục cột cuối). Trang Trợ giúp (key="help_billboard") từng bị SÓT khỏi danh sách này (bug
+       thật đã gặp, ảnh chụp người dùng gửi thiếu hẳn đường kẻ dọc) -- đã thêm help_billboard_row. */
+    [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
+    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
         padding-left: 24px !important;
+        border-left: 1px solid var(--divider);
     }
-    /* Cột ngày (số to + Thứ/ngày/tháng chữ + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng
-       cảm giác 1 tờ lịch bàn xé hằng ngày. vertical_alignment="center" của st.columns cha đã canh
-       khối này theo tâm so với cột trích dẫn cao hơn bên cạnh; text-align lo phần ngang. */
-    .tbill-date { text-align: center; padding: 16px 16px 14px; }
-    /* "Tab lịch xé" -- thanh accent bo góc trên + 2 chấm tròn màu nền trang (giả lỗ đục lịch bàn)
-       nằm NGAY TRÊN số ngày to, hiện tháng/năm dạng nhãn nhỏ in hoa (mockup billboard Hôm nay). */
-    .tbill-tab { position: relative; background: var(--accent); border-radius: 8px 8px 0 0;
-        padding: 8px 0 7px; margin-bottom: 8px; }
-    .tbill-tab::before, .tbill-tab::after { content: ''; position: absolute; top: 6px;
-        width: 9px; height: 9px; border-radius: 50%; background: var(--bg);
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.35); }
-    .tbill-tab::before { left: 22px; }
-    .tbill-tab::after { right: 22px; }
-    .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
-        text-transform: uppercase; color: var(--card); }
-    .tbill-num { font-size: 76px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    /* .tbill-dow/.tbill-meta -- cùng lý do var(--text)/var(--text-2) đã áp cho .pbill-* ở trên
-       (billboard Hôm nay dùng chung khối .tbill-date, xem docstring render_period_billboard). */
-    .tbill-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
-    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
+    /* Badge tròn billboard (Apple/macOS-inspired, khớp Hôm nay.dc.html) -- DÙNG CHUNG cho MỌI
+       billboard trong app (Hôm nay `_render_today_billboard()` lẫn Báo cáo/Sách/Gundam/Sức khoẻ/
+       Tuỳ biến/Trợ giúp qua `render_period_billboard()`) -- xác nhận với người dùng đổi hẳn khỏi
+       khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.tbill-date`/`.tbill-meta`/`.pbill-num`/`.pbill-label`,
+       đã bỏ hoàn toàn) để MỌI cột badge trong app đồng bộ 1 kiểu. vertical_alignment="center" của
+       st.columns cha đã canh khối này theo tâm so với cột khác cao hơn bên cạnh. */
+    .tbcircle-wrap { text-align: center; padding: 0 4px; }
+    /* Nhãn kỳ (tab_label -- "TUẦN 34 · 2026"/"TOÀN BỘ DỮ LIỆU"/"TỦ SÁCH 2026"...) dạng viên thuốc
+       đứng NGAY TRÊN badge tròn -- billboard Hôm nay không cần nhãn này (badge tự chứa tháng qua
+       `.tbcircle-mon`, chỉ 3-4 ký tự viết vừa trong vòng tròn) vì tab_label các trang khác dài hơn
+       hẳn, không thể nhét vừa bên trong badge. */
+    .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 11px;
+        font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 13px;
+        border-radius: 20px; margin-bottom: 12px; }
+    .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: #fff;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
+    .tbcircle-num { font-size: 34px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+    .tbcircle-mon { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+        opacity: 0.9; margin-top: 2px; }
+    .tbcircle-dow { font-size: 14.5px; font-weight: 700; color: var(--text); margin-top: 12px; }
+    .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
+    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ
+       giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
+       nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
+       padding-left của CHÍNH cột này đã xử lý ở rule gộp ":not(:first-child)" phía trên -- không
+       cần lặp lại ở đây. padding-bottom để chip cuối không sát mép dưới billboard khi cột này cao
+       hơn 2 cột còn lại (badge/nội dung được vertical_alignment="center" canh giữa, tự thấp hơn
+       cột mục lục nếu có ≥4 chip) -- bug thật đã gặp (screenshot người dùng gửi), thiếu bước này
+       khiến chip cuối gần như dính viền dưới billboard. */
+    .tbill-toccol { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+    .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
@@ -9830,7 +9891,16 @@ def _inject_note_editor_shortcuts():
     gắn ổn định vào window.parent.document xuyên suốt qua các lần rerun) -- nên phải lặp lại
     việc gắn định kỳ, giống hệt cách style_quill() lặp lại applyQuillCss mỗi 400ms; đánh dấu
     qua thuộc tính tự đặt trên chính document của iframe đó để không gắn trùng nhiều listener
-    lên cùng 1 iframe còn sống."""
+    lên cùng 1 iframe còn sống.
+
+    Cùng lượt PHÁT HIỆN iframe MỚI (đúng thời điểm set __noteShortcutsBound lần đầu) cũng tự
+    focus() thẳng vào .ql-editor + dời con trỏ về CUỐI nội dung -- bug thật đã gặp: bấm nút "Sửa
+    ghi chú"/"Thêm ghi chú" xong, con trỏ chuột KHÔNG tự nằm trong ô soạn (khác lối vào qua phím
+    tắt "n", vốn đã tự focus sẵn -- xem _inject_keyboard_shortcuts()), nên phím ↑/↓ gõ ngay sau đó
+    bị trình duyệt hiểu là cuộn trang (không phần tử nào đang focus) thay vì di chuyển con trỏ
+    trong ô soạn. Chỉ focus ĐÚNG 1 LẦN khi iframe mới mount (cùng điều kiện với việc gắn listener,
+    không lặp lại mỗi 400ms) -- lặp lại sẽ liên tục cướp focus/con trỏ khỏi tay người dùng đang gõ
+    dở, dù họ đã bấm ra ngoài ô soạn để đọc phần khác của trang."""
     js = (
         "<script>\n"
         "function bindNoteShortcuts(){\n"
@@ -9854,6 +9924,16 @@ def _inject_note_editor_shortcuts():
         "        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); clickByLabel('Cập nhật'); }\n"
         "        else if (e.key === 'Escape') { e.preventDefault(); clickByLabel('Huỷ'); }\n"
         "      });\n"
+        "      const ed = d.querySelector('.ql-editor');\n"
+        "      ed.focus();\n"
+        "      try {\n"
+        "        const range = d.createRange();\n"
+        "        range.selectNodeContents(ed);\n"
+        "        range.collapse(false);\n"
+        "        const sel = f.contentWindow.getSelection();\n"
+        "        sel.removeAllRanges();\n"
+        "        sel.addRange(range);\n"
+        "      } catch (err) {}\n"
         "    });\n"
         "  }catch(e){}\n"
         "}\n"
@@ -10030,12 +10110,19 @@ def _shuffle_daily_quote():
 
 def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
     """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
-    (trước đây là 3 khối rời -- header glass-card, kq_daily_card, sec_hero) vào 1 khối duy nhất,
-    đập vào mắt ngay khi vừa mở trang thay vì rải rác. Cột trái là "tờ lịch xé hằng ngày": số ngày
-    to + Thứ/ngày/tháng chữ đầy đủ + 2 dòng meta (ngày hoạt động, cập nhật gần nhất), canh giữa cả
-    ngang (CSS text-align) lẫn dọc (vertical_alignment="center" của st.columns, canh theo tâm so
-    với cột phải cao hơn). Cột phải là trích dẫn Kindle hôm nay -- vắng mặt hẳn (chưa import trích
-    dẫn nào) thì cột ngày chiếm trọn bề rộng, không chia cột.
+    vào 1 khối duy nhất, xếp thành 3 cột (badge tròn | trích dẫn | mục lục dọc) ngăn cách bởi
+    đường kẻ dọc -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired), THAY cho khuôn "tờ
+    lịch xé" cũ. Dùng CSS `.tbcircle-*` -- DÙNG CHUNG với `render_period_billboard()` (billboard
+    Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ giúp cũng đã đổi sang badge tròn này, không còn
+    khuôn "tờ lịch xé" ở bất kỳ đâu trong app). Khác biệt duy nhất: Hôm nay không cần `.tbcircle-tab`
+    (nhãn kỳ dạng viên thuốc phía trên badge) vì tháng đã hiện gọn trong `.tbcircle-mon` bên trong
+    vòng tròn (chỉ 3-4 ký tự "Th8", khác tab_label các trang khác dài hơn hẳn).
+
+    Cột phải "mục lục" (`hero_chips`) xếp DỌC (khác `.sec-toc` hàng-ngang-wrap dùng ở nơi khác) --
+    dùng class `.tbill-toccol` bọc ngoài, tái dùng nguyên `.sec-toc-chip` cho từng chip.
+
+    Cột giữa (trích dẫn) vắng mặt hẳn (chưa import trích dẫn nào) thì chỉ còn 2 cột (badge | mục
+    lục) -- không chia 3 cột.
 
     Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
     do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
@@ -10052,20 +10139,27 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
         _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
                      f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
 
-    _tab_label = f"{VN_MONTHS_WORD[sel.month - 1]} {sel.year}"
-    _date_html = (
-        "<div class='tbill-date'>"
-        f"<div class='tbill-tab'><span class='tbill-tab-label'>{_tab_label}</span></div>"
-        f"<div class='tbill-num'>{sel.day}</div>"
-        f"<div class='tbill-dow'>{vn_dow}</div>"
-        f"<div class='tbill-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
+    _mon_abbr = f"Th{sel.month}"
+    _badge_html = (
+        "<div class='tbcircle-wrap'>"
+        f"<div class='tbcircle'><div class='tbcircle-num'>{sel.day}</div>"
+        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
+        f"<div class='tbcircle-dow'>{vn_dow}</div>"
+        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
+
+    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
+    _toc_html = f"<div class='tbill-toccol'>{_chips_html}</div>"
 
     with st.container(key="today_billboard", border=True):
-        if kq is not None:
-            with st.container(key="tbill_daterow"):
-                c_date, c_quote = st.columns([1, 2], vertical_alignment="center")
-                with c_date:
-                    st.markdown(_date_html, unsafe_allow_html=True)
+        with st.container(key="tbill_daterow"):
+            if kq is not None:
+                c_date, c_quote, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
+            else:
+                c_date, c_toc = st.columns([1, 1], vertical_alignment="center")
+                c_quote = None
+            with c_date:
+                st.markdown(_badge_html, unsafe_allow_html=True)
+            if c_quote is not None:
                 with c_quote:
                     st.markdown(
                         "<div class='kq-daily-mark'>“</div>"
@@ -10095,11 +10189,8 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                                          help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                                 st.rerun()
-        else:
-            st.markdown(_date_html, unsafe_allow_html=True)
-
-        _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
-        st.markdown(f"<div class='sec-toc' style='margin-top:20px;'>{_chips_html}</div>", unsafe_allow_html=True)
+            with c_toc:
+                st.markdown(_toc_html, unsafe_allow_html=True)
 
     if _upd_line:
         _inject_relative_time_ticker()
