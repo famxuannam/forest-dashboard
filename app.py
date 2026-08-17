@@ -5478,8 +5478,8 @@ def _render_health_input(df_health):
             _right_html = "<div class='pbill-title'>Tất cả chỉ số trong khoảng tham chiếu</div>"
         _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
         # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
-        # chú thích cho biết ngày to bên trái là ngày LẤY MẪU gần nhất, không phải hôm nay, tránh
-        # đọc lẫn với khuôn "tờ lịch hôm nay" của billboard Hôm nay (cùng CSS .tbill-date/.pbill-num
+        # chú thích cho biết số to trong badge tròn bên trái là ngày LẤY MẪU gần nhất, không phải
+        # hôm nay, tránh đọc lẫn với badge tròn của billboard Hôm nay (cùng CSS .tbcircle-*
         # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi tháng/năm CHỮ ĐẦY ĐỦ (không chỉ số
         # to + thứ ở trên) + số ngày đã trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác
         # format_relative() dùng cho mốc giờ thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu
@@ -6994,15 +6994,18 @@ def sec_block(html):
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
     """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
-    -> Tổng quan/Chi tiết, Sức khoẻ, Tuỳ biến, Trợ giúp): số to bên trái đóng khung như tờ giấy
-    lịch bàn + nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi
-    đường kẻ dọc) -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired, đồng bộ với
-    `_render_today_billboard()`). Style nền (kính mờ/frosted glass) dùng chung y hệt billboard Hôm
-    nay -- xem CSS `.st-key-today_billboard, .st-key-bc_billboard`. Tái dùng nguyên khối
-    `.tbill-tab`/`.tbill-meta` (giá trị CSS giống hệt), chỉ thêm `.pbill-*` cho số to/nhãn vì cỡ
-    chữ khác billboard Hôm nay (64px so với 76px, do đây là số nhiều chữ số hơn số ngày). Mục lục
-    dùng chung `.tbill-toccol`/`.sec-toc-chip` với billboard Hôm nay -- KHÔNG còn xếp hàng ngang
-    bên dưới (`.sec-toc` cũ) nữa.
+    -> Tổng quan/Chi tiết, Sức khoẻ, Tuỳ biến, Trợ giúp): badge TRÒN bên trái (số to + nhãn kỳ) +
+    nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi đường kẻ dọc).
+    Badge tròn dùng chung `.tbcircle-*` với billboard Hôm nay (`_render_today_billboard()`) -- xác
+    nhận với người dùng đổi hẳn khỏi khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.pbill-num`/`.pbill-label`
+    /`.tbill-date`, đã bỏ) để MỌI billboard trong app đồng bộ 1 kiểu badge, không riêng Hôm nay.
+    Style nền (kính mờ/frosted glass) dùng chung y hệt billboard Hôm nay -- xem CSS
+    `.st-key-today_billboard, .st-key-bc_billboard`. Mục lục dùng chung `.tbill-toccol`/
+    `.sec-toc-chip` với billboard Hôm nay.
+
+    big_num ở đây thường NHIỀU CHỮ SỐ hơn số ngày (Hôm nay luôn 1-2 chữ số) -- vd "9h30′"/"13281"/
+    "0" -- cỡ chữ trong badge tự co theo độ dài chuỗi (`_tbcircle_num_fs()`) để không tràn khỏi
+    vòng tròn 96px, KHÔNG dùng cỡ cố định 34px như Hôm nay.
 
     right_html: HTML THÔ cho cột giữa -- caller tự dựng (khác nhau khá nhiều giữa các trang: Báo
     cáo dùng tiêu đề+mô tả câu văn (.pbill-title/.pbill-sub), Sách dùng kicker+tên sách/tác giả
@@ -7019,12 +7022,17 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
     nếu dùng chung key mặc định. CSS `.st-key-bc_billboard*`/`[class*="st-key-bc_billboard_row"...]`
     phải liệt kê thêm MỌI key mới thêm vào đây (khớp chính xác, không dùng prefix chung vì
     "..._detail_row" không còn chứa nguyên vẹn chuỗi con "billboard_row")."""
+    def _tbcircle_num_fs(v):
+        # 1-2 ký tự (số ngày kiểu Hôm nay) giữ nguyên 34px gốc; chuỗi dài hơn (giờ/phút, số phiên,
+        # số dòng mã nguồn...) tự thu nhỏ dần để không tràn khỏi vòng tròn 96px.
+        n = len(str(v))
+        return 34 if n <= 2 else 28 if n == 3 else 22 if n == 4 else 18
     _left_html = (
-        "<div class='tbill-date'>"
-        f"<div class='tbill-tab'><span class='tbill-tab-label'>{tab_label}</span></div>"
-        f"<div class='pbill-num'>{big_num}</div>"
-        f"<div class='pbill-label'>{big_label}</div>"
-        f"<div class='tbill-meta'>{meta}</div></div>")
+        "<div class='tbcircle-wrap'>"
+        f"<div class='tbcircle-tab'>{tab_label}</div>"
+        f"<div class='tbcircle'><div class='tbcircle-num' style='font-size:{_tbcircle_num_fs(big_num)}px;'>{big_num}</div></div>"
+        f"<div class='tbcircle-dow'>{big_label}</div>"
+        f"<div class='tbcircle-meta'>{meta}</div></div>")
     with st.container(key=key, border=True):
         with st.container(key=f"{key}_row"):
             if chips:
@@ -8708,16 +8716,15 @@ _MAIN_CSS = """
         -webkit-backdrop-filter: var(--billboard-backdrop);
         filter: drop-shadow(0 4px 8px rgba(33,28,19,0.16));
     }
-    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- số to/nhãn cột trái + tiêu đề/mô
-       tả cột phải, cỡ chữ riêng khác billboard Hôm nay (xem docstring render_period_billboard).
-       Màu chữ ở đây dùng var(--text)/var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) --
-       billboard LUÔN có nền hiệu ứng SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền
-       nào đang chọn: 6 bảng "nhạt" là kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố
-       định" (BG_PALETTES_DARK_BG) đổi hẳn sang nền đặc phớt accent lên var(--card) -- billboard
-       PHẢI là 1 "thẻ" sáng/chữ tối như light theme bình thường (xác nhận với người dùng, chỉ nền
-       NGOÀI billboard/thẻ mới được phép đậm), nên var(--text) luôn đúng ở đây. */
-    .pbill-num { font-size: 64px; font-weight: 800; line-height: 1; color: var(--accent-dark); }
-    .pbill-label { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 5px; }
+    /* Billboard sub-tab Báo cáo (render_period_billboard()) -- badge tròn dùng chung .tbcircle-*
+       với billboard Hôm nay (xem CSS gần _render_today_billboard/docstring render_period_billboard),
+       tiêu đề/mô tả cột giữa dùng riêng .pbill-title/.pbill-sub. Màu chữ ở đây dùng var(--text)/
+       var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) -- billboard LUÔN có nền hiệu ứng
+       SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền nào đang chọn: 6 bảng "nhạt" là
+       kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) đổi
+       hẳn sang nền đặc phớt accent lên var(--card) -- billboard PHẢI là 1 "thẻ" sáng/chữ tối như
+       light theme bình thường (xác nhận với người dùng, chỉ nền NGOÀI billboard/thẻ mới được
+       phép đậm), nên var(--text) luôn đúng ở đây. */
     .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
     .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
         margin-top: 8px; }
@@ -9204,31 +9211,20 @@ _MAIN_CSS = """
         padding-left: 24px !important;
         border-left: 1px solid var(--divider);
     }
-    /* Cột ngày (nhãn tháng/năm + số to + meta) -- canh giữa CẢ ngang lẫn dọc trong cột, đúng cảm
-       giác 1 tờ lịch bàn xé hằng ngày. Từ đợt redesign Apple/macOS-inspired, khối "tờ lịch xé" này
-       CHỈ còn dùng ở billboard Báo cáo/Sách/Gundam (`render_period_billboard()`) -- billboard Hôm
-       nay (`_render_today_billboard()`) đã đổi hẳn sang badge tròn `.tbcircle-*` khớp
-       `Hôm nay.dc.html`, không còn dùng `.tbill-tab`/`.tbill-num`/`.tbill-dow` nữa.
-       vertical_alignment="center" của st.columns cha đã canh khối này theo tâm so với cột nội
-       dung cao hơn bên cạnh; text-align lo phần ngang. */
-    .tbill-date { text-align: center; padding: 16px 16px 14px; }
-    /* "Tab lịch xé" -- thanh accent bo góc trên + 2 chấm tròn màu nền trang (giả lỗ đục lịch bàn)
-       nằm NGAY TRÊN số to, hiện tháng/năm (hoặc "Toàn bộ dữ liệu"...) dạng nhãn nhỏ in hoa. */
-    .tbill-tab { position: relative; background: var(--accent); border-radius: 8px 8px 0 0;
-        padding: 8px 0 7px; margin-bottom: 8px; }
-    .tbill-tab::before, .tbill-tab::after { content: ''; position: absolute; top: 6px;
-        width: 9px; height: 9px; border-radius: 50%; background: var(--bg);
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.35); }
-    .tbill-tab::before { left: 22px; }
-    .tbill-tab::after { right: 22px; }
-    .tbill-tab-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
-        text-transform: uppercase; color: var(--card); }
-    /* .tbill-meta -- cùng lý do var(--text-2) đã áp cho .pbill-sub ở dưới (dùng chung giữa Báo
-       cáo/Sách/Gundam). */
-    .tbill-meta { font-size: 12.5px; color: var(--text-2); margin-top: 10px; line-height: 1.7; }
-    /* Badge tròn billboard Hôm nay (Apple/macOS-inspired, khớp Hôm nay.dc.html) -- THAY cho "tờ
-       lịch xé" cũ, riêng cho _render_today_billboard(), không dùng chung với render_period_billboard(). */
+    /* Badge tròn billboard (Apple/macOS-inspired, khớp Hôm nay.dc.html) -- DÙNG CHUNG cho MỌI
+       billboard trong app (Hôm nay `_render_today_billboard()` lẫn Báo cáo/Sách/Gundam/Sức khoẻ/
+       Tuỳ biến/Trợ giúp qua `render_period_billboard()`) -- xác nhận với người dùng đổi hẳn khỏi
+       khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.tbill-date`/`.tbill-meta`/`.pbill-num`/`.pbill-label`,
+       đã bỏ hoàn toàn) để MỌI cột badge trong app đồng bộ 1 kiểu. vertical_alignment="center" của
+       st.columns cha đã canh khối này theo tâm so với cột khác cao hơn bên cạnh. */
     .tbcircle-wrap { text-align: center; padding: 0 4px; }
+    /* Nhãn kỳ (tab_label -- "TUẦN 34 · 2026"/"TOÀN BỘ DỮ LIỆU"/"TỦ SÁCH 2026"...) dạng viên thuốc
+       đứng NGAY TRÊN badge tròn -- billboard Hôm nay không cần nhãn này (badge tự chứa tháng qua
+       `.tbcircle-mon`, chỉ 3-4 ký tự viết vừa trong vòng tròn) vì tab_label các trang khác dài hơn
+       hẳn, không thể nhét vừa bên trong badge. */
+    .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 11px;
+        font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 13px;
+        border-radius: 20px; margin-bottom: 12px; }
     .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: #fff;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
@@ -10093,9 +10089,11 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
     """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
     vào 1 khối duy nhất, xếp thành 3 cột (badge tròn | trích dẫn | mục lục dọc) ngăn cách bởi
     đường kẻ dọc -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired), THAY cho khuôn "tờ
-    lịch xé" cũ. Dùng CSS riêng `.tbcircle-*` (KHÔNG đụng `.tbill-tab`/`.tbill-date`/`.tbill-meta`
-    -- vẫn được `render_period_billboard()` dùng nguyên cho billboard Báo cáo/Sách/Gundam, chưa
-    đổi theo mockup này) -- badge tròn CHỈ áp riêng cho billboard Hôm nay.
+    lịch xé" cũ. Dùng CSS `.tbcircle-*` -- DÙNG CHUNG với `render_period_billboard()` (billboard
+    Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ giúp cũng đã đổi sang badge tròn này, không còn
+    khuôn "tờ lịch xé" ở bất kỳ đâu trong app). Khác biệt duy nhất: Hôm nay không cần `.tbcircle-tab`
+    (nhãn kỳ dạng viên thuốc phía trên badge) vì tháng đã hiện gọn trong `.tbcircle-mon` bên trong
+    vòng tròn (chỉ 3-4 ký tự "Th8", khác tab_label các trang khác dài hơn hẳn).
 
     Cột phải "mục lục" (`hero_chips`) xếp DỌC (khác `.sec-toc` hàng-ngang-wrap dùng ở nơi khác) --
     dùng class `.tbill-toccol` bọc ngoài, tái dùng nguyên `.sec-toc-chip` cho từng chip.
