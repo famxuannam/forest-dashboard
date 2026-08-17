@@ -2836,11 +2836,14 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None,
-        # margin-bottom -- card_style mặc định ("padding:18px;") không có margin, khiến khoảng
-        # cách xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), cũng
-        # không tự có margin) chỉ còn đúng gap 10px của khối cha thay vì 14px+10px như mọi cặp
-        # thẻ khác (cùng lỗi đã sửa ở Sách/Gundam -> Tổng quan, áp dụng nhất quán sang Báo cáo).
-        card_style="padding:18px;margin-bottom:14px;")
+        # margin-bottom -- card_style mặc định ("") không có margin, khiến khoảng cách xuống 2 thẻ
+        # "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), cũng không tự có margin)
+        # chỉ còn đúng gap 10px của khối cha thay vì 14px+10px như mọi cặp thẻ khác (cùng lỗi đã
+        # sửa ở Sách/Gundam -> Tổng quan, áp dụng nhất quán sang Báo cáo). KHÔNG còn "padding:18px"
+        # ở đây (bản trước đây, khi .sp-wrap là 1 div CHỈ để margin -- không phải thẻ hiển thị
+        # được nữa từ khi tách hero/list thành thẻ riêng) -- padding đó vô tình ép .sp-listcard
+        # bên trong hẹp hơn 36px so với thẻ khác trên trang (bug thật đã gặp, ảnh chụp người dùng).
+        card_style="margin-bottom:14px;")
     render_project_rhythm(df_period)
     if show_top3:
         st.write("")
@@ -3755,7 +3758,10 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
             # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), không tự
             # có margin riêng) chỉ còn đúng gap 10px của khối cha thay vì 24px như mọi cặp thẻ
             # khác trong chương này (bug thật đã gặp, ảnh chụp người dùng gửi ở tab Sách/Gundam).
-            card_style="padding:18px;margin:14px 0;",
+            # KHÔNG còn "padding:18px" (bug khác đã gặp: ép .sp-listcard bên trong hẹp hơn 36px so
+            # với thẻ "Đang đọc" ngay phía trên -- .sp-wrap giờ chỉ là div canh margin, không phải
+            # thẻ hiển thị có padding riêng như bản render_stat_panel cũ).
+            card_style="margin:14px 0;",
         )
 
         render_project_rhythm(df_books)
@@ -8081,14 +8087,17 @@ _MAIN_CSS = """
     .sp-v span { font-size: 15px; font-weight: 600; color: var(--text-2); }
     .sp-d { font-size: 13px; font-weight: 500; margin-top: 4px; }
     /* Thẻ list: mỗi "section" = 1 tiêu đề nhỏ in hoa (border-top ĐẬM ngăn với section trước) +
-       các dòng label/giá trị (border-top MỜ ngăn giữa các dòng) -- không còn chip-pill. */
+       các dòng label/giá trị (border-top MỜ ngăn giữa các dòng) -- không còn chip-pill. Padding
+       dòng/section rút gọn (10px->7px, 14px->9px) so với bản đầu -- xác nhận với người dùng qua
+       ảnh chụp: khối "Tổng quan ngày" (So sánh/Mốc trong ngày/Theo buổi/Liền mạch dồn 1 chỗ) cao
+       quá mức so với lượng thông tin, chiếm nhiều màn hình hơn cần thiết. */
     .sp-listcard { padding: 0 !important; overflow: hidden; }
     .sp-lsec-head { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
-        letter-spacing: 0.4px; padding: 14px 20px 4px; border-top: 1px solid var(--border); }
+        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border); }
     .sp-lsec-head.first { border-top: none; }
     .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        padding: 10px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
-    .sp-listcard > .sp-lrow:last-child { padding-bottom: 14px; }
+        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+    .sp-listcard > .sp-lrow:last-child { padding-bottom: 10px; }
     .sp-lrow-v { font-variant-numeric: tabular-nums; text-align: right; }
     .sp-lrow-d { font-weight: 700; margin-left: 4px; }
     .sp-lrow.hl .sp-lrow-k, .sp-lrow.hl .sp-lrow-v { color: var(--accent-dark); font-weight: 700; }
@@ -8401,12 +8410,13 @@ _MAIN_CSS = """
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
     [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
-    /* day_stepper riêng: mockup thu gọn cả hàng ◀ [ngày] ▶ về đúng bề rộng nội dung rồi canh
-       giữa trang (KHÔNG kéo giãn full-width như period_stepper của Báo cáo, vốn cần chiếm hết
-       hàng ngang cho các lựa chọn kỳ) -- 2 cột nút cố định 44px, cột ngày co theo nội dung
-       thay vì flex-grow theo tỉ lệ [1,8,1] mặc định. */
+    /* day_stepper riêng: thu gọn cả hàng ◀ [ngày] ▶ về đúng bề rộng nội dung rồi canh TRÁI trang
+       (không còn canh giữa như bản trước, xác nhận với người dùng đổi lại -- KHÔNG kéo giãn
+       full-width như period_stepper của Báo cáo, vốn cần chiếm hết hàng ngang cho các lựa chọn
+       kỳ) -- 2 cột nút cố định 44px, cột ngày co theo nội dung thay vì flex-grow theo tỉ lệ
+       [1,8,1] mặc định. */
     [class*="st-key-day_stepper"] [data-testid="stHorizontalBlock"] {
-        width: fit-content !important; margin: 0 auto !important;
+        width: fit-content !important; margin: 0 !important;
     }
     [class*="st-key-day_stepper"] [data-testid="stColumn"]:first-child,
     [class*="st-key-day_stepper"] [data-testid="stColumn"]:last-child {
@@ -8439,14 +8449,15 @@ _MAIN_CSS = """
         flex-grow: 0 !important;
     }
     /* Bộ chọn kỳ (period_stepper key="stepper_week"/"stepper_month"/"stepper_year", Báo cáo ->
-       Tuần/Tháng/Năm) thu gọn + canh giữa CÙNG kiểu day_stepper (Hôm nay) -- xem lại thấy đồng bộ
-       đẹp hơn để full-width như trước (ghi chú cũ ở rule [class*="stepper"] phía trên vẫn đúng lý
-       do LÚC ĐÓ, chỉ là đổi quyết định thẩm mỹ). 4 cột (lùi/chọn kỳ/tiến/về hiện tại) -- 3 cột nút
+       Tuần/Tháng/Năm) thu gọn CÙNG kiểu day_stepper (Hôm nay) thay vì full-width như trước (ghi
+       chú cũ ở rule [class*="stepper"] phía trên vẫn đúng lý do LÚC ĐÓ, chỉ là đổi quyết định
+       thẩm mỹ) -- CĂN TRÁI (không còn canh giữa như bản trước, xác nhận với người dùng đổi lại,
+       cùng đợt với day_stepper/sub-tab picker). 4 cột (lùi/chọn kỳ/tiến/về hiện tại) -- 3 cột nút
        cố định 44px (chọn theo :not(:nth-child(2)), không phải :first-child/:last-child như
        day_stepper 3 cột, vì period_stepper có thêm cột nút "về hiện tại" thứ 4), cột selectbox co
        theo nội dung. */
     [class*="st-key-stepper_"] [data-testid="stHorizontalBlock"] {
-        width: fit-content !important; margin: 0 auto !important;
+        width: fit-content !important; margin: 0 !important;
     }
     [class*="st-key-stepper_"] [data-testid="stColumn"]:not(:nth-child(2)) {
         flex: 0 0 44px !important; width: 44px !important;
@@ -10625,8 +10636,10 @@ elif nav == "Báo cáo":
                 sections=_sections,
                 # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm, Dự án và Sách/
                 # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px.
-                card_style="padding:18px;margin-bottom:14px;",
+                # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG còn
+                # "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang -- xem chú thích chỗ
+                # gọi tương tự ở Báo cáo/Sách).
+                card_style="margin-bottom:14px;",
             )
             render_project_rhythm(df)
 
@@ -11137,8 +11150,9 @@ elif nav == "Báo cáo":
                     sections=_grp_sections,
                     # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm và Sách/
                     # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                    # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px.
-                    card_style="padding:18px;margin-bottom:14px;",
+                    # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG
+                    # còn "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang).
+                    card_style="margin-bottom:14px;",
                 )
                 # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
                 # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
