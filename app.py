@@ -2099,7 +2099,25 @@ def _inject_date_picker_locale():
     "calendar"]` rồi thay theo 2 bảng tra VN_MONTHS/VN_DAYS_ABBR (khớp đúng chuỗi, không đoán mò
     bằng regex tách từ -- an toàn hơn khi BaseWeb đổi định dạng header giữa các bản Streamlit).
     Chỉ cần gọi 1 lần cho cả trang (không phải 1 lần mỗi date_input) vì observer theo dõi chung
-    toàn bộ <body>."""
+    toàn bộ <body>.
+
+    CÙNG observer đó còn xếp lại lưới ngày để THỨ HAI đứng đầu tuần (mặc định là Chủ Nhật). Đây
+    KHÔNG phải thứ chỉnh được từ Python: lưới do date-fns dựng bên trong bundle Streamlit, đầu tuần
+    lấy từ `locale.options.weekStartsOn` của locale suy ra từ ngôn ngữ TRÌNH DUYỆT (xem chunk
+    `useIntlLocale.*.js`) -- `st.date_input` không có tham số nào chạm tới, và bản thân date-fns
+    nằm trong module scope nên không gọi `setDefaultOptions()` từ ngoài được.
+
+    Cách xếp lại (an toàn vì chỉ DI CHUYỂN đúng các node ô ngày có sẵn, không tự vẽ lại ngày nên
+    không thể sai ngày/mất handler click):
+    - Lưới luôn là các `[role="row"]` × 7 `[role="gridcell"]`; ô ngày của tháng khác để TRỐNG
+      (div rỗng) nên tập ô "có chữ" chính là ngày 1..N của tháng đang xem, đúng thứ tự.
+    - Thứ THẬT của ngày 1 đọc từ `aria-label` (BaseWeb luôn ghi tiếng Anh "... Sat, August 1..." --
+      translateNode ở trên CHỈ đổi text node, không đụng thuộc tính, nên nguồn này luôn đáng tin
+      dù giao diện đã dịch sang tiếng Việt).
+    - Vị trí mong muốn của ngày 1 = (thứ + 6) % 7; nếu đã đúng thì thoát ngay -> hàm idempotent,
+      observer chạy lại bao nhiêu lần cũng không lặp vô hạn (lần 2 trở đi không sinh mutation).
+    - Số hàng tính lại theo offset mới (tháng bắt đầu Chủ Nhật cần thêm 1 hàng), tự thêm/bớt hàng.
+    Hàng tiêu đề thứ cũng xoay 1 nấc (đưa ô Chủ Nhật xuống cuối) cho khớp lưới."""
     _months_js = json.dumps(VN_MONTHS, ensure_ascii=False)
     _days_js = json.dumps(VN_DAYS_ABBR, ensure_ascii=False)
     js = (
@@ -2108,6 +2126,8 @@ def _inject_date_picker_locale():
         f"  const MONTHS = {_months_js};\n"
         f"  const DAYS = {_days_js};\n"
         "  const MONTH_RE = new RegExp('\\\\b(' + Object.keys(MONTHS).join('|') + ')\\\\b', 'g');\n"
+        "  const WD = {Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6};\n"
+        "  const SUN_LBL = ['Su','Sun','CN'];\n"
         "  function translateNode(node){\n"
         "    for (const child of node.childNodes){\n"
         "      if (child.nodeType === 3){\n"
@@ -2124,9 +2144,54 @@ def _inject_date_picker_locale():
         "      }\n"
         "    }\n"
         "  }\n"
+        "  function mondayFirst(cal){\n"
+        "    const rows = [...cal.querySelectorAll('[role=\"row\"]')];\n"
+        "    if (!rows.length) return;\n"
+        "    const cells = [];\n"
+        "    rows.forEach(r => { for (const c of r.children) cells.push(c); });\n"
+        "    const real = cells.filter(c => (c.textContent || '').trim() !== '');\n"
+        "    const blank = cells.find(c => (c.textContent || '').trim() === '');\n"
+        "    if (!real.length || !blank) return;\n"
+        "    const m = (real[0].getAttribute('aria-label') || '').match(/\\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\\b/);\n"
+        "    if (!m) return;\n"
+        "    const want = (WD[m[1]] + 6) % 7;\n"
+        "    if (cells.indexOf(real[0]) === want) return;\n"
+        "    const nRows = Math.ceil((want + real.length) / 7);\n"
+        "    const seq = [];\n"
+        "    for (let i = 0; i < want; i++) seq.push(blank.cloneNode(false));\n"
+        "    for (const c of real) seq.push(c);\n"
+        "    while (seq.length < nRows * 7) seq.push(blank.cloneNode(false));\n"
+        "    while (rows.length < nRows){\n"
+        "      const r = rows[0].cloneNode(false);\n"
+        "      rows[0].parentNode.appendChild(r);\n"
+        "      rows.push(r);\n"
+        "    }\n"
+        "    for (let i = 0; i < nRows; i++) rows[i].replaceChildren(...seq.slice(i * 7, i * 7 + 7));\n"
+        "    for (let i = nRows; i < rows.length; i++) rows[i].remove();\n"
+        "  }\n"
+        "  function mondayFirstHeader(cal){\n"
+        "    const hdrs = cal.querySelectorAll('[role=\"presentation\"]');\n"
+        "    for (const h of hdrs){\n"
+        "      const kids = [...h.children];\n"
+        "      if (kids.length !== 7) continue;\n"
+        "      if (kids.some(k => k.getAttribute('role') === 'gridcell')) continue;\n"
+        "      if (!kids.every(k => { const t = (k.textContent || '').trim(); return t.length > 0 && t.length <= 3; })) continue;\n"
+        "      if (SUN_LBL.includes((kids[0].textContent || '').trim())) h.appendChild(kids[0]);\n"
+        "      return;\n"
+        "    }\n"
+        "  }\n"
+        "  let busy = false;\n"
         "  function run(){\n"
-        "    const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
-        "    cals.forEach(translateNode);\n"
+        "    if (busy) return;\n"
+        "    busy = true;\n"
+        "    try {\n"
+        "      const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
+        "      cals.forEach(function(cal){\n"
+        "        translateNode(cal);\n"
+        "        mondayFirstHeader(cal);\n"
+        "        mondayFirst(cal);\n"
+        "      });\n"
+        "    } finally { busy = false; }\n"
         "  }\n"
         "  run();\n"
         "  const obs = new MutationObserver(run);\n"
@@ -2449,7 +2514,7 @@ def _clip_card(note):
     st.caption() trần trụi lạc quẻ giữa các thẻ số liệu. Icon đồng hồ cát (khác icon lịch sử của
     thẻ "Cập nhật gần nhất") vì ý nghĩa gần với "đang tính" hơn."""
     st.markdown(
-        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:16px; display:flex; "
+        f"<div class='glass-card' style='padding:12px 18px; margin-bottom:4px; display:flex; "
         f"align-items:center; flex-wrap:wrap; gap:6px 10px;'>"
         f"<span style='font-size:13px;color:var(--text-2);font-weight:500;text-transform:uppercase;"
         f"letter-spacing:0.5px;white-space:nowrap;'>"
@@ -2836,14 +2901,13 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
     ], sections=_top_days_section(df_period, top_days_label),
         footer=_smart_digest(full_df, period_col, selected_key, df_period, prev, avg, clip_note is not None)
         if show_footer else None,
-        # margin-bottom -- card_style mặc định ("") không có margin, khiến khoảng cách xuống 2 thẻ
-        # "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), cũng không tự có margin)
-        # chỉ còn đúng gap 10px của khối cha thay vì 14px+10px như mọi cặp thẻ khác (cùng lỗi đã
-        # sửa ở Sách/Gundam -> Tổng quan, áp dụng nhất quán sang Báo cáo). KHÔNG còn "padding:18px"
-        # ở đây (bản trước đây, khi .sp-wrap là 1 div CHỈ để margin -- không phải thẻ hiển thị
-        # được nữa từ khi tách hero/list thành thẻ riêng) -- padding đó vô tình ép .sp-listcard
-        # bên trong hẹp hơn 36px so với thẻ khác trên trang (bug thật đã gặp, ảnh chụp người dùng).
-        card_style="margin-bottom:14px;")
+        # margin-bottom 4px CỘNG gap flex 10px chung = 14px, đúng khoảng cách chuẩn giữa 2 thẻ
+        # nội dung trong app -- card_style mặc định ("") không margin sẽ chỉ ra 10px, hẹp hơn mọi
+        # cặp thẻ khác trên cùng trang (đo bằng Playwright, xem đợt chuẩn hoá spacing 14px).
+        # KHÔNG có "padding:18px" ở đây: .sp-wrap chỉ là div canh margin, không phải thẻ hiển thị
+        # (hero/list đã tách thành 2 thẻ riêng) -- padding đó từng ép .sp-listcard bên trong hẹp
+        # hơn 36px so với thẻ khác trên trang (bug thật đã gặp, ảnh chụp người dùng gửi).
+        card_style="margin-bottom:4px;")
     render_project_rhythm(df_period)
     if show_top3:
         st.write("")
@@ -3754,14 +3818,12 @@ def _render_reading_overview(t, df_books, _grp_summary, s_read, _span, _pace,
                     {"k": "30 ngày", "v": f"{_fmt_hours_short(_pace(30))}/ngày"},
                 ]},
             ],
-            # margin ĐỐI XỨNG (không chỉ margin-top) -- thiếu margin-bottom khiến khoảng cách
-            # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới (render_project_rhythm(), không tự
-            # có margin riêng) chỉ còn đúng gap 10px của khối cha thay vì 24px như mọi cặp thẻ
-            # khác trong chương này (bug thật đã gặp, ảnh chụp người dùng gửi ở tab Sách/Gundam).
-            # KHÔNG còn "padding:18px" (bug khác đã gặp: ép .sp-listcard bên trong hẹp hơn 36px so
-            # với thẻ "Đang đọc" ngay phía trên -- .sp-wrap giờ chỉ là div canh margin, không phải
-            # thẻ hiển thị có padding riêng như bản render_stat_panel cũ).
-            card_style="margin:14px 0;",
+            # margin ĐỐI XỨNG 4px (không chỉ margin-top) -- cộng gap flex 10px chung ra đúng 14px
+            # ở CẢ 2 phía, khớp khoảng cách chuẩn giữa mọi cặp thẻ trong app. KHÔNG có
+            # "padding:18px" (bug đã gặp: ép .sp-listcard bên trong hẹp hơn 36px so với thẻ "Đang
+            # đọc" ngay phía trên -- .sp-wrap chỉ là div canh margin, không phải thẻ hiển thị có
+            # padding riêng như bản render_stat_panel cũ).
+            card_style="margin:4px 0;",
         )
 
         render_project_rhythm(df_books)
@@ -4692,17 +4754,24 @@ def render_day_timeline(day_df):
 
     st.markdown(f"""
 <style>
-.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:14px 18px;margin:14px 0;}}
-.dtl-strip{{position:relative;height:16px;margin-bottom:3px;}}
+/* Chiều cao rút gọn theo screenshot người dùng gửi (track 44->26px, bar 38->20px, các dải nhãn/
+   trục/legend cùng thu lại) -- dòng thời gian chỉ cần đọc được NHỊP phiên trong ngày, thanh cao
+   44px chiếm chỗ ngang 1 thẻ số liệu mà không thêm thông tin gì. Nhãn tên Dự án trong thanh vẫn
+   giữ (chỉ hiện khi thanh đủ rộng, xem `width > 5.5` ở Python) -- 20px vẫn đủ chỗ cho chữ 10.5px. */
+/* margin 4px CỘNG gap flex 10px chung của khối cha = 14px -- đúng khoảng cách chuẩn giữa 2 thẻ
+   nội dung trong app (xem chú thích "khoảng cách chuẩn 14px" ở rule [data-testid="stVerticalBlock"]).
+   KHÔNG đặt 10px như trước: cộng dồn ra 20px, rộng gấp rưỡi mọi cặp thẻ khác trên cùng trang. */
+.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:12px 16px;margin:4px 0;}}
+.dtl-strip{{position:relative;height:13px;margin-bottom:2px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
-.dtl-track{{position:relative;height:44px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
+.dtl-track{{position:relative;height:26px;border-radius:6px;overflow:hidden;background:var(--chip);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}}
 .dtl-line{{position:absolute;top:0;bottom:0;width:1px;background:var(--divider);}}
-.dtl-bar{{position:absolute;top:3px;height:38px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:11.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar{{position:absolute;top:3px;height:20px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:10.5px;font-weight:600;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
-.dtl-axis{{position:relative;height:16px;margin-top:4px;}}
+.dtl-axis{{position:relative;height:14px;margin-top:3px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
-.dtl-legend{{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--text);}}
-.dtl-legend i{{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}}
+.dtl-legend{{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12px;color:var(--text);}}
+.dtl-legend i{{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px;}}
 </style>
 <div class="dtl-card">
 <span class="rl-book">Dòng thời gian trong ngày</span>
@@ -7173,12 +7242,19 @@ def frag_hourly(scope_df, key_prefix, default_color, with_range=True):
 
 @st.fragment
 def frag_category_bars(scope_df, key, default_color):
-    """Mục Phân bổ thời gian dạng thanh ngang xếp hạng (thay biểu đồ tròn cũ ở mọi trang Báo cáo)
-    -- toggle Nhóm/Dự án, mỗi hàng nhãn + 1 thanh fill dài tỉ lệ theo TỔNG cả kỳ (KHÔNG phải theo
-    hàng cao nhất -- đúng theo mockup Forest Dashboard.dc.html, xác nhận qua width% mỗi hàng cộng
-    dồn ra khớp tổng giờ cả kỳ) + giá trị bên phải. Đã BỎ dòng tóm tắt "X nổi bật" (top 3) theo yêu
-    cầu người dùng -- chỉ còn thanh xếp hạng. Bọc trong container "chartopt_..." (xem docstring
-    frag_calendar) để thu hẹp khoảng cách dọc xuống nội dung ngay dưới."""
+    """Mục Phân bổ thời gian: toggle Nhóm/Dự án + ĐÚNG 1 thanh ngang xếp chồng (mỗi Nhóm/Dự án 1
+    đoạn, bề rộng tỉ lệ theo TỔNG cả kỳ) + legend chấm màu bên dưới -- khớp screenshot người dùng
+    gửi, THAY bố cục cũ "mỗi Nhóm/Dự án 1 HÀNG riêng (nhãn | thanh fill | giá trị)". Lý do đổi:
+    bố cục cũ cao tỉ lệ thuận với số Nhóm/Dự án (10 dự án = 10 hàng ~ 280px) trong khi thông tin
+    chính chỉ là TỈ LỆ giữa chúng -- 1 thanh xếp chồng cho thấy tỉ lệ đó ngay lập tức trong ~14px.
+
+    Legend giữ ĐỦ thông tin của bố cục cũ (tên có link + thời lượng) và thêm % (bố cục cũ không
+    có) -- không mất dữ liệu khi đổi. Đoạn thanh có tooltip `data-tip` (tái dùng _RHYTHM_TIP_CSS
+    của render_project_rhythm) cho các đoạn quá hẹp không đọc được trực tiếp.
+
+    Áp dụng cho MỌI trang gọi hàm này (Hôm nay, Báo cáo Tuần/Tháng) -- cùng cách đã làm với
+    render_stat_panel: ưu tiên khớp mockup hơn giữ nguyên bố cục cũ. Bọc trong container
+    "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống nội dung dưới."""
     with st.container(key=f"chartopt_{key}"):
         ccol = st.segmented_control("Phân loại", ["Nhóm", "Dự án"], default=default_color, key=key,
                                      label_visibility="collapsed") or default_color
@@ -7189,19 +7265,26 @@ def frag_category_bars(scope_df, key, default_color):
             return
         _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
                         if ccol == "Dự án" else None)
-        rows_html = ""
+        segs_html, legend_html = "", ""
+        _n = len(g)
         for i, (name, mins) in enumerate(g.items()):
             pct = mins / total_min * 100
             color = COLOR_MAP.get(name, MAC_COLORS[i % len(MAC_COLORS)])
             _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_proj_to_cat.get(name), name)
-            rows_html += (
-                "<div class='catbar-row'>"
-                f"<span class='catbar-label'>{_entity_link_html(name, _kind)}</span>"
-                f"<span class='catbar-track'><span class='catbar-fill' "
-                f"style='width:{pct:.1f}%;background:{color};'></span></span>"
-                f"<span class='catbar-val'>{_fmt_hours_short(mins / 60)}</span></div>")
-        st.markdown(f"<div class='catbars-card'><div class='catbars'>{rows_html}</div></div>",
-                    unsafe_allow_html=True)
+            _hrs = _fmt_hours_short(mins / 60)
+            # Bo góc RIÊNG đoạn đầu/cuối thay vì overflow:hidden trên cả hàng -- overflow sẽ cắt
+            # mất tooltip (position:absolute trong đoạn), đúng bẫy đã ghi ở ui-components.md.
+            _r = ("7px 0 0 7px" if i == 0 and _n > 1 else "0 7px 7px 0" if i == _n - 1 and _n > 1
+                  else "7px" if _n == 1 else "0")
+            segs_html += (f"<div class='rhythm-seg catbar-seg' data-tip='{html_escape(str(name))}: {_hrs} · {pct:.0f}%' "
+                          f"style='width:{pct:.2f}%;background:{color};border-radius:{_r};'></div>")
+            legend_html += (f"<span class='catbar-lg'><i style='background:{color};'></i>"
+                            f"{_entity_link_html(name, _kind)} · {_hrs} · {pct:.0f}%</span>")
+        st.markdown(_RHYTHM_TIP_CSS, unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='catbars-card'><div class='catbar-stack'>{segs_html}</div>"
+            f"<div class='catbar-legend'>{legend_html}</div></div>",
+            unsafe_allow_html=True)
 
 
 @st.fragment
@@ -7447,26 +7530,48 @@ _LOGO_FONT_FACE = (
 
 
 def _logo_mark_svg(size):
-    """SVG mark phẳng "nhịp phiên" (5 vạch dọc), TỰ ĐỔI theo ACCENT đang chọn -- khối nền tô đặc
-    ACCENT (không gradient), viền 1.5px màu ACCENT đậm hơn (_darken factor=0.75, đủ tương phản để
-    thấy viền trên nền ACCENT nhạt mà không quá gắt như bản skeuomorphic cũ), 5 vạch trắng-ngà
-    (màu {{card}} light -- '#fdfbf5', luôn sáng hơn mọi ACCENT nên không cần đổi theo IS_DARK)
-    cao thấp so le. viewBox cố định 0 0 44 44 -- size chỉ đổi width/height, không đổi hình học.
-    Toạ độ x/y CĂN GIỮA cả cụm 5 vạch trong khung 44x44 (lề trái/phải đều 7px, lề trên/dưới quanh
-    vạch cao nhất đều 10.5px) -- bản gốc copy nguyên từ design handoff bị lệch trái ~2px (lề trái
-    9px, lề phải chỉ 5px) do người thiết kế không cân lại toạ độ khi thu nhỏ viewBox, đã phát hiện
-    qua phản hồi thực tế nên tính lại đây, KHÔNG đổi tỉ lệ chiều cao so le giữa các vạch (vẫn giữ
-    dáng "nhịp phiên" tự nhiên, không phải hình núi đối xứng cứng nhắc)."""
-    dark = _darken(ACCENT, 0.75)
-    bars = [(7, 22.5, 11), (13.5, 15.5, 18), (20, 10.5, 23), (26.5, 17.5, 16), (33, 24.5, 9)]
-    bar_svg = "".join(
-        f"<rect x='{x}' y='{y}' width='4' height='{h}' rx='1.5' fill='#fdfbf5'></rect>"
-        for x, y, h in bars
-    )
+    """SVG mark "cây thông trên thẻ bo góc", TỰ ĐỔI theo ACCENT đang chọn -- khối nền GRADIENT chéo
+    (ACCENT -> _darken(ACCENT, 0.55), hướng ~160deg khớp mockup sidebar) + hình cây thông 3 tầng +
+    thân cây, tô trắng. THAY hẳn mark "nhịp phiên" (5 vạch dọc) cũ theo yêu cầu người dùng (mockup
+    sidebar mới) -- dùng CHUNG cho cả 3 nơi: favicon (page_icon), màn đăng nhập (_wordmark_html
+    layout="login") và cụm thương hiệu sidebar (_sidebar_brand_html()), để logo nhất quán mọi nơi.
+
+    viewBox cố định 0 0 32 32 -- size chỉ đổi width/height, không đổi hình học. Hình cây lấy nguyên
+    toạ độ từ mockup (vốn vẽ cây 21px CĂN GIỮA trong thẻ 34px = chiếm ~62% cạnh thẻ) nhưng ở đó cây
+    và thẻ là 2 phần tử HTML rời; gộp vào 1 SVG nên phải tự thu nhỏ + căn giữa lại bằng transform
+    scale(0.75) + translate -- giữ ĐÚNG tỉ lệ cây/thẻ của mockup thay vì để cây chiếm trọn viewBox.
+
+    Gradient khai báo qua <linearGradient id="lg-mark"> -- id CỐ ĐỊNH (không random) an toàn vì mọi
+    lần gọi đều sinh ra gradient GIỐNG HỆT nhau, trùng id chỉ khiến trình duyệt dùng bản đầu tiên,
+    không gây lệch màu."""
+    dark = _darken(ACCENT, 0.55)
     return (
-        f"<svg width='{size}' height='{size}' viewBox='0 0 44 44'>"
-        f"<rect x='1' y='1' width='42' height='42' rx='9' fill='{ACCENT}' stroke='{dark}' stroke-width='1.5'></rect>"
-        f"{bar_svg}</svg>"
+        f"<svg width='{size}' height='{size}' viewBox='0 0 32 32'>"
+        "<defs><linearGradient id='lg-mark' x1='0%' y1='0%' x2='30%' y2='100%'>"
+        f"<stop offset='0%' stop-color='{ACCENT}'></stop>"
+        f"<stop offset='100%' stop-color='{dark}'></stop>"
+        "</linearGradient></defs>"
+        "<rect x='0' y='0' width='32' height='32' rx='8.5' fill='url(#lg-mark)'></rect>"
+        "<g transform='translate(3.81,3.85) scale(0.75)' fill='#fff' fill-opacity='0.96'>"
+        "<path d='M16 3l6.5 8.2h-3.6L24.5 18h-3.9l5.4 7.3H6l5.4-7.3H7.5l5.6-6.8H9.5L16 3z'></path>"
+        "<rect x='14.1' y='25.3' width='3.8' height='4.1' rx='0.8'></rect>"
+        "</g></svg>"
+    )
+
+
+def _sidebar_brand_html():
+    """Cụm thương hiệu đầu sidebar: thẻ logo bo góc + tên app 1 DÒNG bên phải -- khớp mockup
+    sidebar (xác nhận với người dùng), THAY cụm `_wordmark_html('header')` cũ (mark + "Forest"
+    serif / "DASHBOARD" xếp DỌC 2 dòng, cao gấp đôi và lệch tông so với nav phẳng bên dưới).
+
+    Màu chữ dùng var(--text) (chữ TRONG thẻ) chứ KHÔNG phải var(--text-on-bg) như _wordmark_html --
+    nền sidebar đã đổi sang var(--card) (xem CSS [data-testid="stSidebar"]), không còn là nền trang
+    var(--bg) nữa, nên cặp token "trên nền trang" không còn đúng ở đây."""
+    return (
+        "<div style='display:flex;align-items:center;gap:9px;padding:2px 4px 0;'>"
+        f"{_logo_mark_svg(34)}"
+        "<div style=\"font-size:15px;font-weight:800;color:var(--text);letter-spacing:-0.2px;\">"
+        "Forest Dashboard</div></div>"
     )
 
 
@@ -7823,6 +7928,14 @@ _MAIN_CSS = """
        chương đều dùng gap:10px cho khối bọc ngoài cùng, xem Forest Dashboard.dc.html) -- yêu cầu
        khớp pixel chính xác, không còn là ước lượng "trung dung" như trước. */
     [data-testid="stVerticalBlock"] { gap: 10px !important; }
+    /* KHOẢNG CÁCH CHUẨN GIỮA 2 THẺ NỘI DUNG = 14px (đã đo bằng Playwright và chuẩn hoá đồng loạt
+       -- trước đó rải rác 4px/20px/24px/26px tuỳ nơi, xác nhận qua ảnh chụp người dùng gửi: thẻ
+       "Dòng thời gian trong ngày" dính sát thẻ số liệu ngay trên). Cách đạt 14px: gap flex 10px ở
+       trên CỘNG margin 4px của chính thẻ (`.dtl-card`, `card_style="margin-bottom:4px"`...).
+       Thêm 1 thẻ mới xếp dọc trong cùng container: KHÔNG đặt margin (ra 10px, hẹp hơn phần còn
+       lại) và cũng KHÔNG đặt 10px/14px/16px (ra 20-26px, rộng hơn) -- đặt đúng 4px.
+       2 thẻ nằm TRONG CÙNG 1 st.markdown (vd .sp-herogrid -> .sp-listcard) không có gap flex nào
+       giữa chúng nên margin đặt thẳng 14px. */
     /* Streamlit bọc MỌI st.markdown(html) trong [data-testid="stMarkdownContainer"] có sẵn
        margin-bottom:-16px (bù trừ margin mặc định của <p> cuối cùng trong Markdown thật) -- các
        khối HTML tự viết ở đây đều là <div> thuần, không có <p> nào để bù, nên -16px này ăn thẳng
@@ -7834,6 +7947,7 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .sec-ch),
     [data-testid="stMarkdownContainer"]:has(> .sec-toc),
     [data-testid="stMarkdownContainer"]:has(> .glass-card),
+    [data-testid="stMarkdownContainer"]:has(> .sp-wrap),
     [data-testid="stMarkdownContainer"]:has(> .dtl-card),
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
     [data-testid="stMarkdownContainer"]:has(> .catbars-card),
@@ -7866,6 +7980,18 @@ _MAIN_CSS = """
         padding: var(--card-pad); box-shadow: var(--card-shadow);
     }
     .catbars { display: flex; flex-direction: column; gap: 10px; }
+    /* frag_category_bars: 1 thanh xếp chồng + legend chấm màu (khớp screenshot, xem docstring hàm
+       đó) -- KHÔNG overflow:hidden trên .catbar-stack dù các đoạn cần bo góc 2 đầu: mỗi đoạn tự bo
+       góc riêng theo vị trí (đầu/cuối/giữa) vì overflow sẽ cắt mất tooltip data-tip đặt bên trong
+       đoạn (bẫy đã ghi ở ui-components.md). .catbar-row/.catbar-track/.catbar-fill/.catbar-val bên
+       dưới VẪN dùng: render_year_category_bars()/render_month_category_bars() (Báo cáo Năm/Tháng)
+       giữ nguyên bố cục mỗi mục 1 hàng vì còn cột "so với kỳ trước" riêng, không gộp được vào
+       thanh xếp chồng. */
+    .catbar-stack { display: flex; height: 14px; margin-bottom: 10px; }
+    .catbar-seg { height: 100%; min-width: 2px; }
+    .catbar-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
+    .catbar-lg { display: inline-flex; align-items: center; gap: 6px; }
+    .catbar-lg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
     .catbar-row { display: grid; grid-template-columns: 150px 1fr 60px; align-items: center;
         gap: 10px; font-size: 13px; }
     /* Chương "Nhóm cả năm" (Báo cáo -> Năm, mockup, render_year_category_bars()) -- cột giá
@@ -8241,27 +8367,65 @@ _MAIN_CSS = """
        config.toml, không tự đổi theo Bảng màu nền. padding-top đủ để nội dung nằm dưới
        [data-testid="stHeader"] (position:absolute cao 60px, xem chú thích .block-container ở
        trên) -- header phủ ngang CẢ sidebar lẫn main, không riêng main. */
+    /* Nền var(--card) (KHÔNG phải var(--bg)) khớp mockup sidebar -- sidebar là 1 "tấm panel" sáng
+       tách khỏi nền trang bằng viền phải, không hoà vào nền. Với 4 bảng "nền đậm cố định"
+       (BG_PALETTES_DARK_BG) đây còn là lựa chọn ĐÚNG DUY NHẤT: var(--bg) đậm sẽ khiến chữ nav
+       (var(--text-2), màu chữ TRONG thẻ nên luôn tối) gần như biến mất. */
     [data-testid="stSidebar"] {
-        background: var(--bg) !important;
+        background: var(--card) !important;
         border-right: 1px solid var(--border);
         padding-top: 1rem;
     }
     [data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
     /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
        nút rộng hết bề ngang sidebar -- override đè lên rule .st-key-nav hàng ngang phía trên bằng
-       cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. */
+       cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. Kích thước/khoảng cách lấy ĐÚNG mockup
+       sidebar: item cao 38px, padding ngang 12px, bo góc 9px, gap 3px giữa các item, icon 18px
+       cách nhãn 11px, nhãn 13px/600. */
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] {
         justify-content: flex-start !important;
     }
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] {
-        flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 2px !important;
+        flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 3px !important;
     }
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button {
         width: 100% !important; justify-content: flex-start !important; text-align: left !important;
-        border-radius: 10px !important;
+        border-radius: 9px !important;
+        height: 38px !important; min-height: 38px !important;
+        padding: 0 12px !important;
+        gap: 11px !important;
+        font-size: 13px !important; font-weight: 600 !important;
     }
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button p {
-        text-align: left !important;
+        text-align: left !important; font-size: 13px !important; font-weight: 600 !important;
+    }
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+    }
+    /* Item CHƯA chọn: phẳng hoàn toàn (nền trong suốt + KHÔNG viền), chỉ item đang chọn mới nổi
+       khối accent -- khớp mockup. Phải ghi đè 2 rule CHUNG cho mọi stButtonGroup phía trên (nền
+       var(--card) + viền var(--border), hợp lý cho các segmented_control đứng trên nền trang
+       nhưng ở đây khiến 8 mục nav trông như 8 cái thẻ xếp chồng thay vì 1 danh sách menu). */
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+        background-color: transparent !important;
+        border-color: transparent !important;
+        color: var(--text-2) !important;
+    }
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
+        background-color: var(--chip) !important;
+    }
+    /* Đường kẻ ngăn nhóm "trang nội dung" (6 mục đầu) với nhóm "cài đặt/trợ giúp" (Tuỳ biến, Trợ
+       giúp) -- mockup có 1 divider ở đúng vị trí này. segmented_control render 8 nút trong CÙNG 1
+       [role="radiogroup"], không chèn được phần tử HTML rời vào giữa -- dựng bằng border-top +
+       margin-top trên chính nút thứ 7 (Tuỳ biến). Số 7 ăn theo THỨ TỰ KHAI BÁO trong dict NAV
+       (xem architecture-navigation.md: thứ tự key = thứ tự hiển thị) -- thêm/bớt/đổi chỗ mục nav
+       PHẢI chỉnh lại số này, không tự suy ra được. */
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] > button:nth-child(7) {
+        border-top: 1px solid var(--divider) !important;
+        margin-top: 11px !important;
+        padding-top: 11px !important;
+        height: auto !important; min-height: 38px !important;
+        border-radius: 0 9px 9px 9px !important;
     }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
@@ -9549,7 +9713,7 @@ st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=
 # chừa chỗ cho thanh nav ngang nữa.
 with st.sidebar:
     st.markdown(
-        f"<div style='margin:0.4em 0 1.6em 0;'>{_wordmark_html('header')}</div>",
+        f"<div style='margin:0 0 1.1em 0;'>{_sidebar_brand_html()}</div>",
         unsafe_allow_html=True,
     )
 
@@ -10281,22 +10445,29 @@ def render_day_report(df):
 
         bg = (day_df.assign(_b=pd.to_datetime(day_df['Thời gian bắt đầu']).dt.hour.map(_buoi_of))
                     .groupby('_b')['Thời lượng (Phút)'].sum() / 60)
-        buoi_chips = [{"k": b, "v": f"{_fmt_hours_short(bg[b])}"} for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
+        _buoi_present = [b for b in ["Sáng", "Chiều", "Tối", "Khuya"] if bg.get(b, 0) > 0]
 
+        # GỘP các chỉ số cùng nhóm vào ĐÚNG 1 dòng (nhãn nối bằng " · ", giá trị nối cùng thứ tự)
+        # thay vì mỗi chỉ số 1 dòng riêng -- khớp screenshot người dùng gửi: 3 mốc giờ/3 buổi/2 mốc
+        # liền mạch đều là số ngắn cùng loại, tách dòng chỉ tốn chiều cao chứ không dễ đọc hơn.
+        # 2 nhóm "Mốc trong ngày" + "Theo buổi" cũng gộp chung 1 tiêu đề (cùng chủ đề "giờ giấc
+        # trong ngày"), giữ 2 dòng riêng bên dưới vì đơn vị khác nhau (mốc giờ vs thời lượng).
+        _time_rows = [{"k": "Phiên đầu · Phiên cuối · Trải dài",
+                       "v": f"{t0:%H:%M} → {t1:%H:%M} <span style='color:var(--text-3);'>({span_str})</span>"}]
+        if _buoi_present:
+            _time_rows.append({"k": " · ".join(_buoi_present),
+                               "v": " · ".join(_fmt_hours_short(bg[b]) for b in _buoi_present)})
         _secs = [{"label": "So sánh", "chips": cmp_chips},
-                 {"label": "Mốc trong ngày", "chips": [
-                     {"k": "Phiên đầu", "v": f"{t0:%H:%M}"},
-                     {"k": "Phiên cuối", "v": f"{t1:%H:%M}"},
-                     {"k": "Trải dài", "v": span_str}]}]
-        if buoi_chips:
-            _secs.append({"label": "Theo buổi", "chips": buoi_chips})
+                 {"label": "Mốc trong ngày · Theo buổi", "chips": _time_rows}]
         if d_sess >= 2:
             _longest_block, _longest_gap = _session_flow_stats(day_df)
-            _flow_chips = [{"k": "Khối liền mạch dài nhất",
-                             "v": f"{int(_longest_block // 60)}h{int(_longest_block % 60):02d}"}]
+            _blk = f"{int(_longest_block // 60)}h{int(_longest_block % 60):02d}"
             if _longest_gap is not None:
-                _flow_chips.append({"k": "Khoảng nghỉ dài nhất",
-                                     "v": f"{int(_longest_gap // 60)}h{int(_longest_gap % 60):02d}"})
+                _gap = f"{int(_longest_gap // 60)}h{int(_longest_gap % 60):02d}"
+                _flow_chips = [{"k": "Khối liền mạch dài nhất · Khoảng nghỉ dài nhất",
+                                 "v": f"{_blk} · {_gap}"}]
+            else:
+                _flow_chips = [{"k": "Khối liền mạch dài nhất", "v": _blk}]
             _secs.append({"label": "Liền mạch", "chips": _flow_chips})
         render_stat_panel(hero_items=[
             {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
@@ -10634,12 +10805,10 @@ elif nav == "Báo cáo":
                     {"label": "Số cây đã trồng", "value": f"{total_trees}"},
                 ],
                 sections=_sections,
-                # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm, Dự án và Sách/
-                # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG còn
-                # "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang -- xem chú thích chỗ
-                # gọi tương tự ở Báo cáo/Sách).
-                card_style="margin-bottom:14px;",
+                # margin-bottom 4px + gap flex 10px = 14px, cùng chuẩn spacing với mọi cặp thẻ
+                # khác (xem chú thích chỗ gọi tương tự ở Báo cáo/Sách). KHÔNG có "padding:18px"
+                # (ép .sp-listcard hẹp hơn thẻ khác trên trang).
+                card_style="margin-bottom:4px;",
             )
             render_project_rhythm(df)
 
@@ -11148,11 +11317,9 @@ elif nav == "Báo cáo":
                         {"label": "Số cây đã trồng", "value": f"{curr_trees_g}"},
                     ],
                     sections=_grp_sections,
-                    # margin-bottom -- cùng lỗi/cùng cách sửa như hero Tuần/Tháng/Năm và Sách/
-                    # Gundam -> Tổng quan: card_style mặc định không có margin, khiến khoảng cách
-                    # xuống 2 thẻ "Theo buổi"/"Độ dài phiên" ngay dưới chỉ còn đúng gap 10px. KHÔNG
-                    # còn "padding:18px" (ép .sp-listcard hẹp hơn thẻ khác trên trang).
-                    card_style="margin-bottom:14px;",
+                    # margin-bottom 4px + gap flex 10px = 14px, cùng chuẩn spacing với mọi cặp
+                    # thẻ khác. KHÔNG có "padding:18px" (ép .sp-listcard hẹp hơn thẻ trên trang).
+                    card_style="margin-bottom:4px;",
                 )
                 # 2 thẻ "Theo buổi"/"Độ dài phiên" (trước ở chương riêng "Nhịp làm việc") dời lên
                 # đây -- cùng chương Tổng quan, không còn là chương riêng (theo yêu cầu người dùng).
