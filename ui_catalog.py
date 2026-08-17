@@ -304,6 +304,28 @@ BG_PALETTES = {
         "text-on-bg":   ("#eaf2ec", "#eaf2ec"),
         "text-on-bg-2": ("#a9c2b2", "#a9c2b2"),
     },
+    # "Xám hệ thống": thêm theo đợt redesign Apple/macOS-inspired (xem design handoff .dc.html) --
+    # bg/card/chip/border/divider lấy nguyên hex từ README Design Tokens của bản thiết kế (light bg
+    # #f0f0f2/card #fff/chip #e6e6e9, dark bg #1c1c1e/card #2c2c2e/chip #3a3a3c). Thuộc nhóm "nền
+    # nhạt" bình thường (bg đổi theo IS_DARK như 6 bảng kia, KHÔNG cố định đậm như Bầu trời sao/Rừng
+    # đêm/Rượu vang/Đêm tía) -- không thêm vào BG_PALETTES_DARK_BG. text/text-2/3/4 VÀ text-on-bg/
+    # text-on-bg-2 dùng chung đúng 1 cặp chữ tối/sáng như 5 bảng gốc (theo quy ước đã chốt ở đầu
+    # file), không lấy màu chữ riêng của mockup.
+    "Xám hệ thống": {
+        "bg":        ("#f0f0f2", "#1c1c1e"),
+        "card":      ("#ffffff", "#2c2c2e"),
+        "card-tl":   ("rgba(255,255,255,0.85)", "rgba(44,44,46,0.85)"),
+        "border":    ("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)"),
+        "divider":   ("rgba(0,0,0,0.06)", "rgba(255,255,255,0.07)"),
+        "divider-2": ("rgba(0,0,0,0.1)", "rgba(255,255,255,0.12)"),
+        "chip":      ("#e6e6e9", "#3a3a3c"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
 }
 
 # 4 bảng "nền đậm cố định" (bg đậm ở CẢ 2 cột, xem chú thích trong BG_PALETTES) -- billboard
@@ -399,8 +421,9 @@ CARD_DENSITY = {
 
 # Độ rộng cột nội dung (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --content-max-w cho
 # .block-container (xem _MAIN_CSS). "Rộng" là mặc định. 4 mức cách đều 200px (xác nhận với người
-# dùng: 1100/1300/1500/1700). 2 nút nổi "về đầu trang"/"Đồng bộ nhanh" định vị theo --content-half-w
-# (nửa giá trị đang chọn) để luôn bám đúng mép cột bất kể mức nào đang được chọn.
+# dùng: 1100/1300/1500/1700). Từ khi NAV chuyển sang sidebar trái (Phase 4 hướng B), 2 nút nổi "về
+# đầu trang"/"Đồng bộ nhanh" không còn định vị theo mép cột nội dung nữa (bám thẳng mép phải
+# viewport, xem CSS #app-scroll-top-btn/#app-sync-fab-btn) -- --content-half-w đã bỏ.
 CONTENT_WIDTHS = {
     "Hẹp": 1100,
     "Vừa": 1300,

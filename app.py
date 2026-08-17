@@ -360,9 +360,11 @@ TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng T
 TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades() lý do
 # cần biến này thay vì hardcode 1 mức saturation cố định.
 
-_card_style_name = _cached_settings().get("card_style", "Bo mềm")
+# "Nổi mềm" là mặc định mới (Phase 5 đợt redesign Apple/macOS-inspired, xác nhận với người dùng --
+# đổi hành vi mặc định cho MỌI user, kể cả user chưa từng lưu setting) -- thay "Bo mềm" cũ.
+_card_style_name = _cached_settings().get("card_style", "Nổi mềm")
 if _card_style_name not in CARD_STYLES:
-    _card_style_name = "Bo mềm"
+    _card_style_name = "Nổi mềm"
 CARD_STYLE = _card_style_name
 
 _card_density_name = _cached_settings().get("card_density", "Vừa")
@@ -7716,7 +7718,7 @@ st.markdown(
     f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
-    f"--content-max-w:{CONTENT_WIDTH_PX}px;--content-half-w:{CONTENT_WIDTH_PX // 2}px;"
+    f"--content-max-w:{CONTENT_WIDTH_PX}px;"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
     unsafe_allow_html=True,
@@ -8189,6 +8191,35 @@ _MAIN_CSS = """
     .st-key-nav { width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
     .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
+
+    /* Sidebar trái (Phase 4 hướng B, xem docs/architecture-navigation.md): nền/viền phải ép lại
+       qua var(--token) như mọi chrome NATIVE khác của Streamlit (xem bẫy "chrome/widget NATIVE"
+       ở theming.md) -- [data-testid="stSidebar"] mặc định đọc secondaryBackgroundColor TĨNH của
+       config.toml, không tự đổi theo Bảng màu nền. padding-top đủ để nội dung nằm dưới
+       [data-testid="stHeader"] (position:absolute cao 60px, xem chú thích .block-container ở
+       trên) -- header phủ ngang CẢ sidebar lẫn main, không riêng main. */
+    [data-testid="stSidebar"] {
+        background: var(--bg) !important;
+        border-right: 1px solid var(--border);
+        padding-top: 1rem;
+    }
+    [data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
+    /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
+       nút rộng hết bề ngang sidebar -- override đè lên rule .st-key-nav hàng ngang phía trên bằng
+       cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. */
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] {
+        justify-content: flex-start !important;
+    }
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] {
+        flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 2px !important;
+    }
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button {
+        width: 100% !important; justify-content: flex-start !important; text-align: left !important;
+        border-radius: 10px !important;
+    }
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button p {
+        text-align: left !important;
+    }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -9355,18 +9386,17 @@ _MAIN_CSS = """
        st.button -- xem docstring hàm đó). Ẩn mặc định (opacity 0 + pointer-events none), JS gắn
        class "show" khi cuộn quá ngưỡng; z-index thấp hơn overlay bảng phím tắt (99999) để không
        che nhau nếu cùng hiện 1 lúc.
-       Vị trí: .block-container tối đa --content-max-w và tự canh giữa màn hình (xem rule phía
-       trên) -- màn hình rộng hơn --content-max-w+lề thì "right: 22px" bám theo MÉP TRÌNH DUYỆT sẽ
-       trôi ra xa hẳn cột nội dung thật đang nằm giữa màn hình (lỗi thật đã gặp). Dùng right:
-       max(22px, calc(50vw - var(--content-half-w) + 22px)) để nút luôn bám đúng mép phải của cột
-       đó khi màn hình đủ rộng, còn màn hình hẹp hơn --content-max-w (calc ra âm) thì max() tự chọn
-       lại 22px sát mép trình duyệt như bình thường. --content-half-w tự đổi theo mức "Độ rộng nội
-       dung" người dùng chọn (xem CONTENT_WIDTHS) nên nút luôn bám đúng mép bất kể mức nào.
+       Vị trí: từ khi NAV chuyển sang sidebar trái (Phase 4 hướng B, xem
+       docs/architecture-navigation.md), .block-container không còn canh giữa TOÀN viewport nữa
+       (50vw không còn đúng vì sidebar chiếm phần bên trái) -- công thức cũ bám mép cột nội dung
+       theo --content-half-w hết tác dụng. Đổi về "right: 22px" bám thẳng mép PHẢI trình duyệt
+       (đơn giản, luôn đúng bất kể sidebar mở/thu gọn/desktop), chấp nhận đánh đổi nút không còn
+       bám sát mép cột nội dung ở màn hình rất rộng.
        Mobile đổi hẳn sang mép TRÁI (không còn cùng phía bên phải) -- bên phải dưới cùng trên
        Streamlit Cloud là chỗ huy hiệu "Hosted with Streamlit" tự chèn, nút bên phải sẽ bị che mất
        một phần bởi huy hiệu đó (lỗi thật đã gặp, xem ảnh chụp), sang trái tránh hẳn xung đột này. */
     #app-scroll-top-btn {
-        position: fixed; right: max(22px, calc(50vw - var(--content-half-w) + 22px)); bottom: 22px; z-index: 99980;
+        position: fixed; right: 22px; bottom: 22px; z-index: 99980;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -9394,7 +9424,7 @@ _MAIN_CSS = """
        (display:none ở .st-key-nav_sync_fab bên dưới), nút JS này proxy click sang nút thật bằng
        .click() (không cần hiển thị/hit-test, click() lập trình vẫn kích hoạt handler bình thường). */
     #app-sync-fab-btn {
-        position: fixed; right: max(22px, calc(50vw - var(--content-half-w) + 22px)); bottom: 76px; z-index: 99979;
+        position: fixed; right: 22px; bottom: 76px; z-index: 99979;
         width: 44px; height: 44px; border-radius: 50%;
         background: var(--accent); color: #fff; border: none;
         display: flex; align-items: center; justify-content: center;
@@ -9440,12 +9470,17 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
-st.markdown(
-    f"<div style='margin:0 0 1.8em 0;'>{_wordmark_html('header')}</div>",
-    unsafe_allow_html=True,
-)
+# Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
+# người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
+# widget nav (key="nav", vẫn segmented_control, chỉ đổi CHỖ render + CSS ép layout dọc, không đổi
+# cơ chế state/dispatch/deep-link) nằm trong st.sidebar; .block-container chính không còn phải
+# chừa chỗ cho thanh nav ngang nữa.
+with st.sidebar:
+    st.markdown(
+        f"<div style='margin:0.4em 0 1.6em 0;'>{_wordmark_html('header')}</div>",
+        unsafe_allow_html=True,
+    )
 
-# Thanh điều hướng 1 hàng phẳng (kiểu iOS segmented control), icon Material cho từng trang.
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
     "Hôm nay": ":material/wb_sunny:",
@@ -9498,12 +9533,13 @@ def _reset_today_on_nav_click():
     if st.session_state.get("nav") in (None, "Hôm nay") and "day_pick" in st.session_state:
         st.session_state["day_pick"] = _today_vn()
 
-nav = st.segmented_control(
-    "Trang", list(NAV.keys()),
-    format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
-    key="nav", label_visibility="collapsed",
-    on_change=_reset_today_on_nav_click,
-)
+with st.sidebar:
+    nav = st.segmented_control(
+        "Trang", list(NAV.keys()),
+        format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
+        key="nav", label_visibility="collapsed",
+        on_change=_reset_today_on_nav_click,
+    )
 if not nav:
     nav = "Hôm nay"
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
@@ -10284,7 +10320,7 @@ def _render_tuybien_giao_dien():
     with _reset_col:
         if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
             for _k, _v in [("accent_hex", "#2f5fa3"), ("bg_palette", "Giấy ấm"), ("bg_style", "Sương mai"),
-                           ("card_style", "Bo mềm"), ("content_width", "Rộng"), ("card_density", "Vừa"),
+                           ("card_style", "Nổi mềm"), ("content_width", "Rộng"), ("card_density", "Vừa"),
                            ("body_font", "Manrope")]:
                 save_setting(_k, _v)
             st.rerun()
