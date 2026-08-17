@@ -2561,10 +2561,18 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
         chips = sec.get('chips') or []
         if not chips:
             return ''
+        # label rỗng/None -> BỎ hẳn dòng tiêu đề nhóm, các dòng chảy tiếp thành 1 danh sách liền
+        # (xác nhận với người dùng: ở Hôm nay, nhãn của TỪNG DÒNG đã tự mô tả đủ -- "vs Thứ Hai
+        # tuần trước", "Phiên đầu · Phiên cuối · Trải dài" -- nên tiêu đề nhóm chỉ tốn chiều cao).
+        # Vẫn giữ ranh giới nhóm bằng đường kẻ ĐẬM hơn (class "gtop", var(--border) thay
+        # var(--divider)) trên dòng đầu mỗi nhóm, để không mất hẳn cấu trúc gộp nhóm.
+        rows = [_render_row(c) for c in chips]
+        if not sec.get('label'):
+            if not is_first:
+                rows[0] = rows[0].replace("class='sp-lrow", "class='sp-lrow gtop", 1)
+            return "".join(rows)
         head_cls = "sp-lsec-head first" if is_first else "sp-lsec-head"
-        out = f"<div class='{head_cls}'>{sec['label']}</div>"
-        out += "".join(_render_row(c) for c in chips)
-        return out
+        return f"<div class='{head_cls}'>{sec['label']}</div>" + "".join(rows)
 
     def _render_listcard(secs, with_footer):
         inner = ''
@@ -7752,6 +7760,29 @@ else:
         for _name, _ranges in _BODY_FONT_RANGES.items()
     )
 
+# Font "khung vỏ" CỐ ĐỊNH cho sidebar + bộ chọn ngày/kỳ (xác nhận với người dùng: 2 chỗ này phải
+# luôn cùng 1 font để nhất quán, KHÔNG đổi theo trục "Font thân chữ" -- trục đó chỉ còn áp cho phần
+# NỘI DUNG). Dùng Manrope (font mặc định của app). Phải tự nhúng RIÊNG ở đây vì _BODY_FONT_FACE
+# trên chỉ nhúng ĐÚNG font đang chọn -- nếu người dùng chọn "Lora"/"Oswald"... thì Manrope không
+# có @font-face nào, khung vỏ sẽ lặng lẽ rơi về font hệ thống thay vì Manrope (đúng lỗi mà cách
+# "chỉ ghi tên font trong CSS" hay mắc). Khi font thân chữ ĐANG chọn chính là Manrope thì bỏ qua,
+# không nhúng lần 2 (trùng @font-face, phí payload).
+_UI_FONT = "Manrope"
+if BODY_FONT == _UI_FONT:
+    _UI_FONT_FACE = ""
+else:
+    _ui_font_b64 = _body_font_b64(BODY_FONTS[_UI_FONT]["file_prefix"])
+    _UI_FONT_FACE = "".join(
+        f"@font-face {{ font-family:'{_UI_FONT}'; font-style:normal; font-weight:200 800; "
+        f"font-display:swap; src:url(data:font/woff2;base64,{_ui_font_b64[_name]}) format('woff2'); "
+        f"unicode-range:{_ranges}; }}"
+        for _name, _ranges in _BODY_FONT_RANGES.items()
+    )
+# Stack dùng cho --font-ui: khai báo ở khối :root (f-string) chứ KHÔNG phải trong _MAIN_CSS --
+# _MAIN_CSS bị .replace("'Manrope'", font đang chọn) ngay trước khi inject (xem cuối file), nên mọi
+# chuỗi 'Manrope' viết trong đó sẽ bị đổi theo font thân chữ, đúng thứ cần tránh ở đây.
+_UI_FONT_STACK = f"'{_UI_FONT}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
 # Font số liệu cho .dtbl (Bảng số liệu) -- hệ "Sổ Tay" đổi từ system sans sang IBM Plex Mono thật
 # (tự host, cùng cách 2 font trên), khớp đúng bản mockup gốc (DTBL trong file thiết kế dùng
 # 'IBM Plex Mono' cho toàn bảng). KHÔNG phải variable font (IBM Plex Mono không có bản variable
@@ -7862,7 +7893,7 @@ _billboard_backdrop = "none" if _billboard_bg_dark_forced else "blur(16px) satur
 # accent gốc khi rơi vào 1 trong 4 bảng đó.
 _tab_accent = _brighten(ACCENT) if _billboard_bg_dark_forced else ACCENT
 st.markdown(
-    f"<style>{_BODY_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
+    f"<style>{_BODY_FONT_FACE}{_UI_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--font-ui:{_UI_FONT_STACK};--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
     f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
     f"--content-max-w:{CONTENT_WIDTH_PX}px;"
@@ -8224,6 +8255,11 @@ _MAIN_CSS = """
     .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
         padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
     .sp-listcard > .sp-lrow:last-child { padding-bottom: 10px; }
+    /* Nhóm KHÔNG có tiêu đề (sections truyền label="") -- dòng đầu tiên của cả thẻ không được kẻ
+       viền trên (trước đây luôn có .sp-lsec-head.first đứng trước nên không lộ), và dòng đầu của
+       mỗi nhóm TIẾP THEO kẻ đậm hơn (var(--border)) để vẫn thấy ranh giới nhóm dù đã bỏ chữ. */
+    .sp-listcard > .sp-lrow:first-child { border-top: none !important; padding-top: 12px; }
+    .sp-lrow.gtop { border-top-color: var(--border) !important; }
     .sp-lrow-v { font-variant-numeric: tabular-nums; text-align: right; }
     .sp-lrow-d { font-weight: 700; margin-left: 4px; }
     .sp-lrow.hl .sp-lrow-k, .sp-lrow.hl .sp-lrow-v { color: var(--accent-dark); font-weight: 700; }
@@ -8377,6 +8413,16 @@ _MAIN_CSS = """
         padding-top: 1rem;
     }
     [data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
+    /* FONT KHUNG VỎ CỐ ĐỊNH -- sidebar (thương hiệu + nav) và bộ chọn ngày/kỳ dùng var(--font-ui)
+       (Manrope, khai báo ở khối :root, xem _UI_FONT/_UI_FONT_STACK) thay vì font thân chữ đang
+       chọn. Xác nhận với người dùng: 2 cụm này là "khung vỏ" điều hướng, phải luôn nhất quán với
+       nhau; trục "Font thân chữ" ở Tuỳ biến từ nay chỉ đổi phần NỘI DUNG (thẻ số liệu, ghi chú,
+       bảng...). !important là BẮT BUỘC: rule "html, body, .stApp, .stApp.stApp *:not(...)" áp
+       BODY_FONT có độ đặc hiệu 2 class + universal, cao hơn hẳn các selector ở đây nên không
+       có !important sẽ thua dù đứng sau trong nguồn (đúng bug đã ghi ở .kq-daily-text). */
+    [data-testid="stSidebar"], [data-testid="stSidebar"] *:not([data-testid="stIconMaterial"]) {
+        font-family: var(--font-ui) !important;
+    }
     /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
        nút rộng hết bề ngang sidebar -- override đè lên rule .st-key-nav hàng ngang phía trên bằng
        cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. Kích thước/khoảng cách lấy ĐÚNG mockup
@@ -8398,6 +8444,16 @@ _MAIN_CSS = """
     }
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button p {
         text-align: left !important; font-size: 13px !important; font-weight: 600 !important;
+    }
+    /* Streamlit bọc icon+nhãn trong 1 <div> flex CON của <button>, và chính div đó mới là flex
+       container thật (justify-content:center, width ~= full) -- đặt justify-content/gap trên
+       <button> KHÔNG có tác dụng gì vì button chỉ có đúng 1 con chiếm trọn bề ngang (xác nhận qua
+       getComputedStyle: button có justify-content:flex-start nhưng nhãn vẫn nằm giữa). Phải ép
+       thẳng div con này thì icon mới về sát lề trái như mockup. */
+    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button > div {
+        justify-content: flex-start !important;
+        width: 100% !important;
+        gap: 11px !important;
     }
     [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
         font-size: 18px !important;
@@ -8572,7 +8628,7 @@ _MAIN_CSS = """
        "st-key-" như "stepper_x". Thiếu rule này, cột chứa st.date_input (min-width mặc định
        của Streamlit ăn theo nội dung) sẽ bị đẩy xuống dòng riêng trên mobile thay vì co lại
        vừa tỉ lệ cột như st.selectbox của period_stepper. */
-    [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
+    [class*="stepper"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 10px !important; }
     [class*="stepper"] [data-testid="stColumn"] { min-width: 0 !important; }
     /* day_stepper riêng: thu gọn cả hàng ◀ [ngày] ▶ về đúng bề rộng nội dung rồi canh TRÁI trang
        (không còn canh giữa như bản trước, xác nhận với người dùng đổi lại -- KHÔNG kéo giãn
@@ -8584,7 +8640,7 @@ _MAIN_CSS = """
     }
     [class*="st-key-day_stepper"] [data-testid="stColumn"]:first-child,
     [class*="st-key-day_stepper"] [data-testid="stColumn"]:last-child {
-        flex: 0 0 44px !important; width: 44px !important;
+        flex: 0 0 34px !important; width: 34px !important;
     }
     [class*="st-key-day_stepper"] [data-testid="stColumn"]:not(:first-child):not(:last-child) {
         flex: 0 0 auto !important; width: auto !important;
@@ -8593,7 +8649,8 @@ _MAIN_CSS = """
        chỉ cao ~36px -- vertical_alignment="center" của st.columns canh giữa theo TÂM mỗi item,
        không kéo chúng về cùng 1 chiều cao, nên 2 nút trông lệch thấp hơn vài px so với ô ngày dù
        đã "canh giữa". Ép cùng 36px cho cả 3 phần tử trên 1 hàng thẳng hàng thật sự. */
-    [class*="st-key-day_stepper"] button { height: 36px !important; min-height: 0 !important; }
+    [class*="st-key-day_stepper"] button { height: 34px !important; min-height: 0 !important;
+        width: 34px !important; padding: 0 !important; border-radius: 8px !important; }
     /* Cột giữa (chứa st.date_input) cao hơn hẳn 2 cột nút (~50px vs 36px) dù widget bên trong chỉ
        cao 36px -- Streamlit tự dành sẵn 1 khoảng "block" tối thiểu cho mỗi widget (từng chứa
        nhãn) bất kể label_visibility="collapsed" đã ẩn nhãn đi, CỘNG THÊM 1 stElementContainer ẩn
@@ -8606,9 +8663,9 @@ _MAIN_CSS = """
        tràn bị cắt bởi overflow:hidden) về đúng 36px như 2 cột nút -- cả 3 cột bằng nhau thì
        vertical_alignment="center" không còn gì để lệch nữa, không phụ thuộc justify-content. */
     [class*="st-key-day_stepper"] [data-testid="stColumn"] [data-testid="stVerticalBlock"] {
-        height: 36px !important;
-        min-height: 36px !important;
-        max-height: 36px !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
         overflow: hidden !important;
         flex-grow: 0 !important;
     }
@@ -8624,16 +8681,17 @@ _MAIN_CSS = """
         width: fit-content !important; margin: 0 !important;
     }
     [class*="st-key-stepper_"] [data-testid="stColumn"]:not(:nth-child(2)) {
-        flex: 0 0 44px !important; width: 44px !important;
+        flex: 0 0 34px !important; width: 34px !important;
     }
     [class*="st-key-stepper_"] [data-testid="stColumn"]:nth-child(2) {
         flex: 0 0 auto !important; width: auto !important;
     }
-    [class*="st-key-stepper_"] button { height: 36px !important; min-height: 0 !important; }
+    [class*="st-key-stepper_"] button { height: 34px !important; min-height: 0 !important;
+        width: 34px !important; padding: 0 !important; border-radius: 8px !important; }
     [class*="st-key-stepper_"] [data-testid="stColumn"] [data-testid="stVerticalBlock"] {
-        height: 36px !important;
-        min-height: 36px !important;
-        max-height: 36px !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
         overflow: hidden !important;
         flex-grow: 0 !important;
     }
@@ -8645,9 +8703,40 @@ _MAIN_CSS = """
        thay vì để bị cắt qua overflow -- viền hiện đủ 4 cạnh, không cần đụng gì tới clip 36px của
        nhóm nút cạnh bên. */
     [class*="st-key-stepper_"] [data-testid="stColumn"] [role="group"] {
-        height: 36px !important;
-        min-height: 36px !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        border-radius: 9px !important;
     }
+    /* ===== Tinh chỉnh kiểu Apple cho MỌI bộ chọn kỳ/ngày (mockup `Hôm nay.dc.html`) =====
+       1) Icon ◀/▶ trong 2 stepper: rule nút secondary chung tô `color: var(--accent)` (vàng/nâu
+          tuỳ accent) -- mockup dùng icon XÁM trung tính (var(--text-2)), chỉ ô ngày/kỳ ở giữa mới
+          là điểm nhấn. Ghi đè scope RIÊNG 2 stepper, KHÔNG đổi rule nút secondary toàn app.
+       2) Chữ trong ô chọn kỳ (st.selectbox) và nhãn nút: 13px/600 khớp ô ngày, thay cỡ 16px
+          thường mặc định của Streamlit (lệch hẳn tông với nhãn 13px xung quanh).
+       3) Nút "về kỳ hiện tại" (cột 4 của period_stepper) dùng chung luôn 2 rule trên. */
+    [class*="st-key-day_stepper"] div[data-testid="stButton"] button[kind="secondary"],
+    [class*="st-key-stepper_"] div[data-testid="stButton"] button[kind="secondary"] {
+        color: var(--text-2) !important;
+    }
+    [class*="st-key-day_stepper"] div[data-testid="stButton"] button[kind="secondary"]:hover,
+    [class*="st-key-stepper_"] div[data-testid="stButton"] button[kind="secondary"]:hover {
+        color: var(--text) !important;
+        border-color: var(--text-4) !important;
+    }
+    [class*="st-key-day_stepper"] button span[data-testid="stIconMaterial"],
+    [class*="st-key-stepper_"] button span[data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+    }
+    [class*="st-key-stepper_"] [data-testid="stColumn"] [role="group"],
+    [class*="st-key-stepper_"] [data-testid="stColumn"] [role="group"] * {
+        font-size: 13px !important;
+        font-weight: 600 !important;
+    }
+    /* Ô chọn 1 mục dài (Sách/Gundam "Chọn 1 cuốn", Báo cáo -> Dự án "Chọn Nhóm hoặc Dự án", Sức
+       khoẻ "Năm"/"Chọn lần xét nghiệm") -- cùng ngôn ngữ hình với ô chọn kỳ: bo 9px thay 7px.
+       KHÔNG ép 13px/600 ở đây: đây là ô chọn nội dung tự do (tên sách/dự án dài), giữ cỡ chữ
+       mặc định để đọc thoải mái, chỉ đồng bộ bo góc. */
+    .stSelectbox > div > div { border-radius: 9px !important; }
     /* Khoảng cách xuống Billboard ngay dưới (period_stepper "Tuần"/"Tháng"/"Năm" VÀ day_stepper
        "Hôm nay") chỉ đúng 10px mặc định -- lệch với chuẩn 12px vừa thống nhất cho cụm Nav ->
        Sub-tab picker (xem `.st-key-nav`/`.st-key-bc_sub_picker` phía trên, xác nhận qua mockup
@@ -8676,26 +8765,72 @@ _MAIN_CSS = """
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        height: 36px !important;
-        min-height: 36px !important;
+        height: 34px !important;
+        min-height: 34px !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
     }
+    /* Khuôn "viên thuốc" kiểu Apple theo mockup `Hôm nay.dc.html` (cao 34px, bo 9px, đệm ngang
+       14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt) -- kèm icon lịch nhỏ đứng
+       TRƯỚC ngày. Icon vẽ bằng ::before với ligature Material Symbols Rounded (font Streamlit đã
+       tự nạp sẵn cho icon `:material/x:` của chính nó, xem quy ước _mi() ở ui-components.md) --
+       không chèn được phần tử thật vào trong widget native nên đây là cách duy nhất. */
     div[data-testid="stDateInput"] [data-baseweb="base-input"] {
-        background: var(--card-tl) !important;
+        background: var(--card) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 7px !important;
+        border-radius: 9px !important;
         box-shadow: none !important;
-        height: 36px !important;
-        min-height: 36px !important;
+        height: 34px !important;
+        min-height: 34px !important;
         box-sizing: border-box !important;
+        padding: 0 14px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
     }
+    div[data-testid="stDateInput"] [data-baseweb="base-input"]::before {
+        content: 'calendar_today';
+        font-family: 'Material Symbols Rounded';
+        font-size: 15px;
+        line-height: 1;
+        color: var(--text-3);
+        flex-shrink: 0;
+        -webkit-font-feature-settings: 'liga';
+        font-feature-settings: 'liga';
+    }
+    /* Chữ ngày: 13px/600 căn giữa (mockup) -- mặc định Streamlit là 16px thường căn trái, trông
+       "nặng" và lệch hẳn tông với nhãn/nút 13px xung quanh. padding:0 vì đệm ngang đã đặt ở
+       base-input (nếu để cả 2 sẽ cộng dồn, đẩy chữ lệch khỏi tâm). */
     div[data-testid="stDateInput"] [data-baseweb="input"] input {
-        height: 36px !important;
-        line-height: 36px !important;
+        height: 32px !important;
+        line-height: 32px !important;
+        padding: 0 !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--text) !important;
+        text-align: center !important;
         box-sizing: border-box !important;
         -webkit-appearance: none !important;
         appearance: none !important;
+        /* KHÔNG để <input> giãn hết chỗ (mặc định BaseWeb flex:1): nó sẽ đẩy icon ::before dạt hẳn
+           sang mép trái, trong khi mockup có cụm icon+ngày CĂN GIỮA thành 1 khối. Ghim bề rộng vừa
+           đúng nội dung bằng đơn vị `ch` (bề rộng chữ số "0" của CHÍNH font đang dùng) chứ không
+           phải px cứng -- app cho người dùng đổi giữa 8 font thân chữ (BODY_FONTS), px cứng sẽ
+           hụt/thừa tuỳ font. Cả 3 st.date_input trong app đều hiển thị 10 ký tự (dd/mm/yyyy hoặc
+           yyyy/mm/dd) nên 10ch phủ đủ, dấu "/" hẹp hơn chữ số nên còn dư nhẹ. */
+        flex: 0 0 auto !important;
+        width: 10ch !important;
+        min-width: 0 !important;
+    }
+    /* Bề rộng ô ngày ở day_stepper: 170px đúng mockup (`min-width:170px`) -- không đặt thì ô ăn
+       theo bề rộng nội tại rất rộng của BaseWeb, dài gấp ~2.5 lần cụm icon+ngày bên trong. */
+    [class*="st-key-day_stepper"] div[data-testid="stDateInput"] { width: 170px !important; }
+    /* Cùng lý do/cùng nguồn font với sidebar (xem "FONT KHUNG VỎ CỐ ĐỊNH" ở trên) -- gồm cả ô
+       ngày, ô chọn kỳ (selectbox) và 3 nút icon của 2 stepper. */
+    [class*="st-key-day_stepper"], [class*="st-key-day_stepper"] *:not([data-testid="stIconMaterial"]),
+    [class*="st-key-stepper_"], [class*="st-key-stepper_"] *:not([data-testid="stIconMaterial"]) {
+        font-family: var(--font-ui) !important;
     }
     div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within [data-baseweb="base-input"] {
         border-color: var(--accent) !important;
@@ -10457,8 +10592,12 @@ def render_day_report(df):
         if _buoi_present:
             _time_rows.append({"k": " · ".join(_buoi_present),
                                "v": " · ".join(_fmt_hours_short(bg[b]) for b in _buoi_present)})
-        _secs = [{"label": "So sánh", "chips": cmp_chips},
-                 {"label": "Mốc trong ngày · Theo buổi", "chips": _time_rows}]
+        # label="" -> bỏ hẳn dòng tiêu đề nhóm (xác nhận với người dùng: nhãn từng dòng ở đây đã
+        # tự mô tả đủ, tiêu đề nhóm chỉ tốn chiều cao). Các trang khác (Sách/Gundam "Chuỗi đọc"/
+        # "Đều đặn"..., Báo cáo "Ngày nổi bật") GIỮ tiêu đề vì nhãn dòng ở đó ngắn, không tự đủ
+        # nghĩa nếu tách khỏi tiêu đề (vd "Tổng số ngày"/"Dài nhất"/"Hiện tại").
+        _secs = [{"label": "", "chips": cmp_chips},
+                 {"label": "", "chips": _time_rows}]
         if d_sess >= 2:
             _longest_block, _longest_gap = _session_flow_stats(day_df)
             _blk = f"{int(_longest_block // 60)}h{int(_longest_block % 60):02d}"
@@ -10468,7 +10607,7 @@ def render_day_report(df):
                                  "v": f"{_blk} · {_gap}"}]
             else:
                 _flow_chips = [{"k": "Khối liền mạch dài nhất", "v": _blk}]
-            _secs.append({"label": "Liền mạch", "chips": _flow_chips})
+            _secs.append({"label": "", "chips": _flow_chips})
         render_stat_panel(hero_items=[
             {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
             {"label": "Số phiên", "value": f"{d_sess}"},
