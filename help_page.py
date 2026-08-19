@@ -16,7 +16,7 @@ def render_help_page(*, st, json, health_metrics_json_example, render_period_bil
     # lấy TỪ ĐÚNG entry mới nhất của HELP_CHANGELOG (chương 9 bên dưới) -- 2 giá trị này PHẢI sửa
     # cùng lúc mỗi khi thêm entry mới (đúng quy ước "số tĩnh, điền tay" đã áp dụng cho cả
     # HELP_CHANGELOG, xem docstring render_help_changelog()).
-    _help_latest_date, _help_latest_lines = "24/07/2026", 13281
+    _help_latest_date, _help_latest_lines = "19/08/2026", 14157
     render_period_billboard(
         "Trợ giúp", str(_help_latest_lines), "dòng mã nguồn", f"Cập nhật gần nhất {_help_latest_date}",
         "<div class='pbill-title'>Xin chào, đây là một lượt dạo qua Forest Dashboard</div>"
@@ -493,13 +493,68 @@ def render_help_page(*, st, json, health_metrics_json_example, render_period_bil
         "help-ch9", 9, "Nhật ký phát triển")
     # Mỗi mục gộp TẤT CẢ PR có ý nghĩa với người dùng cuối merge trong CÙNG 1 ngày thành 1 entry
     # duy nhất (xác nhận với người dùng) -- pr liệt kê đủ mọi số PR của ngày đó, pr_lines/
-    # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR).
+    # total_lines lấy theo đúng PR merge SAU CÙNG trong ngày (không cộng dồn nhiều PR). pr_lines =
+    # tổng insertions+deletions (git --shortstat, MỌI file, không riêng .py) của đúng PR đó.
+    # PR thuần nội bộ (đổi tài liệu dev Codex↔Claude Code, refactor không đổi hành vi/giao diện vd
+    # tách module app.py) KHÔNG được tính vào "pr" liệt kê hay vào bullets -- không có ý nghĩa với
+    # người dùng cuối. Từ sau PR #291 (tách app.py thành nhiều module) total_lines đổi sang đếm
+    # TỔNG số dòng MỌI file `.py` trong repo (trước đó chỉ có mỗi app.py nên 2 cách tính trùng
+    # nhau) -- không dùng lại "wc -l app.py" đơn thuần nữa vì sẽ hiện 1 cú SỤT dòng giả tạo (code
+    # dời sang module khác, không phải bị xoá).
     # date/total_lines của entry ĐẦU (mới nhất) bị TRÙNG với _help_latest_date/_help_latest_lines
     # ở billboard đầu trang (xem elif nav == "Hướng dẫn" phía trên) -- sửa entry mới nhất ở đây thì
     # PHẢI sửa cả 2 biến đó theo, không tự động đồng bộ.
     HELP_CHANGELOG = [
-        dict(pr="281-285", date="24/07/2026", pr_lines=297, total_lines=13281,
-             title="Nhập Nhật ký Day One, Lịch tháng mới ở Báo cáo, nút Quay lại + cập nhật tài liệu",
+        dict(pr="299", date="19/08/2026", pr_lines=680, total_lines=14157,
+             title="Sub-nav Báo cáo/Sức khoẻ/Tuỳ biến chuyển vào sidebar, chèn ngay sau nút trang cha",
+             bullets=[
+                 "**3 sub-nav \"Chọn kỳ xem\"/\"Xem theo\" (Báo cáo, Sức khoẻ, Tuỳ biến) chuyển từ "
+                 "đầu nội dung trang sang sidebar**, đứng ngay dưới nav chính thay vì chiếm 1 hàng "
+                 "riêng phía trên billboard mỗi trang.",
+                 "**Sub-nav được chèn NGAY SAU nút của đúng trang cha** trong nav chính (vd sub-nav "
+                 "của \"Báo cáo\" nằm ngay dưới mục \"Báo cáo\"), không rơi xuống cuối toàn bộ danh "
+                 "sách nav — nav chính giờ tự chia nhóm quanh trang đang xem để lồng đúng sub-nav "
+                 "vào giữa.",
+                 "Không đổi cơ chế deep-link (`?sub=`/`?hsub=`/`?tsub=`) hay các link \"nhảy nhanh\" "
+                 "sang 1 sub-tab cụ thể từ nơi khác trong app (vd click biểu đồ Xu hướng nhảy sang "
+                 "sub-tab \"Dự án\").",
+             ]),
+        dict(pr="293-298", date="17/08/2026", pr_lines=42, total_lines=13985,
+             title="Chuyển nav sang sidebar, redesign Apple/macOS, bộ chọn ngày/kỳ mới, spacing 14px",
+             bullets=[
+                 "**Nav chính chuyển sang sidebar trái cố định** (trước đây là 1 hàng ngang trên "
+                 "cùng) — thêm palette nền \"Xám hệ thống\", đổi kiểu thẻ mặc định sang \"Nổi mềm\" "
+                 "cho người dùng chưa từng lưu tuỳ biến riêng.",
+                 "**Redesign billboard theo phong cách Apple/macOS**: badge số tròn thay \"tờ lịch "
+                 "xé\", thêm cột mục lục dọc; panel số liệu (Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ) "
+                 "tách thành lưới thẻ hero + 1 thẻ danh sách có gạch ngăn; thanh sub-tab (\"Chọn kỳ "
+                 "xem\"/\"Xem theo\"/\"Chọn mục\") căn trái thay vì căn giữa.",
+                 "**Bộ chọn ngày/kỳ đổi theo phong cách Apple**: viên thuốc bo góc + icon lịch, lịch "
+                 "bắt đầu từ Thứ Hai; font khung vỏ (sidebar + bộ chọn ngày/kỳ) ghìm cố định Manrope, "
+                 "tách khỏi trục \"Font thân chữ\" chọn ở Tuỳ biến.",
+                 "**Trang Hôm nay**: gộp \"Phiên đầu · Phiên cuối · Trải dài\" thành 1 dòng, bỏ các "
+                 "đề mục nhóm cho gọn; ô soạn ghi chú tự focus + đặt con trỏ cuối nội dung ngay khi "
+                 "bấm Sửa/Thêm ghi chú.",
+                 "**Rút gọn biểu đồ**: \"Dòng thời gian trong ngày\" giảm chiều cao, biểu đồ theo "
+                 "Nhóm/Dự án đổi sang 1 thanh xếp chồng + legend chấm màu thay vì mỗi mục 1 hàng "
+                 "riêng; tooltip từng thanh của \"Dòng thời gian\" hiện tức thời (không delay), thêm "
+                 "Nhóm và thời lượng thật.",
+                 "Cùng loạt sửa nhỏ: chuẩn hoá khoảng cách thẻ→thẻ về đúng 14px (trước đó rải rác "
+                 "4–26px), thu gọn list-card, sửa vài thẻ lệch bề rộng do sót padding cũ.",
+             ]),
+        dict(pr="289-290", date="25/07/2026", pr_lines=32, total_lines=13278,
+             title="Chia 2 cột Trích dẫn & Ghi chú, sửa spacing thẻ Trích dẫn trên mobile",
+             bullets=[
+                 "**Chương \"Trích dẫn & Ghi chú\" (Sách → Tổng quan) chia 2 cột cân bằng theo khối "
+                 "lượng văn bản** (thuật toán tham lam) trên desktop, tự co về 1 cột trên mobile.",
+                 "**\"Trích dẫn hôm nay\" giờ gắn cố định theo NGÀY ĐANG XEM** (seed tất định từ ISO "
+                 "ngày đó) thay vì ngày thật hôm nay — đổi ngày ra câu khác, quay lại ngày cũ vẫn ra "
+                 "đúng câu cũ, không cần bảng ánh xạ riêng.",
+                 "Sửa lỗi spacing không đều (44px thay vì 10px) giữa 2 thẻ Trích dẫn ở ranh giới cột "
+                 "khi màn hình co về 1 cột trên mobile.",
+             ]),
+        dict(pr="281-288", date="24/07/2026", pr_lines=86, total_lines=13236,
+             title="Nhập Nhật ký Day One, Lịch tháng mới ở Báo cáo, cập nhật tài liệu phát triển",
              bullets=[
                  "**Nhập Nhật ký Day One** (Tuỳ biến → Dữ liệu đầu vào → Dự phòng) — đọc file JSON "
                  "xuất từ Day One, giữ đúng định dạng **đậm**/*nghiêng*/list (kể cả lồng cấp), bỏ "
@@ -513,13 +568,10 @@ def render_help_page(*, st, json, health_metrics_json_example, render_period_bil
                  "tổng hợp toàn thời gian).",
                  "**Mỗi năm ở \"Ngày này năm trước\" giờ là link nhảy thẳng tới Báo cáo ngày** của "
                  "đúng ngày đó, để sửa lại ghi chú cũ không cần tự tìm lại.",
-                 "**Nút \"← Quay lại\" cho Báo cáo ngày/Báo cáo → Dự án** — click 1 link nội bộ (tên "
-                 "Dự án, ngày trong Nhật ký...) tới 2 trang này giờ hiện được đường quay lại đúng nơi "
-                 "xuất phát, không phụ thuộc nút Back trình duyệt (vốn không hoạt động vì mọi link "
-                 "nội bộ đều tải lại toàn trang).",
-                 "Cùng 1 sửa lỗi: màu phân trang (`st.pagination`) đọc được trên Bảng màu nền đậm ở "
-                 "light theme; và rà soát lại tài liệu phát triển cho khớp code hiện "
-                 "tại.",
+                 "Cùng vài sửa lỗi: màu phân trang (`st.pagination`) đọc được trên Bảng màu nền đậm ở "
+                 "light theme; rà soát lại tài liệu phát triển cho khớp code hiện tại. (Nút \"← Quay "
+                 "lại\" cho Báo cáo ngày/Báo cáo → Dự án cũng thử nghiệm trong ngày này nhưng bị bỏ "
+                 "ngay sau đó vì phá bố cục trang — không còn xuất hiện ở bản hiện tại.)",
              ]),
         dict(pr="276-280", date="23/07/2026", pr_lines=237, total_lines=12713,
              title="Trục \"Độ rộng nội dung\" cho màn hình lớn, chip Liền mạch, tối ưu backend + dọn lỗi nhỏ",

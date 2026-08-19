@@ -168,12 +168,16 @@ phá huỷ) chiếm không gian cố định trên trang.
 `architecture-navigation.md`. Muốn nhảy sang sub-tab khác từ 1 nút bấm ở NƠI KHÁC trong cùng lượt
 chạy (vd nút "Sửa lần khám này" ở Dữ liệu đầu vào nhảy sang Lịch sử) — TUYỆT ĐỐI không set
 `st.session_state["X_picker"] = "..."` ngay tại nút bấm đó: nếu widget `segmented_control` đã
-instantiate TRƯỚC nút bấm này trong CÙNG lượt chạy (thường vậy, vì nó luôn nằm ở đầu hàm dispatch
-trang), Streamlit raise `StreamlitAPIException: cannot be modified after the widget... is
-instantiated` (bug thật đã gặp). Cách đúng: nút bấm chỉ ghi 1 cờ tạm (`st.session_state["_X_jump"]
-= "Lịch sử"`) rồi `st.rerun()`; xử lý cờ đó ở ĐẦU hàm dispatch, TRƯỚC dòng gọi
+instantiate TRƯỚC nút bấm này trong CÙNG lượt chạy, Streamlit raise `StreamlitAPIException: cannot
+be modified after the widget... is instantiated` (bug thật đã gặp). Cách đúng: nút bấm chỉ ghi 1 cờ
+tạm (`st.session_state["_X_jump"] = "Lịch sử"`) rồi `st.rerun()`; xử lý cờ đó TRƯỚC dòng gọi
 `segmented_control` (`if "_X_jump" in st.session_state: ... st.session_state["X_picker"] = ...`) --
-lúc đó là lượt chạy MỚI, set trước khi widget instantiate nên hợp lệ.
+lúc đó là lượt chạy MỚI, set trước khi widget instantiate nên hợp lệ. Với `bc_sub_picker`/
+`hm_sub_picker`/`tb_sub_picker` (render trong `st.sidebar`, ngay sau khi `nav` được xác định, xem
+`architecture-navigation.md`) widget instantiate RẤT SỚM trong lượt chạy -- cờ `_bc_sub_jump`/
+`_hm_sub_jump` vì vậy phải xử lý ở module-level ngay cạnh khai báo `BAOCAO_SUBS`/`SUCKHOE_SUBS`,
+KHÔNG phải trong hàm render trang (trang được dispatch/gọi MUỘN hơn nhiều so với lúc widget sidebar
+đã render xong).
 
 ## Tooltip tức thời cho thanh phân bổ HTML: `data-tip` + CSS `:hover::after`, không dùng `title=`
 
