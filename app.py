@@ -9541,7 +9541,7 @@ _MAIN_CSS = """
         /* padding-bottom 16px -> 24px: cột mục lục dọc (.tbill-toccol) thường cao hơn 2 cột badge/
            nội dung bên cạnh (canh giữa theo chiều cao hàng), nên mép dưới billboard cần dư dả hơn
            để chip mục lục cuối cùng không sát viền (bug thật đã gặp, xem screenshot người dùng). */
-        padding: 20px 28px 24px !important;
+        padding: 14px 20px 16px !important;
         border-radius: 12px !important;
         margin: 0 0 6px !important;
     }
@@ -9594,14 +9594,14 @@ _MAIN_CSS = """
     .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 11px;
         font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 13px;
         border-radius: 20px; margin-bottom: 12px; }
-    .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: #fff;
+    .tbcircle { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #fff;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
-    .tbcircle-num { font-size: 34px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
-    .tbcircle-mon { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-        opacity: 0.9; margin-top: 2px; }
-    .tbcircle-dow { font-size: 14.5px; font-weight: 700; color: var(--text); margin-top: 12px; }
-    .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
+    .tbcircle-num { font-size: 26px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+    .tbcircle-mon { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+        opacity: 0.9; margin-top: 1px; }
+    .tbcircle-dow { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 8px; }
+    .tbcircle-meta { font-size: 11px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
     /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ
        giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
        nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
@@ -9610,7 +9610,7 @@ _MAIN_CSS = """
        hơn 2 cột còn lại (badge/nội dung được vertical_alignment="center" canh giữa, tự thấp hơn
        cột mục lục nếu có ≥4 chip) -- bug thật đã gặp (screenshot người dùng gửi), thiếu bước này
        khiến chip cuối gần như dính viền dưới billboard. */
-    .tbill-toccol { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+    .tbill-toccol { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
     .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
@@ -9667,12 +9667,12 @@ _MAIN_CSS = """
        Garamond như trước khi có tính năng đó (xác nhận với người dùng: đây là font trang trọng cố
        ý tách biệt vai trò nội dung, không phải "giao diện chung" -- đúng tinh thần đã ghi ở
        BODY_FONTS/_body_font_b64() nhưng thiếu !important nên chưa thật sự bất biến). */
-    .kq-daily-mark { font-size: 58px; line-height: 1; color: var(--accent);
+    .kq-daily-mark { font-size: 40px; line-height: 1; color: var(--accent);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-weight: 600; font-style: italic;
-        opacity: .5; margin-bottom: -14px; }
-    .kq-daily-text { font-size: 20px; line-height: 1.45; font-weight: 600; color: var(--text);
+        opacity: .5; margin-bottom: -8px; }
+    .kq-daily-text { font-size: 16px; line-height: 1.4; font-weight: 600; color: var(--text);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
-    .kq-daily-src { margin: 0; font-size: 17.5px; color: var(--text); font-weight: 700;
+    .kq-daily-src { margin: 0; font-size: 14px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
     /* Tên sách trong "Trích dẫn hôm nay" là <a class="entity-link"> (xem _entity_link_html()) --
        CÙNG bug !important đã ghi ở .kq-daily-text phía trên: rule font thân chữ toàn app khớp
