@@ -368,7 +368,7 @@ def render_help_page(*, st, json, health_metrics_json_example, render_period_bil
         "</ul>"
         "Chọn một màu là áp dụng ngay lập tức, không cần bấm thêm nút Lưu nào cả — giá trị được ghi thẳng "
         "vào bảng <code>settings</code> trên Supabase. Nếu chẳng may bảng đó chưa được tạo, hoặc giá trị "
-        "lưu trong đó bị hỏng, ứng dụng sẽ lặng lẽ trở về màu “Lam biển” mặc định thay vì báo "
+        "lưu trong đó bị hỏng, ứng dụng sẽ lặng lẽ trở về màu “Chàm điện” mặc định thay vì báo "
         "lỗi hay ngừng hoạt động.")
     sec_block(
         "<h4>Chế độ tối — vì sao không có riêng một nút bật/tắt</h4>"

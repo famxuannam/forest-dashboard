@@ -51,22 +51,26 @@ MAC_COLORS = [
 CHART_COLORS = ["#c1440e", "#2f8f5e", "#3a5a9e", "#c9932a", "#8a3b8f", "#1f9caf", "#c94f70", "#6fa02e"]
 
 
-# 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn. Bộ thứ 2 (thay hẳn
-# bộ "đất/mộc mạc" đồng sắc độ trước đó theo phản hồi trực tiếp của người dùng -- muốn đa dạng hơn
-# hẳn, không chỉ xoay quanh vài tông nâu/xanh rêu gần nhau) -- 8 hue trải ĐỀU quanh vòng màu (đỏ ->
-# cam -> vàng -> lục -> lam ngọc -> lam biển -> chàm -> hồng cổ) nhưng vẫn giữ cùng dải độ trầm/
-# saturation trung bình như trước để không lạc hẳn sang tông "candy-bright" kiểu iOS. Ai đã lưu 1
-# màu ở bộ cũ sẽ tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex bên
-# dưới). Bảng này TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Nhóm/Dự án, hệ "Vintage bản đồ").
+# 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn. Bộ thứ 3 (thay hẳn bộ
+# "trầm/mộc mạc" trước đó theo phản hồi trực tiếp của người dùng -- đã nhìn quen 2 bộ cũ, muốn 1 bộ
+# "hoàn toàn khác") -- vẫn 8 hue trải đều quanh vòng màu (đỏ -> cam -> vàng -> lục -> lam ngọc ->
+# chàm -> tím -> hồng) nhưng NÂNG saturation/độ sáng hẳn 1 bậc so với 2 bộ trước (tông "jewel-tone"
+# rực rỡ hơn, không còn xỉn/trầm) để cảm giác khác biệt rõ ràng ngay cái nhìn đầu, không chỉ đổi vài
+# mã hex gần giống cũ. Contrast chữ trắng trên nút/pill đã kiểm qua công thức WCAG (relative
+# luminance) -- "Vàng hổ phách" thấp nhất (~2.45:1) nhưng CÙNG MỨC với "Vàng nghệ" bộ cũ (~2.65:1,
+# đã được chấp nhận trước đó) -- vàng/hổ phách bão hoà cao luôn khó đạt AA 4.5:1 với chữ trắng nếu
+# muốn giữ đúng cảm giác "vàng" (kéo tối thêm sẽ ngả nâu, mất tông). Ai đã lưu 1 màu ở 2 bộ cũ sẽ
+# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex trong app.py). Bảng này
+# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Nhóm/Dự án, hệ "Vintage bản đồ", không đổi).
 ACCENT_PRESETS = {
-    "Đỏ gạch": "#b23a2f",
-    "Cam cháy": "#c96a1f",
-    "Vàng nghệ": "#c9971f",
-    "Lục bảo": "#3a7d4f",
-    "Ngọc lam": "#1f8f8a",
-    "Lam biển": "#2f5fa3",       # mặc định
-    "Chàm tím": "#5b4b8a",
-    "Hồng cổ": "#a3456f",
+    "Đỏ ruby": "#c81452",
+    "Cam rực": "#e0630a",
+    "Vàng hổ phách": "#d99a06",
+    "Lục bích": "#12946b",
+    "Lam ngọc bích": "#0f7ea3",
+    "Chàm điện": "#4f4dc4",       # mặc định
+    "Tím thạch anh": "#8a3fc9",
+    "Hồng mẫu đơn": "#d13a7a",
 }
 
 # Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)/var(--bg-position))
@@ -75,106 +79,107 @@ ACCENT_PRESETS = {
 # dùng image:none (hợp lệ) thay vì bỏ hẳn cặp thuộc tính, để 1 cơ chế var() duy nhất áp cho mọi
 # lựa chọn, không cần nhánh riêng trong CSS chính. "position" mặc định "0 0" nếu không khai báo.
 #
-# Đợt đổi mới (xác nhận với người dùng: lấy nguyên 8 kiểu từ mockup "Tuỳ Chỉnh Giao Diện.dc.html",
-# thay hẳn bộ "Chấm bi/Vũ trụ/Tartan/Argyle/Chevron/Quatrefoil/Xương cá" trước đó) -- chủ đề rừng/
-# nhịp thời gian: Sương mai/Vòng tuổi/Vân gỗ/Lá rơi/Đường mòn/Giọt sương/Núi xa, cộng "Trơn" giữ
-# nguyên. Mockup viết công thức bằng placeholder "INK" (màu mực suy theo độ sáng bảng màu nền tại
-# thời điểm render) -- dịch thẳng sang var(--divider) sẵn có của app (cùng vai trò, tự đổi theo
-# IS_DARK). "Sương mai" là mặc định mới (khớp state.pattern mặc định trong mockup), thay "Chấm bi"
-# cũ -- xem fallback BG_STYLE bên dưới.
+# Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen bộ chủ đề "rừng/nhịp thời gian" -- Sương
+# mai/Vòng tuổi/Vân gỗ/Lá rơi/Đường mòn/Giọt sương/Núi xa -- muốn 1 bộ "hoàn toàn khác"). Đổi hẳn
+# sang chủ đề "hình học tối giản": Lưới điểm/Chấm tròn (2 mật độ chấm khác nhau, giống cặp Sương
+# mai/Giọt sương cũ nhưng dựng bằng 1 lớp duy nhất TĨNH đều tăm tắp thay vì rải rác tự nhiên) + Ô
+# vuông/Kẻ ngang/Kẻ chéo/Kim cương/Vân lưới (đều dựng từ (repeating-)linear-gradient kẻ thẳng,
+# KHÔNG còn radial-gradient rải rác kiểu hữu cơ như bộ trước) -- 2 nhóm kỹ thuật hoàn toàn khác bộ
+# cũ (bộ cũ chủ yếu radial-gradient rải rác + vài lớp lệch góc nhẹ mô phỏng vân tự nhiên). "Lưới
+# điểm" là mặc định mới, thay "Sương mai" -- xem fallback BG_STYLE bên dưới.
 BG_PRESETS = {
     "Trơn": {
         "image": "none",
         "size": "auto",
     },
-    "Sương mai": {
-        # 5 lớp radial-gradient chấm nhỏ rải rác trong 1 ô 90x80 -> sương sớm lấm tấm, thưa hơn hẳn
-        # "Vũ trụ" cũ.
-        "image": ("radial-gradient(1.6px 1.6px at 12px 18px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(1.4px 1.4px at 55px 62px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(2.2px 2.2px at 78px 24px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(1.4px 1.4px at 30px 70px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(1.8px 1.8px at 68px 46px, var(--divider-on-bg), transparent)"),
-        "size": "90px 80px",
+    "Lưới điểm": {
+        # 1 lớp radial-gradient duy nhất, chấm nhỏ đều tăm tắp theo lưới vuông -- khác hẳn "Sương
+        # mai" cũ (5 lớp chấm rải rác không đều).
+        "image": "radial-gradient(1.4px 1.4px at 1px 1px, var(--divider-on-bg), transparent)",
+        "size": "22px 22px",
     },
-    "Vòng tuổi": {
-        # 1 lớp repeating-radial-gradient tâm giữa ô -> các vòng tròn đồng tâm lặp lại, gợi vòng
-        # năm của cây.
-        "image": "repeating-radial-gradient(circle at 50% 50%, transparent 0 10px, var(--divider-on-bg) 10px 12px, transparent 12px 24px)",
-        "size": "64px 64px",
+    "Chấm tròn": {
+        # Cùng công thức "Lưới điểm" nhưng chấm to hơn + ô thưa hơn hẳn -- cặp mật độ khác nhau,
+        # cùng vai trò 2 mức "chấm bi" như Sương mai/Giọt sương cũ nhưng đều tăm tắp thay vì rải rác.
+        "image": "radial-gradient(2.6px 2.6px at 1px 1px, var(--divider-on-bg), transparent)",
+        "size": "46px 46px",
     },
-    "Vân gỗ": {
-        # 2 lớp repeating-linear-gradient gần ngang, lệch góc rất nhẹ (0.8deg/-1.4deg) và chu kỳ
-        # khác nhau -> thớ gỗ mộc mạc, không đều tăm tắp như kẻ ngang thường.
-        "image": ("repeating-linear-gradient(0.8deg, var(--divider-on-bg) 0 1.5px, transparent 1.5px 11px), "
-                   "repeating-linear-gradient(-1.4deg, var(--divider-on-bg) 0 1px, transparent 1px 17px)"),
+    "Ô vuông": {
+        # 2 lớp linear-gradient kẻ dọc + ngang mảnh -> lưới ô vuông kiểu giấy kẻ ly, công thức CSS
+        # "graph paper" kinh điển, KHÔNG có trong bộ cũ (bộ cũ toàn hoạ tiết chấm/kẻ chéo/vòng tròn).
+        "image": ("linear-gradient(var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(90deg, var(--divider-on-bg) 1px, transparent 1px)"),
+        "size": "42px 42px",
+    },
+    "Kẻ ngang": {
+        # 1 lớp repeating-linear-gradient ngang (0deg mặc định) -> vạch kẻ ngang mảnh đều, kiểu
+        # "giấy kẻ dòng" -- khác hẳn mọi hoạ tiết chéo/chấm/tròn ở cả 2 bộ trước.
+        "image": "repeating-linear-gradient(var(--divider-on-bg) 0 1px, transparent 1px 17px)",
         "size": "auto",
     },
-    "Lá rơi": {
-        # 5 lớp radial-gradient chấm cỡ lớn hơn "Sương mai", rải rác trong ô 130x110 -> lá rụng rải
-        # rác cuối thu.
-        "image": ("radial-gradient(3.4px 3.4px at 20px 30px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(2.8px 2.8px at 90px 80px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(4px 4px at 112px 36px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(3px 3px at 54px 96px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(2.6px 2.6px at 66px 12px, var(--divider-on-bg), transparent)"),
-        "size": "130px 110px",
+    "Kẻ chéo": {
+        # 1 lớp vạch chéo 60deg mảnh, chu kỳ thưa (26px) -- góc/chu kỳ khác hẳn "Đường mòn" cũ
+        # (45deg, đoạn đứt 8px) để không lặp lại cảm giác cũ dù cùng kỹ thuật repeating-linear.
+        "image": "repeating-linear-gradient(60deg, var(--divider-on-bg) 0 1px, transparent 1px 26px)",
+        "size": "auto",
     },
-    "Đường mòn": {
-        # 1 lớp vạch chéo 45deg lặp lại, chu kỳ thưa (20px) -> lối đi trong rừng, mảnh/thưa hơn hẳn
-        # "Argyle" cũ.
-        "image": "repeating-linear-gradient(45deg, var(--divider-on-bg) 0 8px, transparent 8px 20px)",
+    "Kim cương": {
+        # 2 lớp linear-gradient chéo 45/-45deg giao nhau -> lưới hình thoi (kim cương/argyle mảnh),
+        # công thức khác hẳn "Núi xa" cũ (Núi xa dùng 2 lớp CÙNG chiều lệch để tạo răng cưa, không
+        # giao nhau thành ô kín).
+        "image": ("linear-gradient(45deg, var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(-45deg, var(--divider-on-bg) 1px, transparent 1px)"),
         "size": "34px 34px",
     },
-    "Giọt sương": {
-        # 2 chấm nhỏ lệch nhau trong 1 ô 32x32 -> lưới hơi nước trên lá, thưa hơn "Chấm bi" cũ.
-        "image": ("radial-gradient(2.2px 2.2px at 8px 8px, var(--divider-on-bg), transparent), "
-                   "radial-gradient(2.2px 2.2px at 24px 24px, var(--divider-on-bg), transparent)"),
-        "size": "32px 32px",
-    },
-    "Núi xa": {
-        # 2 lớp linear-gradient góc 135/225 tạo hình răng cưa lặp lại -> đường chân trời xa, cùng
-        # công thức gốc với "Chevron" cũ (chỉ 2 lớp thay vì 4, không cần lệch "position" riêng).
-        # Phủ ~25% diện tích ô -> pha loãng còn 70% qua color-mix() như Chevron cũ để không đậm hơn
-        # hẳn 7 hoạ tiết chấm/kẻ thưa còn lại.
-        "image": ("linear-gradient(135deg, color-mix(in srgb, var(--divider-on-bg) 70%, transparent) 25%, transparent 25%), "
-                   "linear-gradient(225deg, color-mix(in srgb, var(--divider-on-bg) 70%, transparent) 25%, transparent 25%)"),
-        "size": "56px 30px",
+    "Vân lưới": {
+        # 3 lớp repeating-linear-gradient mảnh ở 0/60/120deg giao nhau -> lưới tam giác/lục giác
+        # mặt phẳng (công thức "triangular grid" kinh điển), phức tạp/dày đặc hơn hẳn "Kim cương"
+        # (chỉ 2 lớp) -- hoạ tiết dày nhất trong bộ mới, giữ vai trò "hoạ tiết đậm nhất" như "Núi
+        # xa" cũ nhưng bằng kỹ thuật kẻ thẳng thay vì mảng phủ.
+        "image": ("repeating-linear-gradient(0deg, var(--divider-on-bg) 0 1px, transparent 1px 30px), "
+                   "repeating-linear-gradient(60deg, var(--divider-on-bg) 0 1px, transparent 1px 30px), "
+                   "repeating-linear-gradient(120deg, var(--divider-on-bg) 0 1px, transparent 1px 30px)"),
+        "size": "auto",
     },
 }
 
 # Bảng màu nền (tab Tuỳ biến -> "4. Giao diện"), người dùng tự chọn -- mỗi entry bundle ĐỦ 13
 # token (light, dark) dùng để dựng _TOK (xem khối :root gần cuối file): bg/card/card-tl/border/
 # divider/divider-2/chip/text/text-2/text-3/text-4/text-on-bg/text-on-bg-2. Bundle cùng lúc (không
-# cho đổi rời từng token) để tránh nền mới "đọ màu" với viền/chip/chữ cũ. 5 bảng gốc GIỮ ĐÚNG 4
-# token chữ gốc (#211c13/#f1ece0 v.v., trước đây là hằng số riêng ngoài bundle) để không đổi gì cho
-# người dùng chưa từng chọn. "Giấy ấm" PHẢI giữ đúng giá trị gốc.
+# cho đổi rời từng token) để tránh nền mới "đọ màu" với viền/chip/chữ cũ.
 #
-# text/text-2/3/4: LUÔN là màu chữ dùng BÊN TRONG thẻ/card (nền var(--card)) -- cả 8 bảng đều dùng
-# thẻ SÁNG + chữ TỐI (yêu cầu trực tiếp của người dùng: "ở các màu nền tối như bầu trời sao hay
-# rừng đêm, tôi muốn nó vẫn là light theme, các card vẫn có màu sáng và chữ màu tối"), nên 8 bảng
-# đều dùng chung đúng 1 cặp chữ tối/sáng theo IS_DARK như 5 bảng gốc -- không còn khác biệt riêng
-# cho 3 bảng mới ở nhóm token này nữa (bản trước đây từng để "card"/"text" của Bầu trời sao/Rừng
-# đêm tối theo màu nền, đã đổi lại theo phản hồi này).
+# Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen 8 bảng "Giấy ấm/Rượu vang/Đêm tía/Lá
+# non/Hoàng hôn/Sương tím/Bầu trời sao/Rừng đêm" + "Xám hệ thống" thêm sau -- muốn 1 bộ "hoàn toàn
+# khác", kể cả bảng mặc định). 9 bảng mới dựng theo 1 CÔNG THỨC HSL nhất quán (khác cách hand-pick
+# tự do trước đây) để đảm bảo tương phản/hài hoà mà không cần tinh chỉnh từng mã hex riêng lẻ -- 5
+# bảng "nền nhạt" giữ nguyên hue xuyên suốt bg/card/border/chip (bg: S34% L87.5%/8.4%, card: S40%
+# L96.5%/13.5%, border: S28% L72%/22%, chip: S30% L79%/17.5%, cùng khuôn "Lá non"/"Hoàng hôn" cũ đã
+# đo lại), 4 bảng "nền đậm cố định" dùng khuôn "Rừng đêm"/"Rượu vang" cũ đã đo lại (bg S~24-36%
+# L16-20% CỐ ĐỊNH cả 2 cột, card/border/chip theo công thức riêng sáng hơn, text-on-bg S24% L93%/
+# text-on-bg-2 S17% L71% CỐ ĐỊNH cả 2 cột). 5 hue mới (lam ngọc/lam nhạt/hồng/vàng bơ/tím oải hương)
+# và 4 hue mới (lam thẳm/nâu hạt dẻ/xám than/đất nung) đều KHÔNG trùng hue nào ở bộ cũ.
+#
+# text/text-2/3/4: LUÔN là màu chữ dùng BÊN TRONG thẻ/card (nền var(--card)) -- cả 9 bảng đều dùng
+# thẻ SÁNG + chữ TỐI (yêu cầu trực tiếp của người dùng, giữ nguyên từ đợt trước: "các card vẫn có
+# màu sáng và chữ màu tối" kể cả ở bảng nền đậm), nên dùng chung đúng 1 cặp chữ tối/sáng
+# (#211c13/#f1ece0 v.v., KHÔNG đổi -- vẫn là hằng số gốc của app, độc lập với bảng màu nền đang
+# chọn) cho MỌI bảng, không có khác biệt riêng theo bảng.
 #
 # text-on-bg/text-on-bg-2: token MỚI, chỉ dùng cho phần chữ nằm TRỰC TIẾP trên nền trang
 # (var(--bg), NGOÀI mọi card) -- ví dụ wordmark "Forest/Dashboard" ở header (_wordmark_html()), text
-# phụ ở màn đăng nhập (_login_txt2). 6 bảng "nền nhạt" (Giấy ấm/Trắng tinh/Đá xanh/Lá non/Hoàng
-# hôn/Sương tím) dùng LUÔN cặp text/text-2 (không có gì khác biệt). "Bầu trời sao"/"Rừng đêm" có
-# var(--bg) đậm CỐ ĐỊNH bất kể
-# IS_DARK (ý tưởng người dùng đề xuất: "ngay cả trong light theme vẫn dùng màu nền đậm hơn tạo
-# tương phản") nên 2 bảng này cần cặp text-on-bg/text-on-bg-2 SÁNG cố định riêng (không đổi theo
-# IS_DARK, y hệt cặp "text" cũ của 2 bảng này trước khi đổi sang light theme ở trên) để chữ trên nền
-# đậm luôn đọc được, tách biệt hẳn khỏi cặp text/text-2 tối giờ dùng cho bên trong card.
+# phụ ở màn đăng nhập (_login_txt2). 5 bảng "nền nhạt" dùng LUÔN cặp text/text-2 (không có gì khác
+# biệt). 4 bảng "nền đậm cố định" có var(--bg) đậm CỐ ĐỊNH bất kể IS_DARK nên cần cặp text-on-bg/
+# text-on-bg-2 SÁNG cố định riêng (không đổi theo IS_DARK) để chữ trên nền đậm luôn đọc được, tách
+# biệt hẳn khỏi cặp text/text-2 tối dùng cho bên trong card.
 BG_PALETTES = {
-    "Giấy ấm": {
-        "bg":        ("#f3efe4", "#1a1712"),
-        "card":      ("#fdfbf5", "#262117"),
-        "card-tl":   ("rgba(253,251,245,0.85)", "rgba(38,33,23,0.85)"),
-        "border":    ("#ddd3b8", "#3c3628"),
-        "divider":   ("rgba(33,28,19,0.14)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(33,28,19,0.2)", "rgba(255,255,255,0.17)"),
-        "chip":      ("#ece4d0", "#322c20"),
+    "Bạc hà": {
+        "bg":        ("#d4eae5", "#0e1d19"),
+        "card":      ("#f3faf8", "#1a2b27"),
+        "card-tl":   ("rgba(243,250,248,0.85)", "rgba(26,43,39,0.85)"),
+        "border":    ("#a4ccc2", "#284840"),
+        "divider":   ("rgba(13,38,32,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(13,38,32,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#b9dad1", "#213832"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
@@ -182,56 +187,14 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    # "Rượu vang"/"Đêm tía" thay "Trắng tinh"/"Đá xanh" (xác nhận với người dùng: 2 bảng nền đậm
-    # cố định -- Bầu trời sao/Rừng đêm -- là hơi ít, cần thêm 2 tông đậm khác biệt hẳn về hue thay
-    # cho 2 bảng nhạt). Cùng công thức "nền đậm cố định" với Bầu trời sao/Rừng đêm: bg ĐẬM ở CẢ 2
-    # cột (khác 6 bảng "nền nhạt" -- bg chỉ đậm khi IS_DARK), card/border/chip/divider theo ĐÚNG
-    # công thức bảng "nền nhạt" bình thường (thẻ sáng/tối theo IS_DARK như mọi bảng khác), còn
-    # text-on-bg/text-on-bg-2 SÁNG CỐ ĐỊNH cả 2 cột (bg luôn đậm nên chữ trên nền luôn cần sáng).
-    "Rượu vang": {
-        "bg":        ("#3a1620", "#220c12"),
-        "card":      ("#faf5f6", "#2d181c"),
-        "card-tl":   ("rgba(250,245,246,0.85)", "rgba(45,24,28,0.85)"),
-        "border":    ("#e3c9d0", "#492932"),
-        "divider":   ("rgba(36,10,17,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(36,10,17,0.19)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#eddde1", "#3b2027"),
-        "text":      ("#211c13", "#f1ece0"),
-        "text-2":    ("#6f6650", "#b3a688"),
-        "text-3":    ("#a39877", "#857a5f"),
-        "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#f5eaed", "#f5eaed"),
-        "text-on-bg-2": ("#dbb3be", "#dbb3be"),
-    },
-    "Đêm tía": {
-        "bg":        ("#2a1a3d", "#160d21"),
-        "card":      ("#f8f5fc", "#21182d"),
-        "card-tl":   ("rgba(248,245,252,0.85)", "rgba(33,24,45,0.85)"),
-        "border":    ("#ddd0ef", "#372949"),
-        "divider":   ("rgba(22,10,36,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(22,10,36,0.19)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#e9e1f5", "#2c203b"),
-        "text":      ("#211c13", "#f1ece0"),
-        "text-2":    ("#6f6650", "#b3a688"),
-        "text-3":    ("#a39877", "#857a5f"),
-        "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#efeaf5", "#efeaf5"),
-        "text-on-bg-2": ("#c5b3db", "#c5b3db"),
-    },
-    # 2 bảng dưới đây (Lá non/Hoàng hôn) + "Sương tím" (kế tiếp) lấy ĐÚNG bg/card/border từ mockup
-    # "Tuỳ Chỉnh Giao Diện.dc.html" (xác nhận với người dùng thay hẳn bộ bảng cũ). Mockup chỉ cho
-    # 1 mã màu/token (không phân biệt sáng/tối theo IS_DARK như app) -- biến thể "dark" (cột thứ 2
-    # mỗi tuple) do agent tự suy ra bằng cách làm tối cùng tông (giữ nguyên hue, hạ độ sáng) theo
-    # đúng công thức 5 bảng gốc đã áp dụng, xác nhận với người dùng chọn cách này thay vì dùng
-    # nguyên 1 mã cho cả 2 chế độ.
-    "Lá non": {
-        "bg":        ("#e0ead4", "#161d0e"),
-        "card":      ("#f8faf0", "#292d18"),
-        "card-tl":   ("rgba(248,250,240,0.85)", "rgba(41,45,24,0.85)"),
-        "border":    ("#bccca4", "#3d4929"),
-        "divider":   ("rgba(27,38,13,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(27,38,13,0.19)", "rgba(255,255,255,0.17)"),
-        "chip":      ("#ccdaba", "#333b20"),
+    "Xanh da trời": {
+        "bg":        ("#d4e1ea", "#0e171d"),
+        "card":      ("#f3f7fa", "#1a242b"),
+        "card-tl":   ("rgba(243,247,250,0.85)", "rgba(26,36,43,0.85)"),
+        "border":    ("#a4bbcc", "#283b48"),
+        "divider":   ("rgba(13,28,38,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(13,28,38,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#b9ccda", "#212e38"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
@@ -239,14 +202,14 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    "Hoàng hôn": {
-        "bg":        ("#f3e0cb", "#1d160e"),
-        "card":      ("#fdf5ec", "#2d2318"),
-        "card-tl":   ("rgba(253,245,236,0.85)", "rgba(45,35,24,0.85)"),
-        "border":    ("#dfbe9c", "#493a29"),
-        "divider":   ("rgba(40,26,11,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(40,26,11,0.19)", "rgba(255,255,255,0.17)"),
-        "chip":      ("#e8cdb1", "#3b2e20"),
+    "Hồng phấn": {
+        "bg":        ("#ead4da", "#1d0e12"),
+        "card":      ("#faf3f4", "#2b1a1e"),
+        "card-tl":   ("rgba(250,243,244,0.85)", "rgba(43,26,30,0.85)"),
+        "border":    ("#cca4ae", "#482830"),
+        "divider":   ("rgba(38,13,19,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(38,13,19,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#dab9c1", "#382127"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
@@ -254,14 +217,14 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    "Sương tím": {
-        "bg":        ("#e7e1f0", "#140e1d"),
-        "card":      ("#faf8fd", "#20182d"),
-        "card-tl":   ("rgba(250,248,253,0.85)", "rgba(32,24,45,0.85)"),
-        "border":    ("#c8bbdd", "#362949"),
-        "divider":   ("rgba(23,13,38,0.13)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(23,13,38,0.19)", "rgba(255,255,255,0.17)"),
-        "chip":      ("#d6cce6", "#2b203b"),
+    "Vàng bơ": {
+        "bg":        ("#eae6d4", "#1d1a0e"),
+        "card":      ("#faf8f3", "#2b281a"),
+        "card-tl":   ("rgba(250,248,243,0.85)", "rgba(43,40,26,0.85)"),
+        "border":    ("#ccc4a4", "#484228"),
+        "divider":   ("rgba(38,33,13,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(38,33,13,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#dad3b9", "#383321"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
@@ -269,62 +232,84 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    # "Bầu trời sao"/"Rừng đêm": var(--bg) đậm CỐ ĐỊNH bất kể IS_DARK (ý tưởng người dùng), nhưng
-    # card/border/divider/chip/text dùng công thức LIGHT THEME chuẩn (thẻ sáng, chữ tối) giống 5
-    # bảng gốc -- chỉ text-on-bg/text-on-bg-2 (chữ nằm trực tiếp trên nền, ngoài card) mới cần cặp
-    # sáng cố định riêng để đọc được trên nền đậm. Cả 2 bảng này TRÙNG KHỚP mockup sẵn (bg/card/
-    # border cùng mã hex), không cần đổi gì.
-    "Bầu trời sao": {
-        "bg":        ("#232a4d", "#0d1024"),
-        "card":      ("#f5f6fc", "#161a35"),
-        "card-tl":   ("rgba(245,246,252,0.85)", "rgba(22,26,53,0.85)"),
-        "border":    ("#d7dbf0", "#242a4a"),
-        "divider":   ("rgba(20,24,45,0.12)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(20,24,45,0.18)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#e7e9f7", "#1a1f3c"),
-        "text":      ("#211c13", "#f1ece0"),
-        "text-2":    ("#6f6650", "#b3a688"),
-        "text-3":    ("#a39877", "#857a5f"),
-        "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#eef0fb", "#eef0fb"),
-        "text-on-bg-2": ("#b7bcdf", "#b7bcdf"),
-    },
-    "Rừng đêm": {
-        "bg":        ("#1f3327", "#0d160f"),
-        "card":      ("#f5f9f6", "#16211a"),
-        "card-tl":   ("rgba(245,249,246,0.85)", "rgba(22,33,26,0.85)"),
-        "border":    ("#d3e0d8", "#25382c"),
-        "divider":   ("rgba(20,30,24,0.12)", "rgba(255,255,255,0.12)"),
-        "divider-2": ("rgba(20,30,24,0.18)", "rgba(255,255,255,0.2)"),
-        "chip":      ("#e5efe8", "#1a2a20"),
-        "text":      ("#211c13", "#f1ece0"),
-        "text-2":    ("#6f6650", "#b3a688"),
-        "text-3":    ("#a39877", "#857a5f"),
-        "text-4":    ("#cabf9d", "#4f483a"),
-        "text-on-bg":   ("#eaf2ec", "#eaf2ec"),
-        "text-on-bg-2": ("#a9c2b2", "#a9c2b2"),
-    },
-    # "Xám hệ thống": thêm theo đợt redesign Apple/macOS-inspired (xem design handoff .dc.html) --
-    # bg/card/chip/border/divider lấy nguyên hex từ README Design Tokens của bản thiết kế (light bg
-    # #f0f0f2/card #fff/chip #e6e6e9, dark bg #1c1c1e/card #2c2c2e/chip #3a3a3c). Thuộc nhóm "nền
-    # nhạt" bình thường (bg đổi theo IS_DARK như 6 bảng kia, KHÔNG cố định đậm như Bầu trời sao/Rừng
-    # đêm/Rượu vang/Đêm tía) -- không thêm vào BG_PALETTES_DARK_BG. text/text-2/3/4 VÀ text-on-bg/
-    # text-on-bg-2 dùng chung đúng 1 cặp chữ tối/sáng như 5 bảng gốc (theo quy ước đã chốt ở đầu
-    # file), không lấy màu chữ riêng của mockup.
-    "Xám hệ thống": {
-        "bg":        ("#f0f0f2", "#1c1c1e"),
-        "card":      ("#ffffff", "#2c2c2e"),
-        "card-tl":   ("rgba(255,255,255,0.85)", "rgba(44,44,46,0.85)"),
-        "border":    ("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)"),
-        "divider":   ("rgba(0,0,0,0.06)", "rgba(255,255,255,0.07)"),
-        "divider-2": ("rgba(0,0,0,0.1)", "rgba(255,255,255,0.12)"),
-        "chip":      ("#e6e6e9", "#3a3a3c"),
+    "Tím oải hương": {
+        "bg":        ("#e1d4ea", "#170e1d"),
+        "card":      ("#f7f3fa", "#241a2b"),
+        "card-tl":   ("rgba(247,243,250,0.85)", "rgba(36,26,43,0.85)"),
+        "border":    ("#bba4cc", "#3b2848"),
+        "divider":   ("rgba(28,13,38,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(28,13,38,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#ccb9da", "#2e2138"),
         "text":      ("#211c13", "#f1ece0"),
         "text-2":    ("#6f6650", "#b3a688"),
         "text-3":    ("#a39877", "#857a5f"),
         "text-4":    ("#cabf9d", "#4f483a"),
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    # 4 bảng dưới đây: "nền đậm cố định" -- bg ĐẬM ở CẢ 2 cột (khác 5 bảng "nền nhạt" trên -- bg chỉ
+    # đậm khi IS_DARK), card/border/chip/divider theo công thức riêng (thẻ sáng/tối theo IS_DARK
+    # như mọi bảng khác), text-on-bg/text-on-bg-2 SÁNG CỐ ĐỊNH cả 2 cột (bg luôn đậm nên chữ trên
+    # nền luôn cần sáng) -- xem BG_PALETTES_DARK_BG ngay dưới.
+    "Lam thẳm": {
+        "bg":        ("#1a3037", "#1a3037"),
+        "card":      ("#f5f8f9", "#161f22"),
+        "card-tl":   ("rgba(245,248,249,0.85)", "rgba(22,31,34,0.85)"),
+        "border":    ("#d2dcdf", "#253237"),
+        "divider":   ("rgba(10,26,31,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(10,26,31,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e6edef", "#1a2529"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#e9eff1", "#e9eff1"),
+        "text-on-bg-2": ("#a8bbc2", "#a8bbc2"),
+    },
+    "Nâu hạt dẻ": {
+        "bg":        ("#37261a", "#37261a"),
+        "card":      ("#f9f7f5", "#221b16"),
+        "card-tl":   ("rgba(249,247,245,0.85)", "rgba(34,27,22,0.85)"),
+        "border":    ("#dfd8d2", "#372c25"),
+        "divider":   ("rgba(31,19,10,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(31,19,10,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#efeae6", "#29201a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#f1ece9", "#f1ece9"),
+        "text-on-bg-2": ("#c2b3a8", "#c2b3a8"),
+    },
+    "Xám than": {
+        "bg":        ("#2e3138", "#2e3138"),
+        "card":      ("#f5f7f9", "#161a22"),
+        "card-tl":   ("rgba(245,247,249,0.85)", "rgba(22,26,34,0.85)"),
+        "border":    ("#d2d7df", "#252b37"),
+        "divider":   ("rgba(10,17,31,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(10,17,31,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e6e9ef", "#1a1f29"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#e9ecf1", "#e9ecf1"),
+        "text-on-bg-2": ("#a8b1c2", "#a8b1c2"),
+    },
+    "Đất nung": {
+        "bg":        ("#37211a", "#37211a"),
+        "card":      ("#f9f6f5", "#221916"),
+        "card-tl":   ("rgba(249,246,245,0.85)", "rgba(34,25,22,0.85)"),
+        "border":    ("#dfd5d2", "#372925"),
+        "divider":   ("rgba(31,15,10,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(31,15,10,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#efe8e6", "#291d1a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#f1ebe9", "#f1ebe9"),
+        "text-on-bg-2": ("#c2afa8", "#c2afa8"),
     },
 }
 
@@ -333,76 +318,79 @@ BG_PALETTES = {
 # thật, KHÔNG hoà theo màu nền trang đậm phía sau (xác nhận với người dùng: billboard vẫn là
 # "light theme" y hệt các bảng nền nhạt, chỉ có nền NGOÀI thẻ/billboard mới được phép đậm) -- xem
 # _billboard_bg/_billboard_backdrop ngay dưới _root_vars.
-BG_PALETTES_DARK_BG = {"Bầu trời sao", "Rừng đêm", "Rượu vang", "Đêm tía"}
+BG_PALETTES_DARK_BG = {"Lam thẳm", "Nâu hạt dẻ", "Xám than", "Đất nung"}
 
 # divider-on-bg: token riêng cho hoạ tiết nền (BG_PRESETS, vẽ trực tiếp lên var(--bg) qua
 # --bg-image) -- KHÔNG dùng chung "divider" được nữa vì "divider" thiết kế cho viền/kẻ BÊN TRONG
 # card (thẻ luôn sáng, xem chú thích trên BG_PALETTES), cột "light" của nó là mực TỐI. Với 4 bảng
 # BG_PALETTES_DARK_BG, var(--bg) luôn ĐẬM bất kể IS_DARK -- dùng nguyên "divider" ở light theme sẽ
-# ra mực tối vẽ trên nền đậm, hoạ tiết gần như vô hình (bug thật, ảnh chụp người dùng gửi ở "Đêm
-# tía"). Lấy nguyên cột "dark" của divider (đã là màu sáng, tương phản tốt trên nền đậm) cho CẢ 2
-# cột. 6 bảng "nền nhạt" còn lại giữ y hệt divider gốc -- không đổi hành vi cũ.
+# ra mực tối vẽ trên nền đậm, hoạ tiết gần như vô hình (bug thật, ảnh chụp người dùng gửi ở bảng
+# nền đậm cố định thời bộ cũ). Lấy nguyên cột "dark" của divider (đã là màu sáng, tương phản tốt
+# trên nền đậm) cho CẢ 2 cột. 5 bảng "nền nhạt" còn lại giữ y hệt divider gốc -- không đổi hành vi cũ.
 for _pal_name, _pal in BG_PALETTES.items():
     _pal["divider-on-bg"] = ((_pal["divider"][1], _pal["divider"][1]) if _pal_name in BG_PALETTES_DARK_BG
                               else _pal["divider"])
 
 # Kiểu thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập với bảng màu nền ở trên, áp dụng chung
-# lên MỌI bảng màu qua 3 token CSS --card-radius/--card-border-w/--card-shadow. "Bo mềm" PHẢI giữ
-# đúng công thức gốc (10px / 1px / box-shadow nhạt hiện tại) để không đổi gì cho người chưa chọn.
+# lên MỌI bảng màu qua 3 token CSS --card-radius/--card-border-w/--card-shadow, cộng 3 KHOÁ TUỲ
+# CHỌN "bg_override"/"backdrop"/"border_image" (mặc định var(--card)/none/none nếu không khai báo,
+# xem _card_style_vars) cho 2 hiệu ứng cần hơn 3 token gốc (đổi background-image/backdrop-filter,
+# không chỉ radius/border/shadow) -- áp qua 1 rule CSS gộp DUY NHẤT (xem rule ngay sau
+# _card_style_vars), đặt SAU mọi rule gốc trong cascade nên tự thắng mà không cần sửa từng nơi.
 #
-# 3 lựa chọn gốc chỉ cần đúng 3 token trên. 5 lựa chọn mới (xác nhận với người dùng qua mockup)
-# thêm 3 KHOÁ TUỲ CHỌN "bg_override"/"backdrop"/"border_image" (mặc định var(--card)/none/none nếu
-# không khai báo, xem _card_style_vars) -- 2 hiệu ứng "Kính mờ" (kính mờ thật, backdrop-filter +
-# nền bán trong suốt card-tl có sẵn) và "Viền gradient" (viền đổi màu theo Accent) KHÔNG áp được
-# chỉ qua radius/border_w/shadow (hàng chục nơi rải rác trong app tự viết riêng "border: var(
-# --card-border-w) solid var(--border); background: var(--card);" theo TỪNG khối, không có 1 điểm
-# nối chung để đổi border-style/background-image) -- xử lý bằng 1 rule CSS gộp DUY NHẤT, liệt kê
-# lại đúng danh sách selector card đã rà soát (xem rule ngay sau _card_style_vars), đặt SAU mọi
-# rule gốc trong cascade nên tự thắng mà không cần sửa từng nơi. Mặc định var(--card)/none/none
-# khiến rule gộp này vô hại (không đổi gì) với 6 kiểu còn lại.
+# Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen 8 kiểu cũ -- Bo mềm/Vuông viền đậm/Nổi
+# khối/Viền kép/Nổi mềm/Đóng dấu/Kính mờ/Viền gradient -- muốn 1 bộ "hoàn toàn khác", kể cả kiểu
+# mặc định). 8 kiểu mới vẫn dùng ĐÚNG cơ chế 3+3 token trên (không đổi kiến trúc), chỉ đổi công
+# thức cụ thể: "Phẳng lì" (không viền/không bóng -- CHƯA có kiểu nào trong 2 bộ trước hoàn toàn
+# phẳng), "Viên thuốc" (bo tròn 24px kiểu capsule, khác hẳn mọi mức bo tròn cũ tối đa 16px), "Bóng
+# sâu" (bóng đơn lớn/đậm hơn "Nổi khối" cũ), "Viền nhấn" (viền ĐẶC màu Accent qua border_image
+# 1-màu, khác "Viền gradient" cũ luôn có dải chuyển màu), "Nền mờ nhẹ" (bg_override var(--card-tl)
+# GIỐNG "Kính mờ" cũ nhưng KHÔNG bật backdrop-filter -- phẳng/trong suốt thay vì hiệu ứng kính mờ
+# thật), "Đổ tầng" (3 lớp box-shadow chồng xa dần, khác mọi shadow đơn lớp trước đó), "Khắc chìm"
+# (2 lớp inset tạo cảm giác khắc/chạm nổi ngược, khác "Đóng dấu" cũ chỉ 1 lớp inset), "Hào quang
+# nhấn" (viền mảnh + quầng sáng màu Accent lan toả quanh thẻ, hiệu ứng CHƯA từng có ở 2 bộ trước).
 CARD_STYLES = {
-    "Bo mềm": {
-        "radius": "10px",
-        "border_w": "1px",
-        "shadow": "0 1px 1px rgba(0,0,0,0.02)",
-    },
-    "Vuông viền đậm": {
-        "radius": "3px",
-        "border_w": "1.5px",
+    "Phẳng lì": {
+        "radius": "4px",
+        "border_w": "0px",
         "shadow": "none",
     },
-    "Nổi khối": {
-        "radius": "12px",
-        "border_w": "0.5px",
-        "shadow": "0 6px 18px rgba(0,0,0,0.12)",
-    },
-    "Viền kép": {
-        "radius": "6px",
+    "Viên thuốc": {
+        "radius": "24px",
         "border_w": "1px",
-        "shadow": "0 0 0 3px var(--card), 0 0 0 4px var(--border)",
+        "shadow": "0 1px 2px rgba(0,0,0,0.04)",
     },
-    "Nổi mềm": {
-        "radius": "16px",
-        "border_w": "0px",
-        "shadow": "0 2px 4px rgba(0,0,0,0.04), 0 14px 28px rgba(0,0,0,0.09)",
-    },
-    "Đóng dấu": {
-        "radius": "10px",
-        "border_w": "0px",
-        "shadow": "inset 0 2px 6px rgba(0,0,0,0.15)",
-    },
-    "Kính mờ": {
+    "Bóng sâu": {
         "radius": "14px",
-        "border_w": "1px",
-        "shadow": "0 8px 28px rgba(0,0,0,0.10)",
-        "bg_override": "var(--card-tl)",
-        "backdrop": "blur(14px)",
+        "border_w": "0px",
+        "shadow": "0 12px 32px rgba(0,0,0,0.16)",
     },
-    "Viền gradient": {
-        "radius": "12px",
+    "Viền nhấn": {
+        "radius": "10px",
         "border_w": "2px",
         "shadow": "none",
-        "border_image": "linear-gradient(135deg, var(--accent), transparent 75%) 1",
+        "border_image": "linear-gradient(var(--accent), var(--accent)) 1",
+    },
+    "Nền mờ nhẹ": {
+        "radius": "14px",
+        "border_w": "1px",
+        "shadow": "0 4px 16px rgba(0,0,0,0.06)",
+        "bg_override": "var(--card-tl)",
+    },
+    "Đổ tầng": {
+        "radius": "10px",
+        "border_w": "1px",
+        "shadow": "0 1px 1px rgba(0,0,0,0.05), 0 4px 8px rgba(0,0,0,0.05), 0 12px 24px rgba(0,0,0,0.05)",
+    },
+    "Khắc chìm": {
+        "radius": "10px",
+        "border_w": "0px",
+        "shadow": "inset 0 1px 4px rgba(0,0,0,0.18), inset 0 -1px 1px rgba(255,255,255,0.35)",
+    },
+    "Hào quang nhấn": {          # mặc định
+        "radius": "12px",
+        "border_w": "1px",
+        "shadow": "0 0 0 1px var(--border), 0 10px 28px rgba(var(--accent-rgb),0.18)",
     },
 }
 
@@ -435,31 +423,34 @@ CONTENT_WIDTHS = {
 # nhãn/nút" (html/body/.stApp + iframe Quill, xem _BODY_FONT_FACE/style_quill()) -- KHÔNG áp cho
 # font bảng số liệu (IBM Plex Mono, _TABLE_FONT_FACE) hay font trích dẫn (Cormorant Garamond,
 # _QUOTE_FONT_FACE), vì 2 font đó được chọn có chủ đích riêng theo vai trò nội dung, không phải
-# "giao diện chung" (xác nhận với người dùng). 8 lựa chọn LẤY NGUYÊN từ mockup "Tuỳ Chỉnh Giao
-# Diện.dc.html" (đủ dáng chữ khác biệt: sans nhân văn/hình học/bo tròn, serif, slab-serif, sans nén
-# cao -- xem chú thích đầy đủ ở khai báo BODY_FONTS/_body_font_b64()).
-# "file_prefix" khớp tên file trong assets/fonts/ (vd Manrope-Variable-latin.woff2), "family" là
-# tên CSS font-family thật. "Manrope" PHẢI là mặc định (giữ nguyên hiện trạng cho người chưa từng
-# chọn).
-# Đợt đổi mới (xác nhận với người dùng: lấy nguyên 8 font từ mockup "Tuỳ Chỉnh Giao Diện.dc.html",
-# thay hẳn "Inter"/"Public Sans"/"JetBrains Mono"/"Roboto" bằng "Be Vietnam Pro"/"Lora"/
-# "Roboto Slab"/"Oswald" -- 4 font còn lại (Manrope/Plus Jakarta Sans/Nunito/Literata) TRÙNG với
-# bộ cũ nên giữ nguyên file .woff2 sẵn có). "weights": Be Vietnam Pro KHÔNG có bản variable trên
-# Google Fonts (chỉ có file tĩnh từng mức đậm riêng, khác 7 font còn lại) -- key này báo
-# _body_font_b64()/_BODY_FONT_FACE nhúng NHIỀU file tĩnh (400/600/800, mỗi mức đủ 3 subset) thay
-# vì 1 file biến trục duy nhất, để vẫn giữ được phân cấp đậm/nhạt (label/nút thường 400-600, tiêu
-# đề/số liệu nhấn 700-800) -- trình duyệt tự chọn file GẦN NHẤT với font-weight CSS thực tế đang
-# yêu cầu (không có nội suy liên tục như font biến trục, nhưng vẫn có 3 mức rõ rệt thay vì 1 mức
-# phẳng lì). File đặt tên `<file_prefix>-<weight>-<subset>.woff2` (khác quy ước
-# `<file_prefix>-<subset>.woff2` của font biến trục).
+# "giao diện chung" (xác nhận với người dùng).
+# "file_prefix" khớp tên file trong assets/fonts/ (vd Inter-Variable-latin.woff2), "family" là tên
+# CSS font-family thật.
+#
+# Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen bộ 8 font trước -- Manrope/Be Vietnam
+# Pro/Plus Jakarta Sans/Nunito/Literata/Lora/Roboto Slab/Oswald -- muốn 1 bộ "hoàn toàn khác"). 8
+# font mới: Inter (sans trung tính sắc nét, MẶC ĐỊNH mới), Archivo (grotesque khổ rộng), Epilogue
+# (hình học đặc trưng), Unbounded (display bo khối đậm), Fraunces (serif ấm/tương phản cao, có trục
+# opsz), Newsreader (serif kiểu báo/tạp chí), Bitter (slab serif mềm hơn Roboto Slab cũ), Big
+# Shoulders Text (condensed công nghiệp, thay vai trò "sans nén cao" của Oswald cũ). Đã xác minh cả
+# 8 đều có bản variable phủ đủ wght 200-800 trong 1 file (như bộ cũ, TRỪ Be Vietnam Pro) VÀ đủ 3
+# subset latin/latin-ext/vietnamese trước khi tải (không font nào cần cơ chế "weights" nhiều file
+# tĩnh như Be Vietnam Pro cũ nữa).
+#
+# QUAN TRỌNG: "Manrope" (font khung vỏ CỐ ĐỊNH cho sidebar/date-picker, xem _UI_FONT trong app.py)
+# KHÔNG còn là 1 key trong dict này -- đã tách riêng khỏi trục "Font thân chữ" (đọc thẳng
+# "Manrope-Variable" qua _body_font_b64(), không tra cứu qua BODY_FONTS[_UI_FONT] nữa) để 8 lựa
+# chọn ở đây có thể thay hẳn mà không phá khung vỏ cố định. File Manrope-Variable-*.woff2 trong
+# assets/fonts/ VẪN GIỮ NGUYÊN (đang dùng cho khung vỏ), dù không còn hiện trong danh sách 8 lựa
+# chọn này.
 BODY_FONTS = {
-    "Manrope": {"family": "Manrope", "file_prefix": "Manrope-Variable"},
-    "Be Vietnam Pro": {"family": "Be Vietnam Pro", "file_prefix": "BeVietnamPro", "weights": (400, 600, 800)},
-    "Plus Jakarta Sans": {"family": "Plus Jakarta Sans", "file_prefix": "PlusJakartaSans-Variable"},
-    "Nunito": {"family": "Nunito", "file_prefix": "Nunito-Variable"},
-    "Literata": {"family": "Literata", "file_prefix": "Literata-Variable"},
-    "Lora": {"family": "Lora", "file_prefix": "Lora-Variable"},
-    "Roboto Slab": {"family": "Roboto Slab", "file_prefix": "RobotoSlab-Variable"},
-    "Oswald": {"family": "Oswald", "file_prefix": "Oswald-Variable"},
+    "Inter": {"family": "Inter", "file_prefix": "Inter-Variable"},          # mặc định
+    "Archivo": {"family": "Archivo", "file_prefix": "Archivo-Variable"},
+    "Epilogue": {"family": "Epilogue", "file_prefix": "Epilogue-Variable"},
+    "Unbounded": {"family": "Unbounded", "file_prefix": "Unbounded-Variable"},
+    "Fraunces": {"family": "Fraunces", "file_prefix": "Fraunces-Variable"},
+    "Newsreader": {"family": "Newsreader", "file_prefix": "Newsreader-Variable"},
+    "Bitter": {"family": "Bitter", "file_prefix": "Bitter-Variable"},
+    "Big Shoulders Text": {"family": "Big Shoulders Text", "file_prefix": "BigShouldersText-Variable"},
 }
 
