@@ -36,6 +36,21 @@ set trực tiếp từ phía JS.
   xem trước trực tiếp, xem `theming.md`) tách hẳn khỏi chuỗi chương "Tổng quan" thành 1 sub-page
   riêng để có billboard/chip-TOC/hàng nút Reset-Ngẫu nhiên của riêng nó, dù bố cục bên trong (billboard
   + chuỗi `sec_chapter()`) vẫn dùng ĐÚNG khuôn chung với "Tổng quan"/Báo cáo/Sách/Gundam.
+- Cả 3 widget picker (`bc_sub_picker`/`hm_sub_picker`/`tb_sub_picker`) render trong `st.sidebar`,
+  NGAY DƯỚI widget `nav` chính, thay vì đứng ở đầu nội dung trang — khối `with st.sidebar:` xử lý
+  việc này nằm ngay sau khi biến `nav` được xác định (đầu `app.py`, cùng chỗ với việc khai báo
+  `BAOCAO_SUBS`/`SUCKHOE_SUBS`/`TUYBIEN_SUBS` và đồng bộ `bc_sub`/`hm_sub`/`tb_sub` qua query
+  param), CHỈ hiện đúng 1 sub-nav khớp trang `nav` đang đứng. Dispatch nội dung trang (chuỗi
+  if/elif chính) chỉ ĐỌC lại `st.session_state["bc_sub"]`/`"hm_sub"`/`"tb_sub"` đã đồng bộ sẵn ở
+  đó, không tự render lại widget picker. Ngoại lệ: sub-tab "Chọn mục" ở Sách/Gundam
+  (`rl_view_tabs_picker`/`rl_view_tabs_gd_picker`, xem `render_reading_log()`) VẪN đứng ở đầu nội
+  dung trang như cũ, KHÔNG dời sang sidebar — chỉ 3 sub-nav cấp trang chính (Báo cáo/Sức khoẻ/Tuỳ
+  biến) mới áp dụng thay đổi này.
+- Cờ chờ xử lý kiểu `_bc_sub_jump`/`_hm_sub_jump` (nhảy sang 1 sub-tab khác BẰNG CODE) PHẢI được
+  set/pop TRƯỚC khối `with st.sidebar:` render widget picker (tức là ở phần khai báo
+  `BAOCAO_SUBS`/`SUCKHOE_SUBS` đầu `app.py`, không phải trong hàm render trang như trước khi dời
+  sang sidebar) — xem gotcha `StreamlitAPIException` ở `ui-components.md`, giờ áp dụng chặt hơn vì
+  widget instantiate sớm hơn nhiều trong lượt chạy so với trước.
 - `day_picker(nav_days)` (dùng ở trang "Hôm nay") làm điều tương tự với `?day=` cho việc chọn ngày
   cụ thể — `nav_days` (danh sách ngày lịch/nút `◀`/`▶` được phép tới) quyết định luôn cả biên lo/hi
   lẫn tập ứng viên bước; `render_day_report()` truyền vào hợp của ngày CÓ phiên Forest (`active_days`)

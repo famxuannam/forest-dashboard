@@ -5715,26 +5715,7 @@ def render_health_page():
     khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
     SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
     df_health = load_health_metrics()
-
-    # Nút "Sửa" ở card "Lần khám gần nhất" (_render_health_input()) nhảy sang sub-tab Lịch sử qua
-    # cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["hm_sub_picker"] tại nút bấm, vì
-    # lúc đó widget segmented_control DƯỚI ĐÂY đã instantiate rồi trong CÙNG lượt chạy (bug thật
-    # đã gặp: StreamlitAPIException "cannot be modified after the widget... is instantiated") --
-    # phải set key của widget TRƯỚC khi nó được gọi, nên phải xử lý ở đây, đầu trang, trước dòng
-    # segmented_control, rồi mới rerun sang lượt chạy mới áp dụng được.
-    if "_hm_sub_jump" in st.session_state:
-        _jump = st.session_state.pop("_hm_sub_jump")
-        st.session_state["hm_sub_picker"] = _jump
-        st.session_state["hm_sub"] = _jump
-
-    _sub_pick = st.segmented_control(
-        "Xem theo", SUCKHOE_SUBS,
-        format_func=lambda x: f"{SUCKHOE_SUB_ICONS_MD[x]} {x}",
-        default=st.session_state["hm_sub"], key="hm_sub_picker", label_visibility="collapsed")
-    if _sub_pick and _sub_pick != st.session_state["hm_sub"]:
-        st.session_state["hm_sub"] = _sub_pick
     hm_sub = st.session_state["hm_sub"]
-    st.query_params["hsub"] = hm_sub
 
     if hm_sub == "Báo cáo":
         _render_health_report(df_health)
@@ -8517,6 +8498,66 @@ _MAIN_CSS = """
         height: auto !important; min-height: 38px !important;
         border-radius: 0 9px 9px 9px !important;
     }
+    /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo của Báo cáo/Sức khoẻ/Tuỳ biến) render NGAY DƯỚI nav
+       chính trong CÙNG sidebar (xem khối "with st.sidebar" ngay sau khi "nav" được xác định trong
+       dispatch) thay vì đứng ở đầu nội dung trang -- xác nhận với người dùng đổi kiến trúc điều
+       hướng. Dáng lặp lại ĐÚNG khuôn cột dọc/pill của nav chính ở trên (không phải tab gạch chân
+       như bản cũ đứng trên nền trang, đã bỏ luôn phần CSS đó cho 3 key này) để đọc liền mạch như 1
+       menu duy nhất, chỉ THU NHỎ + THỤT LỀ để phân cấp rõ với nav chính: item thấp hơn (32px thay
+       38px), chữ nhỏ hơn (12.5px), thụt trái 23px (12px lề ngoài + 11px = đúng khoảng cách
+       icon->nhãn của nav chính phía trên, để nhãn sub-nav thẳng hàng với nhãn nav chính chứ không
+       thẳng hàng với icon). Nút đang chọn dùng LẠI đúng rule chung `button[data-selected="true"]`
+       (nền accent đặc + chữ trắng) như nav chính -- không tự chế kiểu accent khác cho 1 menu phụ
+       cùng 1 sidebar.  */
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"],
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"],
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] {
+        justify-content: flex-start !important;
+        margin: 2px 0 10px 0 !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] {
+        flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 2px !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button,
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button {
+        width: 100% !important; justify-content: flex-start !important; text-align: left !important;
+        border-radius: 8px !important;
+        height: 32px !important; min-height: 32px !important;
+        padding: 0 12px 0 23px !important;
+        font-size: 12.5px !important; font-weight: 600 !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button p,
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button p,
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button p {
+        text-align: left !important; font-size: 12.5px !important; font-weight: 600 !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button > div,
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button > div,
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button > div {
+        justify-content: flex-start !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
+        font-size: 15px !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+        background-color: transparent !important;
+        border-color: transparent !important;
+        color: var(--text-2) !important;
+    }
+    [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
+    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
+        background-color: var(--chip) !important;
+    }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -8552,36 +8593,24 @@ _MAIN_CSS = """
         gap: 4px !important;
     }
 
-    /* Thanh chọn sub-tab "Chọn kỳ xem" (Báo cáo), "Xem theo" (Sức khoẻ), và "Chọn mục" (Tổng
-       quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log() -- trước đây dùng st.tabs()
-       riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các sub-tab picker khác, đổi hẳn
-       sang segmented_control cho đồng bộ, xác nhận với người dùng qua ảnh chụp) -- label đã ẩn
-       (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav ở trên NGOẠI TRỪ căn lề:
-       CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người dùng đổi lại) -- khớp cảm
-       giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống trải khi ít mục. Dáng nút
-       tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để huỷ gap chung 6px ở trên
-       (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút bên dưới, không phải gap
-       của container, cộng cả 2 sẽ ra khoảng cách quá lớn). [class*="st-key-rl_view_tabs"]
-       (substring, KHÔNG phải class chính xác) vì Sách dùng key "rl_view_tabs_picker", Gundam
-       "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp 1 trong 2 trang. */
-    .st-key-bc_sub_picker, .st-key-hm_sub_picker, .st-key-tb_sub_picker,
+    /* Thanh chọn "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log()
+       -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các
+       sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác nhận với người dùng
+       qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav
+       ở trên NGOẠI TRỪ căn lề: CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người
+       dùng đổi lại) -- khớp cảm giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống
+       trải khi ít mục. Dáng nút tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để
+       huỷ gap chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút
+       bên dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn).
+       [class*="st-key-rl_view_tabs"] (substring, KHÔNG phải class chính xác) vì Sách dùng key
+       "rl_view_tabs_picker", Gundam "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp
+       1 trong 2 trang. "Chọn kỳ xem" (Báo cáo)/"Xem theo" (Sức khoẻ, Tuỳ biến) KHÔNG còn dùng bộ
+       CSS này nữa -- 3 picker đó đã dời sang sidebar (xem khối "with st.sidebar" ngay sau khi
+       "nav" được xác định trong dispatch), dùng riêng bộ CSS dáng pill dọc thu nhỏ ngay dưới đây
+       thay vì dáng tab gạch chân đứng trên nền trang chính. */
     [class*="st-key-rl_view_tabs"] { width: 100% !important; }
-    /* Không override -> mặc định margin-bottom:10px của stButtonGroup cộng gap flex 10px ra
-       tổng 20px xuống billboard, gấp đôi khoảng "Nav -> sub-tab picker" (12px, xem `.st-key-nav`
-       ở trên) dù nhìn sơ tưởng đã đều -- đo thật bằng Playwright phát hiện lệch hẳn 4px/20px. Đặt
-       cùng 2px để 2 khoảng bằng nhau (12px), khớp phương án B đã chọn trong mockup. Tuỳ biến
-       (`.st-key-tb_sub_picker`) dùng lại ĐÚNG rule này (xác nhận với người dùng: sub-tab
-       "Tổng quan"/"Giao diện" phải cùng kiểu tab gạch chân căn trái như Báo cáo/Sức khoẻ, không
-       phải dáng nút pill của nav chính). */
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"],
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"],
     [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: flex-start !important; width: 100% !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"], .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
-    .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
-    .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
-    .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
     [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         /* Nút CHƯA chọn nền trong suốt (giữ nguyên, xem chú thích trên) nên đứng TRỰC TIẾP trên
            var(--bg) -- màu chữ PHẢI đọc var(--text-on-bg-2) (không phải var(--text-2)) để không
@@ -8602,8 +8631,6 @@ _MAIN_CSS = """
         border-bottom: 2px solid transparent !important; box-shadow: none !important;
         color: var(--text-on-bg-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
     }
-    .st-key-bc_sub_picker button[data-selected="true"], .st-key-hm_sub_picker button[data-selected="true"],
-    .st-key-tb_sub_picker button[data-selected="true"],
     [class*="st-key-rl_view_tabs"] button[data-selected="true"] {
         /* var(--tab-accent) thay vì var(--accent) thẳng -- xem _tab_accent (khối :root): bản sáng
            hơn của accent khi rơi vào 1 trong 4 bảng "nền đậm cố định" để không lẫn vào nền đậm
@@ -9950,6 +9977,105 @@ if not nav:
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
+# Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở
+# trên, cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế. Widget picker được render
+# trong st.sidebar NGAY DƯỚI nav chính (xem khối "with st.sidebar" cuối phần này) thay vì đứng ở
+# đầu nội dung trang -- xác nhận với người dùng đổi kiến trúc điều hướng, cùng tinh thần dời nav
+# chính sang sidebar trước đó (xem docs/architecture-navigation.md).
+BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
+BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material/calendar_view_month:",
+                        "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
+                        "Dự án": ":material/folder:"}
+
+# Click biểu đồ Xu hướng/Theo khung giờ (render_trend_fig/render_hourly_chart) nhảy sang sub-tab
+# "Dự án" qua cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["bc_sub_picker"] tại chỗ
+# bấm, vì widget segmented_control (key="bc_sub_picker", render trong sidebar bên dưới) đã
+# instantiate rồi trong CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở
+# "_hm_sub_jump" ngay dưới) -- phải set TRƯỚC dòng segmented_control, nên xử lý ở đây, trước khi
+# "bc_sub" tự đọc query param. Set CẢ 2 key (bc_sub_picker VÀ bc_sub) vì "bc_sub" tuy không phải
+# key widget nhưng segmented_control CHỈ đọc default= khi key CHƯA từng có giá trị -- đã ghé "Báo
+# cáo" 1 lần trong phiên thì bc_sub_picker đã có state riêng, set mỗi bc_sub sẽ không đổi được tab
+# đang hiện.
+if "_bc_sub_jump" in st.session_state:
+    _bc_jump = st.session_state.pop("_bc_sub_jump")
+    st.session_state["bc_sub_picker"] = _bc_jump
+    st.session_state["bc_sub"] = _bc_jump
+elif "bc_sub" not in st.session_state:
+    _qs = st.query_params.get("sub")
+    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
+if nav == "Báo cáo":
+    st.query_params["sub"] = st.session_state["bc_sub"]
+elif "sub" in st.query_params:
+    del st.query_params["sub"]
+
+# Sub-page của "Sức khoẻ" (Báo cáo/Lịch sử/Dữ liệu đầu vào) -- CÙNG 1 pattern hệt BAOCAO_SUBS ở
+# trên (segmented_control trong sidebar + query param riêng), không dùng st.tabs() -- khác tab
+# Hướng dẫn (nội dung tĩnh, không cần deep-link) ở chỗ đây là trang thao tác, cần chia sẻ được
+# link/nhảy sang đúng sub-tab bằng code (vd sau khi Lưu ở "Dữ liệu đầu vào" có thể tự chuyển sang
+# "Báo cáo"). Query param riêng "hsub" (không dùng chung "sub" với Báo cáo) để 2 trang không giẫm
+# state.
+SUCKHOE_SUBS = ["Báo cáo", "Lịch sử", "Dữ liệu đầu vào"]
+SUCKHOE_SUB_ICONS_MD = {"Báo cáo": ":material/monitoring:", "Lịch sử": ":material/history:",
+                        "Dữ liệu đầu vào": ":material/edit_note:"}
+# Nút "Sửa" ở card "Lần khám gần nhất" (_render_health_input()) nhảy sang sub-tab Lịch sử qua cờ
+# chờ xử lý này -- xử lý ở đây (trước dòng segmented_control key="hm_sub_picker" trong sidebar bên
+# dưới), CÙNG gotcha/pattern với "_bc_sub_jump" ở trên.
+if "_hm_sub_jump" in st.session_state:
+    _hm_jump = st.session_state.pop("_hm_sub_jump")
+    st.session_state["hm_sub_picker"] = _hm_jump
+    st.session_state["hm_sub"] = _hm_jump
+elif "hm_sub" not in st.session_state:
+    _qs_hm = st.query_params.get("hsub")
+    st.session_state["hm_sub"] = _qs_hm if _qs_hm in SUCKHOE_SUBS else "Báo cáo"
+if nav == "Sức khoẻ":
+    st.query_params["hsub"] = st.session_state["hm_sub"]
+elif "hsub" in st.query_params:
+    del st.query_params["hsub"]
+
+# Sub-page của "Tuỳ biến" (Tổng quan/Giao diện) -- CÙNG 1 pattern hệt SUCKHOE_SUBS ở trên. "Giao
+# diện" tách khỏi chuỗi chương cuộn dọc "Tổng quan" (trước đây là chương "3. Giao diện") thành 1
+# sub-page riêng theo mockup "Tuỳ Chỉnh Giao Diện.dc.html" -- bố cục 2 cột (6 trục cá nhân hoá +
+# xem trước trực tiếp), khác hẳn khuôn billboard+chip-TOC-cuộn-trang của "Tổng quan" nên cần tách
+# hẳn thành sub-tab thay vì chỉ 1 chương trong cùng trang. Query param riêng "tsub".
+TUYBIEN_SUBS = ["Tổng quan", "Giao diện"]
+TUYBIEN_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Giao diện": ":material/palette:"}
+if "tb_sub" not in st.session_state:
+    _qs_tb = st.query_params.get("tsub")
+    st.session_state["tb_sub"] = _qs_tb if _qs_tb in TUYBIEN_SUBS else "Tổng quan"
+if nav == "Tuỳ biến":
+    st.query_params["tsub"] = st.session_state["tb_sub"]
+elif "tsub" in st.query_params:
+    del st.query_params["tsub"]
+
+# Sub-nav (cấp 2) render NGAY DƯỚI nav chính trong sidebar -- chỉ hiện đúng 1 widget khớp trang
+# đang đứng. Nội dung trang (dispatch if/elif bên dưới) chỉ ĐỌC lại session_state đã đồng bộ ở
+# đây (bc_sub/hm_sub/tb_sub), không tự render lại widget picker nữa.
+with st.sidebar:
+    if nav == "Báo cáo":
+        _sub_pick = st.segmented_control(
+            "Chọn kỳ xem", BAOCAO_SUBS,
+            format_func=lambda x: f"{BAOCAO_SUB_ICONS_MD[x]} {x}",
+            default=st.session_state["bc_sub"], key="bc_sub_picker", label_visibility="collapsed")
+        if _sub_pick and _sub_pick != st.session_state["bc_sub"]:
+            st.session_state["bc_sub"] = _sub_pick
+            st.query_params["sub"] = st.session_state["bc_sub"]
+    elif nav == "Sức khoẻ":
+        _sub_pick = st.segmented_control(
+            "Xem theo", SUCKHOE_SUBS,
+            format_func=lambda x: f"{SUCKHOE_SUB_ICONS_MD[x]} {x}",
+            default=st.session_state["hm_sub"], key="hm_sub_picker", label_visibility="collapsed")
+        if _sub_pick and _sub_pick != st.session_state["hm_sub"]:
+            st.session_state["hm_sub"] = _sub_pick
+            st.query_params["hsub"] = st.session_state["hm_sub"]
+    elif nav == "Tuỳ biến":
+        _tb_sub_pick = st.segmented_control(
+            "Xem theo", TUYBIEN_SUBS,
+            format_func=lambda x: f"{TUYBIEN_SUB_ICONS_MD[x]} {x}",
+            default=st.session_state["tb_sub"], key="tb_sub_picker", label_visibility="collapsed")
+        if _tb_sub_pick and _tb_sub_pick != st.session_state["tb_sub"]:
+            st.session_state["tb_sub"] = _tb_sub_pick
+            st.query_params["tsub"] = st.session_state["tb_sub"]
+
 
 def _inject_keyboard_shortcuts():
     """Phím tắt toàn app. Bỏ qua khi đang gõ trong input/textarea (kể cả date picker) hoặc đang
@@ -10286,65 +10412,6 @@ def _inject_note_editor_shortcuts():
         "</script>"
     )
     components.html(js, height=0)
-
-# Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở trên,
-# cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế qua hàng "Chọn kỳ xem" trong trang.
-BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
-BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material/calendar_view_month:",
-                        "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
-                        "Dự án": ":material/folder:"}
-
-# Click biểu đồ Xu hướng/Theo khung giờ (render_trend_fig/render_hourly_chart) nhảy sang sub-tab
-# "Dự án" qua cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["bc_sub_picker"] tại chỗ
-# bấm, vì widget segmented_control (key="bc_sub_picker", dòng dưới) đã instantiate rồi trong
-# CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở _hm_sub_jump) -- phải set TRƯỚC
-# dòng segmented_control, nên xử lý ở đây, đầu dispatch, trước khi "bc_sub" tự đọc query param.
-# Set CẢ 2 key (bc_sub_picker VÀ bc_sub, giống hệt _hm_sub_jump set cả hm_sub_picker/hm_sub) vì
-# "bc_sub" tuy không phải key widget nhưng segmented_control CHỈ đọc default= khi key CHƯA từng
-# có giá trị -- đã ghé "Báo cáo" 1 lần trong phiên thì bc_sub_picker đã có state riêng, set mỗi
-# bc_sub sẽ không đổi được tab đang hiện.
-if "_bc_sub_jump" in st.session_state:
-    _bc_jump = st.session_state.pop("_bc_sub_jump")
-    st.session_state["bc_sub_picker"] = _bc_jump
-    st.session_state["bc_sub"] = _bc_jump
-elif "bc_sub" not in st.session_state:
-    _qs = st.query_params.get("sub")
-    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
-if nav == "Báo cáo":
-    st.query_params["sub"] = st.session_state["bc_sub"]
-elif "sub" in st.query_params:
-    del st.query_params["sub"]
-
-# Sub-page của "Sức khoẻ" (Báo cáo/Lịch sử/Dữ liệu đầu vào) -- CÙNG 1 pattern hệt BAOCAO_SUBS ở
-# trên (segmented_control + query param riêng), không dùng st.tabs() -- khác tab Hướng dẫn (nội
-# dung tĩnh, không cần deep-link) ở chỗ đây là trang thao tác, cần chia sẻ được link/nhảy sang
-# đúng sub-tab bằng code (vd sau khi Lưu ở "Dữ liệu đầu vào" có thể tự chuyển sang "Báo cáo").
-# Query param riêng "hsub" (không dùng chung "sub" với Báo cáo) để 2 trang không giẫm state.
-SUCKHOE_SUBS = ["Báo cáo", "Lịch sử", "Dữ liệu đầu vào"]
-SUCKHOE_SUB_ICONS_MD = {"Báo cáo": ":material/monitoring:", "Lịch sử": ":material/history:",
-                        "Dữ liệu đầu vào": ":material/edit_note:"}
-if "hm_sub" not in st.session_state:
-    _qs_hm = st.query_params.get("hsub")
-    st.session_state["hm_sub"] = _qs_hm if _qs_hm in SUCKHOE_SUBS else "Báo cáo"
-if nav == "Sức khoẻ":
-    st.query_params["hsub"] = st.session_state["hm_sub"]
-elif "hsub" in st.query_params:
-    del st.query_params["hsub"]
-
-# Sub-page của "Tuỳ biến" (Tổng quan/Giao diện) -- CÙNG 1 pattern hệt SUCKHOE_SUBS ở trên. "Giao
-# diện" tách khỏi chuỗi chương cuộn dọc "Tổng quan" (trước đây là chương "3. Giao diện") thành 1
-# sub-page riêng theo mockup "Tuỳ Chỉnh Giao Diện.dc.html" -- bố cục 2 cột (6 trục cá nhân hoá +
-# xem trước trực tiếp), khác hẳn khuôn billboard+chip-TOC-cuộn-trang của "Tổng quan" nên cần tách
-# hẳn thành sub-tab thay vì chỉ 1 chương trong cùng trang. Query param riêng "tsub".
-TUYBIEN_SUBS = ["Tổng quan", "Giao diện"]
-TUYBIEN_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Giao diện": ":material/palette:"}
-if "tb_sub" not in st.session_state:
-    _qs_tb = st.query_params.get("tsub")
-    st.session_state["tb_sub"] = _qs_tb if _qs_tb in TUYBIEN_SUBS else "Tổng quan"
-if nav == "Tuỳ biến":
-    st.query_params["tsub"] = st.session_state["tb_sub"]
-elif "tsub" in st.query_params:
-    del st.query_params["tsub"]
 
 _inject_keyboard_shortcuts()
 _inject_reading_calendar_tap_tip()
@@ -10898,14 +10965,7 @@ if nav == "Hôm nay":
 # TAB BÁO CÁO THÁNG
 # ==========================================
 elif nav == "Báo cáo":
-    _sub_pick = st.segmented_control(
-        "Chọn kỳ xem", BAOCAO_SUBS,
-        format_func=lambda x: f"{BAOCAO_SUB_ICONS_MD[x]} {x}",
-        default=st.session_state["bc_sub"], key="bc_sub_picker", label_visibility="collapsed")
-    if _sub_pick and _sub_pick != st.session_state["bc_sub"]:
-        st.session_state["bc_sub"] = _sub_pick
     bc_sub = st.session_state["bc_sub"]
-    st.query_params["sub"] = bc_sub
 
     # Tải chung cho chương "Biểu đồ lịch" của Tổng quan/Tháng/Năm (frag_report_calendar_month/
     # _render_report_calendar_month) -- cả 3 @st.cache_data nên gọi ở đây 1 lần không tốn thêm
@@ -11599,18 +11659,12 @@ elif nav == "Tìm kiếm":
 # TAB TUỲ BIẾN
 # ==========================================
 elif nav == "Tuỳ biến":
-    # Sub-page "Tổng quan"/"Giao diện" (TUYBIEN_SUBS, xem khai báo cạnh SUCKHOE_SUBS) -- CÙNG 1
-    # pattern segmented_control + query param hệt Sức khoẻ. "Giao diện" tách hẳn khỏi chuỗi chương
-    # cuộn dọc bên dưới vì bố cục mockup của nó (2 cột: trục cá nhân hoá + xem trước trực tiếp)
-    # không khớp khuôn billboard+chip-TOC-cuộn-trang chung của "Tổng quan".
-    _tb_sub_pick = st.segmented_control(
-        "Xem theo", TUYBIEN_SUBS,
-        format_func=lambda x: f"{TUYBIEN_SUB_ICONS_MD[x]} {x}",
-        default=st.session_state["tb_sub"], key="tb_sub_picker", label_visibility="collapsed")
-    if _tb_sub_pick and _tb_sub_pick != st.session_state["tb_sub"]:
-        st.session_state["tb_sub"] = _tb_sub_pick
+    # Sub-page "Tổng quan"/"Giao diện" (TUYBIEN_SUBS, xem khai báo cạnh SUCKHOE_SUBS) -- widget
+    # picker render trong sidebar (khối "with st.sidebar" ngay sau khi "nav" được xác định), ở đây
+    # chỉ đọc lại session_state đã đồng bộ. "Giao diện" tách hẳn khỏi chuỗi chương cuộn dọc bên
+    # dưới vì bố cục mockup của nó (2 cột: trục cá nhân hoá + xem trước trực tiếp) không khớp
+    # khuôn billboard+chip-TOC-cuộn-trang chung của "Tổng quan".
     tb_sub = st.session_state["tb_sub"]
-    st.query_params["tsub"] = tb_sub
 
     if tb_sub == "Giao diện":
         _render_tuybien_giao_dien()
