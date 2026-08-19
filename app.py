@@ -9670,8 +9670,12 @@ _MAIN_CSS = """
        hơn 2 cột còn lại (badge/nội dung được vertical_alignment="center" canh giữa, tự thấp hơn
        cột mục lục nếu có ≥4 chip) -- bug thật đã gặp (screenshot người dùng gửi), thiếu bước này
        khiến chip cuối gần như dính viền dưới billboard. */
-    .tbill-toccol { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
-    .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left; }
+    .tbill-toccol { display: flex; flex-direction: column; gap: 3px; padding-bottom: 4px; }
+    /* Chip mục lục billboard rút gọn riêng (khác .sec-toc-chip mặc định dùng ở nơi khác) -- padding
+       5px/12px -> 4px/10px, font 12.5px -> 11.5px, để cột mục lục chiếm ít chiều cao billboard hơn
+       (phản hồi thực tế: mục lục chỉ là link neo, không cần to bằng nội dung chính). */
+    .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left;
+        padding: 4px 10px; font-size: 11.5px; }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
