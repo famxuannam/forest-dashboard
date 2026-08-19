@@ -8278,12 +8278,23 @@ _MAIN_CSS = """
        dòng/section rút gọn (10px->7px, 14px->9px) so với bản đầu -- xác nhận với người dùng qua
        ảnh chụp: khối "Tổng quan ngày" (So sánh/Mốc trong ngày/Theo buổi/Liền mạch dồn 1 chỗ) cao
        quá mức so với lượng thông tin, chiếm nhiều màn hình hơn cần thiết. */
-    .sp-listcard { padding: 0 !important; overflow: hidden; }
+    /* column-count: 2 -- các dòng label/giá trị (vd "Phiên đầu · Phiên cuối · Trải dài") thường
+       ngắn hơn nhiều bề rộng thẻ, để 1 cột duy nhất tạo khoảng trống giữa nhãn/giá trị rất dài
+       (phản hồi thực tế, xem ảnh chụp người dùng gửi). CSS multi-column tự chảy từng dòng vào 2 cột
+       theo thứ tự DOM (đầy cột trái rồi mới sang cột phải, cân bằng chiều cao tự động) -- chọn
+       cách này thay vì CSS grid 2 cột vì grid xếp XEN KẼ trái/phải theo hàng, có thể trộn lẫn 2
+       "nhóm" (section) khác nhau trên cùng 1 hàng ngang trông rối; multi-column giữ nguyên thứ tự
+       đọc dọc quen thuộc trong từng cột. break-inside: avoid trên .sp-lrow/-head để 1 dòng không
+       bị cắt đôi giữa 2 cột. column-rule thay cho viền ngăn cách 2 cột. */
+    .sp-listcard { padding: 0 !important; overflow: hidden; column-count: 2; column-gap: 0;
+        column-rule: 1px solid var(--divider); }
     .sp-lsec-head { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
-        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border); }
+        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border);
+        break-inside: avoid; break-after: avoid; }
     .sp-lsec-head.first { border-top: none; }
     .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text);
+        break-inside: avoid; }
     .sp-listcard > .sp-lrow:last-child { padding-bottom: 10px; }
     /* Nhóm KHÔNG có tiêu đề (sections truyền label="") -- dòng đầu tiên của cả thẻ không được kẻ
        viền trên (trước đây luôn có .sp-lsec-head.first đứng trước nên không lộ), và dòng đầu của
