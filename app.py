@@ -7267,6 +7267,13 @@ def frag_category_bars(scope_df, key, default_color):
     có) -- không mất dữ liệu khi đổi. Đoạn thanh có tooltip `data-tip` (tái dùng _RHYTHM_TIP_CSS
     của render_project_rhythm) cho các đoạn quá hẹp không đọc được trực tiếp.
 
+    Thẻ dùng ĐÚNG khuôn .glass-card + nhãn .rl-book + thanh cao 26px với nhãn chữ trong từng đoạn
+    (_seg_label) + bo góc 6px 2 đầu -- khớp 1:1 với 2 thẻ "Theo buổi"/"Độ dài phiên" của
+    render_project_rhythm() theo yêu cầu người dùng ("3 bar graph giống hệt nhau ở mọi khía
+    cạnh"), thay style .catbars-card/.catbar-stack cũ (thẻ không có nhãn, thanh 14px, không nhãn
+    chữ trong đoạn). Legend giữ style cũ nhưng đặt trong khối margin-top:10px;font-size:13px cùng
+    _insight1/_insight2 để đồng nhất khoảng cách/kiểu chữ với câu nhận định của 2 thẻ kia.
+
     Áp dụng cho MỌI trang gọi hàm này (Hôm nay, Báo cáo Tuần/Tháng) -- cùng cách đã làm với
     render_stat_panel: ưu tiên khớp mockup hơn giữ nguyên bố cục cũ. Bọc trong container
     "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống nội dung dưới."""
@@ -7287,18 +7294,25 @@ def frag_category_bars(scope_df, key, default_color):
             color = COLOR_MAP.get(name, MAC_COLORS[i % len(MAC_COLORS)])
             _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_proj_to_cat.get(name), name)
             _hrs = _fmt_hours_short(mins / 60)
-            # Bo góc RIÊNG đoạn đầu/cuối thay vì overflow:hidden trên cả hàng -- overflow sẽ cắt
-            # mất tooltip (position:absolute trong đoạn), đúng bẫy đã ghi ở ui-components.md.
-            _r = ("7px 0 0 7px" if i == 0 and _n > 1 else "0 7px 7px 0" if i == _n - 1 and _n > 1
-                  else "7px" if _n == 1 else "0")
-            segs_html += (f"<div class='rhythm-seg catbar-seg' data-tip='{html_escape(str(name))}: {_hrs} · {pct:.0f}%' "
-                          f"style='width:{pct:.2f}%;background:{color};border-radius:{_r};'></div>")
+            lbl = _seg_label(f"{name} {pct:.0f}%", pct)
+            # Bo góc RIÊNG đoạn đầu/cuối (như render_project_rhythm) thay vì overflow:hidden trên
+            # cả hàng -- overflow sẽ cắt mất tooltip (position:absolute trong đoạn).
+            _rad = ("border-radius:6px 0 0 6px;" if i == 0 and _n > 1 else
+                    "border-radius:0 6px 6px 0;" if i == _n - 1 and _n > 1 else
+                    "border-radius:6px;" if _n == 1 else "")
+            segs_html += (f"<div class='rhythm-seg' data-tip='{html_escape(str(name))}: {_hrs} · {pct:.0f}%' "
+                          f"style='width:{pct:.4f}%;background:{color};{_rad}"
+                          f"color:{_readable_text(color)};font-size:12px;font-weight:600;display:flex;"
+                          f"align-items:center;justify-content:center;white-space:nowrap;'>{lbl}</div>")
             legend_html += (f"<span class='catbar-lg'><i style='background:{color};'></i>"
                             f"{_entity_link_html(name, _kind)} · {_hrs} · {pct:.0f}%</span>")
         st.markdown(_RHYTHM_TIP_CSS, unsafe_allow_html=True)
         st.markdown(
-            f"<div class='catbars-card'><div class='catbar-stack'>{segs_html}</div>"
-            f"<div class='catbar-legend'>{legend_html}</div></div>",
+            "<div class='glass-card' style='padding:14px 18px;'>"
+            f"<span class='rl-book'>Theo {ccol.lower()}</span>"
+            f"<div style='display:flex;height:26px;'>{segs_html}</div>"
+            f"<div class='catbar-legend' style='margin-top:10px;'>{legend_html}</div>"
+            "</div>",
             unsafe_allow_html=True)
 
 
@@ -8032,7 +8046,11 @@ _MAIN_CSS = """
        thanh xếp chồng. */
     .catbar-stack { display: flex; height: 14px; margin-bottom: 10px; }
     .catbar-seg { height: 100%; min-width: 2px; }
-    .catbar-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
+    /* frag_category_bars ĐÃ chuyển sang thẻ .glass-card (không còn dùng .catbar-stack/.catbar-seg
+       ở trên, giữ lại cho tương thích ngược nếu còn nơi khác tham chiếu) -- .catbar-legend giờ
+       đặt trong khối margin-top:10px;font-size:13px giống câu nhận định của render_project_rhythm
+       nên cỡ chữ/màu đổi từ 12.5px sang 13px để khớp, xem docstring frag_category_bars. */
+    .catbar-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--text-2); }
     .catbar-lg { display: inline-flex; align-items: center; gap: 6px; }
     .catbar-lg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
     .catbar-row { display: grid; grid-template-columns: 150px 1fr 60px; align-items: center;
