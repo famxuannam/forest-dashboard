@@ -317,11 +317,11 @@ except Exception:
     IS_DARK = False
 
 # Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT bên dưới (giá trị lạ/preset cũ
-# đã bỏ -- vd "Chấm bi" trước khi đổi hẳn bộ hoạ tiết theo mockup -- rơi về "Sương mai" mặc định
-# mới, không crash).
-_bg_style_name = _cached_settings().get("bg_style", "Sương mai")
+# đã bỏ -- vd "Sương mai" trước khi đổi hẳn bộ hoạ tiết sang chủ đề hình học tối giản -- rơi về
+# "Lưới điểm" mặc định mới, không crash).
+_bg_style_name = _cached_settings().get("bg_style", "Lưới điểm")
 if _bg_style_name not in BG_PRESETS:
-    _bg_style_name = "Sương mai"
+    _bg_style_name = "Lưới điểm"
 BG_STYLE = _bg_style_name
 BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
 BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
@@ -330,9 +330,9 @@ BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
 # Bảng màu nền đang chọn -- tính TRƯỚC PLOT_TEXT (ngay dưới), vì từ khi text/text-2/3/4 vào luôn
 # bundle Màu nền, PLOT_TEXT phải đọc đúng theo bảng đang chọn thay vì hằng số IS_DARK trần như
 # trước.
-_bg_palette_name = _cached_settings().get("bg_palette", "Giấy ấm")
+_bg_palette_name = _cached_settings().get("bg_palette", "Bạc hà")
 if _bg_palette_name not in BG_PALETTES:
-    _bg_palette_name = "Giấy ấm"
+    _bg_palette_name = "Bạc hà"
 BG_PALETTE = _bg_palette_name
 
 # Màu chữ trên biểu đồ Plotly (nhãn tổng, đường TB động, ngưỡng độ dài phiên...) -- khớp token
@@ -341,14 +341,14 @@ BG_PALETTE = _bg_palette_name
 # màu chữ riêng khác hẳn cặp #211c13/#f1ece0 gốc.
 PLOT_TEXT = BG_PALETTES[BG_PALETTE]["text"][1 if IS_DARK else 0]
 
-# Accent (màu nhấn) đang chọn -- fallback "Lam biển" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
+# Accent (màu nhấn) đang chọn -- fallback "Chàm điện" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
 # khi giá trị đã lưu là 1 màu ở bộ preset cũ đã bị thay -- không crash, chỉ lặng lẽ rơi về mặc định
 # mới). PHẢI tính TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó
 # là câu lệnh cấp module chạy ngay khi import, sớm hơn cả st.set_page_config()/cổng kiểm tra
 # secrets Supabase.
-_accent_hex = _cached_settings().get("accent_hex", "#2f5fa3")
+_accent_hex = _cached_settings().get("accent_hex", "#4f4dc4")
 if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi tay/preset cũ đã bỏ) -> fallback an toàn
-    _accent_hex = "#2f5fa3"
+    _accent_hex = "#4f4dc4"
 ACCENT = _accent_hex
 ACCENT_RGB = _hex_rgb_str(ACCENT)
 # ACCENT_DARK = "accent tương phản trên nền tint accent nhạt". Ở dark mode, nền tint đó lại
@@ -360,11 +360,11 @@ TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng T
 TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades() lý do
 # cần biến này thay vì hardcode 1 mức saturation cố định.
 
-# "Nổi mềm" là mặc định mới (Phase 5 đợt redesign Apple/macOS-inspired, xác nhận với người dùng --
-# đổi hành vi mặc định cho MỌI user, kể cả user chưa từng lưu setting) -- thay "Bo mềm" cũ.
-_card_style_name = _cached_settings().get("card_style", "Nổi mềm")
+# "Hào quang nhấn" là mặc định mới (đợt đổi bộ Kiểu thẻ thứ 2, xác nhận với người dùng -- đổi hành
+# vi mặc định cho MỌI user, kể cả user chưa từng lưu setting) -- thay "Nổi mềm" cũ.
+_card_style_name = _cached_settings().get("card_style", "Hào quang nhấn")
 if _card_style_name not in CARD_STYLES:
-    _card_style_name = "Nổi mềm"
+    _card_style_name = "Hào quang nhấn"
 CARD_STYLE = _card_style_name
 
 _card_density_name = _cached_settings().get("card_density", "Vừa")
@@ -372,9 +372,12 @@ if _card_density_name not in CARD_DENSITY:
     _card_density_name = "Vừa"
 CARD_DENSITY_NAME = _card_density_name
 
-_body_font_name = _cached_settings().get("body_font", "Manrope")
+# "Inter" là mặc định mới (đợt đổi bộ Font thân chữ thứ 2, xác nhận với người dùng) -- thay
+# "Manrope" cũ. Manrope KHÔNG còn là lựa chọn trong BODY_FONTS (đã tách riêng làm font khung vỏ cố
+# định, xem _UI_FONT ở dưới) nên fallback không thể trỏ về "Manrope" nữa.
+_body_font_name = _cached_settings().get("body_font", "Inter")
 if _body_font_name not in BODY_FONTS:
-    _body_font_name = "Manrope"
+    _body_font_name = "Inter"
 BODY_FONT_NAME = _body_font_name
 BODY_FONT = BODY_FONTS[BODY_FONT_NAME]["family"]
 
@@ -1493,12 +1496,18 @@ def _list_sync_files():
     return sorted((f for f in files if f.get("name")), key=lambda f: f.get("created_at") or "", reverse=True)
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, refresh_mode="background")
 def _list_sync_files_cached():
     """Bản cache TTL=60s của _list_sync_files() -- dùng RIÊNG cho _has_pending_forest_sync(), hàm
     bị gọi lại ở MỌI trang/mỗi lần rerun (qua _render_nav_sync_fab()) chỉ để biết có file Forest
     mới hơn lần đồng bộ gần nhất hay không. Không cache thẳng _list_sync_files() (dùng chung cho cả
-    lúc bấm nút thật) vì lúc đó cần dữ liệu bucket mới nhất, không được trễ tới 60s."""
+    lúc bấm nút thật) vì lúc đó cần dữ liệu bucket mới nhất, không được trễ tới 60s.
+
+    refresh_mode="background" (Streamlit >=1.61) -- hàm này chạy lại ở MỌI trang/mỗi lần rerun nên
+    hay rơi đúng lúc cache vừa hết hạn; mặc định "foreground" sẽ CHẶN lượt render đó chờ round-trip
+    Supabase Storage thật. "background" trả ngay giá trị cũ (có thể cũ tới 1 TTL, tức tối đa ~120s)
+    rồi tự làm mới ngầm phía sau -- đúng điều kiện áp dụng (không đọc st.session_state, không tự vẽ
+    element Streamlit nào bên trong _list_sync_files())."""
     return _list_sync_files()
 
 def _latest_sync_file(files, prefix):
@@ -7642,7 +7651,14 @@ def _wordmark_html(layout="header"):
 # tự thêm xmlns nếu thiếu, rồi encode base64 thành data URI) -- không cần rasterize ra PNG. Icon
 # Material trước đây (":material/forest:") luôn ra màu đen bất kể theme (giới hạn đã biết của
 # Streamlit với favicon Material icon) -- SVG tự vẽ thì giữ được màu accent thật.
-st.set_page_config(page_title="Forest Dashboard", page_icon=_logo_mark_svg(64), layout="wide")
+# initial_sidebar_state="locked" (Streamlit >=1.59) -- toàn bộ nav (chính + sub-nav) giờ SỐNG HẲN
+# trong sidebar (xem docs/architecture-navigation.md), không còn lối vào nào khác; nút thu gọn "«"
+# mặc định vẫn cho phép lỡ tay ẩn mất nav. "locked" gỡ HẲN 2 nút thu/mở khỏi DOM trên desktop (giữ
+# sidebar luôn mở, không chỉ ẩn bằng CSS) nhưng tự lùi về hành vi "auto" (vẫn thu/mở được, không bị
+# kẹt sau overlay) trên màn hẹp <768px -- đúng khớp cách sidebar mobile app đã kiểm bằng Playwright
+# (tự sập thành drawer, mở lại đúng).
+st.set_page_config(page_title="Forest Dashboard", page_icon=_logo_mark_svg(64), layout="wide",
+                    initial_sidebar_state="locked")
 
 # Chỉ dành cho chạy thử trên máy: giữ nguyên secrets production nhưng không đi qua Google OAuth.
 # Cờ này bị từ chối nếu Streamlit đang bind ra mạng, để không thể vô tình triển khai app không có
@@ -7760,16 +7776,22 @@ else:
 
 # Font "khung vỏ" CỐ ĐỊNH cho sidebar + bộ chọn ngày/kỳ (xác nhận với người dùng: 2 chỗ này phải
 # luôn cùng 1 font để nhất quán, KHÔNG đổi theo trục "Font thân chữ" -- trục đó chỉ còn áp cho phần
-# NỘI DUNG). Dùng Manrope (font mặc định của app). Phải tự nhúng RIÊNG ở đây vì _BODY_FONT_FACE
-# trên chỉ nhúng ĐÚNG font đang chọn -- nếu người dùng chọn "Lora"/"Oswald"... thì Manrope không
-# có @font-face nào, khung vỏ sẽ lặng lẽ rơi về font hệ thống thay vì Manrope (đúng lỗi mà cách
-# "chỉ ghi tên font trong CSS" hay mắc). Khi font thân chữ ĐANG chọn chính là Manrope thì bỏ qua,
-# không nhúng lần 2 (trùng @font-face, phí payload).
+# NỘI DUNG). Dùng Manrope (font mặc định gốc của app, TỪ KHI đổi bộ BODY_FONTS lần 2 không còn là
+# lựa chọn trong đó -- xem chú thích BODY_FONTS ở ui_catalog.py) -- đọc thẳng file_prefix hằng
+# "Manrope-Variable" thay vì tra `BODY_FONTS[_UI_FONT]["file_prefix"]` như trước (sẽ KeyError vì
+# "Manrope" không còn là key trong dict đó nữa). File Manrope-Variable-*.woff2 trong assets/fonts/
+# vẫn giữ nguyên, chỉ không còn hiện trong danh sách 8 lựa chọn Font thân chữ. Phải tự nhúng RIÊNG
+# ở đây vì _BODY_FONT_FACE trên chỉ nhúng ĐÚNG font đang chọn -- nếu người dùng chọn font khác thì
+# Manrope không có @font-face nào, khung vỏ sẽ lặng lẽ rơi về font hệ thống thay vì Manrope (đúng
+# lỗi mà cách "chỉ ghi tên font trong CSS" hay mắc). Khi font thân chữ ĐANG chọn chính là Manrope
+# (không còn xảy ra được nữa vì đã bỏ khỏi BODY_FONTS, giữ nhánh này để code vẫn đúng nếu sau này
+# thêm lại Manrope vào BODY_FONTS) thì bỏ qua, không nhúng lần 2 (trùng @font-face, phí payload).
 _UI_FONT = "Manrope"
+_UI_FONT_FILE_PREFIX = "Manrope-Variable"
 if BODY_FONT == _UI_FONT:
     _UI_FONT_FACE = ""
 else:
-    _ui_font_b64 = _body_font_b64(BODY_FONTS[_UI_FONT]["file_prefix"])
+    _ui_font_b64 = _body_font_b64(_UI_FONT_FILE_PREFIX)
     _UI_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{_UI_FONT}'; font-style:normal; font-weight:200 800; "
         f"font-display:swap; src:url(data:font/woff2;base64,{_ui_font_b64[_name]}) format('woff2'); "
@@ -10858,9 +10880,9 @@ def _render_tuybien_giao_dien():
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
         if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
-            for _k, _v in [("accent_hex", "#2f5fa3"), ("bg_palette", "Giấy ấm"), ("bg_style", "Sương mai"),
-                           ("card_style", "Nổi mềm"), ("content_width", "Rộng"), ("card_density", "Vừa"),
-                           ("body_font", "Manrope")]:
+            for _k, _v in [("accent_hex", "#4f4dc4"), ("bg_palette", "Bạc hà"), ("bg_style", "Lưới điểm"),
+                           ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"), ("card_density", "Vừa"),
+                           ("body_font", "Inter")]:
                 save_setting(_k, _v)
             st.rerun()
     with _random_col:
@@ -10898,7 +10920,15 @@ def _render_tuybien_giao_dien():
             _border_c = tok["border"][1] if IS_DARK else tok["border"][0]
             _text_c = tok["text-on-bg"][1] if IS_DARK else tok["text-on-bg"][0]
             _ring = "var(--accent)" if selected else _border_c
-            return (f"background: linear-gradient(135deg, {_bg} 50%, {_card} 50%) !important; "
+            # 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG): swatch chỉ tô ĐẶC màu "bg" (bỏ nửa
+            # "card" của gradient chéo) -- bug thật đã phát hiện (không phải do đợt đổi màu này, có
+            # từ bộ preset trước): "bg" của 4 bảng này luôn ĐẬM còn "card" luôn SÁNG (ở light theme),
+            # trong khi "text-on-bg" là 1 màu SÁNG CỐ ĐỊNH duy nhất -- đọc được trên nửa "bg" đậm
+            # nhưng gần như vô hình trên nửa "card" sáng của gradient chéo, khiến nhãn tên bảng bị
+            # "cắt cụt" nhìn như chữ thiếu. 5 bảng "nền nhạt" còn lại giữ nguyên gradient chéo (cả 2
+            # nửa đều sáng, chữ tối luôn đọc được trên cả 2).
+            _bgimg = _bg if name in BG_PALETTES_DARK_BG else f"linear-gradient(135deg, {_bg} 50%, {_card} 50%)"
+            return (f"background: {_bgimg} !important; "
                     f"color: {_text_c} !important; border:2px solid {_ring} !important; "
                     f"border-radius:10px !important; width:100% !important; height:auto !important; "
                     f"min-height:56px !important; padding:8px 6px !important; font-weight:600 !important; "

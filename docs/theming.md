@@ -127,8 +127,8 @@ cách này, không chỉ tin `background` chung là đủ):
 - `st.pagination` (nút phân trang mọi bảng `.dtbl`, xem `_render_table_pagination()` ở
   `ui-components.md`) — 4 phần tử `[data-testid="stPaginationPrev"]`/`"stPaginationNext"`/
   `"stPaginationPage"`/`"stPaginationPageActive"` tô `color`/`border-color` TĨNH theo `textColor`
-  của `config.toml` — đọc được trên nền "Giấy ấm" gốc nhưng gần như biến mất trên Bảng màu nền đậm
-  (vd "Rượu vang") ở light theme vì màu chữ/viền tối gần bằng màu nền đậm (phát hiện qua ảnh chụp
+  của `config.toml` — đọc được trên bảng nền nhạt mặc định ("Bạc hà") nhưng gần như biến mất trên
+  Bảng màu nền đậm cố định (vd "Lam thẳm") ở light theme vì màu chữ/viền tối gần bằng màu nền đậm (phát hiện qua ảnh chụp
   người dùng gửi). Ép lại `color`/`border-color` qua `var(--text-2)`/`var(--border)` (3 nút thường)
   và `var(--text)`/`var(--chip)`/`var(--text-3)` (nút trang đang chọn) — icon mũi tên `‹`/`›` không
   cần rule riêng, tự ăn theo `color` của nút cha như icon Material khác.
@@ -136,8 +136,8 @@ cách này, không chỉ tin `background` chung là đủ):
 **Giới hạn KHÔNG vá được bằng CSS:** `st.dataframe` (bảng "5. Dữ liệu làm việc hiện tại" ở Tuỳ
 biến, `db_view`) vẽ bằng canvas (glide-data-grid) nội bộ của Streamlit, không phải DOM/CSS thường
 — màu ô/hàng đọc thẳng từ theme resolution của Streamlit lúc vẽ pixel, `!important` CSS KHÔNG chạm
-tới được (đã xác nhận qua screenshot: nền hàng vẫn nguyên tông "Giấy ấm" cũ dù mọi thứ xung quanh
-đã đổi đúng). Muốn bảng này theo đúng Bảng màu nền thì phải thay `st.dataframe` bằng bảng HTML tự
+tới được (đã xác nhận qua screenshot: nền hàng vẫn nguyên tông bảng nền mặc định lúc trang tải dù
+mọi thứ xung quanh đã đổi đúng). Muốn bảng này theo đúng Bảng màu nền thì phải thay `st.dataframe` bằng bảng HTML tự
 vẽ kiểu `.dtbl` (đã dùng ở mọi bảng số liệu khác trong app, tự theo `var(--token)` đầy đủ) — đổi
 kiến trúc thật sự (mất tính năng chọn hàng native qua checkbox, phải tự làm lại bằng cách khác),
 không phải 1 rule CSS thêm vào như các mục trên. Chưa làm — cần hỏi người dùng trước vì đổi hẳn
@@ -145,14 +145,16 @@ cách hiện thực, không phải fix nhỏ.
 
 ## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
 
-`BODY_FONT`/`BODY_FONT_NAME` (chọn từ `BODY_FONTS`, setting `body_font`, mặc định "Manrope") lan ra
+`BODY_FONT`/`BODY_FONT_NAME` (chọn từ `BODY_FONTS`, setting `body_font`, mặc định "Inter") lan ra
 đúng 2 nơi, không hơn — font bảng số liệu (`_TABLE_FONT_FACE`, IBM Plex Mono) và font trích dẫn
 (`_QUOTE_FONT_FACE`, Cormorant Garamond) CHỦ Ý đứng ngoài trục này, giữ cố định vì có vai trò nội
 dung riêng:
 
-1. **`html, body, .stApp` trong khối CSS chính** — literal `'Manrope'` bị `.replace()` thay đúng
-   font đang chọn ngay trước khi `st.markdown()` inject (khối CSS chính là string thường, xem mục
-   trên — không đổi sang f-string, chỉ `.replace()` đúng chỗ cần).
+1. **`html, body, .stApp` trong khối CSS chính** — literal `'Manrope'` (placeholder cố định trong
+   template CSS, KHÔNG phải font đang chọn -- "Manrope" đã tách khỏi `BODY_FONTS` thành font khung
+   vỏ cố định riêng, xem `_UI_FONT`/architecture-navigation.md) bị `.replace()` thay đúng font đang
+   chọn ngay trước khi `st.markdown()` inject (khối CSS chính là string thường, xem mục trên —
+   không đổi sang f-string, chỉ `.replace()` đúng chỗ cần).
 2. **Iframe Quill (`style_quill()`)** — cùng `.replace('Manrope', ...)` trên `QUILL_CSS` trước khi
    tiêm vào iframe, giống hệt cách `ACCENT`/màu dark-mode literal đã làm ở đó.
 
