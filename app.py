@@ -8339,16 +8339,19 @@ _MAIN_CSS = """
     .sp-lcols { display: flex; gap: 14px; }
     .sp-lcols > .sp-listcard { flex: 1 1 0; min-width: 0; }
     .sp-listcard { padding: 0 !important; overflow: hidden; }
+    /* Padding dòng/tiêu đề rút gọn lần 2 (7px->5px, 9px->6px) -- sau khi tách 2 thẻ cân bằng
+       (xem trên), mỗi thẻ còn ít dòng hơn nên có thể siết thêm mà vẫn dễ đọc, tăng thêm mật độ
+       (phản hồi thực tế: dòng vẫn "cao quá mức cần thiết" dù đã chia cột). */
     .sp-lsec-head { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
-        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border); }
+        letter-spacing: 0.4px; padding: 6px 18px 3px; border-top: 1px solid var(--border); }
     .sp-lsec-head.first { border-top: none; }
     .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
-    .sp-listcard > .sp-lrow:last-child { padding-bottom: 10px; }
+        padding: 5px 18px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
+    .sp-listcard > .sp-lrow:last-child { padding-bottom: 8px; }
     /* Nhóm KHÔNG có tiêu đề (sections truyền label="") -- dòng đầu tiên của cả thẻ không được kẻ
        viền trên (trước đây luôn có .sp-lsec-head.first đứng trước nên không lộ), và dòng đầu của
        mỗi nhóm TIẾP THEO kẻ đậm hơn (var(--border)) để vẫn thấy ranh giới nhóm dù đã bỏ chữ. */
-    .sp-listcard > .sp-lrow:first-child { border-top: none !important; padding-top: 12px; }
+    .sp-listcard > .sp-lrow:first-child { border-top: none !important; padding-top: 10px; }
     .sp-lrow.gtop { border-top-color: var(--border) !important; }
     .sp-lrow-v { font-variant-numeric: tabular-nums; text-align: right; }
     .sp-lrow-d { font-weight: 700; margin-left: 4px; }
@@ -9649,14 +9652,16 @@ _MAIN_CSS = """
     .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 11px;
         font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 13px;
         border-radius: 20px; margin-bottom: 12px; }
-    .tbcircle { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #fff;
+    /* Bản gọn ban đầu (72px/26px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) --
+       nới lại giữa chừng (80px/29px), vẫn nhỏ hơn bản gốc 96px/34px trước khi thu gọn. */
+    .tbcircle { width: 80px; height: 80px; border-radius: 50%; background: var(--accent); color: #fff;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
-    .tbcircle-num { font-size: 26px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
-    .tbcircle-mon { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    .tbcircle-num { font-size: 29px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+    .tbcircle-mon { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
         opacity: 0.9; margin-top: 1px; }
-    .tbcircle-dow { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 8px; }
-    .tbcircle-meta { font-size: 11px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
+    .tbcircle-dow { font-size: 14px; font-weight: 700; color: var(--text); margin-top: 9px; }
+    .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
     /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ
        giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
        nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
@@ -9722,12 +9727,14 @@ _MAIN_CSS = """
        Garamond như trước khi có tính năng đó (xác nhận với người dùng: đây là font trang trọng cố
        ý tách biệt vai trò nội dung, không phải "giao diện chung" -- đúng tinh thần đã ghi ở
        BODY_FONTS/_body_font_b64() nhưng thiếu !important nên chưa thật sự bất biến). */
-    .kq-daily-mark { font-size: 40px; line-height: 1; color: var(--accent);
+    /* Bản gọn ban đầu (16px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) -- nới
+       lại giữa chừng (18px), vẫn nhỏ hơn bản gốc 20px trước khi thu gọn. */
+    .kq-daily-mark { font-size: 46px; line-height: 1; color: var(--accent);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-weight: 600; font-style: italic;
-        opacity: .5; margin-bottom: -8px; }
-    .kq-daily-text { font-size: 16px; line-height: 1.4; font-weight: 600; color: var(--text);
+        opacity: .5; margin-bottom: -10px; }
+    .kq-daily-text { font-size: 18px; line-height: 1.42; font-weight: 600; color: var(--text);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
-    .kq-daily-src { margin: 0; font-size: 14px; color: var(--text); font-weight: 700;
+    .kq-daily-src { margin: 0; font-size: 15px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
     /* Tên sách trong "Trích dẫn hôm nay" là <a class="entity-link"> (xem _entity_link_html()) --
        CÙNG bug !important đã ghi ở .kq-daily-text phía trên: rule font thân chữ toàn app khớp
