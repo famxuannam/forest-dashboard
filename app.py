@@ -3542,30 +3542,13 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     # trước đây tên "Yêu thích" (chỉ hiện trích dẫn đã đánh dấu ⭐) -- đổi tên "Trích dẫn" theo yêu
     # cầu người dùng, giờ hiện MỌI trích dẫn kèm chip lọc riêng "Yêu thích" (xem
     # _render_kindle_quotes_tab()), không còn giới hạn chỉ phần đã đánh dấu như tên cũ.
-    _tab_labels = [":material/bar_chart: Tổng quan"]
-    if show_favorites:
-        _tab_labels.append(":material/format_quote: Trích dẫn")
-    _tab_labels.append(":material/search: Chi tiết")
-    # segmented_control (không phải st.tabs() như trước) -- đồng bộ đúng kiểu "tab gạch chân" đã
-    # dùng cho MỌI sub-tab picker khác trong app (Báo cáo/Sức khoẻ/Tuỳ biến, xem .st-key-
-    # bc_sub_picker/.st-key-hm_sub_picker/.st-key-tb_sub_picker) -- st.tabs() không nhận được đủ
-    # bộ CSS riêng cho nút CHƯA chọn (màu chữ safe trên 4 bảng nền đậm cố định, khoảng cách/font
-    # nhất quán) như segmented_control, khiến 2 kiểu nav trông lệch nhau (phản hồi thực tế, ảnh
-    # chụp người dùng gửi). Cùng khuôn 2 key bc_sub_picker/bc_sub: _tabs_key giờ là SOURCE OF
-    # TRUTH (đọc/set trực tiếp), key widget tách riêng "_picker" -- không set thẳng vào key widget
-    # vì nó đã instantiate trong CÙNG lượt chạy sẽ lỗi StreamlitAPIException (xem render_health_page).
-    # Preset tab "Chi tiết" (luôn tab CUỐI) từ deep-link (?book=/?series=) -- tách riêng tham số
-    # cho Sách/Gundam vì cả 2 khối "if nav == ..." đều chạy độc lập, không được đè tham số của
-    # nhau (cùng lý do sub/hsub tách riêng, xem architecture-navigation.md).
+    #
+    # Widget picker ("Chọn mục") KHÔNG còn render Ở ĐÂY -- đã dời sang sidebar, NGAY SAU nút "Nhật
+    # ký đọc sách"/"Gundam" trong nav chính (SACH_SUBS/GUNDAM_SUBS + _NAV_SUBNAV, xem khối "with
+    # st.sidebar" ở dispatch/architecture-navigation.md), đồng bộ với Báo cáo/Sức khoẻ/Tuỳ biến. Ở
+    # đây chỉ ĐỌC lại session_state đã đồng bộ sẵn ngoài đó.
     _tabs_key = "rl_view_tabs" if show_favorites else "rl_view_tabs_gd"
-    _rl_qparam = "book" if show_favorites else "series"
-    if _tabs_key not in st.session_state:
-        st.session_state[_tabs_key] = _tab_labels[-1] if st.query_params.get(_rl_qparam) else _tab_labels[0]
-    _sub_pick = st.segmented_control(
-        "Chọn mục", _tab_labels, default=st.session_state[_tabs_key],
-        key=f"{_tabs_key}_picker", label_visibility="collapsed")
-    if _sub_pick and _sub_pick != st.session_state[_tabs_key]:
-        st.session_state[_tabs_key] = _sub_pick
+    _tab_labels = SACH_SUBS if show_favorites else GUNDAM_SUBS
     _sel = st.session_state[_tabs_key]
 
     # Tên trang cho hero -- chỉ Sách mới có tab Trích dẫn (show_favorites) nên dùng luôn cờ đó để
@@ -7899,18 +7882,10 @@ _billboard_bg_dark_forced = BG_PALETTE in BG_PALETTES_DARK_BG
 _billboard_bg = ("color-mix(in srgb, var(--accent) 6%, var(--card))" if _billboard_bg_dark_forced
                   else "rgba(var(--accent-rgb),0.10)")
 _billboard_backdrop = "none" if _billboard_bg_dark_forced else "blur(16px) saturate(1.6)"
-# Tab gạch chân nền TRONG SUỐT (.st-key-bc_sub_picker/.st-key-hm_sub_picker/.st-key-tb_sub_picker,
-# đứng TRỰC TIẾP trên var(--bg), xem rule CSS) -- tab ĐANG CHỌN tô màu var(--accent), nhưng chính
-# accent lại có thể cùng tông/độ đậm với 1 trong 4 bảng "nền đậm cố định" (vd accent xanh lá trên
-# nền "Rừng đêm" xanh lá đậm) khiến tab chọn cũng gần như biến mất y hệt lỗi chữ đã vá trước đó --
-# giữ nguyên nền trong suốt (xác nhận với người dùng, không đổi sang nền đặc) nhưng đổi màu chữ/
-# viền gạch chân sang bản SÁNG HƠN của accent (_brighten(), giữ nguyên hue/saturation) thay vì
-# accent gốc khi rơi vào 1 trong 4 bảng đó.
-_tab_accent = _brighten(ACCENT) if _billboard_bg_dark_forced else ACCENT
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_UI_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--font-ui:{_UI_FONT_STACK};--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
-    f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};--tab-accent:{_tab_accent};"
+    f"--billboard-bg:{_billboard_bg};--billboard-backdrop:{_billboard_backdrop};"
     f"--content-max-w:{CONTENT_WIDTH_PX}px;"
     f"{_card_style_vars}"
     f"{_root_vars}}}</style>",
@@ -8504,31 +8479,38 @@ _MAIN_CSS = """
         border-top: 1px solid var(--divider);
         margin: 8px 0;
     }
-    /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo của Báo cáo/Sức khoẻ/Tuỳ biến) render NGAY DƯỚI nav
-       chính trong CÙNG sidebar (xem khối "with st.sidebar" ngay sau khi "nav" được xác định trong
-       dispatch) thay vì đứng ở đầu nội dung trang -- xác nhận với người dùng đổi kiến trúc điều
-       hướng. Dáng lặp lại ĐÚNG khuôn cột dọc/pill của nav chính ở trên (không phải tab gạch chân
-       như bản cũ đứng trên nền trang, đã bỏ luôn phần CSS đó cho 3 key này) để đọc liền mạch như 1
-       menu duy nhất, chỉ THU NHỎ + THỤT LỀ để phân cấp rõ với nav chính: item thấp hơn (32px thay
-       38px), chữ nhỏ hơn (12.5px), thụt trái 23px (12px lề ngoài + 11px = đúng khoảng cách
-       icon->nhãn của nav chính phía trên, để nhãn sub-nav thẳng hàng với nhãn nav chính chứ không
-       thẳng hàng với icon). Nút đang chọn dùng LẠI đúng rule chung `button[data-selected="true"]`
-       (nền accent đặc + chữ trắng) như nav chính -- không tự chế kiểu accent khác cho 1 menu phụ
-       cùng 1 sidebar.  */
+    /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo/Chọn mục của Báo cáo/Sức khoẻ/Tuỳ biến/Nhật ký đọc
+       sách/Gundam) render NGAY DƯỚI nav chính trong CÙNG sidebar (xem khối "with st.sidebar" ngay
+       sau khi "nav" được xác định trong dispatch) thay vì đứng ở đầu nội dung trang -- xác nhận
+       với người dùng đổi kiến trúc điều hướng, áp dụng ĐỒNG BỘ cho cả 5 sub-nav trong app (Sách/
+       Gundam là 2 sub-nav sau cùng dời sang sidebar, trước đó còn đứng ở đầu nội dung trang do sót
+       khi đổi kiến trúc lần đầu). Dáng lặp lại ĐÚNG khuôn cột dọc/pill của nav chính ở trên (không
+       phải tab gạch chân như bản cũ đứng trên nền trang, đã bỏ luôn phần CSS đó cho các key này)
+       để đọc liền mạch như 1 menu duy nhất, chỉ THU NHỎ + THỤT LỀ để phân cấp rõ với nav chính:
+       item thấp hơn (32px thay 38px), chữ nhỏ hơn (12.5px), thụt trái 23px (12px lề ngoài + 11px =
+       đúng khoảng cách icon->nhãn của nav chính phía trên, để nhãn sub-nav thẳng hàng với nhãn nav
+       chính chứ không thẳng hàng với icon). Nút đang chọn dùng LẠI đúng rule chung
+       `button[data-selected="true"]` (nền accent đặc + chữ trắng) như nav chính -- không tự chế
+       kiểu accent khác cho 1 menu phụ cùng 1 sidebar. `[class*="st-key-rl_view_tabs"]` (substring,
+       KHÔNG phải class chính xác) vì Sách dùng key "rl_view_tabs_picker", Gundam
+       "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp 1 trong 2 trang.  */
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"],
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"],
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"],
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] {
         justify-content: flex-start !important;
         margin: 2px 0 10px 0 !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"] {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] {
         flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 2px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button,
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button,
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button {
         width: 100% !important; justify-content: flex-start !important; text-align: left !important;
         border-radius: 8px !important;
         height: 32px !important; min-height: 32px !important;
@@ -8537,31 +8519,36 @@ _MAIN_CSS = """
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button p,
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button p,
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button p {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button p,
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button p {
         text-align: left !important; font-size: 12.5px !important; font-weight: 600 !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button > div,
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button > div,
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button > div {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button > div,
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button > div {
         justify-content: flex-start !important;
         width: 100% !important;
         gap: 8px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
         font-size: 15px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         background-color: transparent !important;
         border-color: transparent !important;
         color: var(--text-2) !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
     [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
-    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
+    [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
+    [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
@@ -8599,56 +8586,6 @@ _MAIN_CSS = """
         gap: 4px !important;
     }
 
-    /* Thanh chọn "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log()
-       -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các
-       sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác nhận với người dùng
-       qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt nav chính
-       ở trên NGOẠI TRỪ căn lề: CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người
-       dùng đổi lại) -- khớp cảm giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống
-       trải khi ít mục. Dáng nút tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để
-       huỷ gap chung 6px ở trên (khoảng cách giữa các tab ở đây đến từ margin:0 14px của từng nút
-       bên dưới, không phải gap của container, cộng cả 2 sẽ ra khoảng cách quá lớn).
-       [class*="st-key-rl_view_tabs"] (substring, KHÔNG phải class chính xác) vì Sách dùng key
-       "rl_view_tabs_picker", Gundam "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp
-       1 trong 2 trang. "Chọn kỳ xem" (Báo cáo)/"Xem theo" (Sức khoẻ, Tuỳ biến) KHÔNG còn dùng bộ
-       CSS này nữa -- 3 picker đó đã dời sang sidebar (xem khối "with st.sidebar" ngay sau khi
-       "nav" được xác định trong dispatch), dùng riêng bộ CSS dáng pill dọc thu nhỏ ngay dưới đây
-       thay vì dáng tab gạch chân đứng trên nền trang chính. */
-    [class*="st-key-rl_view_tabs"] { width: 100% !important; }
-    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; display: flex !important; justify-content: flex-start !important; width: 100% !important; }
-    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; gap: 0 !important; }
-    [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
-        /* Nút CHƯA chọn nền trong suốt (giữ nguyên, xem chú thích trên) nên đứng TRỰC TIẾP trên
-           var(--bg) -- màu chữ PHẢI đọc var(--text-on-bg-2) (không phải var(--text-2)) để không
-           gần như biến mất trên 4 bảng nền đậm cố định (BG_PALETTES_DARK_BG), cùng lý do đã áp
-           cho header chương và billboard trước đó -- 6 bảng nhạt còn lại 2 token này trùng giá
-           trị nên không đổi gì.
-           Bug thật đã phát hiện (không liên quan riêng tới đợt sửa nền đậm): rule chung
-           [data-testid="stButtonGroup"] button:not([data-selected="true"]) (nền var(--card) cho
-           nút chưa chọn của MỌI segmented_control khác trong app) từng đè lên rule này dù selector
-           ở đây có vẻ đặc hiệu hơn -- hoá ra do 1 comment cũ (đã sửa) lỡ có 2 ký tự đóng comment
-           CSS nằm giữa chừng, tự kết thúc comment đó sớm, khiến khai báo "background: transparent
-           !important" ngay sau nó bị trình duyệt hiểu nhầm và bỏ qua khi phân tích -- im lặng sai
-           trên "Giấy ấm" vì var(--card)/var(--bg) gần giống hệt nhau, LỘ RÕ thành 1 khối sáng lệch
-           tông trên bảng nền đậm (đúng ảnh chụp người dùng gửi). Thêm ":not([data-selected=true])"
-           vào chính selector này (độ đặc hiệu 0-3-1, thắng chắc chắn rule chung 0-2-1 bất kể thứ
-           tự nạp) để chắc ăn hơn nếu lỡ có comment nào khác dính lỗi tương tự lần nữa. */
-        background: transparent !important; border: none !important; border-radius: 0 !important;
-        border-bottom: 2px solid transparent !important; box-shadow: none !important;
-        color: var(--text-on-bg-2) !important; padding: 8px 4px !important; margin: 0 14px !important;
-    }
-    [class*="st-key-rl_view_tabs"] button[data-selected="true"] {
-        /* var(--tab-accent) thay vì var(--accent) thẳng -- xem _tab_accent (khối :root): bản sáng
-           hơn của accent khi rơi vào 1 trong 4 bảng "nền đậm cố định" để không lẫn vào nền đậm
-           cùng tông, giữ nguyên var(--accent) (không đổi gì) ở 6 bảng còn lại.
-           CHỈ ghi đè border-bottom-color, không reset "border" shorthand -- viền mặc định 3 cạnh
-           còn lại (top/left/right) của segmented_control vẫn giữ nguyên màu accent nhạt của
-           Streamlit, tạo thành khung viền mảnh quanh nút đang chọn (không chỉ 1 gạch chân trần).
-           Đã xác nhận với người dùng đây là hình thức ĐƯỢC THÍCH, không phải lỗi cần dọn -- không
-           tự ý "sửa" thành gạch chân trần thuần tuý nếu thấy lại chi tiết này. */
-        background: transparent !important; color: var(--tab-accent) !important; font-weight: 600 !important;
-        border-bottom-color: var(--tab-accent) !important; box-shadow: none !important;
-    }
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở segmented_control (tự dựng, không có
@@ -10050,10 +9987,32 @@ if nav == "Tuỳ biến":
 elif "tsub" in st.query_params:
     del st.query_params["tsub"]
 
+# Sub-page của "Nhật ký đọc sách"/"Gundam" (Tổng quan/[Trích dẫn]/Chi tiết) -- CÙNG 1 pattern hệt
+# TUYBIEN_SUBS ở trên, tách khỏi render_reading_log() (dùng chung cho cả 2 trang, xem nơi gọi) để
+# render được trong sidebar thay vì đứng ở đầu nội dung trang như trước. Sách có thêm sub-tab
+# "Trích dẫn" mà Gundam không có (xem tham số show_favorites truyền vào render_reading_log()).
+# KHÔNG có query param riêng lưu TÊN sub-tab (khác Báo cáo/Sức khoẻ/Tuỳ biến) -- link nhảy tới 1
+# cuốn/series cụ thể dùng `?book=`/`?series=` (đọc lại trong _render_reading_detail(), không đọc ở
+# đây) chỉ để quyết định sub-tab KHỞI ĐẦU là "Chi tiết" hay không, không cần đồng bộ 2 chiều.
+SACH_SUBS = ["Tổng quan", "Trích dẫn", "Chi tiết"]
+SACH_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Trích dẫn": ":material/format_quote:",
+                      "Chi tiết": ":material/search:"}
+if "rl_view_tabs" not in st.session_state:
+    st.session_state["rl_view_tabs"] = "Chi tiết" if st.query_params.get("book") else "Tổng quan"
+
+GUNDAM_SUBS = ["Tổng quan", "Chi tiết"]
+GUNDAM_SUB_ICONS_MD = {"Tổng quan": ":material/bar_chart:", "Chi tiết": ":material/search:"}
+if "rl_view_tabs_gd" not in st.session_state:
+    st.session_state["rl_view_tabs_gd"] = "Chi tiết" if st.query_params.get("series") else "Tổng quan"
+
 # Trang nào có sub-nav (state key/widget key/query param/nhãn widget riêng) -- dùng bởi
 # _render_active_subnav() để biết có cần chèn sub-nav ngay sau nút nav chính của trang đó không.
+# qparam=None (Nhật ký đọc sách/Gundam) -- không có query param riêng lưu tên sub-tab, xem chú
+# thích SACH_SUBS ở trên.
 _NAV_SUBNAV = {
     "Báo cáo": (BAOCAO_SUBS, BAOCAO_SUB_ICONS_MD, "bc_sub", "bc_sub_picker", "sub", "Chọn kỳ xem"),
+    "Nhật ký đọc sách": (SACH_SUBS, SACH_SUB_ICONS_MD, "rl_view_tabs", "rl_view_tabs_picker", None, "Chọn mục"),
+    "Gundam": (GUNDAM_SUBS, GUNDAM_SUB_ICONS_MD, "rl_view_tabs_gd", "rl_view_tabs_gd_picker", None, "Chọn mục"),
     "Sức khoẻ": (SUCKHOE_SUBS, SUCKHOE_SUB_ICONS_MD, "hm_sub", "hm_sub_picker", "hsub", "Xem theo"),
     "Tuỳ biến": (TUYBIEN_SUBS, TUYBIEN_SUB_ICONS_MD, "tb_sub", "tb_sub_picker", "tsub", "Xem theo"),
 }
@@ -10107,7 +10066,8 @@ def _render_active_subnav():
         default=st.session_state[state_key], key=widget_key, label_visibility="collapsed")
     if picked and picked != st.session_state[state_key]:
         st.session_state[state_key] = picked
-        st.query_params[qparam] = st.session_state[state_key]
+        if qparam:
+            st.query_params[qparam] = st.session_state[state_key]
 
 def _render_nav_group(items, group_key):
     """1 trong 2 cụm nav chính (_NAV_GROUP_A/_NAV_GROUP_B). Nếu trang đang active nằm trong cụm
