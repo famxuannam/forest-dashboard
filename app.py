@@ -1971,8 +1971,8 @@ def day_picker(active_days):
     ngày cuối cùng có dữ liệu (có thể là hôm qua hoặc xa hơn).
 
     Không còn nút "Ngày gần nhất" riêng -- việc "về hôm nay" giờ nằm ở chỗ bấm lại mục "Hôm nay"
-    trên nav bar (xem callback gắn ở st.segmented_control(key="nav")), nút riêng trong trang là
-    thừa khi đã có lối tắt đó."""
+    trên nav bar (xem _commit_nav() ở dispatch, gọi bởi mọi đoạn nav_* khi user đổi trang), nút
+    riêng trong trang là thừa khi đã có lối tắt đó."""
     pk = "day_pick"
     lo, hi = active_days[0], max(active_days[-1], _today_vn())
     if pk not in st.session_state:
@@ -8407,10 +8407,15 @@ _MAIN_CSS = """
        (đã đo bounding box xác nhận, không rõ nguyên nhân sâu, có thể do BaseWeb tự tính lại kích
        thước bằng JS). Đổi hướng: KHÔNG ép radiogroup rộng 100% nữa -- để nó tự nhiên rộng vừa nội
        dung (fit-content), rồi biến chính stButtonGroup (khối NGOÀI, vốn đã rộng đủ 100% nav bar)
-       thành flex container với justify-content:center để tự căn giữa đứa con fit-content đó. */
-    .st-key-nav { width: 100% !important; }
-    .st-key-nav [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
-    .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
+       thành flex container với justify-content:center để tự căn giữa đứa con fit-content đó.
+       [class*="st-key-navseg_"] (substring, KHÔNG phải 1 class cố định) vì nav chính giờ RẢI RÁC
+       thành nhiều segmented_control riêng theo key "navseg_<group>_<full|pre|post>"
+       (_render_nav_segment() ở dispatch) -- mỗi trang có sub-nav tự chẻ cụm chứa nó thành nhiều
+       đoạn để chèn sub-nav ngay sau đúng nút của trang đó (xem architecture-navigation.md), nên
+       KHÔNG còn 1 key "nav" cố định duy nhất để select như bản cũ. */
+    [class*="st-key-navseg_"] { width: 100% !important; }
+    [class*="st-key-navseg_"] [data-testid="stButtonGroup"] { display: flex !important; justify-content: center !important; width: 100% !important; }
+    [class*="st-key-navseg_"] [data-testid="stButtonGroup"] [role="radiogroup"] { flex-wrap: wrap !important; max-width: 100%; }
 
     /* Sidebar trái (Phase 4 hướng B, xem docs/architecture-navigation.md): nền/viền phải ép lại
        qua var(--token) như mọi chrome NATIVE khác của Streamlit (xem bẫy "chrome/widget NATIVE"
@@ -8439,17 +8444,21 @@ _MAIN_CSS = """
         font-family: var(--font-ui) !important;
     }
     /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
-       nút rộng hết bề ngang sidebar -- override đè lên rule .st-key-nav hàng ngang phía trên bằng
-       cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. Kích thước/khoảng cách lấy ĐÚNG mockup
-       sidebar: item cao 38px, padding ngang 12px, bo góc 9px, gap 3px giữa các item, icon 18px
-       cách nhãn 11px, nhãn 13px/600. */
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] {
+       nút rộng hết bề ngang sidebar -- override đè lên rule [class*="st-key-navseg_"] hàng ngang
+       phía trên bằng cách tăng độ đặc hiệu qua [data-testid="stSidebar"]. Kích thước/khoảng cách
+       lấy ĐÚNG mockup sidebar: item cao 38px, padding ngang 12px, bo góc 9px, gap 3px giữa các
+       item, icon 18px cách nhãn 11px, nhãn 13px/600. Áp CHUNG cho mọi đoạn nav_* (mỗi trang chẻ
+       cụm nav thành 1-2 đoạn segmented_control riêng, xem _render_nav_segment) -- gap 3px vốn
+       tính cho khoảng cách GIỮA các nút CÙNG 1 radiogroup, còn khoảng cách GIỮA 2 đoạn kế tiếp
+       nhau (hoặc giữa đoạn với sub-nav chèn giữa) do margin-bottom của stButtonGroup quyết định
+       (xem rule margin-bottom 2px ở cuối khối CSS nav). */
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] {
         justify-content: flex-start !important;
     }
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] [role="radiogroup"] {
         flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 3px !important;
     }
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button {
         width: 100% !important; justify-content: flex-start !important; text-align: left !important;
         border-radius: 9px !important;
         height: 38px !important; min-height: 38px !important;
@@ -8457,7 +8466,7 @@ _MAIN_CSS = """
         gap: 11px !important;
         font-size: 13px !important; font-weight: 600 !important;
     }
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button p {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button p {
         text-align: left !important; font-size: 13px !important; font-weight: 600 !important;
     }
     /* Streamlit bọc icon+nhãn trong 1 <div> flex CON của <button>, và chính div đó mới là flex
@@ -8465,38 +8474,35 @@ _MAIN_CSS = """
        <button> KHÔNG có tác dụng gì vì button chỉ có đúng 1 con chiếm trọn bề ngang (xác nhận qua
        getComputedStyle: button có justify-content:flex-start nhưng nhãn vẫn nằm giữa). Phải ép
        thẳng div con này thì icon mới về sát lề trái như mockup. */
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button > div {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button > div {
         justify-content: flex-start !important;
         width: 100% !important;
         gap: 11px !important;
     }
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
         font-size: 18px !important;
     }
     /* Item CHƯA chọn: phẳng hoàn toàn (nền trong suốt + KHÔNG viền), chỉ item đang chọn mới nổi
        khối accent -- khớp mockup. Phải ghi đè 2 rule CHUNG cho mọi stButtonGroup phía trên (nền
        var(--card) + viền var(--border), hợp lý cho các segmented_control đứng trên nền trang
        nhưng ở đây khiến 8 mục nav trông như 8 cái thẻ xếp chồng thay vì 1 danh sách menu). */
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         background-color: transparent !important;
         border-color: transparent !important;
         color: var(--text-2) !important;
     }
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
+    [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
-    /* Đường kẻ ngăn nhóm "trang nội dung" (6 mục đầu) với nhóm "cài đặt/trợ giúp" (Tuỳ biến, Trợ
-       giúp) -- mockup có 1 divider ở đúng vị trí này. segmented_control render 8 nút trong CÙNG 1
-       [role="radiogroup"], không chèn được phần tử HTML rời vào giữa -- dựng bằng border-top +
-       margin-top trên chính nút thứ 7 (Tuỳ biến). Số 7 ăn theo THỨ TỰ KHAI BÁO trong dict NAV
-       (xem architecture-navigation.md: thứ tự key = thứ tự hiển thị) -- thêm/bớt/đổi chỗ mục nav
-       PHẢI chỉnh lại số này, không tự suy ra được. */
-    [data-testid="stSidebar"] .st-key-nav [data-testid="stButtonGroup"] [role="radiogroup"] > button:nth-child(7) {
-        border-top: 1px solid var(--divider) !important;
-        margin-top: 11px !important;
-        padding-top: 11px !important;
-        height: auto !important; min-height: 38px !important;
-        border-radius: 0 9px 9px 9px !important;
+    /* Đường kẻ ngăn nhóm "trang nội dung" (_NAV_GROUP_A) với nhóm "cài đặt/trợ giúp"
+       (_NAV_GROUP_B: Tuỳ biến, Trợ giúp) -- mockup có 1 divider ở đúng vị trí này. TRƯỚC ĐÂY dựng
+       bằng nth-child(7) trên 1 radiogroup 8 nút duy nhất; giờ nav chính RẢI RÁC thành nhiều
+       segmented_control tuỳ trang đang active (xem _render_nav_group) nên không còn vị trí
+       nth-child cố định -- thay bằng 1 <div class="sidebar-nav-divider"> tường minh, render giữa
+       2 lần gọi _render_nav_group() (luôn đứng giữa 2 cụm, không phụ thuộc cụm nào bị chẻ). */
+    .sidebar-nav-divider {
+        border-top: 1px solid var(--divider);
+        margin: 8px 0;
     }
     /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo của Báo cáo/Sức khoẻ/Tuỳ biến) render NGAY DƯỚI nav
        chính trong CÙNG sidebar (xem khối "with st.sidebar" ngay sau khi "nav" được xác định trong
@@ -8578,7 +8584,7 @@ _MAIN_CSS = """
        dưới (xem `.st-key-bc_sub_picker`) -- xác nhận với người dùng qua mockup 3 phương án
        (8/12/16px đều nhau): cả 2 khoảng đều phải bằng nhau, đo thật bằng Playwright xác nhận cả
        2 cùng ra 12px sau khi sửa (trước đó 4px vs 20px, lệch hẳn dù nhìn qua tưởng đã đều). */
-    .st-key-nav [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
+    [class*="st-key-navseg_"] [data-testid="stButtonGroup"] { margin-bottom: 2px !important; }
     /* Toggle điều khiển (Khoảng thời gian/Gộp theo/Phân loại...) xuống thẻ biểu đồ ngay dưới, ÁP
        DỤNG CHUNG CHO MỌI BIỂU ĐỒ trong app (frag_calendar/frag_trend/frag_hourly/
        frag_period_trend/frag_category_bars key="chartopt_..." -- mỗi hàm bọc TOÀN BỘ nội dung
@@ -8596,7 +8602,7 @@ _MAIN_CSS = """
     /* Thanh chọn "Chọn mục" (Tổng quan/Trích dẫn/Chi tiết ở Sách/Gundam, xem render_reading_log()
        -- trước đây dùng st.tabs() riêng, không nhận đủ bộ CSS này nên trông lệch hẳn so với các
        sub-tab picker khác, đổi hẳn sang segmented_control cho đồng bộ, xác nhận với người dùng
-       qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt .st-key-nav
+       qua ảnh chụp) -- label đã ẩn (label_visibility="collapsed") nên bố cục giống hệt nav chính
        ở trên NGOẠI TRỪ căn lề: CĂN TRÁI (không còn CĂN GIỮA như bản trước, xác nhận với người
        dùng đổi lại) -- khớp cảm giác "menu phụ đứng dưới nav" hơn, không lơ lửng giữa trang trống
        trải khi ít mục. Dáng nút tab gạch chân (không phải nền đặc teal như nav chính) -- gap:0 để
@@ -9904,9 +9910,11 @@ st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
-# widget nav (key="nav", vẫn segmented_control, chỉ đổi CHỖ render + CSS ép layout dọc, không đổi
-# cơ chế state/dispatch/deep-link) nằm trong st.sidebar; .block-container chính không còn phải
-# chừa chỗ cho thanh nav ngang nữa.
+# nav nằm trong st.sidebar; .block-container chính không còn phải chừa chỗ cho thanh nav ngang
+# nữa. Nav chính KHÔNG còn là 1 segmented_control duy nhất -- xem _render_nav_group() bên dưới:
+# mỗi trang có sub-nav (Báo cáo/Sức khoẻ/Tuỳ biến) tự chẻ cụm nav chứa nó thành nhiều đoạn
+# segmented_control riêng để chèn sub-nav NGAY SAU nút của đúng trang đó, thay vì sub-nav luôn rơi
+# xuống cuối toàn bộ nav chính (xác nhận với người dùng đổi lại cách bố trí này).
 with st.sidebar:
     st.markdown(
         f"<div style='margin:0 0 1.1em 0;'>{_sidebar_brand_html()}</div>",
@@ -9935,6 +9943,18 @@ NAV_SHORT = {
     "Tuỳ biến": "Tuỳ biến",
     "Hướng dẫn": "Trợ giúp",
 }
+# 2 cụm nav chính, cách nhau bởi 1 divider cố định (mockup) -- KHÔNG còn dựng bằng CSS nth-child
+# trên 1 radiogroup 8 nút duy nhất (cách cũ) vì số lượng radiogroup thực tế trên trang giờ thay
+# đổi theo "nav" (xem _render_nav_group). Divider là 1 <div> tường minh giữa 2 lần gọi hàm đó.
+_NAV_GROUP_A = ["Hôm nay", "Báo cáo", "Nhật ký đọc sách", "Gundam", "Sức khoẻ", "Tìm kiếm"]
+_NAV_GROUP_B = ["Tuỳ biến", "Hướng dẫn"]
+# Slug ASCII cho từng trang, dùng để dựng key WIDGET duy nhất theo (cụm, biến thể, trang) ở
+# _render_nav_group() -- KHÔNG dùng thẳng tên trang (dấu tiếng Việt/khoảng trắng) làm key vì
+# Streamlit sinh class CSS "st-key-<key>" trực tiếp từ key, ký tự lạ trong đó không an toàn.
+_NAV_SLUG = {
+    "Hôm nay": "homnay", "Báo cáo": "baocao", "Nhật ký đọc sách": "sach", "Gundam": "gundam",
+    "Sức khoẻ": "suckhoe", "Tìm kiếm": "timkiem", "Tuỳ biến": "tuybien", "Hướng dẫn": "huongdan",
+}
 
 df = prep_analysis_data()
 DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
@@ -9951,37 +9971,20 @@ else:
     COLOR_MAP = {}
 
 # Khởi tạo nav từ URL (?nav=<trang>) -> deep-link & giữ trang khi F5/refresh.
-# Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác.
+# Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác. "nav" giờ KHÔNG
+# còn là key CỦA 1 widget cụ thể (widget đã chẻ thành nhiều đoạn nav_*, xem dưới) -- đây thuần là
+# 1 biến trạng thái logic, đọc/ghi y hệt cách bc_sub/hm_sub/tb_sub đã dùng từ trước.
 if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
     st.session_state["nav"] = _q if _q in NAV else "Hôm nay"
-
-def _reset_today_on_nav_click():
-    # Bấm lại mục "Hôm nay" (từ trang khác, hoặc bấm lại chính nó khi đang ở đó -- segmented_control
-    # bỏ chọn khi bấm lại pill đang active, giá trị về None, rơi vào nhánh "if not nav" bên dưới
-    # nên cũng coi là "Hôm nay") phải luôn đưa về đúng NGÀY HÔM NAY, không giữ ngày đã xem trước
-    # đó -- thay cho nút "Ngày gần nhất" đã bỏ trong day_picker(). Chỉ set khi có "day_pick" sẵn
-    # (đã từng vào trang Hôm nay) -- nếu chưa, day_picker() sẽ tự khởi tạo đúng hôm nay lúc đó.
-    if st.session_state.get("nav") in (None, "Hôm nay") and "day_pick" in st.session_state:
-        st.session_state["day_pick"] = _today_vn()
-
-with st.sidebar:
-    nav = st.segmented_control(
-        "Trang", list(NAV.keys()),
-        format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
-        key="nav", label_visibility="collapsed",
-        on_change=_reset_today_on_nav_click,
-    )
-if not nav:
-    nav = "Hôm nay"
+nav = st.session_state["nav"]
 # Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
 st.query_params["nav"] = nav
 
 # Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở
-# trên, cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế. Widget picker được render
-# trong st.sidebar NGAY DƯỚI nav chính (xem khối "with st.sidebar" cuối phần này) thay vì đứng ở
-# đầu nội dung trang -- xác nhận với người dùng đổi kiến trúc điều hướng, cùng tinh thần dời nav
-# chính sang sidebar trước đó (xem docs/architecture-navigation.md).
+# trên, cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế. Widget picker render NGAY
+# SAU nút "Báo cáo" trong sidebar (xem _render_nav_group/_render_active_subnav bên dưới) thay vì
+# đứng ở đầu nội dung trang -- xác nhận với người dùng đổi kiến trúc điều hướng.
 BAOCAO_SUBS = ["Tổng quan", "Tuần", "Tháng", "Năm", "Dự án"]
 BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material/calendar_view_month:",
                         "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
@@ -10047,34 +10050,90 @@ if nav == "Tuỳ biến":
 elif "tsub" in st.query_params:
     del st.query_params["tsub"]
 
-# Sub-nav (cấp 2) render NGAY DƯỚI nav chính trong sidebar -- chỉ hiện đúng 1 widget khớp trang
-# đang đứng. Nội dung trang (dispatch if/elif bên dưới) chỉ ĐỌC lại session_state đã đồng bộ ở
-# đây (bc_sub/hm_sub/tb_sub), không tự render lại widget picker nữa.
+# Trang nào có sub-nav (state key/widget key/query param/nhãn widget riêng) -- dùng bởi
+# _render_active_subnav() để biết có cần chèn sub-nav ngay sau nút nav chính của trang đó không.
+_NAV_SUBNAV = {
+    "Báo cáo": (BAOCAO_SUBS, BAOCAO_SUB_ICONS_MD, "bc_sub", "bc_sub_picker", "sub", "Chọn kỳ xem"),
+    "Sức khoẻ": (SUCKHOE_SUBS, SUCKHOE_SUB_ICONS_MD, "hm_sub", "hm_sub_picker", "hsub", "Xem theo"),
+    "Tuỳ biến": (TUYBIEN_SUBS, TUYBIEN_SUB_ICONS_MD, "tb_sub", "tb_sub_picker", "tsub", "Xem theo"),
+}
+
+def _commit_nav(new_nav):
+    """Chốt 1 lượt đổi trang từ nav chính (mọi đoạn nav_* trong _render_nav_segment() đều gọi qua
+    đây): ghi session_state/query param, reset "Hôm nay" về đúng NGÀY HÔM NAY (thay hẳn on_change
+    cũ), rồi st.rerun() NGAY -- các đoạn nav_*/sub-nav khác trong CÙNG lượt chạy này đã render dựa
+    theo "nav" CŨ (đọc 1 lần ở đầu lượt chạy, xem biến `nav` phía trên) -- đổi session_state giữa
+    chừng không tự vẽ lại phần đã render trước đó, phải rerun để lượt chạy MỚI chẻ nhóm nav lại
+    đúng theo trang mới (xem docstring _render_nav_group)."""
+    st.session_state["nav"] = new_nav
+    st.query_params["nav"] = new_nav
+    if new_nav == "Hôm nay" and "day_pick" in st.session_state:
+        st.session_state["day_pick"] = _today_vn()
+    st.rerun()
+
+def _render_nav_segment(items, key):
+    """1 đoạn liên tiếp của 1 cụm nav chính -- xem _render_nav_group() để biết cách 1 cụm bị chẻ
+    thành nhiều đoạn quanh sub-nav của trang đang active, và cách "key" được dựng để LUÔN riêng
+    biệt theo (cụm, biến thể, trang đang active) -- xem _NAV_SLUG. TUYỆT ĐỐI không tự set
+    st.session_state[key] ở đây trước khi gọi widget để "ép" đúng lựa chọn hiển thị (bug thật đã
+    gặp khi thử cách đó): làm vậy sẽ GHI ĐÈ lên đúng giá trị Streamlit vừa nhận được từ cú click
+    thật của người dùng (Streamlit set session_state[key] TRƯỚC khi script này chạy lại), khiến
+    mọi cú click coi như không xảy ra -- pill nav không bao giờ đổi được. Vì key đã riêng biệt
+    theo "nav" hiện tại, `default=` (chỉ đọc đúng 1 LẦN ĐẦU key đó tồn tại trong session) luôn ứng
+    với đúng "nav" tương ứng, không cần ép lại."""
+    hosts_active = nav in items
+    picked = st.segmented_control(
+        "Trang", items,
+        format_func=lambda x: f"{NAV[x]} {NAV_SHORT[x]}",
+        default=(nav if hosts_active else None),
+        key=key, label_visibility="collapsed",
+    )
+    if picked and picked != nav:
+        _commit_nav(picked)
+    elif picked is None and hosts_active:
+        # Bấm lại đúng pill đang active -> segmented_control tự bỏ chọn (giá trị về None) -- coi
+        # như bấm "Hôm nay", giữ NGUYÊN hành vi cũ của nav gộp 1 widget duy nhất.
+        _commit_nav("Hôm nay")
+
+def _render_active_subnav():
+    """Sub-nav (cấp 2) của đúng trang đang active, nếu có -- xem _NAV_SUBNAV. Không tự gọi
+    st.rerun(): đổi sub-tab KHÔNG đổi cách nav chính chẻ nhóm, chỉ cần đọc lại session_state ở
+    dispatch nội dung trang là đủ, y hệt cơ chế trước khi dời sub-nav vào giữa nav chính."""
+    if nav not in _NAV_SUBNAV:
+        return
+    subs, icons, state_key, widget_key, qparam, label = _NAV_SUBNAV[nav]
+    picked = st.segmented_control(
+        label, subs, format_func=lambda x: f"{icons[x]} {x}",
+        default=st.session_state[state_key], key=widget_key, label_visibility="collapsed")
+    if picked and picked != st.session_state[state_key]:
+        st.session_state[state_key] = picked
+        st.query_params[qparam] = st.session_state[state_key]
+
+def _render_nav_group(items, group_key):
+    """1 trong 2 cụm nav chính (_NAV_GROUP_A/_NAV_GROUP_B). Nếu trang đang active nằm trong cụm
+    này VÀ có sub-nav (_NAV_SUBNAV) -- chẻ cụm thành 2 đoạn NGAY TẠI vị trí trang đó, chèn sub-nav
+    xen giữa, để sub-nav luôn đứng NGAY SAU nút của đúng trang cha thay vì rơi xuống cuối toàn bộ
+    nav chính (xác nhận với người dùng đổi lại cách bố trí này). Key của mỗi đoạn LUÔN gắn thêm
+    slug của "nav" hiện tại (_NAV_SLUG) -- 1 cụm không-chẻ (biến thể "full") được dùng lại cho
+    NHIỀU trang khác nhau tuỳ lúc (vd cả "Hôm nay" lẫn "Sách" đều render cụm A dạng full, không
+    chẻ), nếu dùng chung 1 key cho mọi trang thì lựa chọn hiển thị của lần trước có thể "dính" lại
+    sai khi đổi sang trang khác cùng dùng key đó (xem docstring _render_nav_segment) -- mỗi
+    (cụm, biến thể, trang) giờ có key RIÊNG nên luôn đúng ngay từ default=, không cần ép lại."""
+    slug = _NAV_SLUG[nav]
+    if nav in items and nav in _NAV_SUBNAV:
+        idx = items.index(nav)
+        pre, post = items[:idx + 1], items[idx + 1:]
+        _render_nav_segment(pre, f"navseg_{group_key}_pre_{slug}")
+        _render_active_subnav()
+        if post:
+            _render_nav_segment(post, f"navseg_{group_key}_post_{slug}")
+    else:
+        _render_nav_segment(items, f"navseg_{group_key}_full_{slug}")
+
 with st.sidebar:
-    if nav == "Báo cáo":
-        _sub_pick = st.segmented_control(
-            "Chọn kỳ xem", BAOCAO_SUBS,
-            format_func=lambda x: f"{BAOCAO_SUB_ICONS_MD[x]} {x}",
-            default=st.session_state["bc_sub"], key="bc_sub_picker", label_visibility="collapsed")
-        if _sub_pick and _sub_pick != st.session_state["bc_sub"]:
-            st.session_state["bc_sub"] = _sub_pick
-            st.query_params["sub"] = st.session_state["bc_sub"]
-    elif nav == "Sức khoẻ":
-        _sub_pick = st.segmented_control(
-            "Xem theo", SUCKHOE_SUBS,
-            format_func=lambda x: f"{SUCKHOE_SUB_ICONS_MD[x]} {x}",
-            default=st.session_state["hm_sub"], key="hm_sub_picker", label_visibility="collapsed")
-        if _sub_pick and _sub_pick != st.session_state["hm_sub"]:
-            st.session_state["hm_sub"] = _sub_pick
-            st.query_params["hsub"] = st.session_state["hm_sub"]
-    elif nav == "Tuỳ biến":
-        _tb_sub_pick = st.segmented_control(
-            "Xem theo", TUYBIEN_SUBS,
-            format_func=lambda x: f"{TUYBIEN_SUB_ICONS_MD[x]} {x}",
-            default=st.session_state["tb_sub"], key="tb_sub_picker", label_visibility="collapsed")
-        if _tb_sub_pick and _tb_sub_pick != st.session_state["tb_sub"]:
-            st.session_state["tb_sub"] = _tb_sub_pick
-            st.query_params["tsub"] = st.session_state["tb_sub"]
+    _render_nav_group(_NAV_GROUP_A, "a")
+    st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
+    _render_nav_group(_NAV_GROUP_B, "b")
 
 
 def _inject_keyboard_shortcuts():
@@ -10110,14 +10169,15 @@ def _inject_keyboard_shortcuts():
     phải do phím thật người dùng bấm hay không. Thay vào đó tự bấm (.click()) đúng nút nav/nút
     đã có sẵn trong trang chính -- thao tác trong cùng 1 document (không phải điều hướng
     liên-frame) nên không bị sandbox chặn, và tận dụng lại đúng cơ chế reset-về-hôm-nay đã có
-    sẵn ở on_change của nav "Hôm nay" (_reset_today_on_nav_click) thay vì tự làm lại. Mỗi bước
-    bấm xong cần CHỜ Streamlit rerun (bất đồng bộ) rồi mới bấm được bước kế tiếp -- runChain()
-    nối nhiều bước qua setInterval polling thay vì delay cố định vì thời gian rerun không cố định.
+    sẵn ở _commit_nav() (gọi bởi mọi đoạn nav_* khi user đổi trang, xem dispatch) thay vì tự làm
+    lại. Mỗi bước bấm xong cần CHỜ Streamlit rerun (bất đồng bộ) rồi mới bấm được bước kế tiếp --
+    runChain() nối nhiều bước qua setInterval polling thay vì delay cố định vì thời gian rerun
+    không cố định.
 
     clickNavByLabel() PHẢI tự kiểm tra "đã đứng sẵn ở đúng trang chưa" trước khi bấm -- bấm lại
-    đúng pill đang active sẽ làm segmented_control BỎ CHỌN nó (rơi về "Hôm nay", xem
-    _reset_today_on_nav_click) thay vì giữ nguyên trang, sai hoàn toàn ý đồ của phím số khi người
-    dùng gọi nó lúc đã đứng sẵn ở trang đích.
+    đúng pill đang active sẽ làm segmented_control BỎ CHỌN nó (rơi về "Hôm nay", xem _commit_nav())
+    thay vì giữ nguyên trang, sai hoàn toàn ý đồ của phím số khi người dùng gọi nó lúc đã đứng sẵn
+    ở trang đích.
 
     components.html() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
     window.parent.document (document của trang chính, không phải của iframe) nên vẫn tồn tại
@@ -10130,15 +10190,21 @@ def _inject_keyboard_shortcuts():
     _txt2 = "var(--text-2)"
     _bg = "var(--card)"
     _border = "var(--border)"
-    # activeNavLabel()/clickNavByLabel() SCOPE theo .st-key-nav (class Streamlit gắn cho khối bọc
-    # widget key="nav") -- bản Streamlit cũ dùng data-testid="stBaseButton-segmented_control"/
-    # "...Active" để nhận diện nút/nút đang chọn, NHƯNG bản đang cài đã đổi hẳn markup segmented_
-    # control (button data-variant="segmented_control" + aria-checked, không còn data-testid riêng
-    # trên từng nút -- xác nhận qua DevTools) -- 2 testid cũ không khớp gì cả khiến MỌI phím tắt phụ
-    # thuộc điều hướng nav (số 1-7, n, một phần /, cả ← → vì activeNavLabel() luôn trả null) im lặng
-    # không hoạt động, không báo lỗi console (phát hiện qua báo cáo thực tế + Playwright, không phải
-    # suy đoán). Scope theo .st-key-nav (thay vì query toàn document như bản cũ) để không lỡ khớp
-    # nhầm 1 segmented_control khác cùng trang (vd Mật độ bố cục ở Tuỳ biến) có label trùng tình cờ.
+    # activeNavLabel()/clickNavByLabel() SCOPE theo [class*="st-key-navseg_"] (substring khớp mọi
+    # đoạn nav chính, vì nav chính giờ RẢI RÁC thành nhiều segmented_control key
+    # "navseg_<group>_<full|pre|post>" tuỳ trang đang active -- xem _render_nav_segment() ở
+    # dispatch/architecture-navigation.md -- không còn 1 class "st-key-nav" cố định duy nhất như
+    # bản trước khi tách sub-nav xen giữa nav chính) -- bản Streamlit cũ dùng
+    # data-testid="stBaseButton-segmented_control"/"...Active" để nhận diện nút/nút đang chọn,
+    # NHƯNG bản đang cài đã đổi hẳn markup segmented_control (button
+    # data-variant="segmented_control" + aria-checked, không còn data-testid riêng trên từng nút --
+    # xác nhận qua DevTools) -- 2 testid cũ không khớp gì cả khiến MỌI phím tắt phụ thuộc điều
+    # hướng nav (số 1-7, n, một phần /, cả ← → vì activeNavLabel() luôn trả null) im lặng không
+    # hoạt động, không báo lỗi console (phát hiện qua báo cáo thực tế + Playwright, không phải suy
+    # đoán). Scope theo [class*="st-key-navseg_"] (thay vì query toàn document như bản cũ) để không
+    # lỡ khớp nhầm 1 segmented_control khác cùng trang có label trùng tình cờ (vd "Báo cáo" vừa là
+    # tên trang chính vừa là tên 1 sub-tab của Sức khoẻ -- sub-tab đó KHÔNG dùng key "navseg_*" nên
+    # không lọt vào scope này).
     js = (
         "<script>\n"
         "(function(){\n"
@@ -10151,12 +10217,12 @@ def _inject_keyboard_shortcuts():
         "    return parts[parts.length - 1];\n"
         "  }\n"
         "  function activeNavLabel(){\n"
-        "    const b = w.document.querySelector('.st-key-nav [data-variant=\"segmented_control\"][aria-checked=\"true\"]');\n"
+        "    const b = w.document.querySelector('[class*=\"st-key-navseg_\"] [data-variant=\"segmented_control\"][aria-checked=\"true\"]');\n"
         "    return b ? lastLine(b) : null;\n"
         "  }\n"
         "  function clickNavByLabel(label){\n"
         "    if (activeNavLabel() === label) return true;\n"
-        "    const btns = w.document.querySelectorAll('.st-key-nav [data-variant=\"segmented_control\"]');\n"
+        "    const btns = w.document.querySelectorAll('[class*=\"st-key-navseg_\"] [data-variant=\"segmented_control\"]');\n"
         "    for (const b of btns) { if (lastLine(b) === label) { b.click(); return true; } }\n"
         "    return false;\n"
         "  }\n"

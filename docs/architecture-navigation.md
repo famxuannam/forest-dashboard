@@ -5,26 +5,40 @@ render ra sao, và cách thêm/sửa 1 trang mà không phá deep-link.
 
 ## Cơ chế: 1 dict + 1 chuỗi if/elif, không router riêng
 
-- `NAV` là dict phẳng `{"Tên trang": "material_icon_name", ...}`, render bằng
-  `st.segmented_control`. Đây là toàn bộ "route table" của app — không có class Route, không có
-  framework điều hướng nào khác.
+- `NAV` là dict phẳng `{"Tên trang": "material_icon_name", ...}`. Đây là toàn bộ "route table" của
+  app — không có class Route, không có framework điều hướng nào khác.
 - Trang thực sự được vẽ bởi 1 chuỗi `if nav == "Hôm nay": ... elif nav == "Báo cáo": ...` nằm gần
   cuối `app.py`. Đây KHÔNG phải chỗ quyết định thứ tự hiển thị trên thanh nav — thứ tự đó do vị trí
-  key trong dict `NAV` quyết định. Khi thêm 1 trang mới: thêm key vào `NAV` ở đúng vị trí muốn hiện,
-  rồi thêm 1 nhánh `elif nav == "Tên trang mới":` bất kỳ đâu trong chuỗi — không cần khớp thứ tự.
+  key trong dict `NAV` quyết định (cụ thể hơn: vị trí trong `_NAV_GROUP_A`/`_NAV_GROUP_B`, xem mục
+  dưới). Khi thêm 1 trang mới: thêm key vào `NAV` (và vào đúng 1 trong 2 group) ở đúng vị trí muốn
+  hiện, rồi thêm 1 nhánh `elif nav == "Tên trang mới":` bất kỳ đâu trong chuỗi dispatch — không cần
+  khớp thứ tự.
+- Nav chính KHÔNG còn là 1 `st.segmented_control` DUY NHẤT render trọn 8 mục (khác thiết kế ban
+  đầu) — vì sub-nav của Báo cáo/Sức khoẻ/Tuỳ biến phải chèn NGAY SAU nút của đúng trang cha (xác
+  nhận với người dùng, xem mục "Cấp điều hướng thứ 2" dưới), 1 radiogroup duy nhất không cho phép
+  chèn phần tử HTML rời vào giữa các nút. Nav chính giờ RẢI RÁC thành nhiều `segmented_control` nhỏ
+  (`_render_nav_segment()`), số lượng và ranh giới thay đổi tuỳ trang đang active.
 
 ## Nguồn sự thật của "đang ở trang nào" là `st.session_state`, không phải widget
 
 `st.session_state["nav"]` được seed đúng 1 lần mỗi phiên từ `st.query_params["nav"]`, rồi mọi thay
 đổi (do người dùng click nav) được ghi ngược lại vào `st.query_params`. Đây là cơ chế duy nhất giúp
 deep-link kiểu `?nav=Hôm nay&day=2026-07-04` hoạt động qua reload trang — nếu chỉ dựa vào giá trị
-widget `st.segmented_control` trả về, link chia sẻ sẽ không mở đúng trang.
+widget trả về, link chia sẻ sẽ không mở đúng trang. Khác NHIỀU widget khác trong app (vd `bc_sub`),
+`"nav"` KHÔNG còn là key CỦA 1 widget cụ thể — nav chính đã chẻ thành nhiều `segmented_control` con
+(xem mục dưới), mỗi con có key riêng (`navseg_<group>_<full|pre|post>_<slug>`); `"nav"` thuần là 1
+biến trạng thái logic mà các đoạn đó cùng đọc/ghi qua, giống hệt cách `bc_sub`/`hm_sub`/`tb_sub`
+tách khỏi key widget `bc_sub_picker`/`hm_sub_picker`/`tb_sub_picker` của chúng.
 
-Hệ quả khi sửa code: đừng gán trực tiếp vào biến widget để "chuyển trang" bằng tay — phải set
-`st.session_state["nav"]` (và/hoặc `st.query_params`) rồi `st.rerun()`. Phím tắt điều hướng (JS,
-xem `keyboard-shortcuts.md`) đi theo hướng khác: tự bấm (`.click()`) đúng nút nav đã có sẵn trong
-DOM qua `clickNavByLabel()`, tận dụng lại toàn bộ cơ chế session_state/query_params này thay vì tự
-set trực tiếp từ phía JS.
+Hệ quả khi sửa code: đừng gán trực tiếp vào biến widget để "chuyển trang" bằng tay — mọi thay đổi
+trang PHẢI đi qua `_commit_nav(new_nav)` (set `st.session_state["nav"]` + `st.query_params["nav"]`
++ reset "Hôm nay" về đúng ngày hôm nay nếu cần + `st.rerun()` NGAY). Rerun là BẮT BUỘC ở đây (khác
+nhiều nơi khác trong app): các đoạn nav_*/sub-nav trong CÙNG lượt chạy đã render dựa theo `nav` CŨ
+(đọc 1 lần ở đầu lượt chạy) — đổi `session_state["nav"]` giữa chừng không tự vẽ lại phần đã render
+phía trên, phải rerun để lượt chạy MỚI chẻ nhóm nav lại đúng theo trang mới. Phím tắt điều hướng
+(JS, xem `keyboard-shortcuts.md`) đi theo hướng khác: tự bấm (`.click()`) đúng nút nav đã có sẵn
+trong DOM qua `clickNavByLabel()`, tận dụng lại toàn bộ cơ chế `_commit_nav()`/query_params này
+thay vì tự set trực tiếp từ phía JS.
 
 ## Cấp điều hướng thứ 2: `BAOCAO_SUBS`/`SUCKHOE_SUBS` và `day_picker()`
 
@@ -37,20 +51,46 @@ set trực tiếp từ phía JS.
   riêng để có billboard/chip-TOC/hàng nút Reset-Ngẫu nhiên của riêng nó, dù bố cục bên trong (billboard
   + chuỗi `sec_chapter()`) vẫn dùng ĐÚNG khuôn chung với "Tổng quan"/Báo cáo/Sách/Gundam.
 - Cả 3 widget picker (`bc_sub_picker`/`hm_sub_picker`/`tb_sub_picker`) render trong `st.sidebar`,
-  NGAY DƯỚI widget `nav` chính, thay vì đứng ở đầu nội dung trang — khối `with st.sidebar:` xử lý
-  việc này nằm ngay sau khi biến `nav` được xác định (đầu `app.py`, cùng chỗ với việc khai báo
-  `BAOCAO_SUBS`/`SUCKHOE_SUBS`/`TUYBIEN_SUBS` và đồng bộ `bc_sub`/`hm_sub`/`tb_sub` qua query
-  param), CHỈ hiện đúng 1 sub-nav khớp trang `nav` đang đứng. Dispatch nội dung trang (chuỗi
-  if/elif chính) chỉ ĐỌC lại `st.session_state["bc_sub"]`/`"hm_sub"`/`"tb_sub"` đã đồng bộ sẵn ở
-  đó, không tự render lại widget picker. Ngoại lệ: sub-tab "Chọn mục" ở Sách/Gundam
-  (`rl_view_tabs_picker`/`rl_view_tabs_gd_picker`, xem `render_reading_log()`) VẪN đứng ở đầu nội
-  dung trang như cũ, KHÔNG dời sang sidebar — chỉ 3 sub-nav cấp trang chính (Báo cáo/Sức khoẻ/Tuỳ
-  biến) mới áp dụng thay đổi này.
+  NGAY SAU nút của đúng trang cha trong nav chính (Báo cáo/Sức khoẻ/Tuỳ biến), thay vì đứng ở đầu
+  nội dung trang HAY rơi xuống cuối toàn bộ nav chính (xác nhận với người dùng qua 2 lượt đổi kiến
+  trúc điều hướng liên tiếp — lượt 1 dời cả sub-nav lẫn nav chính vào sidebar nhưng để sub-nav render
+  sau TOÀN BỘ nav chính; lượt 2 mới chèn xen kẽ đúng vị trí). Cơ chế (`_render_nav_group()`,
+  `_render_nav_segment()`, `_render_active_subnav()`, `_NAV_SUBNAV`, `_NAV_GROUP_A`/`_NAV_GROUP_B`,
+  `_NAV_SLUG`) nằm ngay sau khi `NAV`/`NAV_SHORT` được khai báo, đầu `app.py`:
+  - `_NAV_GROUP_A`/`_NAV_GROUP_B` là 2 cụm nav chính cố định (cách nhau bởi 1 `<div
+    class="sidebar-nav-divider">` tường minh, KHÔNG còn dựng bằng CSS `nth-child` như bản đầu
+    tiên vì số radiogroup thực tế trên trang giờ thay đổi theo `nav`).
+  - `_NAV_SUBNAV` map trang → `(subs, icons, state_key, widget_key, query_param, label_widget)` —
+    trang nào có mặt trong dict này thì có sub-nav.
+  - `_render_nav_group(items, group_key)`: nếu `nav` nằm trong cụm này VÀ có trong `_NAV_SUBNAV`,
+    chẻ cụm thành đoạn `pre` (tới hết nút của `nav`) + đoạn `post` (phần còn lại), chèn
+    `_render_active_subnav()` xen giữa; nếu không, render nguyên cụm thành 1 đoạn `full`.
+  - Key của mỗi đoạn (`navseg_<group>_<full|pre|post>_<slug trang, xem _NAV_SLUG>`) LUÔN gắn thêm
+    slug ASCII của `nav` hiện tại — **QUAN TRỌNG, đừng bỏ qua khi sửa**: 1 đoạn "full" (không chẻ)
+    được TÁI SỬ DỤNG cho nhiều trang khác nhau tuỳ lúc (vd cụm A dạng full dùng chung cho cả "Hôm
+    nay" lẫn "Sách"/"Gundam"/"Tìm kiếm"), nếu 2 trang khác nhau dùng CHUNG 1 key thì lựa chọn hiển
+    thị của lượt trước có thể "dính" sai khi đổi sang trang khác cũng dùng key đó (vì `default=`
+    của `segmented_control` chỉ được đọc đúng 1 LẦN ĐẦU TIÊN 1 key tồn tại trong session, các lần
+    sau bị bỏ qua). Gắn slug trang vào key khiến mỗi (cụm, biến thể, trang) có key RIÊNG, luôn
+    đúng ngay từ `default=`.
+  - **Bẫy đã gặp thật, đừng lặp lại**: TUYỆT ĐỐI không tự `st.session_state[key] = ...` để "ép"
+    đúng lựa chọn hiển thị ngay TRƯỚC khi gọi `st.segmented_control(..., key=key)` của 1 đoạn nav_*
+    trên MỌI lượt chạy (khác hẳn cờ `_bc_sub_jump`/`_hm_sub_jump`, chỉ set 1 lần có điều kiện) — làm
+    vậy sẽ GHI ĐÈ lên đúng giá trị Streamlit vừa nhận từ cú click thật của người dùng (Streamlit đã
+    set `session_state[key]` đó TRƯỚC khi script chạy lại), khiến MỌI cú click coi như không xảy ra,
+    pill nav không bao giờ đổi được (bug thật đã gặp khi thử cách này trước khi đổi sang đặt key
+    riêng theo slug trang ở trên).
+  - Dispatch nội dung trang (chuỗi if/elif chính) chỉ ĐỌC lại
+    `st.session_state["bc_sub"]`/`"hm_sub"`/`"tb_sub"` đã đồng bộ sẵn ở sidebar, không tự render lại
+    widget picker.
+  - Ngoại lệ: sub-tab "Chọn mục" ở Sách/Gundam (`rl_view_tabs_picker`/`rl_view_tabs_gd_picker`, xem
+    `render_reading_log()`) VẪN đứng ở đầu nội dung trang như cũ, KHÔNG dời sang sidebar — chỉ 3
+    sub-nav cấp trang chính (Báo cáo/Sức khoẻ/Tuỳ biến) mới áp dụng thay đổi này.
 - Cờ chờ xử lý kiểu `_bc_sub_jump`/`_hm_sub_jump` (nhảy sang 1 sub-tab khác BẰNG CODE) PHẢI được
-  set/pop TRƯỚC khối `with st.sidebar:` render widget picker (tức là ở phần khai báo
-  `BAOCAO_SUBS`/`SUCKHOE_SUBS` đầu `app.py`, không phải trong hàm render trang như trước khi dời
-  sang sidebar) — xem gotcha `StreamlitAPIException` ở `ui-components.md`, giờ áp dụng chặt hơn vì
-  widget instantiate sớm hơn nhiều trong lượt chạy so với trước.
+  set/pop TRƯỚC khối render nav trong sidebar (tức là ở phần khai báo `BAOCAO_SUBS`/`SUCKHOE_SUBS`
+  đầu `app.py`, không phải trong hàm render trang như trước khi dời sang sidebar) — xem gotcha
+  `StreamlitAPIException` ở `ui-components.md`, giờ áp dụng chặt hơn vì widget instantiate sớm hơn
+  nhiều trong lượt chạy so với trước.
 - `day_picker(nav_days)` (dùng ở trang "Hôm nay") làm điều tương tự với `?day=` cho việc chọn ngày
   cụ thể — `nav_days` (danh sách ngày lịch/nút `◀`/`▶` được phép tới) quyết định luôn cả biên lo/hi
   lẫn tập ứng viên bước; `render_day_report()` truyền vào hợp của ngày CÓ phiên Forest (`active_days`)
@@ -74,9 +114,14 @@ bộ — đã bỏ vì phá bố cục trang; không còn `from`/`_back_link_htm
 
 ## Việc cần làm khi thêm 1 trang/sub-tab mới
 
-1. Thêm key vào `NAV` (hoặc item vào `BAOCAO_SUBS`) ở đúng vị trí hiển thị mong muốn.
+1. Thêm key vào `NAV` (hoặc item vào `BAOCAO_SUBS`) ở đúng vị trí hiển thị mong muốn — với trang
+   cấp 1 (nav chính), nhớ thêm luôn vào ĐÚNG 1 trong 2 list `_NAV_GROUP_A`/`_NAV_GROUP_B` (cụm nào
+   trang mới thuộc về) VÀ vào `_NAV_SLUG` (slug ASCII riêng, dùng để dựng key widget).
 2. Thêm nhánh `elif` xử lý render — vị trí trong chuỗi if/elif không quan trọng, chỉ cần tồn tại.
 3. Nếu trang mới cần tham số riêng qua URL, làm theo đúng pattern seed-từ-query-param → ghi lại
    vào `session_state`/`query_params` — không tự chế cơ chế state khác.
-4. Cập nhật trang "Trợ giúp" (thêm nội dung vào chương phù hợp, và/hoặc 1 mục `HELP_CHANGELOG`)
+4. Nếu trang mới cũng cần sub-nav (như Báo cáo/Sức khoẻ/Tuỳ biến): thêm 1 entry vào `_NAV_SUBNAV`
+   (subs/icons/state_key/widget_key/query_param/label) — `_render_nav_group()` sẽ TỰ chèn sub-nav
+   ngay sau nút của trang đó, không cần tự viết lại logic chẻ nhóm.
+5. Cập nhật trang "Trợ giúp" (thêm nội dung vào chương phù hợp, và/hoặc 1 mục `HELP_CHANGELOG`)
    nếu trang có ý nghĩa với người dùng cuối — xem `ui-components.md`.
