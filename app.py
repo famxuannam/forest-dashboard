@@ -2583,7 +2583,7 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
         head_cls = "sp-lsec-head first" if is_first else "sp-lsec-head"
         return f"<div class='{head_cls}'>{sec['label']}</div>" + "".join(rows)
 
-    def _render_listcard(secs, with_footer):
+    def _card_inner(secs):
         inner = ''
         first = True
         for sec in secs:
@@ -2591,17 +2591,63 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
             if rows:
                 inner += rows
                 first = False
+        return inner
+
+    def _split_secs_balanced(secs):
+        """Chia NGUYÊN VẸN từng section (không tách rời các dòng trong CÙNG 1 section) thành 2
+        nhóm cân bằng số dòng, dùng thuật toán tham lam LPT (Longest Processing Time first: xếp
+        section nặng nhất trước, mỗi lần luôn bỏ vào bên đang nhẹ hơn) -- trước đây dùng CSS
+        column-count để trình duyệt tự chảy DÒNG (không phải section) vào 2 cột, có thể xé 1
+        section làm đôi khi số dòng lệch (vd 2 dòng "so sánh" + 3 dòng "mốc giờ/buổi" tách thành
+        2+3 dòng trông chắp vá, phản hồi thực tế người dùng qua ảnh chụp) -- giờ mỗi section luôn
+        nằm trọn trong 1 THẺ, 2 thẻ tách hẳn có khoảng cách riêng thay vì 1 thẻ với vạch chia."""
+        weighted = [(len(s.get('chips') or []) + (1 if s.get('label') else 0), i, s)
+                    for i, s in enumerate(secs) if s.get('chips')]
+        weighted.sort(key=lambda x: -x[0])
+        left, right, left_w, right_w = [], [], 0, 0
+        for w, i, s in weighted:
+            if left_w <= right_w:
+                left.append((i, s)); left_w += w
+            else:
+                right.append((i, s)); right_w += w
+        # Sắp lại theo thứ tự gốc trong TỪNG cột (thuật toán gán ở trên duyệt theo trọng số, không
+        # phải thứ tự xuất hiện) -- giữ mạch đọc quen thuộc trên-xuống trong mỗi cột.
+        left.sort(key=lambda x: x[0]); right.sort(key=lambda x: x[0])
+        return [s for _, s in left], [s for _, s in right]
+
+    def _render_listcard(secs, with_footer):
+        secs = [s for s in secs if s.get('chips')]
+        _footer_html = ''
         if with_footer and footer:
             f_txt, f_bg, f_fg = footer
-            inner += ("<div style='margin:14px 20px 16px;padding-top:14px;border-top:1px solid var(--divider);text-align:center;'>"
-                      f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
-        return f"<div class='glass-card sp-listcard'>{inner}</div>" if inner else ''
+            _footer_html = ("<div style='margin:14px 20px 16px;padding-top:14px;border-top:1px solid var(--divider);text-align:center;'>"
+                            f"<span style='background:{f_bg};color:{f_fg};font-size:14px;font-weight:500;padding:7px 16px;border-radius:11px;'>{f_txt}</span></div>")
+        if len(secs) < 2:
+            inner = _card_inner(secs) + _footer_html
+            return f"<div class='glass-card sp-listcard'>{inner}</div>" if inner else ''
+        # >=2 section: tách 2 THẺ riêng (không phải 1 thẻ + vạch chia CSS) để mỗi cột luôn trọn
+        # vẹn 1/nhiều section, không lộ ranh giới lệch dòng -- footer (hiếm khi đi kèm >=2 section
+        # trong codebase hiện tại) gắn full-width bên dưới cả 2 thẻ nếu có, không nhét vào 1 bên.
+        left_secs, right_secs = _split_secs_balanced(secs)
+        left_html = _card_inner(left_secs)
+        right_html = _card_inner(right_secs)
+        cards = "<div class='sp-lcols'>"
+        if left_html:
+            cards += f"<div class='glass-card sp-listcard'>{left_html}</div>"
+        if right_html:
+            cards += f"<div class='glass-card sp-listcard'>{right_html}</div>"
+        cards += "</div>"
+        return cards + (f"<div class='glass-card sp-listcard' style='margin-top:14px;'>{_footer_html}</div>" if _footer_html else '')
 
     h = f"<div class='sp-wrap' style='{card_style}'>"
     if hero_items:
-        h += "<div class='sp-herogrid'>"
+        # 1 thẻ glass-card DUY NHẤT bọc ngoài (thay vì mỗi số 1 thẻ riêng, đứt gãy shadow/border/
+        # gap giữa chúng) -- các ô ngăn nhau bằng vạch dọc mảnh, khớp .sp-lrow/.sp-listcard đã đổi
+        # sang cùng tinh thần "1 khối, ngăn vạch mảnh" ở trên (giảm khoảng trống thừa, xem phản hồi
+        # người dùng: 3 thẻ to cho 3 số riêng chiếm quá nhiều màn hình so với lượng thông tin).
+        h += "<div class='glass-card sp-herogrid'>"
         for it in hero_items:
-            h += f"<div class='glass-card sp-tile'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
+            h += f"<div class='sp-tile'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
             for txt, col in it.get('deltas', []) or []:
                 h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
             h += "</div>"
@@ -8267,34 +8313,37 @@ _MAIN_CSS = """
     /* ===== Bảng tổng quan gọn (render_stat_panel()) -- lưới thẻ hero + 1 thẻ list dòng bên dưới,
        khớp Hôm nay.dc.html (đợt redesign Apple/macOS-inspired), THAY cho khuôn chip-pill cũ. Áp
        dụng chung cho MỌI trang gọi hàm này (Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ). ===== */
-    .sp-herogrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 14px; }
-    .sp-tile { padding: 18px 20px !important; }
-    .sp-l { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
-    .sp-v { font-size: 27px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
-    .sp-v span { font-size: 15px; font-weight: 600; color: var(--text-2); }
-    .sp-d { font-size: 13px; font-weight: 500; margin-top: 4px; }
+    /* Đổi từ lưới N thẻ .glass-card riêng (mỗi số 1 khối border/shadow/gap 14px) sang 1 thẻ
+       .glass-card DUY NHẤT chứa các ô .sp-tile ngăn nhau bằng vạch dọc mảnh -- gọn hơn hẳn về
+       chiều cao/khoảng trống (padding+border+shadow không còn nhân N lần). flex-wrap để tự xuống dòng nếu quá nhiều ô/màn hẹp
+       (border-left của ô ĐẦU MỖI DÒNG mới cần bỏ, không chỉ ô đầu tiên -- xử lý qua nth-child dựa
+       trên số ô mỗi dòng ở rule mobile bên dưới, còn desktop luôn đủ rộng cho 1 dòng). */
+    .sp-herogrid { display: flex; flex-wrap: wrap; padding: 0 !important; overflow: hidden; margin-bottom: 14px; }
+    .sp-tile { flex: 1 1 0; min-width: 120px; padding: 10px 18px; border-left: 1px solid var(--divider); }
+    .sp-tile:first-child { border-left: none; }
+    .sp-l { font-size: 11.5px; font-weight: 600; color: var(--text-2); margin-bottom: 3px; }
+    .sp-v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sp-v span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .sp-d { font-size: 12px; font-weight: 500; margin-top: 3px; }
     /* Thẻ list: mỗi "section" = 1 tiêu đề nhỏ in hoa (border-top ĐẬM ngăn với section trước) +
        các dòng label/giá trị (border-top MỜ ngăn giữa các dòng) -- không còn chip-pill. Padding
        dòng/section rút gọn (10px->7px, 14px->9px) so với bản đầu -- xác nhận với người dùng qua
        ảnh chụp: khối "Tổng quan ngày" (So sánh/Mốc trong ngày/Theo buổi/Liền mạch dồn 1 chỗ) cao
        quá mức so với lượng thông tin, chiếm nhiều màn hình hơn cần thiết. */
-    /* column-count: 2 -- các dòng label/giá trị (vd "Phiên đầu · Phiên cuối · Trải dài") thường
-       ngắn hơn nhiều bề rộng thẻ, để 1 cột duy nhất tạo khoảng trống giữa nhãn/giá trị rất dài
-       (phản hồi thực tế, xem ảnh chụp người dùng gửi). CSS multi-column tự chảy từng dòng vào 2 cột
-       theo thứ tự DOM (đầy cột trái rồi mới sang cột phải, cân bằng chiều cao tự động) -- chọn
-       cách này thay vì CSS grid 2 cột vì grid xếp XEN KẼ trái/phải theo hàng, có thể trộn lẫn 2
-       "nhóm" (section) khác nhau trên cùng 1 hàng ngang trông rối; multi-column giữ nguyên thứ tự
-       đọc dọc quen thuộc trong từng cột. break-inside: avoid trên .sp-lrow/-head để 1 dòng không
-       bị cắt đôi giữa 2 cột. column-rule thay cho viền ngăn cách 2 cột. */
-    .sp-listcard { padding: 0 !important; overflow: hidden; column-count: 2; column-gap: 0;
-        column-rule: 1px solid var(--divider); }
+    /* 2 section trở lên -> render_stat_panel() (Python, xem _split_secs_balanced()) tách hẳn
+       thành 2 THẺ .sp-listcard riêng (mỗi section nằm TRỌN trong 1 thẻ, cân bằng số dòng bằng
+       thuật toán tham lam LPT) thay vì 1 thẻ + CSS column-count -- bản CSS-column cũ để trình
+       duyệt tự chảy DÒNG vào 2 cột có thể xé 1 section làm đôi khi số dòng lệch, trông chắp vá
+       (phản hồi thực tế người dùng qua ảnh chụp). .sp-lcols là hàng flex chứa 2 thẻ đó, có
+       khoảng cách (gap) thật giữa 2 thẻ thay vì 1 vạch chia trong cùng 1 khối. */
+    .sp-lcols { display: flex; gap: 14px; }
+    .sp-lcols > .sp-listcard { flex: 1 1 0; min-width: 0; }
+    .sp-listcard { padding: 0 !important; overflow: hidden; }
     .sp-lsec-head { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
-        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border);
-        break-inside: avoid; break-after: avoid; }
+        letter-spacing: 0.4px; padding: 9px 20px 3px; border-top: 1px solid var(--border); }
     .sp-lsec-head.first { border-top: none; }
     .sp-lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text);
-        break-inside: avoid; }
+        padding: 7px 20px; border-top: 1px solid var(--divider); font-size: 13.5px; color: var(--text); }
     .sp-listcard > .sp-lrow:last-child { padding-bottom: 10px; }
     /* Nhóm KHÔNG có tiêu đề (sections truyền label="") -- dòng đầu tiên của cả thẻ không được kẻ
        viền trên (trước đây luôn có .sp-lsec-head.first đứng trước nên không lộ), và dòng đầu của
@@ -8959,11 +9008,17 @@ _MAIN_CSS = """
         [class*="st-key-kq_teaser_cols"] [data-testid="stHorizontalBlock"] { row-gap: 0 !important; }
         [class*="st-key-kq_teaser_cols"] [data-testid="stColumn"] { margin-bottom: 10px !important; }
 
-        /* Bảng tổng quan gọn: ép lưới hero về đúng 2 cột trên mobile (auto-fit mặc định có thể ra
-           3 cột hẹp dính chữ nếu màn hình vừa đủ 3× minmax). */
-        .sp-herogrid { grid-template-columns: repeat(2, 1fr) !important; }
+        /* Bảng tổng quan gọn: ép mỗi ô hero chiếm đúng 50% bề ngang trên mobile (2 ô/dòng) --
+           đổi từ grid sang flex ở trên nên dùng flex-basis thay vì grid-template-columns. Vạch
+           dọc bên trái chỉ hợp lý với ô ĐẦU DÒNG (ô thứ 1 và thứ 3, 5... theo thứ tự 2 ô/dòng),
+           bỏ ở các ô đó qua nth-child(2n+1); ô còn lại (2n) giữ vạch để ngăn với ô bên trái. */
+        .sp-tile { flex: 1 1 45%; min-width: 45%; }
+        .sp-tile:nth-child(2n+1) { border-left: none; }
         .sp-tile { padding: 14px 16px !important; }
         .sp-v { font-size: 24px !important; }
+        /* 2 thẻ list (.sp-lcols) xếp dọc trên mobile thay vì cạnh nhau -- màn hẹp không đủ chỗ
+           cho 2 cột mà vẫn đọc được các dòng nhãn/giá trị. */
+        .sp-lcols { flex-direction: column; gap: 10px; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
