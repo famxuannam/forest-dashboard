@@ -8360,6 +8360,53 @@ _MAIN_CSS = """
         letter-spacing: 0.6px; margin: 14px 0 6px; }
     .sp-wrap > .sp-glabel:first-child { margin-top: 0; }
     @media (max-width: 640px) { .sp-lrow { flex-wrap: wrap; } }
+    /* Luồng 2 cột today_flow2 (trang Hôm nay -- xem render_day_report()) -- mỗi chương (kể cả
+       chương 1 với TOÀN BỘ nội dung con, không chia lẻ, xem docstring nơi gọi) là 1 khối
+       break-inside:avoid, CSS tự cân bằng chiều cao 2 cột theo đúng thứ tự DOM. display:block
+       !important BẮT BUỘC: [data-testid="stVerticalBlock"] mặc định display:flex (để dùng gap)
+       qua rule chung, mà column-count KHÔNG có tác dụng trên flex container (xác nhận qua
+       getComputedStyle -- columnCount báo "2" nhưng layout vẫn full-width vì display vẫn "flex",
+       CSS multi-column chỉ hoạt động trên block/flow-root formatting context). MẶC ĐỊNH 1 cột
+       (display:block để giữ nếp gấp nội dung dọc bình thường) -- 2 cột CHỈ bật ở màn >=1300px qua
+       @media min-width bên dưới (xác nhận với người dùng: 640px quá hẹp, tablet dọc ~768px mỗi
+       cột chưa tới 350px rất chật). */
+    .st-key-today_flow2 { display: block !important; }
+    .st-key-today_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
+    /* MỌI tiêu đề chương trong luồng (kể cả chương 2-5 vốn KHÔNG truyền tight_top=True cho
+       sec_chapter()) đều bỏ margin-top -- chỉ chương 1 dùng tight_top=True nên trước đây có
+       tiêu đề cao hơn 8px so với các chương còn lại (đo bằng getBoundingClientRect() xác nhận:
+       header "1" top=308px, header "3" top=316px, đúng 8px lệch). Khi 2 tiêu đề CÙNG là mục ĐẦU
+       của 1 cột (bug thật đã gặp, xem ảnh chụp người dùng gửi) -- lệch 8px lộ rõ vì đứng cùng
+       hàng. Đặt margin-top:0 ĐỒNG NHẤT cho mọi tiêu đề trong luồng, dựa hẳn vào margin-bottom:14px
+       của .st-key-today_flow2 > [data-testid="stLayoutWrapper"] (rule ngay trên) để tạo khoảng
+       cách GIỮA các khối thay vì margin-top của tiêu đề kế tiếp -- tránh cộng dồn 2 nguồn margin
+       cho các chương KHÔNG phải mục đầu cột. */
+    [class*="st-key-today_flow2_i"] .sec-ch { margin-top: 0 !important; }
+    @media (min-width: 1300px) {
+        .st-key-today_flow2 { column-count: 2; column-gap: 24px; }
+        .st-key-today_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
+        /* Khối chương 1 (today_flow2_i1) chiếm ĐÚNG 1/2 trang ở >=1300px -- ép các cặp card con
+           vốn tự chia 2 cột khi đủ rộng (stat listcard .sp-lcols của render_stat_panel(), cặp
+           Theo buổi/Độ dài phiên st.columns(2) của render_project_rhythm()) về lại 1 cột, tránh
+           chia tiếp thành 4 cột quá hẹp (phản hồi thực tế người dùng qua ảnh chụp). CHỈ áp dụng
+           trong media query này -- dưới 1300px today_flow2 đã tự về 1 cột full-width nên chương 1
+           lại có đủ chỗ, để 2 card đó tự chia đôi bình thường như mọi trang khác gọi 2 hàm này.
+           flex-basis:auto (không phải 0) vì lý do đã ghi ở rule mobile .sp-lcols phía dưới --
+           overflow:hidden + flex-basis:0 trên flex-direction:column làm thẻ co sập mất nội dung,
+           xem docstring rule đó. */
+        .st-key-today_flow2_i1 .sp-lcols { flex-direction: column; }
+        .st-key-today_flow2_i1 .sp-lcols > .sp-listcard { flex: 1 1 auto; }
+        /* stColumn (con của stHorizontalBlock) có sẵn flex: 1 1 calc(50% - 16px) từ class emotion
+           riêng của Streamlit (không phải inline style) cho bố cục 2 cột NGANG gốc -- đổi
+           flex-direction sang column KHÔNG tự đổi flex-basis đó, khiến mỗi thẻ dù đã xếp dọc vẫn
+           chỉ rộng 50% (bug thật đã gặp, xem ảnh chụp người dùng gửi: "Theo buổi"/"Độ dài phiên"
+           xếp dọc nhưng mỗi thẻ chỉ chiếm nửa cột). Ép flex-basis/width về 100% !important để mỗi
+           thẻ full chiều ngang cột khi đã xếp dọc. */
+        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] { flex-direction: column; }
+        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
+            flex: 1 1 100% !important; width: 100% !important;
+        }
+    }
     /* .maprow .chip: badge Nhóm ở bảng Phân loại tĩnh (Tuỳ biến -> chương "2. Phân loại") --
        tái dùng nguyên class chip/ck/cv của .pbill-chips (billboard Sách/Gundam/Dự án), chỉ thêm
        vào phạm vi scope vì không phải billboard. */
@@ -9020,8 +9067,15 @@ _MAIN_CSS = """
         .sp-tile { padding: 14px 16px !important; }
         .sp-v { font-size: 24px !important; }
         /* 2 thẻ list (.sp-lcols) xếp dọc trên mobile thay vì cạnh nhau -- màn hẹp không đủ chỗ
-           cho 2 cột mà vẫn đọc được các dòng nhãn/giá trị. */
+           cho 2 cột mà vẫn đọc được các dòng nhãn/giá trị. flex-basis PHẢI đổi từ 0 (desktop,
+           chia đều bề NGANG) sang auto ở đây: khi flex-direction đổi thành column, flex-basis:0
+           lại tính theo chiều CAO, và .sp-listcard có overflow:hidden nên kích thước tối thiểu tự
+           động theo nội dung bị VÔ HIỆU (đúng theo spec CSS flexbox: chỉ áp dụng khi overflow:
+           visible) -- thẻ co sập gần 0px, cắt mất chữ bên trong (bug thật đã gặp, xem ảnh chụp
+           người dùng gửi, verify bằng getBoundingClientRect() thấy .sp-lrow cao 68px nhưng
+           .sp-listcard cha chỉ đo được 34px). flex-basis:auto để mỗi thẻ cao đúng theo nội dung. */
         .sp-lcols { flex-direction: column; gap: 10px; }
+        .sp-lcols > .sp-listcard { flex: 1 1 auto; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
@@ -10795,7 +10849,6 @@ def render_day_report(df):
         sec_chapter("today-ch2", 2, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
-        sec_chapter("today-ch1", 1, "Tổng quan ngày", tight_top=True)
         d_hrs = day_df['Thời lượng (Phút)'].sum() / 60
         d_sess = len(day_df)
         d_avg = _avg_session_min(day_df)
@@ -10852,58 +10905,88 @@ def render_day_report(df):
             else:
                 _flow_chips = [{"k": "Khối liền mạch dài nhất", "v": _blk}]
             _secs.append({"label": "", "chips": _flow_chips})
-        render_stat_panel(hero_items=[
-            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
-            {"label": "Số phiên", "value": f"{d_sess}"},
-            {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
-        ], sections=_secs)
+        # TOÀN BỘ nội dung sau billboard đổ chung vào 1 luồng CSS multi-column (2 cột ở màn rộng)
+        # -- mỗi CHƯƠNG (kể cả chương 1 với toàn bộ nội dung con của nó, KHÔNG chia lẻ tiếp) là 1
+        # khối break-inside:avoid trong CÙNG 1 st.container(key="today_flow2"), CSS tự chảy đầy
+        # cột trái rồi mới sang cột phải THEO ĐÚNG THỨ TỰ DOM (không dùng st.columns() để chọn cột
+        # bằng Python) -- lý do: nếu Python tự tính rồi gán cứng khối vào cột trái/phải, trên
+        # mobile khi dồn về 1 cột sẽ hiện SAI thứ tự đọc gốc 1-2-3-4-5. CSS multi-column dùng 1 DOM
+        # DUY NHẤT nên mobile tự đúng thứ tự (chỉ cần bỏ column-count ở breakpoint hẹp, xem rule
+        # mobile bên dưới).
+        #
+        # Chương 1 GIỮ NGUYÊN 1 khối duy nhất (tiêu đề + hero + stat listcard + dòng thời gian +
+        # theo buổi/độ dài phiên) thay vì tách rời từng mảnh trộn chung với chương 2-5 (bản trước
+        # đó) -- xác nhận với người dùng qua ảnh chụp: tách rời khiến tiêu đề chương 1 (dùng
+        # chung, full-width) và tiêu đề chương 3 (khởi đầu cột phải) LỆCH NHAU (1 ở full-width bên
+        # trên, 1 ở giữa cột) thay vì cùng hàng. Coi chương 1 là 1 khối atomic như chương 2-5 thì
+        # tiêu đề của khối ĐẦU cột trái và khối ĐẦU cột phải tự nhiên cùng hàng, rule kẻ ngang tự
+        # cắt đúng 1/2 màn hình (vì tiêu đề giờ nằm TRONG luồng cột, không còn full-width riêng).
+        #
+        # Đồng thời KHÔNG chia đôi thêm bất kỳ card con nào bên trong 1 khối nữa (stat listcard
+        # "vs Thứ Tư.../Phiên đầu..." và cặp "Theo buổi"/"Độ dài phiên" bình thường tự chia 2 cột
+        # khi đủ rộng -- ở đây mỗi khối chỉ chiếm ĐÚNG 1/2 trang nên chia tiếp sẽ ra 4 cột quá hẹp,
+        # xác nhận với người dùng) -- ép về 1 cột qua CSS scope riêng .st-key-today_flow2_i1 (xem
+        # rule bên dưới), không đổi hành vi mặc định của render_stat_panel()/render_project_rhythm()
+        # ở các trang khác.
+        with st.container(key="today_flow2"):
+            with st.container(key="today_flow2_i1"):
+                sec_chapter("today-ch1", 1, "Tổng quan ngày", tight_top=True)
+                render_stat_panel(hero_items=[
+                    {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
+                    {"label": "Số phiên", "value": f"{d_sess}"},
+                    {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
+                ], sections=_secs)
 
-        # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
-        # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
-        # hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên + legend theo Dự
-        # án. KHÔNG có Top 3 Nhóm/Dự án ở đây (khác Báo cáo theo kỳ) -- 1 ngày thường chỉ
-        # 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên, xếp hạng top 3 chỉ lặp
-        # lại thông tin.
-        render_day_timeline(day_df)
+                # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được
+                # nhịp phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung
+                # giờ điển hình của thứ này" (không cần thiết, gây rối) -- chỉ còn khối phiên +
+                # legend theo Dự án. KHÔNG có Top 3 Nhóm/Dự án ở đây (khác Báo cáo theo kỳ) -- 1
+                # ngày thường chỉ 2-4 phiên, đã thấy rõ hết trong dòng thời gian ngay phía trên,
+                # xếp hạng top 3 chỉ lặp lại thông tin.
+                render_day_timeline(day_df)
 
-        render_project_rhythm(day_df)
+                render_project_rhythm(day_df)
 
-        sec_chapter("today-ch2", 2, "Phân bổ thời gian")
-        frag_category_bars(day_df, "rad_day", "Dự án")
+            with st.container(key="today_flow2_i4"):
+                sec_chapter("today-ch2", 2, "Phân bổ thời gian")
+                frag_category_bars(day_df, "rad_day", "Dự án")
 
-        sec_chapter("today-ch3", 3, "Ghi chú ngày")
-        render_note_editor(sel, sel_day_badges)
+            with st.container(key="today_flow2_i5"):
+                sec_chapter("today-ch3", 3, "Ghi chú ngày")
+                render_note_editor(sel, sel_day_badges)
 
-        sec_chapter("today-ch4", 4, "Danh sách phiên")
-        _day_sorted = day_df.sort_values('Thời gian bắt đầu').reset_index(drop=True)
-        _start, _end, _num_pages, _paged = _table_page_slice(len(_day_sorted), "today_sess_tbl_page")
-        rows_html = ''
-        for i, (_, r) in enumerate(_day_sorted.iloc[_start:_end].iterrows(), _start + 1):
-            s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
-            cat = r.get('Nhóm')
-            cat = str(cat) if (r.get('Có nhóm') and pd.notna(cat)) else '—'
-            _proj_html = _entity_link_html(r["Dự án"], _proj_link_kind(cat, r["Dự án"]) if cat != '—' else "proj")
-            _cat_html = _entity_link_html(cat, "cat") if cat != '—' else html_escape(cat)
-            rows_html += ('<tr class="prow">'
-                          f'<td class="lbl">{i}</td>'
-                          f'<td class="txt">{_proj_html}</td>'
-                          f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
-                          f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
-                          f'<td class="txt">{_cat_html}</td></tr>')
-        rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
-                      f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
-        st.markdown(DTBL_CSS + f"""
+            with st.container(key="today_flow2_i6"):
+                sec_chapter("today-ch4", 4, "Danh sách phiên")
+                _day_sorted = day_df.sort_values('Thời gian bắt đầu').reset_index(drop=True)
+                _start, _end, _num_pages, _paged = _table_page_slice(len(_day_sorted), "today_sess_tbl_page")
+                rows_html = ''
+                for i, (_, r) in enumerate(_day_sorted.iloc[_start:_end].iterrows(), _start + 1):
+                    s = pd.to_datetime(r['Thời gian bắt đầu']); e = pd.to_datetime(r['Thời gian kết thúc'])
+                    cat = r.get('Nhóm')
+                    cat = str(cat) if (r.get('Có nhóm') and pd.notna(cat)) else '—'
+                    _proj_html = _entity_link_html(r["Dự án"], _proj_link_kind(cat, r["Dự án"]) if cat != '—' else "proj")
+                    _cat_html = _entity_link_html(cat, "cat") if cat != '—' else html_escape(cat)
+                    rows_html += ('<tr class="prow">'
+                                  f'<td class="lbl">{i}</td>'
+                                  f'<td class="txt">{_proj_html}</td>'
+                                  f'<td>{s:%H:%M}</td><td>{e:%H:%M}</td>'
+                                  f'<td>{int(r["Thời lượng (Phút)"])}′</td>'
+                                  f'<td class="txt">{_cat_html}</td></tr>')
+                rows_html += ('<tr class="cat"><td class="lbl"></td><td class="txt">Tổng</td><td></td><td></td>'
+                              f'<td class="tot">{int(day_df["Thời lượng (Phút)"].sum())}′</td><td class="tot"></td></tr>')
+                st.markdown(DTBL_CSS + f"""
 <div class="dtbl-wrap"><table class="dtbl">
 <thead><tr><th class="lbl">STT</th><th class="txt">Dự án</th><th>Bắt đầu</th><th>Kết thúc</th><th>Độ dài</th><th class="txt">Nhóm</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table></div>
 """, unsafe_allow_html=True)
-        if _paged:
-            _render_table_pagination(_num_pages, "today_sess_tbl_page",
-                                       f"Hiển thị phiên {_start + 1}–{_end} / {len(_day_sorted)}")
+                if _paged:
+                    _render_table_pagination(_num_pages, "today_sess_tbl_page",
+                                               f"Hiển thị phiên {_start + 1}–{_end} / {len(_day_sorted)}")
 
-        sec_chapter("today-ch5", 5, "Ngày này năm trước")
-        render_on_this_day(sel, df)
+            with st.container(key="today_flow2_i7"):
+                sec_chapter("today-ch5", 5, "Ngày này năm trước")
+                render_on_this_day(sel, df)
 
 
 def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for,
