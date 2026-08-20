@@ -2891,14 +2891,25 @@ def _top_days_chips(items, show_year=True):
     nhận với người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm
     khỏi ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. Luôn kèm tên
     Thứ trước ngày và bọc link nhảy sang Báo cáo Ngày (_day_link_html) -- xác nhận với người
-    dùng, áp dụng cho mọi trang có mục "Ngày nổi bật"."""
+    dùng, áp dụng cho mọi trang có mục "Ngày nổi bật".
+
+    GỘP cả 3 hạng vào ĐÚNG 1 dòng thay vì mỗi hạng 1 dòng riêng như bản trước (cùng tinh thần "gộp
+    chỉ số cùng nhóm" đã áp dụng ở Hôm nay, xem _time_rows trong render_day_report()) -- mỗi hạng
+    "#N ngày·giờ" đi liền nhau (KHÔNG tách #1/#2/#3 riêng khỏi ngày/giờ tương ứng sang 2 cụm k/v
+    như bản đầu, phản hồi thực tế người dùng: tách vậy khó đọc, không rõ hạng nào ứng với ngày
+    nào). Nhét TOÀN BỘ chuỗi vào "k" (căn trái mặc định) và để "v" rỗng -- ".sp-lrow" có
+    justify-content:space-between + ".sp-lrow-v" căn phải, chỉ hợp khi có đúng 1 GIÁ TRỊ ngắn ở
+    cuối dòng như các dòng khác, không hợp cho danh sách nhiều mục cần đọc từ trái sang phải."""
     def _fmt_date(d):
         ts = pd.Timestamp(d)
         s = ts.strftime('%d/%m/%Y' if show_year else '%d/%m')
         return f"{VN_DAYS.get(ts.day_name(), '')}, {s}"
-    return [{"k": f"#{it['rank']}",
-             "v": _day_link_html(it['date'], label=f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}")}
-            for it in items]
+    if not items:
+        return []
+    _k = " · ".join(
+        f"#{it['rank']} " + _day_link_html(it['date'], label=f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}")
+        for it in items)
+    return [{"k": _k, "v": ""}]
 
 
 def _top_days_section(df_scope, label, n=3):
@@ -9365,6 +9376,14 @@ _MAIN_CSS = """
     @media (max-width: 640px) {
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
+    }
+    /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) -- giới hạn ghi chú chính tối đa
+       3 dòng, cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định
+       (dùng chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: mục
+       này chỉ để LƯỚT nhanh nhiều năm cùng lúc, xem chi tiết thì bấm vào ngày/năm đó (đã có sẵn
+       link .jdate-link). Scope RIÊNG .st-key-jcard_otd, không đụng .note-html ở các nơi khác. */
+    .st-key-jcard_otd .note-html {
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
     .jdate { text-align: center; }
     .jdate { text-align: center; }
