@@ -8360,31 +8360,33 @@ _MAIN_CSS = """
         letter-spacing: 0.6px; margin: 14px 0 6px; }
     .sp-wrap > .sp-glabel:first-child { margin-top: 0; }
     @media (max-width: 640px) { .sp-lrow { flex-wrap: wrap; } }
-    /* Luồng 2 cột today_flow2 (trang Hôm nay -- xem render_day_report()) -- mỗi chương (kể cả
-       chương 1 với TOÀN BỘ nội dung con, không chia lẻ, xem docstring nơi gọi) là 1 khối
-       break-inside:avoid, CSS tự cân bằng chiều cao 2 cột theo đúng thứ tự DOM. display:block
-       !important BẮT BUỘC: [data-testid="stVerticalBlock"] mặc định display:flex (để dùng gap)
-       qua rule chung, mà column-count KHÔNG có tác dụng trên flex container (xác nhận qua
-       getComputedStyle -- columnCount báo "2" nhưng layout vẫn full-width vì display vẫn "flex",
-       CSS multi-column chỉ hoạt động trên block/flow-root formatting context). MẶC ĐỊNH 1 cột
-       (display:block để giữ nếp gấp nội dung dọc bình thường) -- 2 cột CHỈ bật ở màn >=1300px qua
-       @media min-width bên dưới (xác nhận với người dùng: 640px quá hẹp, tablet dọc ~768px mỗi
-       cột chưa tới 350px rất chật). */
-    .st-key-today_flow2 { display: block !important; }
-    .st-key-today_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
-    /* MỌI tiêu đề chương trong luồng (kể cả chương 2-5 vốn KHÔNG truyền tight_top=True cho
+    /* Luồng 2 cột (today_flow2 -- trang Hôm nay; bc_tuan_flow2 -- Báo cáo Tuần; thêm Tháng/Năm
+       sau nếu áp dụng) -- mỗi chương là 1 khối break-inside:avoid, CSS tự cân bằng chiều cao 2 cột
+       theo đúng thứ tự DOM (không dùng st.columns() để Python tự gán cột, xem docstring nơi gọi
+       render_day_report()/nhánh "Tuần" -- lý do: mobile dồn về 1 cột phải đúng thứ tự đọc gốc).
+       display:block !important BẮT BUỘC: [data-testid="stVerticalBlock"] mặc định display:flex
+       (để dùng gap) qua rule chung, mà column-count KHÔNG có tác dụng trên flex container (xác
+       nhận qua getComputedStyle -- columnCount báo "2" nhưng layout vẫn full-width vì display vẫn
+       "flex", CSS multi-column chỉ hoạt động trên block/flow-root formatting context). MẶC ĐỊNH 1
+       cột (display:block để giữ nếp gấp nội dung dọc bình thường) -- 2 cột CHỈ bật ở màn >=1300px
+       qua @media min-width bên dưới (xác nhận với người dùng: 640px quá hẹp, tablet dọc ~768px
+       mỗi cột chưa tới 350px rất chật). */
+    .st-key-today_flow2, .st-key-bc_tuan_flow2 { display: block !important; }
+    .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
+    .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
+    /* MỌI tiêu đề chương trong luồng (kể cả chương 2 trở đi vốn KHÔNG truyền tight_top=True cho
        sec_chapter()) đều bỏ margin-top -- chỉ chương 1 dùng tight_top=True nên trước đây có
        tiêu đề cao hơn 8px so với các chương còn lại (đo bằng getBoundingClientRect() xác nhận:
        header "1" top=308px, header "3" top=316px, đúng 8px lệch). Khi 2 tiêu đề CÙNG là mục ĐẦU
        của 1 cột (bug thật đã gặp, xem ảnh chụp người dùng gửi) -- lệch 8px lộ rõ vì đứng cùng
        hàng. Đặt margin-top:0 ĐỒNG NHẤT cho mọi tiêu đề trong luồng, dựa hẳn vào margin-bottom:14px
-       của .st-key-today_flow2 > [data-testid="stLayoutWrapper"] (rule ngay trên) để tạo khoảng
-       cách GIỮA các khối thay vì margin-top của tiêu đề kế tiếp -- tránh cộng dồn 2 nguồn margin
-       cho các chương KHÔNG phải mục đầu cột. */
-    [class*="st-key-today_flow2_i"] .sec-ch { margin-top: 0 !important; }
+       của rule ngay trên để tạo khoảng cách GIỮA các khối thay vì margin-top của tiêu đề kế tiếp
+       -- tránh cộng dồn 2 nguồn margin cho các chương KHÔNG phải mục đầu cột. */
+    [class*="st-key-today_flow2_i"] .sec-ch, [class*="st-key-bc_tuan_flow2_i"] .sec-ch { margin-top: 0 !important; }
     @media (min-width: 1300px) {
-        .st-key-today_flow2 { column-count: 2; column-gap: 24px; }
-        .st-key-today_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
+        .st-key-today_flow2, .st-key-bc_tuan_flow2 { column-count: 2; column-gap: 24px; }
+        .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
+        .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
         /* Khối chương 1 (today_flow2_i1) chiếm ĐÚNG 1/2 trang ở >=1300px -- ép các cặp card con
            vốn tự chia 2 cột khi đủ rộng (stat listcard .sp-lcols của render_stat_panel(), cặp
            Theo buổi/Độ dài phiên st.columns(2) của render_project_rhythm()) về lại 1 cột, tránh
@@ -8394,16 +8396,23 @@ _MAIN_CSS = """
            flex-basis:auto (không phải 0) vì lý do đã ghi ở rule mobile .sp-lcols phía dưới --
            overflow:hidden + flex-basis:0 trên flex-direction:column làm thẻ co sập mất nội dung,
            xem docstring rule đó. */
-        .st-key-today_flow2_i1 .sp-lcols { flex-direction: column; }
-        .st-key-today_flow2_i1 .sp-lcols > .sp-listcard { flex: 1 1 auto; }
+        .st-key-today_flow2_i1 .sp-lcols,
+        .st-key-bc_tuan_flow2_i1 .sp-lcols { flex-direction: column; }
+        .st-key-today_flow2_i1 .sp-lcols > .sp-listcard,
+        .st-key-bc_tuan_flow2_i1 .sp-lcols > .sp-listcard { flex: 1 1 auto; }
         /* stColumn (con của stHorizontalBlock) có sẵn flex: 1 1 calc(50% - 16px) từ class emotion
            riêng của Streamlit (không phải inline style) cho bố cục 2 cột NGANG gốc -- đổi
            flex-direction sang column KHÔNG tự đổi flex-basis đó, khiến mỗi thẻ dù đã xếp dọc vẫn
            chỉ rộng 50% (bug thật đã gặp, xem ảnh chụp người dùng gửi: "Theo buổi"/"Độ dài phiên"
            xếp dọc nhưng mỗi thẻ chỉ chiếm nửa cột). Ép flex-basis/width về 100% !important để mỗi
-           thẻ full chiều ngang cột khi đã xếp dọc. */
-        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] { flex-direction: column; }
-        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
+           thẻ full chiều ngang cột khi đã xếp dọc. Áp dụng luôn cho bc_tuan_flow2_i1 -- chương
+           "Tổng quan" của Báo cáo Tuần (_render_period_overview_hero()) cũng gọi
+           render_project_rhythm() ngay sau render_stat_panel(), cùng cặp "Theo buổi"/"Độ dài
+           phiên" cần un-split như Hôm nay. */
+        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"],
+        .st-key-bc_tuan_flow2_i1 [data-testid="stHorizontalBlock"] { flex-direction: column; }
+        .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] [data-testid="stColumn"],
+        .st-key-bc_tuan_flow2_i1 [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
             flex: 1 1 100% !important; width: 100% !important;
         }
     }
@@ -9419,6 +9428,14 @@ _MAIN_CSS = """
     @media (max-width: 640px) {
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
+    }
+    /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) -- giới hạn ghi chú chính tối đa
+       3 dòng, cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định
+       (dùng chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: mục
+       này chỉ để LƯỚT nhanh nhiều năm cùng lúc, xem chi tiết thì bấm vào ngày/năm đó (đã có sẵn
+       link .jdate-link). Scope RIÊNG .st-key-jcard_otd, không đụng .note-html ở các nơi khác. */
+    .st-key-jcard_otd .note-html {
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
     .jdate { text-align: center; }
     .jdate { text-align: center; }
@@ -11375,18 +11392,29 @@ elif nav == "Báo cáo":
                 # KHÔNG có Top 3 Nhóm/Dự án ở Tuần (khác Tổng quan/Tháng/Năm) -- xác nhận
                 # không cần thiết ở quy mô 1 tuần, tránh lặp thông tin đã có ở chương "Nhóm &
                 # dự án" bên dưới.
-                _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
-                                              lbl_prev_w, lbl_avg_w, _clip_note_w,
-                                              "Ngày nổi bật trong tuần", show_top3=False,
-                                              anchor_prefix="bc-tuan", show_footer=False)
-                sec_chapter("bc-tuan-ch2", 2, "Nhóm & dự án")
-                frag_category_bars(df_w, "rad_tab4", "Nhóm")
-                sec_chapter("bc-tuan-ch3", 3, "Theo ngày")
-                frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
-                sec_chapter("bc-tuan-ch4", 4, "Nhật ký")
-                render_notes_journal(selected_week, 'week', df)
-                sec_chapter("bc-tuan-ch5", 5, "Bảng số liệu")
-                render_period_day_table(df_w, all_days=[_week_start + timedelta(days=i) for i in range(7)])
+                #
+                # Đổ mọi chương vào luồng 2 cột CSS multi-column (>=1300px, xem CSS
+                # .st-key-bc_tuan_flow2) -- cùng cơ chế đã áp dụng ở Hôm nay (render_day_report()):
+                # mỗi chương là 1 khối break-inside:avoid, mỗi hàm chương TỰ vẽ sec_chapter() của
+                # nó nên không cần tách riêng như chương 1 của Hôm nay.
+                with st.container(key="bc_tuan_flow2"):
+                    with st.container(key="bc_tuan_flow2_i1"):
+                        _render_period_overview_hero(df_w, df, 'Tuần', selected_week, prev_w, avg_w,
+                                                      lbl_prev_w, lbl_avg_w, _clip_note_w,
+                                                      "Ngày nổi bật trong tuần", show_top3=False,
+                                                      anchor_prefix="bc-tuan", show_footer=False)
+                    with st.container(key="bc_tuan_flow2_i2"):
+                        sec_chapter("bc-tuan-ch2", 2, "Nhóm & dự án")
+                        frag_category_bars(df_w, "rad_tab4", "Nhóm")
+                    with st.container(key="bc_tuan_flow2_i3"):
+                        sec_chapter("bc-tuan-ch3", 3, "Theo ngày")
+                        frag_period_trend(df_w, "trend_w_color", "Nhóm", 'Thứ', "Thứ trong tuần", cat_order=DAYS_ORDER)
+                    with st.container(key="bc_tuan_flow2_i4"):
+                        sec_chapter("bc-tuan-ch4", 4, "Nhật ký")
+                        render_notes_journal(selected_week, 'week', df)
+                    with st.container(key="bc_tuan_flow2_i5"):
+                        sec_chapter("bc-tuan-ch5", 5, "Bảng số liệu")
+                        render_period_day_table(df_w, all_days=[_week_start + timedelta(days=i) for i in range(7)])
     elif bc_sub == "Tháng":
         if not df.empty:
             months = sorted(df['Tháng'].unique())
