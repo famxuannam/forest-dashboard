@@ -8372,8 +8372,9 @@ _MAIN_CSS = """
     .sp-wrap > .sp-glabel:first-child { margin-top: 0; }
     @media (max-width: 640px) { .sp-lrow { flex-wrap: wrap; } }
     /* Luồng 2 cột (today_flow2 -- trang Hôm nay; bc_tuan_flow2 -- Báo cáo Tuần; bc_thang_flow2 --
-       Báo cáo Tháng; thêm Năm sau nếu áp dụng) -- mỗi chương là 1 khối break-inside:avoid, CSS tự cân bằng chiều cao 2 cột
-       theo đúng thứ tự DOM (không dùng st.columns() để Python tự gán cột, xem docstring nơi gọi
+       Báo cáo Tháng, chỉ chương 3 trở đi; bc_nam_flow2 -- Báo cáo Năm, cùng chỉ chương 3 trở đi)
+       -- mỗi chương là 1 khối break-inside:avoid, CSS tự cân bằng chiều cao 2 cột theo đúng thứ
+       tự DOM (không dùng st.columns() để Python tự gán cột, xem docstring nơi gọi
        render_day_report()/nhánh "Tuần" -- lý do: mobile dồn về 1 cột phải đúng thứ tự đọc gốc).
        display:block !important BẮT BUỘC: [data-testid="stVerticalBlock"] mặc định display:flex
        (để dùng gap) qua rule chung, mà column-count KHÔNG có tác dụng trên flex container (xác
@@ -8382,10 +8383,12 @@ _MAIN_CSS = """
        cột (display:block để giữ nếp gấp nội dung dọc bình thường) -- 2 cột CHỈ bật ở màn >=1300px
        qua @media min-width bên dưới (xác nhận với người dùng: 640px quá hẹp, tablet dọc ~768px
        mỗi cột chưa tới 350px rất chật). */
-    .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2 { display: block !important; }
+    .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2,
+    .st-key-bc_nam_flow2 { display: block !important; }
     .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
     .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"],
-    .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
+    .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"],
+    .st-key-bc_nam_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
     /* MỌI tiêu đề chương trong luồng (kể cả chương 2 trở đi vốn KHÔNG truyền tight_top=True cho
        sec_chapter()) đều bỏ margin-top -- chỉ chương 1 dùng tight_top=True nên trước đây có
        tiêu đề cao hơn 8px so với các chương còn lại (đo bằng getBoundingClientRect() xác nhận:
@@ -8395,12 +8398,14 @@ _MAIN_CSS = """
        của rule ngay trên để tạo khoảng cách GIỮA các khối thay vì margin-top của tiêu đề kế tiếp
        -- tránh cộng dồn 2 nguồn margin cho các chương KHÔNG phải mục đầu cột. */
     [class*="st-key-today_flow2_i"] .sec-ch, [class*="st-key-bc_tuan_flow2_i"] .sec-ch,
-    [class*="st-key-bc_thang_flow2_i"] .sec-ch { margin-top: 0 !important; }
+    [class*="st-key-bc_thang_flow2_i"] .sec-ch, [class*="st-key-bc_nam_flow2_i"] .sec-ch { margin-top: 0 !important; }
     @media (min-width: 1300px) {
-        .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2 { column-count: 2; column-gap: 24px; }
+        .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2,
+        .st-key-bc_nam_flow2 { column-count: 2; column-gap: 24px; }
         .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
         .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"],
-        .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
+        .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"],
+        .st-key-bc_nam_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
         /* Khối chương 1 (today_flow2_i1) chiếm ĐÚNG 1/2 trang ở >=1300px -- ép các cặp card con
            vốn tự chia 2 cột khi đủ rộng (stat listcard .sp-lcols của render_stat_panel(), cặp
            Theo buổi/Độ dài phiên st.columns(2) của render_project_rhythm()) về lại 1 cột, tránh
@@ -11628,14 +11633,23 @@ elif nav == "Báo cáo":
                         f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
                         lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
 
-                sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
-                render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
+                # Chương 3 trở đi vào luồng 2 cột (>=1300px, xem CSS .st-key-bc_nam_flow2) -- cùng
+                # cách chỉ áp dụng TỪ chương 3 đã chốt với người dùng ở Tháng (chương 1/2 giữ
+                # full-width). "Theo tháng" (chương 4) là biểu đồ Plotly thật (render_year_month_
+                # bars(), khác Tháng dùng HTML mặc định) -- đã kiểm tra Plotly hoạt động tốt trong
+                # luồng CSS multi-column ở Hôm nay/Tuần, không có rủi ro riêng.
+                with st.container(key="bc_nam_flow2"):
+                    with st.container(key="bc_nam_flow2_i3"):
+                        sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
+                        render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)
 
-                sec_chapter("bc-nam-ch4", 4, "Theo tháng")
-                render_year_month_bars(df_y)
+                    with st.container(key="bc_nam_flow2_i4"):
+                        sec_chapter("bc-nam-ch4", 4, "Theo tháng")
+                        render_year_month_bars(df_y)
 
-                sec_chapter("bc-nam-ch5", 5, "Bảng số liệu")
-                render_detail_table(df_y, "bc_nam_tbl")
+                    with st.container(key="bc_nam_flow2_i5"):
+                        sec_chapter("bc-nam-ch5", 5, "Bảng số liệu")
+                        render_detail_table(df_y, "bc_nam_tbl")
     elif bc_sub == "Dự án":
         if not df.empty:
             # Gom dự án theo nhóm (Nhóm) và phân biệt rõ Nhóm vs Dự án trong dropdown
