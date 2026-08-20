@@ -2891,25 +2891,14 @@ def _top_days_chips(items, show_year=True):
     nhận với người dùng, kỳ đang xem đã đủ ngữ cảnh, không cần lặp lại năm trên từng chip) bỏ năm
     khỏi ngày, chỉ Tổng quan (xem toàn thời gian, có thể trải nhiều năm) giữ năm. Luôn kèm tên
     Thứ trước ngày và bọc link nhảy sang Báo cáo Ngày (_day_link_html) -- xác nhận với người
-    dùng, áp dụng cho mọi trang có mục "Ngày nổi bật".
-
-    GỘP cả 3 hạng vào ĐÚNG 1 dòng thay vì mỗi hạng 1 dòng riêng như bản trước (cùng tinh thần "gộp
-    chỉ số cùng nhóm" đã áp dụng ở Hôm nay, xem _time_rows trong render_day_report()) -- mỗi hạng
-    "#N ngày·giờ" đi liền nhau (KHÔNG tách #1/#2/#3 riêng khỏi ngày/giờ tương ứng sang 2 cụm k/v
-    như bản đầu, phản hồi thực tế người dùng: tách vậy khó đọc, không rõ hạng nào ứng với ngày
-    nào). Nhét TOÀN BỘ chuỗi vào "k" (căn trái mặc định) và để "v" rỗng -- ".sp-lrow" có
-    justify-content:space-between + ".sp-lrow-v" căn phải, chỉ hợp khi có đúng 1 GIÁ TRỊ ngắn ở
-    cuối dòng như các dòng khác, không hợp cho danh sách nhiều mục cần đọc từ trái sang phải."""
+    dùng, áp dụng cho mọi trang có mục "Ngày nổi bật"."""
     def _fmt_date(d):
         ts = pd.Timestamp(d)
         s = ts.strftime('%d/%m/%Y' if show_year else '%d/%m')
         return f"{VN_DAYS.get(ts.day_name(), '')}, {s}"
-    if not items:
-        return []
-    _k = " · ".join(
-        f"#{it['rank']} " + _day_link_html(it['date'], label=f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}")
-        for it in items)
-    return [{"k": _k, "v": ""}]
+    return [{"k": f"#{it['rank']}",
+             "v": _day_link_html(it['date'], label=f"{_fmt_date(it['date'])} · {_fmt_hours_short(it['hours'])}")}
+            for it in items]
 
 
 def _top_days_section(df_scope, label, n=3):
@@ -8371,8 +8360,8 @@ _MAIN_CSS = """
         letter-spacing: 0.6px; margin: 14px 0 6px; }
     .sp-wrap > .sp-glabel:first-child { margin-top: 0; }
     @media (max-width: 640px) { .sp-lrow { flex-wrap: wrap; } }
-    /* Luồng 2 cột (today_flow2 -- trang Hôm nay; bc_tuan_flow2 -- Báo cáo Tuần; bc_thang_flow2 --
-       Báo cáo Tháng; thêm Năm sau nếu áp dụng) -- mỗi chương là 1 khối break-inside:avoid, CSS tự cân bằng chiều cao 2 cột
+    /* Luồng 2 cột (today_flow2 -- trang Hôm nay; bc_tuan_flow2 -- Báo cáo Tuần; thêm Tháng/Năm
+       sau nếu áp dụng) -- mỗi chương là 1 khối break-inside:avoid, CSS tự cân bằng chiều cao 2 cột
        theo đúng thứ tự DOM (không dùng st.columns() để Python tự gán cột, xem docstring nơi gọi
        render_day_report()/nhánh "Tuần" -- lý do: mobile dồn về 1 cột phải đúng thứ tự đọc gốc).
        display:block !important BẮT BUỘC: [data-testid="stVerticalBlock"] mặc định display:flex
@@ -8382,10 +8371,9 @@ _MAIN_CSS = """
        cột (display:block để giữ nếp gấp nội dung dọc bình thường) -- 2 cột CHỈ bật ở màn >=1300px
        qua @media min-width bên dưới (xác nhận với người dùng: 640px quá hẹp, tablet dọc ~768px
        mỗi cột chưa tới 350px rất chật). */
-    .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2 { display: block !important; }
+    .st-key-today_flow2, .st-key-bc_tuan_flow2 { display: block !important; }
     .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
-    .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"],
-    .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
+    .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"] { margin-bottom: 14px; }
     /* MỌI tiêu đề chương trong luồng (kể cả chương 2 trở đi vốn KHÔNG truyền tight_top=True cho
        sec_chapter()) đều bỏ margin-top -- chỉ chương 1 dùng tight_top=True nên trước đây có
        tiêu đề cao hơn 8px so với các chương còn lại (đo bằng getBoundingClientRect() xác nhận:
@@ -8394,13 +8382,11 @@ _MAIN_CSS = """
        hàng. Đặt margin-top:0 ĐỒNG NHẤT cho mọi tiêu đề trong luồng, dựa hẳn vào margin-bottom:14px
        của rule ngay trên để tạo khoảng cách GIỮA các khối thay vì margin-top của tiêu đề kế tiếp
        -- tránh cộng dồn 2 nguồn margin cho các chương KHÔNG phải mục đầu cột. */
-    [class*="st-key-today_flow2_i"] .sec-ch, [class*="st-key-bc_tuan_flow2_i"] .sec-ch,
-    [class*="st-key-bc_thang_flow2_i"] .sec-ch { margin-top: 0 !important; }
+    [class*="st-key-today_flow2_i"] .sec-ch, [class*="st-key-bc_tuan_flow2_i"] .sec-ch { margin-top: 0 !important; }
     @media (min-width: 1300px) {
-        .st-key-today_flow2, .st-key-bc_tuan_flow2, .st-key-bc_thang_flow2 { column-count: 2; column-gap: 24px; }
+        .st-key-today_flow2, .st-key-bc_tuan_flow2 { column-count: 2; column-gap: 24px; }
         .st-key-today_flow2 > [data-testid="stLayoutWrapper"],
-        .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"],
-        .st-key-bc_thang_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
+        .st-key-bc_tuan_flow2 > [data-testid="stLayoutWrapper"] { break-inside: avoid; }
         /* Khối chương 1 (today_flow2_i1) chiếm ĐÚNG 1/2 trang ở >=1300px -- ép các cặp card con
            vốn tự chia 2 cột khi đủ rộng (stat listcard .sp-lcols của render_stat_panel(), cặp
            Theo buổi/Độ dài phiên st.columns(2) của render_project_rhythm()) về lại 1 cột, tránh
@@ -8422,9 +8408,7 @@ _MAIN_CSS = """
            thẻ full chiều ngang cột khi đã xếp dọc. Áp dụng luôn cho bc_tuan_flow2_i1 -- chương
            "Tổng quan" của Báo cáo Tuần (_render_period_overview_hero()) cũng gọi
            render_project_rhythm() ngay sau render_stat_panel(), cùng cặp "Theo buổi"/"Độ dài
-           phiên" cần un-split như Hôm nay. KHÔNG cần bc_thang_flow2_i1 -- chương 1/2 của Tháng
-           (Tổng quan/Lịch tháng) đứng NGOÀI luồng 2 cột theo yêu cầu người dùng (chỉ chương 3 trở
-           đi vào luồng, không có cặp card nào cần un-split). */
+           phiên" cần un-split như Hôm nay. */
         .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"],
         .st-key-bc_tuan_flow2_i1 [data-testid="stHorizontalBlock"] { flex-direction: column; }
         .st-key-today_flow2_i1 [data-testid="stHorizontalBlock"] [data-testid="stColumn"],
@@ -11502,9 +11486,6 @@ elif nav == "Báo cáo":
                     [("bc-thang-ch1", "1 · Tổng quan"), ("bc-thang-ch2", "2 · Lịch tháng"),
                      ("bc-thang-ch3", "3 · Phân bổ nhóm"), ("bc-thang-ch4", "4 · Xu hướng"),
                      ("bc-thang-ch5", "5 · Nhật ký"), ("bc-thang-ch6", "6 · Bảng số liệu")])
-                # Chương 1 "Tổng quan" + 2 "Lịch tháng" GIỮ NGUYÊN full-width 1 cột (không vào
-                # luồng 2 cột) -- xác nhận với người dùng: chỉ chương 3 trở đi (Phân bổ nhóm/Xu
-                # hướng/Nhật ký/Bảng số liệu) dùng bố cục 2 cột, khác Hôm nay/Tuần (toàn bộ trang).
                 _render_period_overview_hero(df_m, df, 'Tháng', selected_month, prev_m, avg_m,
                                               lbl_prev_m, lbl_avg_m, _clip_note_m,
                                               "Ngày nổi bật trong tháng", show_top3=False,
@@ -11520,32 +11501,24 @@ elif nav == "Báo cáo":
                 with st.container(border=True, key="jcard_bcthang_cal"):
                     _render_report_calendar_month(y, m, df, _rc_wc, _rc_rl, _rc_notes)
 
-                # Chương 3 trở đi đổ vào luồng 2 cột CSS multi-column (>=1300px) -- cùng cơ chế đã
-                # áp dụng ở Hôm nay/Tuần, xem CSS .st-key-bc_thang_flow2.
-                with st.container(key="bc_thang_flow2"):
-                    with st.container(key="bc_thang_flow2_i3"):
-                        sec_chapter("bc-thang-ch3", 3, "Phân bổ nhóm")
-                        frag_category_bars(df_m, "rad_tab3", "Nhóm")
+                sec_chapter("bc-thang-ch3", 3, "Phân bổ nhóm")
+                frag_category_bars(df_m, "rad_tab3", "Nhóm")
 
-                    with st.container(key="bc_thang_flow2_i4"):
-                        sec_chapter("bc-thang-ch4", 4, "Xu hướng")
-                        _thang_trend_view = st.segmented_control(
-                            "Xem theo", ["Theo tuần", "Theo ngày", "Theo khung giờ"], default="Theo tuần",
-                            key="bc_thang_trend_view", label_visibility="collapsed") or "Theo tuần"
-                        if _thang_trend_view == "Theo tuần":
-                            render_month_week_bars(df_m)
-                        elif _thang_trend_view == "Theo ngày":
-                            frag_period_trend(df_m, "trend_m_color", "Nhóm", 'Ngày', "Ngày trong tháng")
-                        else:
-                            frag_hourly(df_m, "hour_m", "Nhóm", with_range=False)
+                sec_chapter("bc-thang-ch4", 4, "Xu hướng")
+                _thang_trend_view = st.segmented_control(
+                    "Xem theo", ["Theo tuần", "Theo ngày", "Theo khung giờ"], default="Theo tuần",
+                    key="bc_thang_trend_view", label_visibility="collapsed") or "Theo tuần"
+                if _thang_trend_view == "Theo tuần":
+                    render_month_week_bars(df_m)
+                elif _thang_trend_view == "Theo ngày":
+                    frag_period_trend(df_m, "trend_m_color", "Nhóm", 'Ngày', "Ngày trong tháng")
+                else:
+                    frag_hourly(df_m, "hour_m", "Nhóm", with_range=False)
 
-                    with st.container(key="bc_thang_flow2_i5"):
-                        sec_chapter("bc-thang-ch5", 5, "Nhật ký")
-                        render_notes_journal(selected_month, 'month', df)
-
-                    with st.container(key="bc_thang_flow2_i6"):
-                        sec_chapter("bc-thang-ch6", 6, "Bảng số liệu")
-                        render_detail_table(df_m, "bc_thang_tbl")
+                sec_chapter("bc-thang-ch5", 5, "Nhật ký")
+                render_notes_journal(selected_month, 'month', df)
+                sec_chapter("bc-thang-ch6", 6, "Bảng số liệu")
+                render_detail_table(df_m, "bc_thang_tbl")
     elif bc_sub == "Năm":
         if not df.empty:
             years = sorted(df['Năm'].unique())
