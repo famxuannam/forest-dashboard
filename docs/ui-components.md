@@ -4,7 +4,7 @@
 
 ## Quy ước đánh số `sec_chapter(anchor, num, title, tight_top=False, badge=None)`
 
-Các trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết Sách/Gundam, Sức khoẻ) được dựng từ 1
+Các trang báo cáo (Tổng quan/Tuần/Tháng/Năm/Dự án, Chi tiết Sách/Gundam) được dựng từ 1
 chuỗi lời gọi `sec_chapter(anchor, num, ...)` đánh số thứ tự (KHÔNG phải `st.expander` — mỗi
 chương luôn mở sẵn, cuộn dọc bình thường). Đây là quy ước UI có chủ đích, không phải đặt tên tuỳ
 tiện. **Khi thêm, xoá, hoặc đổi chỗ 1 mục giữa chuỗi, phải đánh số lại toàn bộ các mục phía sau
@@ -93,37 +93,6 @@ hàng ngày cuối tháng gần sát viền đáy card.
 Đừng dùng `st.metric()` cho số liệu đơn giản; xem phần "Bẫy: `st.metric` bị ẩn toàn cục" trong
 `theming.md` để biết cách thay thế đúng.
 
-## Trang "Trợ giúp" (key nav `"Hướng dẫn"`): tour cuộn dọc, helpers `help_*`
-
-Trang Trợ giúp là 1 trang cuộn dọc theo hành trình sử dụng (hero + mục lục chip anchor + 9
-chương), KHÔNG dùng screenshot — mọi minh hoạ vẽ thuần HTML/CSS bằng token màu nên tự đúng theme.
-Helpers (đều nằm cạnh nhau trong `app.py`, CSS namespace `help-` trong khối CSS chính):
-
-- `help_chapter(anchor, num, kicker, title, lead=None)` — header 1 chương, `anchor` khớp chip mục
-  lục `#help-chN` ở hero.
-- `help_block(html)` — 1 thẻ nội dung `.help-card`; `html` phải là chuỗi liền mạch (không dòng
-  trống giữa khối, markdown parser sẽ cắt).
-- `help_table(headers, rows)` / `help_kbd(*keys)` — bảng cheat-sheet và dãy phím keycap, trả về
-  string HTML để nhúng vào `help_block()`.
-- `help_faq_item(question, answer_md)` — 1 câu hỏi FAQ dạng `st.expander` (không đánh số).
-- `render_help_changelog(entries)` — timeline "Nhật ký phát triển", `entries` là list dict
-  `HELP_CHANGELOG` khai báo ngay trong nhánh dispatch. **Quy ước 1 ngày = 1 mục** (xác nhận với
-  người dùng): mọi PR có ảnh hưởng thấy được tới người dùng merge trong CÙNG 1 ngày dương lịch phải
-  gộp chung vào đúng 1 dict, dù các PR đó thuộc nhiều đợt việc khác nhau — không tách nhiều mục cho
-  cùng 1 ngày. Nếu ngày đang viết mục đã có 1 mục tồn tại (mục đầu `entries`, vì list xếp mới nhất
-  lên đầu), SỬA mục đó (nối thêm `pr`, viết lại `title`/`bullets` cho gọn, không chỉ nối câu) thay
-  vì thêm dict mới; chỉ thêm dict mới khi sang ngày khác. `pr` liệt kê ĐỦ mọi số PR thật của ngày đó
-  (dạng `"223,224"`/`"185-192"`) — không đoán số trước khi PR tồn tại. 2 khoá số liệu tuỳ chọn hiện
-  thành chip, tra tay tại thời điểm viết mục — KHÔNG tự tính lại lúc runtime: `total_lines` = tổng
-  số dòng `app.py` tại commit merge PR **sau cùng trong ngày** (`git show <commit>:app.py | wc -l`),
-  `pr_lines` = số dòng đổi (additions+deletions, tra qua GitHub API) của riêng PR sau cùng đó —
-  không cộng dồn qua nhiều PR trong ngày.
-
-Nội dung trang Trợ giúp là tài liệu người dùng cuối, không phải code phụ trợ — chỉ sửa khi thay
-đổi thực sự ảnh hưởng tới trải nghiệm người dùng, không sửa như tác dụng phụ của 1 việc khác. Khi
-sửa, thêm nội dung vào đúng chương theo hành trình (buổi sáng → trong ngày → cuối ngày → review →
-nguồn phụ → đồng bộ → tuỳ biến → FAQ → changelog) thay vì mở chương mới.
-
 ## Icon: `_mi(name, size=13)` thay EMOJI, không dùng cả 2 kiểu lẫn nhau
 
 Mọi nhãn/câu MỚI thêm dùng icon Material Symbols Rounded qua `_mi('material_icon_name')` (chèn
@@ -133,8 +102,8 @@ thêm. Áp dụng cho toàn bộ code mới, không riêng 1 trang nào.
 
 ## `render_period_billboard(...)`: khi nào dùng chung key mặc định `"bc_billboard"` được
 
-Hầu hết nơi gọi (Báo cáo mọi sub-tab, Sách/Gundam Tổng quan, Dự án, Tuỳ biến, cả 3 sub-tab Sức
-khoẻ) **không cần truyền `key=` riêng** -- an toàn vì mỗi nav/sub-tab dispatch qua 1 chuỗi
+Hầu hết nơi gọi (Báo cáo mọi sub-tab, Sách/Gundam Tổng quan, Dự án, Tuỳ biến)
+**không cần truyền `key=` riêng** -- an toàn vì mỗi nav/sub-tab dispatch qua 1 chuỗi
 `if/elif` (xem `architecture-navigation.md`), nên tại 1 lượt chạy chỉ ĐÚNG 1 nhánh thực thi, không
 có 2 billboard nào cùng vẽ. Chỉ cần key riêng khi 2 lời gọi CÓ THỂ cùng nằm trong 1 lượt chạy --
 ca thật duy nhất là Sách/Gundam "Chi tiết" dùng `st.tabs()` (Streamlit render TOÀN BỘ nội dung mọi
@@ -148,15 +117,16 @@ today_billboard, .st-key-bc_billboard, ...` -- khớp CHÍNH XÁC chuỗi, khôn
 Mọi widget đặt `key=` đều tự có class `st-key-<key>` trên chính element đó (không chỉ
 `st.container(key=...)` mới có) -- nên style riêng MỌI widget trong 1 trang/feature mà không cần
 bọc thêm container nào, chỉ cần **cùng 1 tiền tố key** rồi CSS `[class*="st-key-<tiền tố>_"]`. Ví
-dụ: mọi widget trang Sức khoẻ đặt key tiền tố `hm_` (`hm_chart_cat`, `hm_hist_year`,
-`hm_entry_date`...) → 1 rule `[class*="st-key-hm_"] [data-testid="stWidgetLabel"] p { font-weight:
-700 !important; }` áp dụng đồng bộ cho nhãn mọi widget trong đó. Đặt tên key nhất quán tiền tố
+dụ: mọi widget trang Tuỳ biến đã đặt sẵn key tiền tố `tb_` (`tb_backup_card`, `tb_restore_card`,
+`tb_wipe_card`...) -- nếu cần style riêng chung cho cả nhóm, chỉ cần 1 rule
+`[class*="st-key-tb_"] ... { ... }` là áp dụng đồng bộ cho mọi widget trong đó, không cần bọc thêm
+container. Đặt tên key nhất quán tiền tố
 theo trang/feature ngay từ đầu để tận dụng được trick này về sau, không cần refactor lại.
 
 ## Popup xác nhận/tra cứu: `@st.dialog("Tiêu đề")`
 
-Nội dung phá huỷ dữ liệu (Tuỳ biến → Khôi phục/Xoá toàn bộ) hoặc chỉ tra cứu/copy khi cần (Sức
-khoẻ → Dữ liệu đầu vào → "Xem định dạng JSON mẫu") đặt trong hàm lồng bên trong hàm render, đánh
+Nội dung phá huỷ dữ liệu (Tuỳ biến → Khôi phục/Xoá toàn bộ) hoặc chỉ tra cứu/copy khi cần đặt
+trong hàm lồng bên trong hàm render, đánh
 dấu `@st.dialog("Tiêu đề")`; nút bên ngoài chỉ có nhiệm vụ GỌI hàm đó (`if st.button(...):
 _xxx_dialog()`), không tự vẽ nội dung — tránh nội dung phụ (ít dùng, hoặc cần xác nhận trước khi
 phá huỷ) chiếm không gian cố định trên trang.
@@ -164,18 +134,18 @@ phá huỷ) chiếm không gian cố định trên trang.
 ## Chuyển sub-tab bằng code (không phải người dùng click): cờ chờ xử lý, KHÔNG set trực tiếp session_state của widget
 
 `st.segmented_control(..., key="X_picker")` dùng pattern chung: đọc/ghi qua 1 key riêng
-(`st.session_state["X"]`) tách biệt khỏi key CỦA WIDGET (`"X_picker"`) -- xem `bc_sub`/`hm_sub` ở
+(`st.session_state["X"]`) tách biệt khỏi key CỦA WIDGET (`"X_picker"`) -- xem `bc_sub`/`tb_sub` ở
 `architecture-navigation.md`. Muốn nhảy sang sub-tab khác từ 1 nút bấm ở NƠI KHÁC trong cùng lượt
-chạy (vd nút "Sửa lần khám này" ở Dữ liệu đầu vào nhảy sang Lịch sử) — TUYỆT ĐỐI không set
+chạy (vd click biểu đồ Xu hướng nhảy sang sub-tab Dự án) — TUYỆT ĐỐI không set
 `st.session_state["X_picker"] = "..."` ngay tại nút bấm đó: nếu widget `segmented_control` đã
 instantiate TRƯỚC nút bấm này trong CÙNG lượt chạy, Streamlit raise `StreamlitAPIException: cannot
 be modified after the widget... is instantiated` (bug thật đã gặp). Cách đúng: nút bấm chỉ ghi 1 cờ
-tạm (`st.session_state["_X_jump"] = "Lịch sử"`) rồi `st.rerun()`; xử lý cờ đó TRƯỚC dòng gọi
+tạm (`st.session_state["_X_jump"] = "Dự án"`) rồi `st.rerun()`; xử lý cờ đó TRƯỚC dòng gọi
 `segmented_control` (`if "_X_jump" in st.session_state: ... st.session_state["X_picker"] = ...`) --
 lúc đó là lượt chạy MỚI, set trước khi widget instantiate nên hợp lệ. Với `bc_sub_picker`/
-`hm_sub_picker`/`tb_sub_picker` (render trong `st.sidebar`, ngay sau khi `nav` được xác định, xem
-`architecture-navigation.md`) widget instantiate RẤT SỚM trong lượt chạy -- cờ `_bc_sub_jump`/
-`_hm_sub_jump` vì vậy phải xử lý ở module-level ngay cạnh khai báo `BAOCAO_SUBS`/`SUCKHOE_SUBS`,
+`tb_sub_picker` (render trong `st.sidebar`, ngay sau khi `nav` được xác định, xem
+`architecture-navigation.md`) widget instantiate RẤT SỚM trong lượt chạy -- cờ `_bc_sub_jump`
+vì vậy phải xử lý ở module-level ngay cạnh khai báo `BAOCAO_SUBS`/`TUYBIEN_SUBS`,
 KHÔNG phải trong hàm render trang (trang được dispatch/gọi MUỘN hơn nhiều so với lúc widget sidebar
 đã render xong).
 
@@ -198,7 +168,7 @@ phân trang từ trước với ngưỡng khác). Không tự viết lại code 
 helper định nghĩa cạnh `DTBL_CSS` đã lo đủ:
 
 - `_table_page_slice(n, key, page_size=TABLE_PAGE_SIZE)` — dùng cho bảng PHẲNG (mỗi dòng dữ liệu
-  độc lập, không nhóm cha/con: `render_health_full_table`, `render_health_log_table`,
+  độc lập, không nhóm cha/con:
   `render_period_table`, `render_project_recent_sessions`, bảng "Danh sách phiên" ở Hôm nay, bảng
   "Dữ liệu làm việc hiện tại" ở Tuỳ biến...). Trả `(start, end, num_pages, paged)`, tự **clamp**
   `st.session_state[key]` về `num_pages` hợp lệ (phòng khi dữ liệu co lại sau xoá) — gọi TRƯỚC khi
@@ -238,8 +208,8 @@ cạnh), không chỉ dựa vào CSS.
 ## Bảng số liệu dạng heat table (`DTBL_CSS`)
 
 Style (`DTBL_CSS`) + các hàm dựng bảng số liệu có tô màu theo giá trị (heat cell): `_heat_cell()`
-tính màu 1 ô, dùng bởi `render_data_table()`/`render_detail_table()`/`render_period_table()`/
-`render_health_log_table()` — mỗi hàm ứng với 1 kiểu bảng (theo kỳ/theo dự án/theo ngày sức khoẻ)
+tính màu 1 ô, dùng bởi `render_data_table()`/`render_detail_table()`/`render_period_table()`
+— mỗi hàm ứng với 1 kiểu bảng (theo kỳ/theo dự án/theo ngày)
 nhưng cùng chung style/cơ chế tô màu này. Màu heat cell lấy theo hue suy ra từ `ACCENT` (xem
 `theming.md`) — không hardcode thang màu riêng cho bảng mới, tái dùng cùng cơ chế hue để đổi
 accent tự động đổi luôn bảng.

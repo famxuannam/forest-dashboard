@@ -18,7 +18,6 @@ cặp hàm:
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | `save_setting(key, value)` (upsert trực tiếp trong nơi dùng) · `save_settings_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (màu accent...)            |
-| `health_metrics`   | `load_health_metrics()` | `save_health_metrics_bulk()` (upsert, nhập tay/import JSON) · `save_health_metrics_raw_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Người dùng nhập tay hoặc dán JSON (trang Sức khoẻ) |
 | `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (insert-nếu-mới theo `dedupe_hash` tự tính lại từ file, ignore_duplicates -- dùng cho import) · `save_kindle_highlights_raw_bulk()` (ghi đè đúng `dedupe_hash`/`parent_hash` có sẵn, chỉ dùng khi Khôi phục) · `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` (sửa/xoá/thêm ghi chú trong app) | File `My Clippings.txt` xuất từ Kindle + người dùng sửa/thêm trong app |
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
 | `deleted_kindle_highlights` | `load_deleted_kindle()` | `add_deleted_kindle()` (cộng dồn) · `save_deleted_kindle()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá trích dẫn Kindle trong app) |
@@ -45,42 +44,6 @@ phần dưới). Thiếu 1 trong 2 là coi như chưa xong việc.
 trường hợp bảng rỗng/chưa cấu hình (trả DataFrame rỗng đúng cột, KHÔNG crash), vì người dùng thật
 có thể chưa từng bật CalDAV hay chưa từng tải file Reminder.
 
-## `health_metrics`: ngoại lệ duy nhất CÓ nhập liệu tay (trang Sức khoẻ)
-
-Toàn bộ phần còn lại của app thuần hồi cứu (đọc lại dữ liệu Forest/CalDAV/Reminders), nhưng không có
-nguồn tự động nào xuất được kết quả xét nghiệm máu ra file -- người dùng chụp ảnh phiếu xét nghiệm,
-nhờ ChatGPT đọc rồi dán JSON, hoặc gõ tay trực tiếp trong app. Vài điểm khác biệt so với các bảng
-khác cần nhớ khi sửa:
-
-- **Long format, không phải 1 cột/chỉ số**: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm (`test_date`,
-  `category`, `indicator`, `value`...) -- panel xét nghiệm đổi qua các năm (đổi lab/máy) không đòi
-  hỏi sửa schema, chỉ cần lưu thêm dòng.
-- **Khoảng tham chiếu lưu KÈM mỗi dòng** (`ref_raw`/`ref_low`/`ref_high`), không tách bảng riêng --
-  vì khoảng "bình thường" có thể đổi theo thời gian (đổi máy xét nghiệm), tách riêng sẽ làm sai lệch
-  dữ liệu lịch sử khi tra cứu lại các lần đo cũ. `_parse_ref_range()` parse chuỗi gốc (`"a - b"`,
-  `"< x"`, `"> x"`) về `(ref_low, ref_high)` dạng số, dùng để tô vùng biểu đồ + phát hiện bất thường.
-- **2 hàm ghi khác ngữ nghĩa**: `save_health_metrics_bulk(panels)` là **upsert** theo khoá
-  `(test_date, category, indicator)`, dùng cho nhập liệu thường ngày (form nhập nhanh, import JSON,
-  sửa 1 panel ở mục Lịch sử -- mục Lịch sử tự xoá cả panel trước khi gọi lại hàm này để phản ánh
-  đúng việc xoá/đổi tên chỉ số qua `st.data_editor`). `save_health_metrics_raw_bulk(df)` là **ghi đè
-  toàn bộ** (xoá sạch rồi chèn lại), CHỈ dùng trong luồng Khôi phục từ bản sao lưu ở tab Tuỳ biến.
-- Có mặt trong cả 3 thao tác ở tab Tuỳ biến (Sao lưu/Khôi phục/Làm mới) -- thêm bảng Supabase mới
-  nào có ý nghĩa tồn tại lâu dài cũng nên soát lại 3 chỗ này, không chỉ viết `load_*`/`save_*`.
-- **`_health_is_abnormal(df)` chỉ nhị phân** (trong/ngoài `Ref thấp`/`Ref cao`) -- KHÔNG có mức
-  "sát ngưỡng" nào, dù mockup thiết kế có vẽ mức cảnh báo cam thứ 3 (đã xác nhận với người dùng 2
-  lần khác nhau, ở cả trang Lịch sử và Báo cáo). Thêm mức đó cần tự đặt 1 ngưỡng % không có cơ sở
-  dữ liệu thật -- hỏi lại chứ không tự thêm nếu gặp lại yêu cầu tương tự.
-- **`_health_score(df_health)`** -- điểm "X/Y chỉ số trong ngưỡng" ở billboard trang Báo cáo: tính
-  theo giá trị GẦN NHẤT của MỖI Chỉ số từng theo dõi (không phải chỉ đúng lần khám gần nhất, vì 1
-  lần khám thường chỉ đo 1 phần các chỉ số). Chỉ số không có giá trị số hoặc không có khoảng tham
-  chiếu nào bị loại khỏi cả tử số lẫn mẫu số.
-- **`_health_trend_candidates(df_health, n=4)`** -- chọn tối đa n cặp (Nhóm, Chỉ số) để vẽ mini-
-  card xu hướng (chương "Diễn biến chỉ số"): ưu tiên Chỉ số ĐANG bất thường ở lần khám gần nhất,
-  sau đó xếp theo số lần đo giảm dần; chỉ xét Chỉ số có ≥2 giá trị số. `_health_trend_caption(...)`
-  sinh 1 câu tóm tắt xu hướng từ chênh lệch điểm đầu/cuối (không hồi quy/trung bình trượt) -- có
-  nhánh riêng cho trường hợp KHÔNG tăng/giảm đều (báo "dao động" + chiều đổi của kỳ mới nhất, thay
-  vì so đầu-cuối đơn thuần dễ đọc lầm hướng đang cải thiện/xấu đi).
-
 ## `kindle_highlights`/`kindle_book_map`/`deleted_kindle_highlights`: khoá theo băm nội dung, sửa/xoá được trong app
 
 Kindle không có id ổn định cho từng highlight/note, và `My Clippings.txt` luôn xuất TOÀN BỘ lịch sử
@@ -100,7 +63,7 @@ không gọi lại `_kindle_dedupe_hash()` để suy ngược khoá từ nội d
   (không còn trong bảng nên không đụng độ khoá).
 - `save_kindle_highlights_raw_bulk(df)` — **CHỈ dùng khi Khôi phục từ bản sao lưu** (df đọc từ CSV
   backup, đã có sẵn cột `dedupe_hash`/`parent_hash` gốc): insert thẳng theo đúng khoá cũ, KHÔNG
-  tính lại — y hệt lý do `health_metrics` cần 2 hàm ghi riêng (raw vs upsert thường), xem mục dưới.
+  tính lại (khác `save_kindle_highlights_bulk()` — upsert thường, tính lại hash từ nội dung).
 - `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` — sửa/xoá/
   thêm ghi chú trực tiếp trong app (mục "2. Nhật ký đọc" ở Sách/Gundam → Chi tiết). `delete_*` vừa
   xoá khỏi `kindle_highlights` vừa ghi `dedupe_hash` vào sổ đen `deleted_kindle_highlights` (cùng

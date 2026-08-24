@@ -14,7 +14,7 @@ render ra sao, và cách thêm/sửa 1 trang mà không phá deep-link.
   hiện, rồi thêm 1 nhánh `elif nav == "Tên trang mới":` bất kỳ đâu trong chuỗi dispatch — không cần
   khớp thứ tự.
 - Nav chính KHÔNG còn là 1 `st.segmented_control` DUY NHẤT render trọn 8 mục (khác thiết kế ban
-  đầu) — vì sub-nav của Báo cáo/Sức khoẻ/Tuỳ biến/Nhật ký đọc sách/Gundam phải chèn NGAY SAU nút
+  đầu) — vì sub-nav của Báo cáo/Tuỳ biến/Nhật ký đọc sách/Gundam phải chèn NGAY SAU nút
   của đúng trang cha (xác nhận với người dùng, xem mục "Cấp điều hướng thứ 2" dưới), 1 radiogroup
   duy nhất không cho phép chèn phần tử HTML rời vào giữa các nút. Nav chính giờ RẢI RÁC thành nhiều
   `segmented_control` nhỏ (`_render_nav_segment()`), số lượng và ranh giới thay đổi tuỳ trang đang
@@ -28,8 +28,8 @@ deep-link kiểu `?nav=Hôm nay&day=2026-07-04` hoạt động qua reload trang 
 widget trả về, link chia sẻ sẽ không mở đúng trang. Khác NHIỀU widget khác trong app (vd `bc_sub`),
 `"nav"` KHÔNG còn là key CỦA 1 widget cụ thể — nav chính đã chẻ thành nhiều `segmented_control` con
 (xem mục dưới), mỗi con có key riêng (`navseg_<group>_<full|pre|post>_<slug>`); `"nav"` thuần là 1
-biến trạng thái logic mà các đoạn đó cùng đọc/ghi qua, giống hệt cách `bc_sub`/`hm_sub`/`tb_sub`
-tách khỏi key widget `bc_sub_picker`/`hm_sub_picker`/`tb_sub_picker` của chúng.
+biến trạng thái logic mà các đoạn đó cùng đọc/ghi qua, giống hệt cách `bc_sub`/`tb_sub`
+tách khỏi key widget `bc_sub_picker`/`tb_sub_picker` của chúng.
 
 Hệ quả khi sửa code: đừng gán trực tiếp vào biến widget để "chuyển trang" bằng tay — mọi thay đổi
 trang PHẢI đi qua `_commit_nav(new_nav)` (set `st.session_state["nav"]` + `st.query_params["nav"]`
@@ -41,12 +41,11 @@ phía trên, phải rerun để lượt chạy MỚI chẻ nhóm nav lại đún
 trong DOM qua `clickNavByLabel()`, tận dụng lại toàn bộ cơ chế `_commit_nav()`/query_params này
 thay vì tự set trực tiếp từ phía JS.
 
-## Cấp điều hướng thứ 2: `BAOCAO_SUBS`/`SUCKHOE_SUBS` và `day_picker()`
+## Cấp điều hướng thứ 2: `BAOCAO_SUBS`/`TUYBIEN_SUBS` và `day_picker()`
 
 - Trang "Báo cáo" có sub-nav riêng: list `BAOCAO_SUBS = [Tổng quan, Tuần, Tháng, Năm, Dự án]`,
   seed/ghi lại qua `?sub=` — **cùng 1 pattern hệt `NAV`/`?nav=`**, kể cả nếu bạn không đọc lại code
-  chi tiết, áp y hệt cách suy luận. Trang "Sức khoẻ" có `SUCKHOE_SUBS = [Báo cáo, Lịch sử, Dữ liệu
-  đầu vào]` qua `?hsub=`, cùng khuôn. Trang "Tuỳ biến" có `TUYBIEN_SUBS = [Tổng quan, Giao diện]`
+  chi tiết, áp y hệt cách suy luận. Trang "Tuỳ biến" có `TUYBIEN_SUBS = [Tổng quan, Giao diện]`
   qua `?tsub=`, cùng khuôn -- "Giao diện" (6 trục cá nhân hoá, billboard mở đầu đóng luôn vai trò
   xem trước trực tiếp, xem `theming.md`) tách hẳn khỏi chuỗi chương "Tổng quan" thành 1 sub-page
   riêng để có billboard/chip-TOC/hàng nút Reset-Ngẫu nhiên của riêng nó, dù bố cục bên trong (billboard
@@ -55,12 +54,12 @@ thay vì tự set trực tiếp từ phía JS.
   dẫn, Chi tiết]`/`GUNDAM_SUBS = [Tổng quan, Chi tiết]` — KHÔNG có query param riêng lưu tên sub-tab
   (khác 3 trang trên) vì link nhảy tới 1 cuốn/series cụ thể dùng `?book=`/`?series=` (đọc lại trong
   `_render_reading_detail()`), chỉ để quyết định sub-tab KHỞI ĐẦU là "Chi tiết" hay không.
-- Cả 5 widget picker (`bc_sub_picker`/`hm_sub_picker`/`tb_sub_picker`/`rl_view_tabs_picker`/
+- Cả 4 widget picker (`bc_sub_picker`/`tb_sub_picker`/`rl_view_tabs_picker`/
   `rl_view_tabs_gd_picker`) render trong `st.sidebar`, NGAY SAU nút của đúng trang cha trong nav
-  chính (Báo cáo/Sức khoẻ/Tuỳ biến/Nhật ký đọc sách/Gundam), thay vì đứng ở đầu nội dung trang HAY
+  chính (Báo cáo/Tuỳ biến/Nhật ký đọc sách/Gundam), thay vì đứng ở đầu nội dung trang HAY
   rơi xuống cuối toàn bộ nav chính (xác nhận với người dùng qua NHIỀU lượt đổi kiến trúc điều
   hướng liên tiếp — lượt 1 dời cả sub-nav lẫn nav chính vào sidebar nhưng để sub-nav render sau
-  TOÀN BỘ nav chính; lượt 2 chèn xen kẽ đúng vị trí cho Báo cáo/Sức khoẻ/Tuỳ biến; lượt 3 mới bắt
+  TOÀN BỘ nav chính; lượt 2 chèn xen kẽ đúng vị trí cho Báo cáo/Tuỳ biến; lượt 3 mới bắt
   kịp 2 sub-nav còn sót của Nhật ký đọc sách/Gundam, trước đó vẫn đứng ở đầu nội dung trang do cơ
   chế của chúng nằm TRONG `render_reading_log()` thay vì ở dispatch chính nên bị bỏ sót khi đổi
   kiến trúc lần đầu). Cơ chế (`_render_nav_group()`, `_render_nav_segment()`,
@@ -86,16 +85,16 @@ thay vì tự set trực tiếp từ phía JS.
     đúng ngay từ `default=`.
   - **Bẫy đã gặp thật, đừng lặp lại**: TUYỆT ĐỐI không tự `st.session_state[key] = ...` để "ép"
     đúng lựa chọn hiển thị ngay TRƯỚC khi gọi `st.segmented_control(..., key=key)` của 1 đoạn nav_*
-    trên MỌI lượt chạy (khác hẳn cờ `_bc_sub_jump`/`_hm_sub_jump`, chỉ set 1 lần có điều kiện) — làm
+    trên MỌI lượt chạy (khác hẳn cờ `_bc_sub_jump`, chỉ set 1 lần có điều kiện) — làm
     vậy sẽ GHI ĐÈ lên đúng giá trị Streamlit vừa nhận từ cú click thật của người dùng (Streamlit đã
     set `session_state[key]` đó TRƯỚC khi script chạy lại), khiến MỌI cú click coi như không xảy ra,
     pill nav không bao giờ đổi được (bug thật đã gặp khi thử cách này trước khi đổi sang đặt key
     riêng theo slug trang ở trên).
   - Dispatch nội dung trang (chuỗi if/elif chính, và `render_reading_log()` cho Sách/Gundam) chỉ
-    ĐỌC lại `st.session_state["bc_sub"]`/`"hm_sub"`/`"tb_sub"`/`"rl_view_tabs"`/`"rl_view_tabs_gd"`
+    ĐỌC lại `st.session_state["bc_sub"]`/`"tb_sub"`/`"rl_view_tabs"`/`"rl_view_tabs_gd"`
     đã đồng bộ sẵn ở sidebar, không tự render lại widget picker.
-- Cờ chờ xử lý kiểu `_bc_sub_jump`/`_hm_sub_jump` (nhảy sang 1 sub-tab khác BẰNG CODE) PHẢI được
-  set/pop TRƯỚC khối render nav trong sidebar (tức là ở phần khai báo `BAOCAO_SUBS`/`SUCKHOE_SUBS`
+- Cờ chờ xử lý kiểu `_bc_sub_jump` (nhảy sang 1 sub-tab khác BẰNG CODE) PHẢI được
+  set/pop TRƯỚC khối render nav trong sidebar (tức là ở phần khai báo `BAOCAO_SUBS`/`TUYBIEN_SUBS`
   đầu `app.py`, không phải trong hàm render trang như trước khi dời sang sidebar) — xem gotcha
   `StreamlitAPIException` ở `ui-components.md`, giờ áp dụng chặt hơn vì widget instantiate sớm hơn
   nhiều trong lượt chạy so với trước.
@@ -128,8 +127,6 @@ bộ — đã bỏ vì phá bố cục trang; không còn `from`/`_back_link_htm
 2. Thêm nhánh `elif` xử lý render — vị trí trong chuỗi if/elif không quan trọng, chỉ cần tồn tại.
 3. Nếu trang mới cần tham số riêng qua URL, làm theo đúng pattern seed-từ-query-param → ghi lại
    vào `session_state`/`query_params` — không tự chế cơ chế state khác.
-4. Nếu trang mới cũng cần sub-nav (như Báo cáo/Sức khoẻ/Tuỳ biến): thêm 1 entry vào `_NAV_SUBNAV`
+4. Nếu trang mới cũng cần sub-nav (như Báo cáo/Tuỳ biến): thêm 1 entry vào `_NAV_SUBNAV`
    (subs/icons/state_key/widget_key/query_param/label) — `_render_nav_group()` sẽ TỰ chèn sub-nav
    ngay sau nút của trang đó, không cần tự viết lại logic chẻ nhóm.
-5. Cập nhật trang "Trợ giúp" (thêm nội dung vào chương phù hợp, và/hoặc 1 mục `HELP_CHANGELOG`)
-   nếu trang có ý nghĩa với người dùng cuối — xem `ui-components.md`.

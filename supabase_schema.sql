@@ -32,7 +32,7 @@ create table if not exists notes (
   note text not null
 );
 
--- Ghi chú nhanh từ Shortcut iOS (mục "Ghi chú nhanh" trong tab Hướng dẫn) -- Shortcut chỉ INSERT
+-- Ghi chú nhanh từ Shortcut iOS -- Shortcut chỉ INSERT
 -- thẳng 1 row thô qua REST API (KHÔNG đụng tới bảng notes/HTML Quill), app tự đọc bảng này và
 -- gộp thủ công vào notes khi người dùng bấm nút "Gộp vào Ghi chú chính" trong trình soạn ngày.
 -- "ts" do chính Shortcut tự format và gửi lên (KHÔNG dùng "default now()") -- server Supabase
@@ -127,25 +127,6 @@ create table if not exists settings (
   value text not null
 );
 
--- Chỉ số xét nghiệm máu định kỳ (tab "Sức khoẻ") -- dạng "long format": mỗi dòng là 1 chỉ số
--- của 1 lần xét nghiệm (không phải 1 cột/chỉ số), vì panel xét nghiệm có thể đổi qua các năm
--- (đổi lab, đổi máy, thêm/bớt chỉ số). Khoảng tham chiếu (ref_raw/ref_low/ref_high) lưu KÈM
--- theo từng dòng, không tách bảng riêng -- vì khoảng "bình thường" có thể đổi theo thời gian
--- (đổi máy xét nghiệm/đổi lab), lưu tách riêng sẽ sai lệch dữ liệu lịch sử.
-create table if not exists health_metrics (
-  id bigint generated always as identity primary key,
-  test_date date not null,
-  category text not null,   -- "Huyết học" / "Sinh hóa" / ... (mở rộng tự do, không enum cứng)
-  indicator text not null,  -- tên chỉ số, vd "Hemoglobin", "Glucose"
-  value numeric,            -- giá trị số, dùng để vẽ biểu đồ (NULL nếu kết quả định tính)
-  value_raw text not null,  -- chuỗi gốc y hệt trên phiếu, vd "148", "Âm tính"
-  unit text,
-  ref_raw text,             -- khoảng tham chiếu gốc y hệt trên phiếu, vd "130 - 170", "< 5"
-  ref_low numeric,          -- parse từ ref_raw (xem _parse_ref_range trong app.py), NULL nếu không parse được
-  ref_high numeric,
-  unique (test_date, category, indicator)
-);
-
 -- Gán tay ngày -> series Gundam, ghi đè kết quả suy luận tự động của _assign_reading_sessions()
 -- trong app.py (Forest chỉ có 1 tag "Gundam" chung, không phân biệt series -- suy luận theo
 -- "lần hoàn thành reminder gần nhất" có thể đoán sai nếu 2 series xem xen kẽ nhau). Khoá theo
@@ -176,7 +157,6 @@ alter table quick_notes enable row level security;
 alter table work_calendar enable row level security;
 alter table reading_log enable row level security;
 alter table settings enable row level security;
-alter table health_metrics enable row level security;
 alter table kindle_highlights enable row level security;
 alter table kindle_book_map enable row level security;
 alter table deleted_kindle_highlights enable row level security;
@@ -191,7 +171,6 @@ create policy "anon full access" on quick_notes for all using (true) with check 
 create policy "anon full access" on work_calendar for all using (true) with check (true);
 create policy "anon full access" on reading_log for all using (true) with check (true);
 create policy "anon full access" on settings for all using (true) with check (true);
-create policy "anon full access" on health_metrics for all using (true) with check (true);
 create policy "anon full access" on kindle_highlights for all using (true) with check (true);
 create policy "anon full access" on kindle_book_map for all using (true) with check (true);
 create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);

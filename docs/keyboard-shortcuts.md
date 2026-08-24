@@ -34,5 +34,3 @@ vậy bộ phím tắt toàn cục ở trên không nhận được. Bất kỳ 
 2. Nếu phím tắt điều hướng tới 1 tab/nav mới, tái dùng đúng cơ chế set `session_state`/
    `query_params` rồi `st.rerun()` — xem `architecture-navigation.md`, không tự chế cách điều
    hướng khác bằng JS thuần (ví dụ đổi `window.location` trực tiếp sẽ phá session state).
-3. Cập nhật bảng phím tắt trong tab "Hướng dẫn" (sub-tab liệt kê phím tắt) — đây là tài liệu người
-   dùng, không tự động sinh ra từ code.

@@ -18,13 +18,12 @@ Không có build step, linter hay test suite tự động. Xem `docs/testing.md`
 
 ## Kiến trúc và ràng buộc
 
-- Luồng ứng dụng và UI chính nằm trong `app.py`. Không tách frontend/backend hay module component production riêng trừ khi người dùng yêu cầu rõ ràng; đây là quyết định kiến trúc, không phải technical debt cần tự dọn. Các ngoại lệ có chủ đích là module một chiều, không import ngược `app.py`: `local_dev_data.py` (Supabase giả chỉ khi `FOREST_LOCAL_DEV` bật), `ui_catalog.py` (catalogue UI thuần dữ liệu), `import_parsers.py` (parser import thuần) và `help_page.py` (nội dung Hướng dẫn; nhận helper render từ `app.py`).
+- Luồng ứng dụng và UI chính nằm trong `app.py`. Không tách frontend/backend hay module component production riêng trừ khi người dùng yêu cầu rõ ràng; đây là quyết định kiến trúc, không phải technical debt cần tự dọn. Các ngoại lệ có chủ đích là module một chiều, không import ngược `app.py`: `local_dev_data.py` (Supabase giả chỉ khi `FOREST_LOCAL_DEV` bật), `ui_catalog.py` (catalogue UI thuần dữ liệu) và `import_parsers.py` (parser import thuần).
 - Supabase là nơi lưu trữ duy nhất. Khi thêm bảng hoặc bucket, thêm loader/saver hoặc sync tương ứng, cập nhật `supabase_schema.sql`, và rà soát luồng sao lưu/khôi phục/xoá toàn bộ.
 - Mọi logic về “hôm nay” dùng `_today_vn()`, không dùng `date.today()` trần.
 - Không dùng `st.metric()` vì CSS toàn cục ẩn nó. Khối CSS lớn là string thường, không đổi thành f-string.
 - `prep_analysis_data()` là điểm chuẩn bị dữ liệu báo cáo trung tâm. Giữ `Dự án gốc`; chỉ dùng dữ liệu đã chuẩn bị để báo cáo/gom nhóm, trừ khi có lý do rõ ràng.
 - `_health_is_abnormal()` chỉ có hai trạng thái trong/ngoài khoảng tham chiếu. Không tự thêm mức “sát ngưỡng”.
-- Tab `Hướng dẫn` là nội dung người dùng cuối: chỉ cập nhật khi thay đổi có tác động tới cách dùng app.
 
 ## Cách làm việc
 
