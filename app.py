@@ -7908,40 +7908,29 @@ _MAIN_CSS = """
     [class*="st-key-stepper_"], .st-key-day_stepper { margin-bottom: 2px !important; }
 
     /* st.date_input (hộp chọn "Ngày" ở Hôm nay, "Từ ngày"/"Đến ngày" ở Đồng bộ lịch -- Khoảng khác…)
-       mặc định mang màu đỏ gốc của theme Streamlit (#FF4B4B) -- không liên quan gì tới accent
-       đang chọn, khiến hộp trông lệch tông so với hộp chọn kỳ cạnh nó (period_stepper, dùng
-       st.selectbox, viền xám trung tính #d1d1d6/nền trắng mờ). Đồng bộ lại viền/nền theo đúng
-       kiểu selectbox, còn màu ngày đang chọn trong lịch bật lên đổi theo accent. Lịch bật lên
-       (data-baseweb="calendar") được BaseWeb mount ra ngoài container widget (portal ở cấp
-       body), nên phải chọn toàn cục theo [data-baseweb], không scope theo .st-key-... được --
-       áp dụng cho MỌI date_input trong app, không riêng "Ngày" ở Hôm nay. */
-    /* BaseWeb lồng 3 lớp cho input này: [data-baseweb="input"] (khung ngoài) bọc
-       [data-baseweb="base-input"] (khung sát input, THỰC SỰ mang nền/viền theo CSS mặc định của
-       BaseWeb) bọc <input> thật -- xác nhận qua DevTools thật trên bản deploy (ảnh chụp người
-       dùng gửi), khác với giả định ban đầu chỉ có 1 lớp bọc. Bản sửa trước chỉ ép chiều cao cho
-       khung ngoài -- không đủ, vì khung base-input bên trong vẫn theo chiều cao mặc định (to hơn
-       hẳn 36px của 2 nút ◀▶ cạnh nó), không bị outer's height:36 ràng buộc (overflow mặc định là
-       visible). Ép ĐỒNG NHẤT cả 3 lớp về 36px + overflow:hidden ở khung ngoài để chắc chắn cắt
-       đúng 36px dù còn sót lớp nào chưa lường hết. */
-    div[data-testid="stDateInput"] [data-baseweb="input"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        height: 34px !important;
-        min-height: 34px !important;
-        box-sizing: border-box !important;
-        overflow: hidden !important;
-    }
+       mặc định mang nền/viền be trung tính của theme -- lệch tông so với hộp chọn kỳ cạnh nó
+       (period_stepper, dùng st.selectbox) và với 2 nút ◀▶ cạnh nó (cùng dùng var(--card)/
+       var(--border)). Đồng bộ lại viền/nền theo đúng kiểu nút/selectbox, còn màu ngày đang chọn
+       trong lịch bật lên đổi theo accent.
+       Streamlit đổi hẳn markup widget này sang React Aria DateField (không còn 1 <input> thật +
+       [data-baseweb="input"]/"base-input" như bản BaseWeb cũ -- 3 selector đó đã CHẾT sau khi
+       nâng cấp, y hệt ca [data-testid="stTab"] ở trên) -- ô ngày giờ là 1
+       div[data-testid="stDateInputField"] chứa 1 [role="group"] gồm nhiều <span role="spinbutton">
+       (ngày/tháng/năm) xen giữa <span data-type="literal"> ("/"), không có <input> nào để bám cỡ
+       chữ/màu qua selector `input` nữa -- xác nhận qua DevTools thật. Lịch bật lên portal ra ngoài
+       (mount ở cấp body) mang data-testid="stDateInputCalendar" riêng (không còn
+       [data-baseweb="calendar"]/"popover"), nên vẫn phải chọn TOÀN CỤC như trước, không scope
+       theo .st-key-... được -- áp dụng cho MỌI date_input trong app. */
     /* Khuôn "viên thuốc" kiểu Apple theo mockup `Hôm nay.dc.html` (cao 34px, bo 9px, đệm ngang
        14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt) -- kèm icon lịch nhỏ đứng
        TRƯỚC ngày. Icon vẽ bằng ::before với ligature Material Symbols Rounded (font Streamlit đã
        tự nạp sẵn cho icon `:material/x:` của chính nó, xem quy ước _mi() ở ui-components.md) --
        không chèn được phần tử thật vào trong widget native nên đây là cách duy nhất. */
-    div[data-testid="stDateInput"] [data-baseweb="base-input"] {
+    div[data-testid="stDateInputField"] {
         background: var(--card) !important;
         border: 1px solid var(--border) !important;
         border-radius: 9px !important;
-        box-shadow: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
         height: 34px !important;
         min-height: 34px !important;
         box-sizing: border-box !important;
@@ -7951,7 +7940,7 @@ _MAIN_CSS = """
         justify-content: center !important;
         gap: 8px !important;
     }
-    div[data-testid="stDateInput"] [data-baseweb="base-input"]::before {
+    div[data-testid="stDateInputField"]::before {
         content: 'calendar_today';
         font-family: 'Material Symbols Rounded';
         font-size: 15px;
@@ -7961,32 +7950,17 @@ _MAIN_CSS = """
         -webkit-font-feature-settings: 'liga';
         font-feature-settings: 'liga';
     }
-    /* Chữ ngày: 13px/600 căn giữa (mockup) -- mặc định Streamlit là 16px thường căn trái, trông
-       "nặng" và lệch hẳn tông với nhãn/nút 13px xung quanh. padding:0 vì đệm ngang đã đặt ở
-       base-input (nếu để cả 2 sẽ cộng dồn, đẩy chữ lệch khỏi tâm). */
-    div[data-testid="stDateInput"] [data-baseweb="input"] input {
-        height: 32px !important;
-        line-height: 32px !important;
-        padding: 0 !important;
+    /* Chữ ngày (nhóm span day/"/"/month/"/"year trong [role="group"]): 13px/600 khớp mockup --
+       mặc định Streamlit là 14px thường, trông nhạt hơn hẳn tông 13px/600 của nhãn/nút xung
+       quanh. Cụm span này đã tự căn giữa trong pill qua justify-content:center của khung ngoài. */
+    div[data-testid="stDateInputField"] [role="group"] {
         font-size: 13px !important;
         font-weight: 600 !important;
         color: var(--text) !important;
-        text-align: center !important;
-        box-sizing: border-box !important;
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        /* KHÔNG để <input> giãn hết chỗ (mặc định BaseWeb flex:1): nó sẽ đẩy icon ::before dạt hẳn
-           sang mép trái, trong khi mockup có cụm icon+ngày CĂN GIỮA thành 1 khối. Ghim bề rộng vừa
-           đúng nội dung bằng đơn vị `ch` (bề rộng chữ số "0" của CHÍNH font đang dùng) chứ không
-           phải px cứng -- app cho người dùng đổi giữa các font thân chữ (BODY_FONTS), px cứng sẽ
-           hụt/thừa tuỳ font. Cả 3 st.date_input trong app đều hiển thị 10 ký tự (dd/mm/yyyy hoặc
-           yyyy/mm/dd) nên 10ch phủ đủ, dấu "/" hẹp hơn chữ số nên còn dư nhẹ. */
         flex: 0 0 auto !important;
-        width: 10ch !important;
-        min-width: 0 !important;
     }
     /* Bề rộng ô ngày ở day_stepper: 170px đúng mockup (`min-width:170px`) -- không đặt thì ô ăn
-       theo bề rộng nội tại rất rộng của BaseWeb, dài gấp ~2.5 lần cụm icon+ngày bên trong. */
+       theo bề rộng nội tại rất rộng mặc định, dài hơn hẳn cụm icon+ngày bên trong. */
     [class*="st-key-day_stepper"] div[data-testid="stDateInput"] { width: 170px !important; }
     /* Cùng lý do/cùng nguồn font với sidebar (xem "FONT KHUNG VỎ CỐ ĐỊNH" ở trên) -- gồm cả ô
        ngày, ô chọn kỳ (selectbox) và 3 nút icon của 2 stepper. */
@@ -7994,20 +7968,20 @@ _MAIN_CSS = """
     [class*="st-key-stepper_"], [class*="st-key-stepper_"] *:not([data-testid="stIconMaterial"]) {
         font-family: var(--font-ui) !important;
     }
-    div[data-testid="stDateInput"] [data-baseweb="input"]:focus-within [data-baseweb="base-input"] {
+    div[data-testid="stDateInputField"]:focus-within {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
-    [data-baseweb="calendar"] [role="gridcell"][aria-label^="Selected"]::after {
+    /* Ngày đang chọn trong lịch bật lên: ô ngày (div[data-selected="true"]) tô nền accent + chữ
+       trắng, khớp màu accent đang chọn thay vì màu tím TĨNH mặc định của Streamlit. */
+    [data-testid="stDateInputCalendar"] div[data-selected="true"] {
         background: var(--accent) !important;
+        color: #fff !important;
     }
-    /* Khung lịch bật lên (data-baseweb="popover") -- dùng outline chứ không phải border: nội
-       dung trắng bên trong popover có cùng kích thước với chính nó và vẽ đè lên trên, che mất
-       border thường; outline không tham gia box model nên không bị che. Chỉ áp cho popover có
-       chứa lịch (:has([data-baseweb="calendar"])) -- tức các ô chọn ngày -- KHÔNG áp cho danh
-       sách lựa chọn của st.selectbox thường (cùng dùng data-baseweb="popover" nhưng không có
-       lịch bên trong). */
-    [data-baseweb="popover"]:has([data-baseweb="calendar"]) {
+    /* Khung lịch bật lên -- dùng outline chứ không phải border: nội dung trắng bên trong popover
+       có cùng kích thước với chính nó và vẽ đè lên trên, che mất border thường; outline không
+       tham gia box model nên không bị che. */
+    [data-testid="stDateInputCalendar"] {
         outline: 1.5px solid var(--accent) !important;
         outline-offset: -1px;
     }
