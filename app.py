@@ -8201,18 +8201,18 @@ _MAIN_CSS = """
        hẳn sang nền đặc phớt accent lên var(--card) -- billboard PHẢI là 1 "thẻ" sáng/chữ tối như
        light theme bình thường (xác nhận với người dùng, chỉ nền NGOÀI billboard/thẻ mới được
        phép đậm), nên var(--text) luôn đúng ở đây. */
-    .pbill-title { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.2; }
-    .pbill-sub { font-size: 15px; color: var(--text-2); max-width: 560px; line-height: 1.55;
+    .pbill-title { font-size: 36px; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .pbill-sub { font-size: 17px; color: var(--text-2); max-width: 640px; line-height: 1.55;
         margin-top: 8px; }
     /* Billboard Sách (Tổng quan) -- cột phải khác Tuần/Báo cáo (kicker "ĐANG ĐỌC" + tên sách/tác
        giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Cormorant Garamond với trích
        dẫn Kindle billboard Hôm nay (_QUOTE_FONT_FACE) cho đồng bộ "chữ viết tay" ở mọi nơi trích
        tên riêng/tác giả trong app. */
-    .pbill-kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+    .pbill-kicker { font-size: 12.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
         color: var(--text-2); }
-    .pbill-booktitle { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.2;
+    .pbill-booktitle { font-size: 31px; font-weight: 800; color: var(--text); line-height: 1.2;
         margin-top: 4px; }
-    .pbill-author { font-size: 16px; color: var(--text-2); font-weight: 600;
+    .pbill-author { font-size: 18px; color: var(--text-2); font-weight: 600;
         font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
     /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
        dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
@@ -8331,12 +8331,12 @@ _MAIN_CSS = """
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
     /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) -- giới hạn ghi chú chính tối đa
-       3 dòng, cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định
+       5 dòng, cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định
        (dùng chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: mục
        này chỉ để LƯỚT nhanh nhiều năm cùng lúc, xem chi tiết thì bấm vào ngày/năm đó (đã có sẵn
        link .jdate-link). Scope RIÊNG .st-key-jcard_otd, không đụng .note-html ở các nơi khác. */
     .st-key-jcard_otd .note-html {
-        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
     }
     .jdate { text-align: center; }
     .jdate { text-align: center; }
@@ -8616,21 +8616,22 @@ _MAIN_CSS = """
        đứng NGAY TRÊN badge tròn -- billboard Hôm nay không cần nhãn này (badge tự chứa tháng qua
        `.tbcircle-mon`, chỉ 3-4 ký tự viết vừa trong vòng tròn) vì tab_label các trang khác dài hơn
        hẳn, không thể nhét vừa bên trong badge. */
-    .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 11px;
-        font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 13px;
+    .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 12.5px;
+        font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 6px 15px;
         border-radius: 20px; margin-bottom: 12px; }
     /* Bản gọn ban đầu (72px/26px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) --
-       nới lại giữa chừng (80px/29px), vẫn nhỏ hơn bản gốc 96px/34px trước khi thu gọn. */
-    .tbcircle { width: 80px; height: 80px; border-radius: 50%; background: var(--accent); color: #fff;
+       nới lại giữa chừng (80px/29px, sau lên 96px/34px khi đổi sang bố cục 1 cột -- billboard có
+       nhiều chỗ trống hơn hẳn, phóng to cho dễ nhìn hơn trên màn hình rộng). */
+    .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: #fff;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
-    .tbcircle-num { font-size: 29px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
-    .tbcircle-mon { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    .tbcircle-num { font-size: 34px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+    .tbcircle-mon { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
         opacity: 0.9; margin-top: 1px; }
-    .tbcircle-dow { font-size: 14px; font-weight: 700; color: var(--text); margin-top: 9px; }
-    .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
-    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Tuỳ biến/Trợ
-       giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
+    .tbcircle-dow { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 9px; }
+    .tbcircle-meta { font-size: 13px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
+    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Tuỳ biến
+       qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
        nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
        padding-left của CHÍNH cột này đã xử lý ở rule gộp ":not(:first-child)" phía trên -- không
        cần lặp lại ở đây. padding-bottom để chip cuối không sát mép dưới billboard khi cột này cao
@@ -8699,13 +8700,14 @@ _MAIN_CSS = """
        ý tách biệt vai trò nội dung, không phải "giao diện chung" -- đúng tinh thần đã ghi ở
        BODY_FONTS/_body_font_b64() nhưng thiếu !important nên chưa thật sự bất biến). */
     /* Bản gọn ban đầu (16px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) -- nới
-       lại giữa chừng (18px), vẫn nhỏ hơn bản gốc 20px trước khi thu gọn. */
-    .kq-daily-mark { font-size: 46px; line-height: 1; color: var(--accent);
+       lại giữa chừng (18px), rồi lên 20px (bản gốc trước khi thu gọn) khi đổi sang bố cục 1 cột --
+       billboard rộng rãi hơn hẳn, phóng to cho dễ nhìn. */
+    .kq-daily-mark { font-size: 50px; line-height: 1; color: var(--accent);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-weight: 600; font-style: italic;
         opacity: .5; margin-bottom: -10px; }
-    .kq-daily-text { font-size: 18px; line-height: 1.42; font-weight: 600; color: var(--text);
+    .kq-daily-text { font-size: 20px; line-height: 1.42; font-weight: 600; color: var(--text);
         font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
-    .kq-daily-src { margin: 0; font-size: 15px; color: var(--text); font-weight: 700;
+    .kq-daily-src { margin: 0; font-size: 16px; color: var(--text); font-weight: 700;
         font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
     /* Tên sách trong "Trích dẫn hôm nay" là <a class="entity-link"> (xem _entity_link_html()) --
        CÙNG bug !important đã ghi ở .kq-daily-text phía trên: rule font thân chữ toàn app khớp
