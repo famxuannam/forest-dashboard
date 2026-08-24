@@ -11,7 +11,7 @@ import pandas as pd
 APP_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 def parse_reading_log_shortcut_csv(uploaded):
-    """Đọc file do Shortcut "Xuất tiến độ đọc" (xem tab Hướng dẫn) tạo ra -- đây là nguồn DUY
+    """Đọc file do Shortcut "Xuất tiến độ đọc" tạo ra -- đây là nguồn DUY
     NHẤT để nạp dữ liệu Đọc sách/Gundam vào app (không còn nhánh CalDAV, vì CalDAV chỉ đọc được
     Reminder List đã lưu trong iCloud, còn Shortcuts đọc thẳng dữ liệu trên máy nên thấy đủ cả
     list "Trên iPhone của tôi"). Định dạng: mỗi dòng "list|title|completed_date" (dấu '|'), dòng đầu là
@@ -212,8 +212,8 @@ def parse_dayone_json(uploaded):
     return result, None
 
 def parse_kindle_clippings(raw):
-    """Đọc "My Clippings.txt" (định dạng xuất mặc định của mọi Kindle, xem "Cách xuất Clippings"
-    trong tab Hướng dẫn) -- mỗi entry cách nhau bởi 1 dòng đúng 10 dấu "=", gồm: dòng 1 "Tên sách
+    """Đọc "My Clippings.txt" (định dạng xuất mặc định của mọi Kindle) -- mỗi entry cách nhau
+    bởi 1 dòng đúng 10 dấu "=", gồm: dòng 1 "Tên sách
     (Tác giả)", dòng 2 metadata "- Your Highlight/Note/Bookmark on page X | location Y | Added on
     <ngày giờ>", 1 dòng trống, rồi nội dung (rỗng với Bookmark). Bookmark KHÔNG có nội dung nên bị
     bỏ qua hoàn toàn -- không có gì để hiện làm quote/note. Trả về (df, stats):

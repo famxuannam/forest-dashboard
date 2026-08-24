@@ -69,7 +69,7 @@ nhau và với accent:
 4. **Mật độ bố cục** (`CARD_DENSITY`, setting `card_density`) — 2 token `--card-pad`/`--card-gap`,
    CHỈ áp cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (`16px 18px`/`margin 10px
    0`, ví dụ `.sec-card`). KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
-   (`.quotes-card`, `.help-tl-item`, `.dtl-card`, `.dtl-track`...) — những nơi đó giữ nguyên giá
+   (`.quotes-card`, `.dtl-card`, `.dtl-track`...) — những nơi đó giữ nguyên giá
    trị padding literal.
 
 Cả 4 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
@@ -108,8 +108,8 @@ cách này, không chỉ tin `background` chung là đủ):
   `st.segmented_control`, không riêng nav chính) — mặc định rơi về nền theme trung tính TĨNH, ép
   `background-color: var(--card)`. Bản đầu tiên của rule này CHỈ scope `.st-key-nav` ("chưa có yêu
   cầu đổi" ở nơi khác) — đã tổng quát hoá lên MỌI `stButtonGroup` sau khi phát hiện lệch tông ở bộ
-  lọc "Phân loại" (Nhóm/Dự án). 2 nơi tab kiểu gạch chân dưới (`.st-key-bc_sub_picker`/
-  `.st-key-hm_sub_picker`, "Chọn kỳ xem"/"Xem theo") CHỦ Ý giữ nền trong suốt — rule riêng của 2 nơi
+  lọc "Phân loại" (Nhóm/Dự án). Nơi tab kiểu gạch chân dưới (`.st-key-bc_sub_picker`,
+  "Chọn kỳ xem") CHỦ Ý giữ nền trong suốt — rule riêng của nơi
   đó phải khớp/thắng đúng độ đặc hiệu của rule tổng quát này (2 attribute + 1 tag = `(0,2,1)`) nếu
   sau này đổi lại, không thì nền `var(--card)` sẽ đè nhầm lên kiểu tab gạch chân.
 - `[data-testid="stExpander"] summary:hover` VÀ `details[open] > summary` — Streamlit tự tô 2 màu

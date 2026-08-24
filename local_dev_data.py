@@ -145,7 +145,7 @@ class LocalDevSupabase:
                 {"dedupe_hash": "demo-beloved-1", "kindle_title": "Beloved", "author": "Toni Morrison", "kind": "highlight", "content": "Freeing yourself was one thing; claiming ownership of that freed self was another.", "location": "112", "added_at": (today - timedelta(days=1)).isoformat(), "parent_hash": None, "is_favorite": True},
                 {"dedupe_hash": "demo-beloved-2", "kindle_title": "Beloved", "author": "Toni Morrison", "kind": "highlight", "content": "Anything dead coming back to life hurts.", "location": "137", "added_at": today.isoformat(), "parent_hash": None, "is_favorite": False},
             ],
-            "deleted_kindle_highlights": [], "gundam_overrides": [], "book_overrides": [], "health_metrics": [],
+            "deleted_kindle_highlights": [], "gundam_overrides": [], "book_overrides": [],
         }
 
     def table(self, name):

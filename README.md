@@ -6,9 +6,8 @@ thêm 2 nguồn tuỳ chọn (lịch hẹn Work qua CalDAV, tiến độ đọc 
 Reminders). Toàn bộ mang tính hồi cứu (retrospective) — không đặt mục tiêu, không nhắc nhở,
 Forest đã làm việc đó rồi.
 
-Hướng dẫn sử dụng và giải thích từng tính năng nằm trong chính app, ở tab **Hướng dẫn**
-(bao gồm sub-tab "Nhịp làm việc" — cách đưa app vào nhịp ngày/tuần/tháng thực tế). README này
-không lặp lại nội dung đó, chỉ ghi lại vài điểm kiến trúc cho bản thân sau này đọc lại.
+README này ghi lại vài điểm kiến trúc cho bản thân sau này đọc lại, không phải hướng dẫn sử
+dụng đầy đủ.
 
 ## Công nghệ
 
@@ -24,10 +23,9 @@ không lặp lại nội dung đó, chỉ ghi lại vài điểm kiến trúc ch
 - `local_dev_data.py` — Supabase giả và dữ liệu mẫu, chỉ dùng với `FOREST_LOCAL_DEV=1`.
 - `ui_catalog.py` — catalogue màu, nền, font và nhãn UI thuần dữ liệu.
 - `import_parsers.py` — parser cho các file import Forest, Reminders, Day One và Kindle.
-- `help_page.py` — nội dung và bố cục tab Hướng dẫn.
 - `supabase_schema.sql` — schema đầy đủ: `sessions`, `mapping`, `deleted_sessions`, `notes`,
   `quick_notes`, `work_calendar`, `reading_log`, `kindle_highlights`, `kindle_book_map`,
-  `deleted_kindle_highlights`, `settings`, `health_metrics`, `gundam_overrides`, và
+  `deleted_kindle_highlights`, `settings`, `gundam_overrides`, và
   `book_overrides`; đồng thời khai báo bucket Storage `sync-uploads`.
 - `.streamlit/config.toml` — theme sáng/tối; `.streamlit/secrets.toml.example` — mẫu các biến
   cần điền (chỉ `SUPABASE_URL`/`SUPABASE_KEY` là bắt buộc, còn lại đều tuỳ chọn).

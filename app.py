@@ -26,7 +26,6 @@ from caldav import DAVClient
 from local_dev_data import LocalDevSupabase
 from ui_catalog import VN_DAYS, VN_MONTHS, VN_DAYS_ABBR, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CARD_DENSITY, CONTENT_WIDTHS, BODY_FONTS
 from import_parsers import parse_dayone_json, parse_forest_csv, parse_kindle_clippings, parse_reading_log_shortcut_csv
-from help_page import render_help_page
 
 _LOCAL_DEV_REQUESTED = os.getenv("FOREST_LOCAL_DEV", "").strip().lower() in {"1", "true", "yes"}
 try:
@@ -163,7 +162,6 @@ QUICK_NOTES_FILE = "quick_notes.csv"  # ghi chú nhanh từ Shortcut iOS, đứn
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
-HEALTH_METRICS_FILE = "health_metrics.csv"  # chỉ số xét nghiệm máu định kỳ (trang Sức khoẻ)
 KINDLE_HIGHLIGHTS_FILE = "kindle_highlights.csv"  # trích dẫn/ghi chú Kindle, nạp từ My Clippings.txt
 KINDLE_BOOK_MAP_FILE = "kindle_book_map.csv"  # ánh xạ tên sách Kindle -> Dự án/nhãn hiển thị
 DELETED_KINDLE_FILE = "deleted_kindle_highlights.csv"  # sổ đen trích dẫn Kindle đã xoá trong app
@@ -461,7 +459,7 @@ _SB_PAGE_SIZE = 1000  # PostgREST (nền tảng Supabase) mặc định chỉ tr
 # phần dư (không lỗi, không warning nào cảnh báo). Đã xác nhận bug thật trên work_calendar (1003
 # dòng -- thiếu đúng 3 dòng dư ngưỡng, hiện sai lịch ngày hôm đó dù dữ liệu trong Supabase vẫn
 # còn nguyên). Mọi bảng có thể phát triển không giới hạn theo thời gian sử dụng (sessions,
-# work_calendar, reading_log, deleted_sessions, notes, kindle_highlights, health_metrics,
+# work_calendar, reading_log, deleted_sessions, notes, kindle_highlights,
 # mapping, kindle_book_map, deleted_kindle_highlights...) PHẢI đọc qua _sb_select_all() thay vì
 # gọi .execute() trực tiếp -- các bảng nhỏ có trần rõ ràng (settings: vài chục key cấu hình cố
 # định; children theo đúng 1 parent_hash) không cần vì không bao giờ chạm ngưỡng.
@@ -656,7 +654,7 @@ def save_notes_bulk(df):
 @st.cache_data(ttl=30)
 def load_quick_notes():
     """Ghi chú nhanh -- "hộp thư nháp" trong ngày, ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG
-    qua app, xem chương "Trong ngày" của trang Trợ giúp). Không tự động gộp vào Ghi chú chính, nhưng có nút
+    qua app). Không tự động gộp vào Ghi chú chính, nhưng có nút
     "Gộp" ở render_note_editor() để người dùng chủ động chọn lúc nào tổng hợp (xem docstring hàm
     đó) -- 2 bảng vẫn tách biệt, chỉ có 1 thao tác 1 chiều nối nội dung + xoá quick note gốc.
     ttl=30 (khác load_notes() cache vô hạn) vì bảng này có thể bị thay đổi từ NGOÀI vòng save_*/
@@ -1092,8 +1090,8 @@ def save_kindle_highlights_raw_bulk(df):
     """Ghi đè theo ĐÚNG dedupe_hash/parent_hash có sẵn trong df (cột lấy thẳng từ
     load_kindle_highlights(), KHÔNG tính lại từ nội dung) -- CHỈ dùng trong luồng Khôi phục từ bản
     sao lưu, khác save_kindle_highlights_bulk() (dùng cho import My Clippings.txt, ở đó bắt buộc
-    TÍNH LẠI hash từ nội dung vì đang đọc file thô, y hệt lý do health_metrics cần 2 hàm ghi riêng
-    -- xem data-layer.md). Nếu tính lại hash ở đây, trích dẫn đã Sửa nội dung trước khi sao lưu sẽ
+    TÍNH LẠI hash từ nội dung vì đang đọc file thô -- xem data-layer.md). Nếu tính lại hash ở đây,
+    trích dẫn đã Sửa nội dung trước khi sao lưu sẽ
     đổi sang hash MỚI khi khôi phục -- vừa làm gãy tham chiếu parent_hash của ghi chú con, vừa
     khiến lần import file Clippings.txt gốc tiếp theo không nhận ra dòng đó nữa (hash không khớp
     bản gốc), tạo trùng lặp. Gọi SAU khi caller đã _sb_delete_all("kindle_highlights", ...) --
@@ -1210,217 +1208,6 @@ def _kindle_location_sort_key(loc):
     đầu), tránh đẩy quote thiếu dữ liệu lên trước quote có vị trí thật khi sort tăng dần."""
     m = re.search(r'\d+', str(loc)) if pd.notna(loc) else None
     return int(m.group()) if m else float('inf')
-
-
-HEALTH_METRICS_COLS = ["id", "Ngày lấy mẫu", "Nhóm", "Chỉ số", "Giá trị", "Giá trị (gốc)",
-                        "Đơn vị", "Khoảng tham chiếu", "Ref thấp", "Ref cao"]
-
-
-def _backfill_ref_range(df):
-    """Đồng bộ Khoảng tham chiếu của mỗi Chỉ số theo lần khám GẦN NHẤT có ghi nhận giá trị này --
-    phiếu xét nghiệm cùng 1 chỉ số qua các lần khám thường lấy chung 1 khoảng tham chiếu (cùng
-    máy/lab), lệch nhau chỉ là do cách ghi (thiếu hẳn, hoặc dấu cách khác nhau quanh dấu </≤) chứ
-    không phải khoảng tham chiếu thật sự đổi -- áp GHI ĐÈ khoảng của lần gần nhất lên MỌI lần khám
-    cũ hơn của cùng (Nhóm, Chỉ số), kể cả những lần đã có sẵn giá trị khác. Không đổi các cột khác
-    (Giá trị/Giá trị gốc) -- chỉ chuẩn hoá 3 cột khoảng tham chiếu."""
-    if df.empty:
-        return df
-    df = df.sort_values('Ngày lấy mẫu')
-    # CHÚ Ý: không dùng groupby(...).apply(hàm trả nguyên group) -- pandas (>=2.2) âm thầm loại
-    # bỏ chính các cột dùng làm khoá group ("Nhóm"/"Chỉ số") khỏi kết quả nối lại trong trường hợp
-    # này, làm vỡ mọi chỗ đọc 2 cột đó sau đó (đã bắt lỗi này qua kiểm thử thật, không phải suy
-    # đoán). Dùng tail(1) lấy đúng 1 dòng gần nhất có ref mỗi nhóm rồi merge lại là cách an toàn.
-    has_ref = df.dropna(subset=['Ref thấp', 'Ref cao'], how='all')
-    if has_ref.empty:
-        return df
-    latest_ref = has_ref.groupby(['Nhóm', 'Chỉ số']).tail(1)[
-        ['Nhóm', 'Chỉ số', 'Khoảng tham chiếu', 'Ref thấp', 'Ref cao']]
-    merged = df.drop(columns=['Khoảng tham chiếu', 'Ref thấp', 'Ref cao']).merge(
-        latest_ref, on=['Nhóm', 'Chỉ số'], how='left')
-    return merged[df.columns]
-
-
-@st.cache_data
-def load_health_metrics():
-    """Đọc bảng health_metrics (chỉ số xét nghiệm máu định kỳ, xem tab "Sức khoẻ") -- dạng long
-    format: mỗi dòng là 1 chỉ số của 1 lần xét nghiệm, không phải 1 cột/chỉ số. Khoảng tham chiếu
-    được chuẩn hoá qua _backfill_ref_range() ngay khi đọc (xem docstring hàm đó) -- mọi nơi đọc từ
-    hàm này (Báo cáo/Lịch sử/Dữ liệu đầu vào) đều thấy khoảng tham chiếu đã đồng bộ."""
-    sb = _get_supabase()
-    data = _sb_select_all(lambda: sb.table("health_metrics").select(
-        "id,test_date,category,indicator,value,value_raw,unit,ref_raw,ref_low,ref_high"
-    ).order("id"))
-    if not data:
-        return pd.DataFrame(columns=HEALTH_METRICS_COLS)
-    df = pd.DataFrame(data).rename(columns={
-        "test_date": "Ngày lấy mẫu", "category": "Nhóm", "indicator": "Chỉ số",
-        "value": "Giá trị", "value_raw": "Giá trị (gốc)", "unit": "Đơn vị",
-        "ref_raw": "Khoảng tham chiếu", "ref_low": "Ref thấp", "ref_high": "Ref cao"})
-    df["Ngày lấy mẫu"] = pd.to_datetime(df["Ngày lấy mẫu"], format='ISO8601')
-    return _backfill_ref_range(df[HEALTH_METRICS_COLS])
-
-
-def _parse_ref_range(raw):
-    """Parse chuỗi khoảng tham chiếu in trên phiếu xét nghiệm về (thấp, cao) dạng số -- dùng để
-    tô vùng bình thường trên biểu đồ + phát hiện giá trị bất thường. Hỗ trợ các dạng thường gặp
-    trên phiếu xét nghiệm: "a - b" (khoảng đủ), "< x"/"≤ x" (chỉ có trần trên), ">x"/"≥ x" (chỉ
-    có sàn dưới). Trả (None, None) nếu không nhận dạng được (vd kết quả định tính "Âm tính") --
-    không raise lỗi, vì không phải chỉ số nào cũng có khoảng tham chiếu dạng số."""
-    if not raw:
-        return None, None
-    s = str(raw).strip().replace(",", ".")
-    m = re.match(r'^[<≤]\s*([\d.]+)$', s)
-    if m:
-        return None, float(m.group(1))
-    m = re.match(r'^[>≥]\s*([\d.]+)$', s)
-    if m:
-        return float(m.group(1)), None
-    m = re.match(r'^([\d.]+)\s*-\s*([\d.]+)$', s)
-    if m:
-        return float(m.group(1)), float(m.group(2))
-    return None, None
-
-
-def _health_is_abnormal(df):
-    """Chỉ số nào (theo df có cột 'Giá trị'/'Ref thấp'/'Ref cao', vd health_metrics hoặc lát cắt
-    của nó) nằm ngoài khoảng tham chiếu -- logic DÙNG CHUNG cho biểu đồ theo dõi (Báo cáo), bảng
-    Lịch sử, và view "Chỉ số bất thường" tổng quan, tránh lặp 3 lần cùng 1 điều kiện. Chỉ số
-    không có 'Giá trị' dạng số (kết quả định tính) hoặc không có khoảng tham chiếu -> luôn False
-    (không đánh giá được, không phải "bình thường")."""
-    return ((df['Ref thấp'].notna() & (df['Giá trị'] < df['Ref thấp'])) |
-            (df['Ref cao'].notna() & (df['Giá trị'] > df['Ref cao'])))
-
-
-def _health_score(df_health):
-    """(số chỉ số trong ngưỡng, tổng số chỉ số ĐÁNH GIÁ ĐƯỢC) -- mỗi Chỉ số tính theo giá trị GẦN
-    NHẤT của riêng nó (không phải theo 1 lần khám cụ thể), vì 1 lần khám thường chỉ đo 1 phần các
-    chỉ số (vd đợt này đo đường huyết, đợt trước đo mỡ máu) -- "Số sức khoẻ" ở billboard cần nhìn
-    xuyên suốt MỌI Nhóm/Chỉ số đã từng theo dõi. Chỉ số không có giá trị số hoặc không có khoảng
-    tham chiếu nào (không đánh giá được) bị loại khỏi CẢ tử số lẫn mẫu số, không tính là "bất
-    thường" oan."""
-    latest_per_ind = (df_health.sort_values('Ngày lấy mẫu')
-                      .groupby(['Nhóm', 'Chỉ số'], as_index=False).last())
-    evaluable = latest_per_ind[latest_per_ind['Giá trị'].notna() &
-                                (latest_per_ind['Ref thấp'].notna() | latest_per_ind['Ref cao'].notna())]
-    if evaluable.empty:
-        return 0, 0
-    return int((~_health_is_abnormal(evaluable)).sum()), len(evaluable)
-
-
-def _health_trend_candidates(df_health, n=4):
-    """Chọn tối đa n cặp (Nhóm, Chỉ số) để vẽ mini-card xu hướng (chương "Diễn biến chỉ số",
-    _render_health_report()) -- ưu tiên Chỉ số ĐANG bất thường ở lần khám gần nhất (đáng theo dõi
-    nhất), sau đó xếp theo số lần đo giảm dần (theo dõi đều/lâu mới đủ điểm vẽ xu hướng). Chỉ xét
-    Chỉ số có >=2 giá trị SỐ -- ít hơn thì không có gì để vẽ xu hướng (1 điểm = 1 chấm, không phải
-    đường/cột diễn biến)."""
-    num = df_health[df_health['Giá trị'].notna()]
-    counts = num.groupby(['Nhóm', 'Chỉ số']).size()
-    candidates = list(counts[counts >= 2].index)
-    if not candidates:
-        return []
-    latest_date = num['Ngày lấy mẫu'].max()
-    latest_panel = num[num['Ngày lấy mẫu'] == latest_date]
-    abn_keys = set()
-    if not latest_panel.empty:
-        abn_mask = _health_is_abnormal(latest_panel)
-        abn_keys = set(zip(latest_panel.loc[abn_mask, 'Nhóm'], latest_panel.loc[abn_mask, 'Chỉ số']))
-    candidates.sort(key=lambda k: (k not in abn_keys, -counts[k]))
-    return candidates[:n]
-
-
-def _health_trend_caption(vals, dates, ref_low, ref_high, unit):
-    """1 câu ngắn tóm tắt xu hướng của 1 chỉ số qua các lần đo đang hiện trong mini-card (vd "Ngưỡng
-    ≤ 5.2 — tăng dần 4 kỳ liên tiếp.", "Giảm đều −3.4 kg trong 21 tháng.", "dao động quanh ngưỡng,
-    tăng lại kỳ này.") -- quy tắc đơn giản, KHÔNG suy luận xu hướng phức tạp (hồi quy, trung bình
-    trượt...): vài điểm rời rạc mỗi vài tháng thì phép tính phức tạp cũng không đáng tin hơn so
-    sánh đầu-cuối, mà lại khó hiểu hơn. Riêng trường hợp KHÔNG tăng/giảm đều (n>=3) -- vd
-    462→430→418→445 -- so đầu-cuối đơn thuần sẽ ra "giảm" dù kỳ MỚI NHẤT vừa tăng lại, đọc vào dễ
-    hiểu lầm là đang cải thiện; báo "dao động" + chiều đổi của riêng kỳ mới nhất trung thực hơn."""
-    n = len(vals)
-    if n < 2:
-        return ""
-    ref_txt = f"Ngưỡng ≤ {ref_high:g} — " if pd.notna(ref_high) else (
-        f"Ngưỡng ≥ {ref_low:g} — " if pd.notna(ref_low) else "")
-    delta = vals[-1] - vals[0]
-    months = (dates[-1].year - dates[0].year) * 12 + (dates[-1].month - dates[0].month)
-    span_txt = f"{months} tháng" if months >= 1 else f"{n} kỳ"
-    increasing = all(vals[i] < vals[i + 1] for i in range(n - 1))
-    decreasing = all(vals[i] > vals[i + 1] for i in range(n - 1))
-    if abs(delta) < 1e-9:
-        return f"{ref_txt}ổn định trong {span_txt}."
-    if increasing and n >= 3:
-        return f"{ref_txt}tăng dần {n} kỳ liên tiếp."
-    if decreasing and n >= 3:
-        return f"{ref_txt}giảm đều {abs(delta):.1f} {unit} trong {span_txt}.".replace("  ", " ")
-    if n >= 3:
-        last_delta = vals[-1] - vals[-2]
-        if last_delta == 0:
-            return f"{ref_txt}dao động quanh ngưỡng."
-        return f"{ref_txt}dao động quanh ngưỡng, {'tăng' if last_delta > 0 else 'giảm'} lại kỳ này."
-    verb = "tăng" if delta > 0 else "giảm"
-    return f"{ref_txt}{verb} {abs(delta):.1f} {unit} trong {span_txt}.".replace("  ", " ")
-
-
-def save_health_metrics_bulk(panels):
-    """Ghi 1 hoặc nhiều "panel" xét nghiệm vào Supabase -- dùng chung cho cả form nhập nhanh lẫn
-    import JSON hàng loạt. panels: list dict {"test_date", "category", "indicators": [{"indicator",
-    "value_raw"/"value", "unit"?, "ref_raw"/"ref_range"?}, ...]}. Upsert theo khoá (test_date,
-    category, indicator) nên sửa 1 chỉ số đã nhập chỉ cần gọi lại cùng khoá, không cần xoá tay
-    trước (khác _sb_delete_all + insert lại như reading_log, vì ở đây ta muốn CỘNG DỒN qua nhiều
-    lần nhập chứ không ghi đè toàn bảng mỗi lần lưu)."""
-    sb = _get_supabase()
-    recs = []
-    for p in panels:
-        category = str(p["category"]).strip()
-        test_date = str(p["test_date"])
-        for ind in p.get("indicators", []):
-            name = str(ind.get("indicator", "")).strip()
-            if not name:
-                continue
-            value_raw = str(ind.get("value_raw", ind.get("value", ""))).strip()
-            value = pd.to_numeric(value_raw.replace(",", "."), errors="coerce")
-            ref_raw = ind.get("ref_raw") or ind.get("ref_range") or None
-            ref_low, ref_high = _parse_ref_range(ref_raw)
-            recs.append({
-                "test_date": test_date, "category": category, "indicator": name,
-                "value": None if pd.isna(value) else float(value), "value_raw": value_raw,
-                "unit": (str(ind["unit"]).strip() if ind.get("unit") else None),
-                "ref_raw": ref_raw, "ref_low": ref_low, "ref_high": ref_high,
-            })
-    if recs:
-        for i in range(0, len(recs), 500):
-            sb.table("health_metrics").upsert(
-                recs[i:i + 500], on_conflict="test_date,category,indicator").execute()
-    load_health_metrics.clear()
-
-
-def delete_health_metric_panel(test_date, category):
-    """Xoá toàn bộ 1 lần xét nghiệm (mọi chỉ số cùng ngày lấy mẫu + nhóm)."""
-    sb = _get_supabase()
-    sb.table("health_metrics").delete().eq("test_date", str(test_date)).eq("category", category).execute()
-    load_health_metrics.clear()
-
-
-def save_health_metrics_raw_bulk(df):
-    """Ghi đè TOÀN BỘ bảng health_metrics từ 1 DataFrame đúng khuôn HEALTH_METRICS_COLS -- dùng
-    RIÊNG cho luồng Khôi phục từ bản sao lưu (khác save_health_metrics_bulk là upsert cộng dồn
-    dùng cho nhập liệu thường ngày). Y hệt kiểu save_db()/save_reading_log_bulk(): xoá sạch rồi
-    chèn lại nguyên trạng, đúng ngữ nghĩa "khôi phục về đúng mốc đã sao lưu"."""
-    sb = _get_supabase()
-    _sb_delete_all("health_metrics", "id")
-    if not df.empty:
-        recs = [{
-            "test_date": str(pd.Timestamp(r["Ngày lấy mẫu"]).date()), "category": str(r["Nhóm"]),
-            "indicator": str(r["Chỉ số"]), "value": None if pd.isna(r["Giá trị"]) else float(r["Giá trị"]),
-            "value_raw": str(r["Giá trị (gốc)"]) if pd.notna(r["Giá trị (gốc)"]) else "",
-            "unit": (str(r["Đơn vị"]) if pd.notna(r["Đơn vị"]) else None),
-            "ref_raw": (str(r["Khoảng tham chiếu"]) if pd.notna(r["Khoảng tham chiếu"]) else None),
-            "ref_low": None if pd.isna(r["Ref thấp"]) else float(r["Ref thấp"]),
-            "ref_high": None if pd.isna(r["Ref cao"]) else float(r["Ref cao"]),
-        } for r in df.to_dict("records")]
-        for i in range(0, len(recs), 500):
-            sb.table("health_metrics").insert(recs[i:i + 500]).execute()
-    load_health_metrics.clear()
 
 
 def save_dayone_notes_bulk(day_texts):
@@ -3258,9 +3045,8 @@ def _render_reading_series_override(tag_sessions, rl_subset, assigned_df, overri
     # container key="rl_series_override" (xem CSS .st-key-rl_series_override) -- expander này đứng
     # trực tiếp trên nền trang (ngoài mọi .sec-card), tiêu đề/caption mặc định đọc var(--text)/
     # var(--text-2) sẽ mất tương phản trên các Bảng màu nền cố định tông đậm (vd "Rượu vang") vì 2
-    # token đó tính theo var(--bg) SÁNG thông thường. Ghi đè thành 1 thẻ var(--card) như đã làm ở
-    # "Sửa/xoá xét nghiệm" (key="hm_hist_edit") và FAQ (key="help_faq") thay vì đổi sang
-    # var(--text-on-bg) -- var(--text) mặc định lại ĐÚNG khi nằm trên var(--card).
+    # token đó tính theo var(--bg) SÁNG thông thường. Ghi đè thành 1 thẻ var(--card) thay vì đổi
+    # sang var(--text-on-bg) -- var(--text) mặc định lại ĐÚNG khi nằm trên var(--card).
     with st.container(key="rl_series_override"), st.expander(f"Sửa gán {item_label} tự động", expanded=False):
         st.caption(
             f"Forest chỉ có 1 tag chung, không phân biệt {item_label} -- mỗi ngày có phiên được "
@@ -3611,7 +3397,7 @@ def render_reading_log(df_books, latest_overall, reading_log_df, recency_days=14
     #
     # Widget picker ("Chọn mục") KHÔNG còn render Ở ĐÂY -- đã dời sang sidebar, NGAY SAU nút "Nhật
     # ký đọc sách"/"Gundam" trong nav chính (SACH_SUBS/GUNDAM_SUBS + _NAV_SUBNAV, xem khối "with
-    # st.sidebar" ở dispatch/architecture-navigation.md), đồng bộ với Báo cáo/Sức khoẻ/Tuỳ biến. Ở
+    # st.sidebar" ở dispatch/architecture-navigation.md), đồng bộ với Báo cáo/Tuỳ biến. Ở
     # đây chỉ ĐỌC lại session_state đã đồng bộ sẵn ngoài đó.
     _tabs_key = "rl_view_tabs" if show_favorites else "rl_view_tabs_gd"
     _tab_labels = SACH_SUBS if show_favorites else GUNDAM_SUBS
@@ -4258,7 +4044,7 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
 def _reading_cal_lvl(mins):
     """Bậc màu heatmap theo phút -- CÙNG 6 mốc giờ cố định với render_reading_calendar_grid()
     (0/<0.5h/<1h/<2h/<4h/>=4h), không co giãn theo tháng đang xem, khớp triết lý "thang màu cố
-    định" đã xác nhận cho mọi Biểu đồ lịch trong app (xem tab Trợ giúp)."""
+    định" đã xác nhận cho mọi Biểu đồ lịch trong app."""
     h = mins / 60
     if h <= 0: return 0
     if h < 0.5: return 1
@@ -5141,8 +4927,8 @@ def render_notes_journal(period_key, kind, df_all):
     một kỳ (tuần/tháng) -- một dòng cho mỗi ngày có ÍT NHẤT 1 trong 4 nguồn (hợp/union): ghi
     chú, lịch, đọc sách, HOẶC giữ 1 kỷ lục Bảng vàng (xem _compute_alltime_records()) -- nguồn
     thứ 4 này đảm bảo 1 ngày kỷ lục nhưng không có ghi chú/lịch/đọc sách nào vẫn hiện dòng riêng
-    để chip 🏆 có chỗ hiện ra, đúng lời hứa "chip Kỷ lục luôn thấy được ở Nhật ký Tuần/Tháng"
-    trong tab Hướng dẫn. Mỗi dòng theo thứ tự cố định: chip Kỷ lục (nếu có) → chip Lịch (kèm
+    để chip 🏆 có chỗ hiện ra, đúng lời hứa "chip Kỷ lục luôn thấy được ở Nhật ký Tuần/Tháng".
+    Mỗi dòng theo thứ tự cố định: chip Kỷ lục (nếu có) → chip Lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách (tự nhóm+gắn nhãn theo từng cuốn/series qua
     _book_chips_html()) → ghi chú nhanh đang chờ (chỉ đọc, xem _quick_note_chips_html()) → nhãn
     "Ghi chú chính" + ghi chú (nhãn chỉ hiện nếu ngày đó có ghi chú). Không lọc Gundam khỏi nguồn
@@ -5261,517 +5047,6 @@ def render_notes_journal(period_key, kind, df_all):
         )
     with st.container(border=True, key=f"jcard_journal_{kind}"):
         st.markdown(f"<div class='jrows'>{rows_html}</div>", unsafe_allow_html=True)
-
-
-HEALTH_METRICS_JSON_EXAMPLE = [
-    {
-        "test_date": "2026-07-08",
-        "category": "Huyết học",
-        "indicators": [
-            {"indicator": "Số lượng hồng cầu", "value_raw": "5.03", "unit": "T/L", "ref_raw": "4.2 - 5.4"},
-            {"indicator": "Hemoglobin (Hb)", "value_raw": "148", "unit": "g/L", "ref_raw": "130 - 170"},
-        ],
-    },
-    {
-        "test_date": "2026-07-08",
-        "category": "Sinh hóa",
-        "indicators": [
-            {"indicator": "Glucose", "value_raw": "5.4", "unit": "mmol/L", "ref_raw": "3.9 - 6.4"},
-        ],
-    },
-]
-
-
-def _render_health_report(df_health):
-    """Sub-tab "Báo cáo": billboard "Số sức khoẻ" (điểm X/Y chỉ số đang trong ngưỡng, xem
-    _health_score()) rồi 3 chương đánh số: 1· Chỉ số bất thường (card chi tiết của ĐÚNG lần khám
-    gần nhất; KHÔNG còn liệt kê chip "trong ngưỡng" -- 1 lần khám có thể có vài chục chỉ số, liệt
-    kê hết làm rối giao diện, đã xác nhận với người dùng bỏ hẳn, xem bảng đầy đủ ở chương 3 nếu
-    cần) · 2· Diễn biến chỉ số (lưới mini-card xu hướng auto-chọn,
-    xem _health_trend_candidates(), CỘNG với bộ chọn Nhóm/Chỉ số + biểu đồ đường đầy đủ giữ nguyên
-    từ bản cũ -- xác nhận với người dùng: lưới mini-card là tổng quan nhanh THÊM VÀO, không thay
-    thế bộ chọn/biểu đồ chi tiết) · 3· Bảng xét nghiệm đầy đủ (mọi Chỉ số của lần khám gần nhất).
-
-    Mockup có mức đánh giá thứ 3 "Sát ngưỡng" (cam) và chip "Hẹn tái khám" -- CẢ 2 đều bỏ, đã xác
-    nhận với người dùng: mức "sát ngưỡng" cần tự đặt 1 ngưỡng % không có cơ sở dữ liệu thật (giữ
-    nhị phân trong/ngoài ngưỡng như _health_is_abnormal() đã có, đồng bộ với Lịch sử), "Hẹn tái
-    khám" không có trường dữ liệu nào tương ứng trong health_metrics."""
-    if df_health.empty:
-        st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
-        return
-
-    _latest_date = pd.Timestamp(df_health['Ngày lấy mẫu'].max())
-    _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
-    _latest_num = _latest_panel[_latest_panel['Giá trị'].notna()]
-
-    _abn_latest = _latest_num[_health_is_abnormal(_latest_num)] if not _latest_num.empty else _latest_num
-    if not _abn_latest.empty:
-        # Cùng 1 lần khám đôi khi có 2 dòng cho CÙNG 1 xét nghiệm dưới 2 tên khác nhau (vd tên
-        # đầy đủ trên phiếu "Định lượng Glucose [Máu]" VÀ tên gọn "Glucose") -- nguồn nhập liệu
-        # ghi cả 2 dòng cho cùng 1 kết quả. Nhận diện trùng qua (Nhóm, Giá trị, Đơn vị, Ref thấp,
-        # Ref cao) giống hệt nhau (KHÔNG so tên Chỉ số, vốn khác chữ dù cùng 1 xét nghiệm) -- dùng
-        # Ref thấp/Ref cao (đã parse ra số) thay vì chuỗi thô "Khoảng tham chiếu", vì chuỗi thô có
-        # thể lệch khoảng trắng giữa 2 dòng cùng nguồn (vd "<3.4" so với "< 3.4") khiến so sánh
-        # chuỗi trượt trùng dù cùng 1 kết quả. Chỉ giữ 1 dòng, ưu tiên tên NGẮN hơn (thường là tên
-        # gọn thông dụng). Chỉ áp dụng cho billboard/chương 1 (tóm tắt nhanh) -- Lịch sử Sức khoẻ
-        # vẫn giữ nguyên mọi dòng đã nhập, không tự ý xoá dữ liệu.
-        _abn_latest = (
-            _abn_latest.assign(_namelen=_abn_latest['Chỉ số'].str.len())
-            .sort_values('_namelen')
-            .drop_duplicates(subset=['Nhóm', 'Giá trị', 'Đơn vị', 'Ref thấp', 'Ref cao'], keep='first')
-            .drop(columns='_namelen'))
-
-    _toc = [("hm-bc-ch1", "1 · Chỉ số bất thường"), ("hm-bc-ch2", "2 · Diễn biến chỉ số"),
-            ("hm-bc-ch3", "3 · Bảng xét nghiệm đầy đủ")]
-    _ok_score, _total_score = _health_score(df_health)
-    if not _abn_latest.empty:
-        # Chỉ hiện SỐ LƯỢNG, không liệt kê từng chỉ số bằng chip -- danh sách chi tiết (tên/giá
-        # trị/mũi tên) đã có ngay dưới ở chương 1 "Chỉ số bất thường", lặp lại ở billboard là dư.
-        _right_html = (f"<div class='pbill-kicker'>Cần chú ý</div>"
-                        f"<div class='pbill-title'>{len(_abn_latest)} chỉ số ngoài ngưỡng</div>")
-    else:
-        _right_html = "<div class='pbill-title'>Tất cả chỉ số trong ngưỡng</div>"
-    render_period_billboard("Số sức khoẻ", f"{_ok_score}/{_total_score}", "chỉ số trong ngưỡng",
-                             f"Lần khám gần nhất {_latest_date:%d/%m/%Y}", _right_html, _toc)
-
-    sec_chapter("hm-bc-ch1", 1, "Chỉ số bất thường",
-                badge=f"Lần khám {_latest_date:%d/%m/%Y}", tight_top=True)
-    if _latest_num.empty:
-        st.caption("Lần khám gần nhất chưa có chỉ số dạng số nào để đánh giá.")
-    elif _abn_latest.empty:
-        st.success(f"Tất cả {len(_latest_num)} chỉ số trong lần khám gần nhất đều trong ngưỡng.")
-    else:
-        _cards = ''
-        for _, r in _abn_latest.iterrows():
-            _above = r['Giá trị'] > r['Ref cao'] if pd.notna(r['Ref cao']) else False
-            arrow = _mi('arrow_upward', 12) if _above else _mi('arrow_downward', 12)
-            _ref_txt = f"trên ngưỡng {r['Ref cao']:g}" if _above else f"dưới ngưỡng {r['Ref thấp']:g}"
-            unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
-            _cards += (
-                "<div class='hmtl-card'>"
-                f"<span class='rl-book'>{html_escape(str(r['Chỉ số']))}</span>"
-                f"<div class='hbn-value'>{r['Giá trị']:g}<span class='hbn-unit'>{unit}</span></div>"
-                f"<div class='hbn-delta'>{arrow} {_ref_txt}</div></div>")
-        st.markdown(f"<div class='hbn-grid'>{_cards}</div>", unsafe_allow_html=True)
-
-    sec_chapter("hm-bc-ch2", 2, "Diễn biến chỉ số")
-    _trend_keys = _health_trend_candidates(df_health, n=4)
-    if not _trend_keys:
-        st.caption("Chưa có chỉ số nào đủ ít nhất 2 lần đo để vẽ xu hướng.")
-    else:
-        _trend_cards = ''
-        for _nhom, _chiso in _trend_keys:
-            _s = (df_health[(df_health['Nhóm'] == _nhom) & (df_health['Chỉ số'] == _chiso)
-                             & df_health['Giá trị'].notna()]
-                  .sort_values('Ngày lấy mẫu').tail(4).reset_index(drop=True))
-            _vals, _dates = list(_s['Giá trị']), list(_s['Ngày lấy mẫu'])
-            _abn_flags = list(_health_is_abnormal(_s))
-            _vmin, _vmax = min(_vals), max(_vals)
-            _bars = ''
-            for _v, _d, _a in zip(_vals, _dates, _abn_flags):
-                _pct = 50 if _vmax == _vmin else 15 + (_v - _vmin) / (_vmax - _vmin) * 85
-                _bars += (f"<div class='htrend-bar-col'><span class='htrend-bar-val{' abn' if _a else ''}'>"
-                          f"{_v:g}</span><div class='htrend-bar{' abn' if _a else ''}' "
-                          f"style='height:{_pct:.0f}%;'></div><span class='htrend-bar-date'>{_d:%m/%y}</span></div>")
-            _unit_vals = _s['Đơn vị'].dropna()
-            _unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
-            _last = _s.iloc[-1]
-            _caption = _health_trend_caption(_vals, _dates, _last['Ref thấp'], _last['Ref cao'], _unit)
-            _latest_style = "color:#ff3b30;" if _abn_flags[-1] else ""
-            _trend_cards += (
-                "<div class='hmtl-card htrend-card'><div class='hmtl-head'>"
-                f"<span class='htrend-title'>{html_escape(_chiso)} <span class='htrend-unit'>{_unit}</span></span>"
-                f"<span style='font-weight:700;{_latest_style}'>{_vals[-1]:g}</span></div>"
-                f"<div class='htrend-bars'>{_bars}</div>"
-                f"<div class='htrend-caption'>{_caption}</div></div>")
-        st.markdown(f"<div class='htrend-grid'>{_trend_cards}</div>", unsafe_allow_html=True)
-
-    st.write("")
-    cc1, cc2 = st.columns(2)
-    cats = sorted(df_health['Nhóm'].dropna().unique())
-    cat_pick = cc1.selectbox("Nhóm", cats, key="hm_chart_cat")
-    inds = sorted(df_health.loc[df_health['Nhóm'] == cat_pick, 'Chỉ số'].dropna().unique())
-    ind_pick = cc2.selectbox("Chỉ số", inds, key="hm_chart_ind")
-    s = (df_health[(df_health['Nhóm'] == cat_pick) & (df_health['Chỉ số'] == ind_pick)]
-         .sort_values('Ngày lấy mẫu'))
-    s_num = s[s['Giá trị'].notna()].reset_index(drop=True)
-
-    # "Số liệu"/"Biểu đồ theo dõi" là 2 mục CON trong CÙNG chương 2 (không phải chương riêng đánh
-    # số như bản cũ) -- dùng .section-hd (tiêu đề phụ nhẹ, không có ô số) vì lưới mini-card phía
-    # trên đã là nội dung chính của chương "Diễn biến chỉ số", 2 mục này chỉ là phần "xem sâu 1
-    # chỉ số cụ thể" bổ sung, không cần đánh số ngang hàng 3 chương lớn của trang.
-    if s_num.empty:
-        st.markdown("<div class='section-hd'>Số liệu</div>", unsafe_allow_html=True)
-        st.caption("Chỉ số này chưa có giá trị dạng số để thống kê (có thể là kết quả định tính).")
-        st.markdown("<div class='section-hd'>Biểu đồ theo dõi</div>", unsafe_allow_html=True)
-        st.caption("Chỉ số này chưa có giá trị dạng số để vẽ biểu đồ.")
-        return
-
-    _unit_vals = s_num['Đơn vị'].dropna()
-    unit = _unit_vals.iloc[-1] if not _unit_vals.empty else ""
-    is_abn = _health_is_abnormal(s_num)
-
-    st.markdown("<div class='section-hd'>Số liệu</div>", unsafe_allow_html=True)
-    last = s_num.iloc[-1]
-    deltas = []
-    if len(s_num) > 1:
-        d = last['Giá trị'] - s_num.iloc[-2]['Giá trị']
-        dc = "#34c759" if d > 0 else "#ff3b30" if d < 0 else "var(--text-2)"
-        deltas = [(f"{'+' if d > 0 else ''}{d:.2f} so với lần trước", dc)]
-    hero_items = [{"label": f"Gần nhất · {last['Ngày lấy mẫu']:%d/%m/%Y}",
-                   "value": f"{last['Giá trị']:g} {unit}".strip(), "deltas": deltas}]
-    hi, lo = int(s_num['Giá trị'].idxmax()), int(s_num['Giá trị'].idxmin())
-    n_abn = int(is_abn.sum())
-    sections = [
-        {"label": "Thống kê", "chips": [
-            {"k": "Số quan sát", "v": str(len(s_num))},
-            {"k": "Khoảng thời gian",
-             "v": f"{s_num['Ngày lấy mẫu'].min():%m/%Y} – {s_num['Ngày lấy mẫu'].max():%m/%Y}"},
-            {"k": "Trung bình", "v": f"{s_num['Giá trị'].mean():.2f} {unit}".strip()},
-            {"k": "Cao nhất", "v": f"{s_num.loc[hi, 'Giá trị']:g} ({s_num.loc[hi, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-            {"k": "Thấp nhất", "v": f"{s_num.loc[lo, 'Giá trị']:g} ({s_num.loc[lo, 'Ngày lấy mẫu']:%d/%m/%Y})"},
-        ]},
-        {"label": "Bất thường", "chips": [
-            {"k": "Ngoài khoảng tham chiếu", "v": f"{n_abn}/{len(s_num)}", "hl": n_abn > 0},
-        ]},
-    ]
-    render_stat_panel(hero_items, sections=sections)
-
-    st.markdown("<div class='section-hd'>Biểu đồ theo dõi</div>", unsafe_allow_html=True)
-    _band_fill = "rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)"
-    _band_line = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
-    fig = go.Figure()
-    if s_num['Ref cao'].notna().any():
-        fig.add_trace(go.Scatter(
-            x=s_num['Ngày lấy mẫu'], y=s_num['Ref cao'], mode='lines',
-            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-            name='Trần tham chiếu', showlegend=False, hoverinfo='skip'))
-    if s_num['Ref thấp'].notna().any():
-        fig.add_trace(go.Scatter(
-            x=s_num['Ngày lấy mẫu'], y=s_num['Ref thấp'], mode='lines',
-            line=dict(color=_band_line, width=1, dash='dot'), connectgaps=True,
-            fill='tonexty', fillcolor=_band_fill,
-            name='Khoảng tham chiếu', showlegend=False, hoverinfo='skip'))
-    fig.add_trace(go.Scatter(
-        x=s_num['Ngày lấy mẫu'], y=s_num['Giá trị'], mode='lines+markers',
-        line=dict(color=ACCENT, width=2.5),
-        marker=dict(color=['#ff3b30' if a else ACCENT for a in is_abn], size=9),
-        name=ind_pick, customdata=s_num['Khoảng tham chiếu'].fillna(''),
-        hovertemplate=f'%{{x|%d/%m/%Y}}<br>%{{y}} {unit}<br>Tham chiếu: %{{customdata}}<extra></extra>',
-    ))
-    fig.update_layout(
-        height=340, margin=dict(l=10, r=10, t=24, b=10), showlegend=False,
-        xaxis=dict(title='', tickformat='%d/%m/%y', showgrid=False),
-        yaxis=dict(title=unit, gridcolor=("rgba(255,255,255,0.10)" if IS_DARK else "rgba(0,0,0,0.06)")),
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-    )
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
-    if is_abn.any():
-        st.warning(f"Có {int(is_abn.sum())} lần đo nằm ngoài khoảng tham chiếu.")
-    render_health_log_table(s_num, is_abn)
-
-    sec_chapter("hm-bc-ch3", 3, "Bảng xét nghiệm đầy đủ", badge=f"Lần khám {_latest_date:%d/%m/%Y}")
-    render_health_full_table(_latest_panel)
-
-
-def _render_health_history(df_health):
-    """Sub-tab "Lịch sử": dòng thời gian các lần khám theo năm, 1 thẻ/NGÀY (gộp mọi Nhóm khám
-    cùng ngày -- khớp mockup "1 lần khám = 1 thẻ", dữ liệu thật lưu theo (Ngày, Nhóm) riêng nên
-    1 ngày có thể có nhiều Nhóm, vd "Huyết học" + "Sinh hóa" cùng ngày). Mỗi Nhóm trong thẻ hiện
-    hàng chip chỉ số (đỏ + mũi tên lên/xuống nếu ngoài khoảng tham chiếu, xem _health_is_abnormal).
-    Sửa/xoá dữ liệu thật vẫn theo TỪNG Nhóm (khớp khoá test_date+category của
-    save_health_metrics_bulk()/delete_health_metric_panel(), gộp sẽ lẫn 2 Nhóm khi lưu) -- gom
-    CHUNG vào 1 expander DUY NHẤT ở cuối (chọn lần xét nghiệm cần sửa qua selectbox) thay vì 1
-    expander riêng dưới MỖI thẻ như bản đầu: thao tác này ít dùng, mà 1 expander/Nhóm chen giữa
-    timeline (kèm đường kẻ ngang phân cách của st.expander) làm vỡ mạch dòng thời gian liên tục,
-    lại không đồng bộ hình khối với các thẻ HTML xung quanh.
-
-    Mockup còn có dòng phụ đề "Cơ sở y tế · Gói khám" và ghi chú tự do của bác sĩ, cùng 1 mức
-    cảnh báo cam "sát ngưỡng" cạnh mức đỏ "cao" -- CẢ 3 đều không có trong dữ liệu hiện tại (chỉ
-    có Ngày/Nhóm/Chỉ số/Giá trị/Đơn vị/Khoảng tham chiếu, không có cơ sở/gói khám/ghi chú, và
-    _health_is_abnormal() chỉ nhị phân trong/ngoài khoảng) nên bỏ hẳn, không bịa dữ liệu (đã xác
-    nhận với người dùng)."""
-    if df_health.empty:
-        st.info("Chưa có dữ liệu xét nghiệm nào — sang tab **Dữ liệu đầu vào** để nhập.")
-        return
-    _years = sorted(df_health['Ngày lấy mẫu'].dt.year.unique(), reverse=True)
-    year_sel = st.selectbox("Năm", _years, key="hm_hist_year")
-    panels = df_health[df_health['Ngày lấy mẫu'].dt.year == year_sel]
-    _dates = sorted(panels['Ngày lấy mẫu'].unique(), reverse=True)
-
-    _panel_keys = []  # [(pdate, pcat, grp), ...] tất cả (Ngày, Nhóm) của năm đang chọn -- gom
-                       # 1 lần duy nhất ở đây để dùng lại cho cả timeline lẫn expander sửa/xoá
-                       # gộp ở cuối, không lặp lại groupby 2 nơi.
-    for pdate in _dates:
-        day_df = panels[panels['Ngày lấy mẫu'] == pdate]
-        for pcat, grp in sorted(day_df.groupby('Nhóm'), key=lambda kv: kv[0]):
-            _panel_keys.append((pd.Timestamp(pdate), pcat, grp))
-
-    for _i, pdate in enumerate(_dates):
-        pdate = pd.Timestamp(pdate)
-        day_df = panels[panels['Ngày lấy mẫu'] == pdate]
-        # Đường nối chỉ vẽ khi CHƯA phải thẻ cuối -- mỗi thẻ render riêng 1 lệnh st.markdown nên
-        # ":last-child" trong CSS luôn đúng với chính nó (là con duy nhất trong khối markdown của
-        # nó) và sẽ ẨN đường nối ở MỌI thẻ nếu dựa vào CSS -- phải quyết định ở Python theo vị trí
-        # trong _dates.
-        line_html = "<div class='hmtl-line'></div>" if _i < len(_dates) - 1 else ""
-        _day_groups = [(pcat, grp) for pd_, pcat, grp in _panel_keys if pd_ == pdate]
-        _n_abn_day = int(_health_is_abnormal(day_df).sum())
-        if _n_abn_day:
-            dot_cls, badge_html = "hmtl-dot warn", f"<span class='hmtl-badge bad'>{_n_abn_day} chỉ số bất thường</span>"
-        else:
-            dot_cls, badge_html = "hmtl-dot", "<span class='hmtl-badge ok'>Trong khoảng tham chiếu</span>"
-
-        grp_html = ''
-        for pcat, grp in _day_groups:
-            _abn = _health_is_abnormal(grp)
-            chips = ''
-            for (_, r), a in zip(grp.iterrows(), _abn):
-                val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
-                unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
-                arrow = ''
-                if a and pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
-                    arrow = _mi('arrow_upward', 11)
-                elif a and pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
-                    arrow = _mi('arrow_downward', 11)
-                title = f" title='Tham chiếu {html_escape(str(r['Khoảng tham chiếu']))}'" if pd.notna(r['Khoảng tham chiếu']) else ""
-                chips += (f"<span class='jchip{' abn' if a else ''}'{title}>"
-                          f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
-                          f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
-            grp_html += f"<div class='hmtl-grp'><span class='rl-book'>{html_escape(str(pcat))}</span>{chips}</div>"
-
-        st.markdown(
-            "<div class='hmtl-item'>"
-            f"<div class='{dot_cls}'></div>{line_html}"
-            "<div class='hmtl-card'>"
-            f"<div class='hmtl-head'><span class='hmtl-date'>{pdate:%d/%m/%Y}</span>{badge_html}</div>"
-            f"{grp_html}</div></div>", unsafe_allow_html=True)
-
-    # 1 expander DUY NHẤT cho sửa/xoá, đặt SAU cả timeline (không chen giữa từng thẻ) -- chọn
-    # đúng 1 lần xét nghiệm (Ngày + Nhóm) qua selectbox rồi mới hiện bảng sửa, xem docstring. Style
-    # riêng (container key="hm_hist_edit", xem CSS .st-key-hm_hist_edit) để trông như 1 thẻ hộp
-    # khớp .hmtl-card phía trên, thay vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của mọi
-    # st.expander khác, xem rule [data-testid="stExpander"]) -- lạc tông với timeline card ngay
-    # trên nó. Cùng khuôn với FAQ (Trợ giúp, xem CSS .st-key-help_faq), đã có tiền lệ trong app.
-    with st.container(key="hm_hist_edit"):
-        with st.expander("Sửa / xoá xét nghiệm đã nhập", icon=":material/edit_note:", expanded=False):
-            _opts = [f"{pdate:%d/%m/%Y} · {pcat}" for pdate, pcat, _ in _panel_keys]
-            _pick = st.selectbox("Chọn lần xét nghiệm", _opts, key="hm_hist_edit_pick")
-            pdate, pcat, grp = _panel_keys[_opts.index(_pick)]
-            _ek = f"hm_edit_{pdate:%Y%m%d}_{re.sub(r'[^a-zA-Z0-9]+', '_', pcat)}"
-            _abn = _health_is_abnormal(grp)
-            grp_disp = grp[["Chỉ số", "Giá trị (gốc)", "Đơn vị", "Khoảng tham chiếu"]].copy()
-            grp_disp.insert(1, "Bất thường", ['Có' if a else '' for a in _abn])
-            edited = st.data_editor(
-                grp_disp, hide_index=True, width='stretch', num_rows="dynamic", key=_ek,
-                column_config={"Bất thường": st.column_config.TextColumn(
-                    "Bất thường", disabled=True, width="small",
-                    help="Tự tính từ Giá trị (gốc)/Khoảng tham chiếu đã lưu, không sửa trực tiếp được ở đây.")})
-            ec1, ec2 = st.columns(2)
-            if ec1.button("Lưu thay đổi", type="primary", key=f"{_ek}_save"):
-                delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                _rows = [r for r in edited.to_dict("records") if str(r["Chỉ số"]).strip()]
-                if _rows:
-                    save_health_metrics_bulk([{
-                        "test_date": pdate.date().isoformat(), "category": pcat,
-                        "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị (gốc)"],
-                                        "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                       for r in _rows]}])
-                st.success("Đã lưu thay đổi.")
-                time.sleep(1)
-                st.rerun()
-            if ec2.button("Xoá cả lần xét nghiệm này", key=f"{_ek}_del"):
-                delete_health_metric_panel(pdate.date().isoformat(), pcat)
-                st.success("Đã xoá.")
-                time.sleep(1)
-                st.rerun()
-
-
-def _render_health_input(df_health):
-    """Sub-tab "Dữ liệu đầu vào": Import hàng loạt lên TRƯỚC (luồng chính, dùng khi nhờ ChatGPT
-    đọc ảnh phiếu xét nghiệm), Nhập kết quả xét nghiệm (nhập tay) xuống sau (luồng phụ/sửa lỗi).
-
-    ĐỔI SANG khuôn "chương" của Hôm nay/Báo cáo (billboard + sec_chapter đánh số) thay vì
-    accordion/expander cũ -- xác nhận với người dùng: tab này rất ít vào nên không sợ dài, ưu tiên
-    đồng bộ giao diện với phần còn lại của app hơn là gọn bằng cách gập lại. Cả 2 chương LUÔN MỞ
-    (không còn st.expander bọc ngoài) vì lý do tương tự.
-
-    Billboard "Lần khám gần nhất" dùng render_period_billboard() -- CÙNG key mặc định "bc_billboard"
-    với Báo cáo/Sách/Gundam/Dự án/Tuỳ biến (an toàn vì mỗi nav/sub-tab render độc quyền 1 khối
-    if/elif, không có 2 billboard nào cùng vẽ trong 1 lượt chạy ở đây) -- tái dùng thẳng CSS kính
-    mờ có sẵn, không cần thêm rule mới. Cột phải CHỈ liệt kê chip các chỉ số BẤT THƯỜNG (cùng khuôn
-    _right_html của billboard "Số sức khoẻ" ở _render_health_report()) -- 1 lần khám có thể có tới
-    vài chục chỉ số, liệt kê hết (bản cũ) làm billboard tràn dài bất thường, chỉ nên tóm tắt (lỗi
-    thật đã gặp, xem ảnh chụp); danh sách đầy đủ mọi chỉ số đã có sẵn ở chương "2. Nhập kết quả xét
-    nghiệm" phía dưới rồi. Nút "Sửa lần khám này" KHÔNG tự xây bộ sửa/xoá riêng (trùng lặp) mà nhảy
-    sang sub-tab Lịch sử -- nơi đã có UI sửa/xoá đầy đủ, qua cờ chờ xử lý `_hm_sub_jump` (xem đầu
-    render_health_page(), không set trực tiếp session_state của widget segmented_control sau khi nó
-    đã instantiate).
-
-    Mockup còn có nút "Tải lên PDF" (trích số liệu từ file kết quả) -- app không có khả năng đọc
-    PDF (luồng chính là dán JSON do ChatGPT đọc ảnh hộ), nên bỏ hẳn, không bịa tính năng chưa làm
-    (đã xác nhận với người dùng). Mục "Ngưỡng tham chiếu" (tự đặt ngưỡng cảnh báo riêng, chặt hơn
-    mức lab in trên phiếu) cũng bỏ qua -- là tính năng nghiệp vụ MỚI ngoài phạm vi "chỉ sửa giao
-    diện" của yêu cầu này, chưa có nơi lưu/logic nào tương ứng."""
-    _toc = [("hm-in-ch1", "1 · Import hàng loạt"), ("hm-in-ch2", "2 · Nhập kết quả xét nghiệm")]
-
-    if not df_health.empty:
-        _latest_date = pd.Timestamp(df_health['Ngày lấy mẫu'].max())
-        _latest_panel = df_health[df_health['Ngày lấy mẫu'] == _latest_date]
-        _abn_mask = _health_is_abnormal(_latest_panel)
-        _abn_rows = _latest_panel[_abn_mask]
-        _n_abn = len(_abn_rows)
-        # Chỉ liệt kê chip các chỉ số BẤT THƯỜNG -- 1 lần khám có thể có vài chục chỉ số, liệt kê
-        # hết (bản cũ) làm billboard tràn dài, cùng cách xử lý đã áp dụng ở billboard "Số sức khoẻ"
-        # của _render_health_report().
-        chips = ''
-        for _, r in _abn_rows.iterrows():
-            val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
-            unit = f" {r['Đơn vị']}" if pd.notna(r['Đơn vị']) and str(r['Đơn vị']).strip() else ""
-            arrow = ''
-            if pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao']:
-                arrow = _mi('arrow_upward', 11)
-            elif pd.notna(r['Ref thấp']) and r['Giá trị'] < r['Ref thấp']:
-                arrow = _mi('arrow_downward', 11)
-            chips += (f"<span class='jchip abn'>"
-                      f"<span class='ck'>{html_escape(str(r['Chỉ số']))}</span>"
-                      f"<span class='cv'>{html_escape(val)}{unit}{arrow}</span></span>")
-        if _n_abn:
-            _right_html = (f"<div class='pbill-kicker'>Cần chú ý</div>"
-                            f"<div class='pbill-title'>{_n_abn} chỉ số ngoài khoảng tham chiếu</div>"
-                            f"<div class='pbill-chips'>{chips}</div>")
-        else:
-            _right_html = "<div class='pbill-title'>Tất cả chỉ số trong khoảng tham chiếu</div>"
-        _vn_dow = VN_DAYS.get(_latest_date.day_name(), "")
-        # Nhãn tab CỐ Ý ghi rõ "Lần khám gần nhất" (không phải tháng/năm như Hôm nay/Báo cáo) --
-        # chú thích cho biết số to trong badge tròn bên trái là ngày LẤY MẪU gần nhất, không phải
-        # hôm nay, tránh đọc lẫn với badge tròn của billboard Hôm nay (cùng CSS .tbcircle-*
-        # nên nhìn thoáng qua dễ ngỡ là ngày hiện tại). meta ghi tháng/năm CHỮ ĐẦY ĐỦ (không chỉ số
-        # to + thứ ở trên) + số ngày đã trôi qua CHỈ tính theo ngày (không kèm giờ) -- khác
-        # format_relative() dùng cho mốc giờ thật (vd đồng bộ dữ liệu), vì health_metrics chỉ lưu
-        # NGÀY lấy mẫu, không có giờ, nên hiển thị "X giờ" ở đây là số liệu giả tạo không có thật.
-        _tab_label = "Lần khám gần nhất"
-        _month_word = f"{VN_MONTHS_WORD[_latest_date.month - 1]} {_latest_date.year}"
-        _days_ago = (_today_vn() - _latest_date.date()).days
-        _rel = "Hôm nay" if _days_ago == 0 else "Hôm qua" if _days_ago == 1 else f"{_days_ago} ngày trước"
-        _meta = f"{_month_word} · {_rel}"
-        render_period_billboard(_tab_label, str(_latest_date.day), _vn_dow, _meta, _right_html, _toc)
-        _bc1, _bc2 = st.columns([5, 1])
-        with _bc2:
-            if st.button("Sửa lần khám này", key="hm_input_latest_edit"):
-                st.session_state["_hm_sub_jump"] = "Lịch sử"
-                st.rerun()
-
-    # ==========================================
-    # 1. IMPORT HÀNG LOẠT
-    # ==========================================
-    @st.dialog("Định dạng JSON mẫu")
-    def _hm_json_example_dialog():
-        st.code(json.dumps(HEALTH_METRICS_JSON_EXAMPLE, ensure_ascii=False, indent=2), language="json")
-
-    sec_chapter("hm-in-ch1", 1, "Import hàng loạt", tight_top=True)
-    st.caption("Dán JSON do ChatGPT xuất ra sau khi đọc ảnh phiếu xét nghiệm — dùng để nạp nhanh dữ liệu "
-                "nhiều lần khám cũ cùng lúc.")
-    # Khối JSON mẫu để trong popup (st.dialog(), cùng khuôn "Khôi phục dữ liệu"/"Xoá toàn bộ dữ
-    # liệu" ở Tuỳ biến) thay vì hiện trực tiếp -- xác nhận với người dùng: chỉ để tra cứu/copy khi
-    # cần, không nên chiếm không gian mặc định của chương.
-    if st.button("Xem định dạng JSON mẫu", key="hm_json_example_btn"):
-        _hm_json_example_dialog()
-    st.text_area("Dán nội dung JSON vào đây", height=200, key="hm_import_json")
-    if st.button("Xem trước", key="hm_import_preview_btn"):
-        try:
-            parsed = json.loads(st.session_state.get("hm_import_json", "") or "[]")
-            if not isinstance(parsed, list) or not parsed:
-                raise ValueError("JSON phải là 1 danh sách (list) các lần xét nghiệm.")
-            flat_rows = []
-            for p in parsed:
-                for ind in p.get("indicators", []):
-                    flat_rows.append({
-                        "Ngày lấy mẫu": p.get("test_date"), "Nhóm": p.get("category"),
-                        "Chỉ số": ind.get("indicator"),
-                        "Giá trị": ind.get("value_raw", ind.get("value")),
-                        "Đơn vị": ind.get("unit"),
-                        "Khoảng tham chiếu": ind.get("ref_raw", ind.get("ref_range")),
-                    })
-            if not flat_rows:
-                raise ValueError("Không tìm thấy chỉ số nào trong dữ liệu đã dán.")
-            st.session_state["hm_import_preview"] = parsed
-            st.session_state["hm_import_preview_df"] = pd.DataFrame(flat_rows)
-        except Exception as e:
-            st.session_state.pop("hm_import_preview", None)
-            st.session_state.pop("hm_import_preview_df", None)
-            st.error(f"JSON không hợp lệ: {e}")
-    if st.session_state.get("hm_import_preview") is not None:
-        _prev_df = st.session_state["hm_import_preview_df"]
-        _n_panels = len(st.session_state["hm_import_preview"])
-        st.caption(f"Xem trước {len(_prev_df)} chỉ số từ {_n_panels} lần xét nghiệm:")
-        st.dataframe(_prev_df, hide_index=True, width='stretch')
-        if st.button("Xác nhận lưu", type="primary", key="hm_import_confirm_btn"):
-            save_health_metrics_bulk(st.session_state["hm_import_preview"])
-            _saved_n = len(_prev_df)
-            st.session_state.pop("hm_import_preview", None)
-            st.session_state.pop("hm_import_preview_df", None)
-            st.session_state.pop("hm_import_json", None)
-            st.success(f"Đã lưu {_saved_n} chỉ số từ {_n_panels} lần xét nghiệm.")
-            time.sleep(1)
-            st.rerun()
-
-    # ==========================================
-    # 2. NHẬP KẾT QUẢ XÉT NGHIỆM (nhập tay, 1 lần xét nghiệm mỗi lượt)
-    # ==========================================
-    sec_chapter("hm-in-ch2", 2, "Nhập kết quả xét nghiệm")
-    existing_cats = sorted(df_health['Nhóm'].dropna().unique()) if not df_health.empty else []
-    cat_options = sorted(set(["Huyết học", "Sinh hóa"]) | set(existing_cats)) + ["+ Nhóm khác..."]
-    ic1, ic2 = st.columns(2)
-    entry_date = ic1.date_input("Ngày lấy mẫu", value=_today_vn(), format="DD/MM/YYYY", key="hm_entry_date")
-    cat_choice = ic2.selectbox("Nhóm", cat_options, key="hm_entry_cat_choice")
-    entry_category = (st.text_input("Tên nhóm mới", key="hm_entry_cat_new")
-                       if cat_choice == "+ Nhóm khác..." else cat_choice)
-    _empty_rows = pd.DataFrame({"Chỉ số": [""] * 6, "Giá trị": [""] * 6,
-                                 "Đơn vị": [""] * 6, "Khoảng tham chiếu": [""] * 6})
-    entry_df = st.data_editor(
-        _empty_rows, hide_index=True, width='stretch', num_rows="dynamic", key="hm_entry_editor",
-        column_config={
-            "Chỉ số": st.column_config.TextColumn("Chỉ số", width="large"),
-            "Giá trị": st.column_config.TextColumn("Giá trị"),
-            "Đơn vị": st.column_config.TextColumn("Đơn vị"),
-            "Khoảng tham chiếu": st.column_config.TextColumn(
-                "Khoảng tham chiếu", help='Vd "4.2 - 5.4", "< 5", "> 10"'),
-        })
-    if st.button("Lưu vào Supabase", type="primary", key="hm_entry_save"):
-        rows = [r for r in entry_df.to_dict("records") if str(r["Chỉ số"]).strip()]
-        if not entry_category or not str(entry_category).strip():
-            st.error("Chưa chọn/nhập Nhóm.")
-        elif not rows:
-            st.error("Chưa nhập chỉ số nào.")
-        else:
-            panel = {"test_date": entry_date.isoformat(), "category": str(entry_category).strip(),
-                      "indicators": [{"indicator": r["Chỉ số"], "value_raw": r["Giá trị"],
-                                      "unit": r["Đơn vị"], "ref_raw": r["Khoảng tham chiếu"]}
-                                     for r in rows]}
-            save_health_metrics_bulk([panel])
-            st.session_state.pop("hm_entry_editor", None)
-            st.success(f"Đã lưu {len(rows)} chỉ số cho lần xét nghiệm {entry_date:%d/%m/%Y}.")
-            time.sleep(1)
-            st.rerun()
-
-
-def render_health_page():
-    """Trang "Sức khoẻ": theo dõi chỉ số xét nghiệm máu định kỳ. Khác với phần còn lại của app
-    (thuần retrospective, đọc lại dữ liệu Forest) -- trang này CÓ nhập liệu tay, vì không có
-    nguồn tự động nào xuất dữ liệu xét nghiệm ra file: người dùng chụp ảnh phiếu xét nghiệm, nhờ
-    ChatGPT đọc ảnh rồi dán JSON (đúng khuôn HEALTH_METRICS_JSON_EXAMPLE), hoặc gõ tay từng lần
-    khám. 3 sub-tab cùng pattern segmented_control+query param với BAOCAO_SUBS (xem khai báo
-    SUCKHOE_SUBS): Báo cáo (xem số liệu/biểu đồ) · Lịch sử (sửa/xoá) · Dữ liệu đầu vào (nhập)."""
-    df_health = load_health_metrics()
-    hm_sub = st.session_state["hm_sub"]
-
-    if hm_sub == "Báo cáo":
-        _render_health_report(df_health)
-    elif hm_sub == "Lịch sử":
-        _render_health_history(df_health)
-    elif hm_sub == "Dữ liệu đầu vào":
-        _render_health_input(df_health)
 
 
 def render_search():
@@ -6957,82 +6232,6 @@ def render_period_day_table(df_period, all_days=None):
 """, unsafe_allow_html=True)
 
 
-def render_health_full_table(latest_panel):
-    """Bảng đầy đủ MỌI Chỉ số của LẦN KHÁM GẦN NHẤT (mọi Nhóm), chương "Bảng xét nghiệm đầy đủ"
-    (_render_health_report()) -- khác render_health_log_table() (lịch sử NHIỀU lần đo của ĐÚNG 1
-    Chỉ số): bảng này là 1 lần khám x MỌI Chỉ số, dùng cùng khung .dtbl cho đồng bộ. Cột "Đánh
-    giá" chỉ 2 mức Cao/Thấp (đỏ) hoặc Bình thường (xanh) -- KHÔNG có mức "Sát ngưỡng" như mockup,
-    xem docstring _health_is_abnormal (đã xác nhận với người dùng giữ nhị phân)."""
-    if latest_panel.empty:
-        st.caption("Lần khám gần nhất chưa có chỉ số nào.")
-        return
-    _panel = latest_panel.sort_values(['Nhóm', 'Chỉ số'])
-    _abn = _health_is_abnormal(_panel)
-    _start, _end, _num_pages, _paged = _table_page_slice(len(_panel), "hm_full_tbl_page")
-    _panel_pg, _abn_pg = _panel.iloc[_start:_end], _abn.iloc[_start:_end]
-    rows_html = ''
-    for (_, r), a in zip(_panel_pg.iterrows(), _abn_pg):
-        val = f"{r['Giá trị']:g}" if pd.notna(r['Giá trị']) else str(r['Giá trị (gốc)'] or '')
-        if a:
-            _direction = "Cao" if pd.notna(r['Ref cao']) and r['Giá trị'] > r['Ref cao'] else "Thấp"
-            eval_html = f"<span class='heval-bad'>{_direction}</span>"
-        elif pd.notna(r['Giá trị']):
-            eval_html = "<span class='heval-ok'>Bình thường</span>"
-        else:
-            eval_html = ''
-        rows_html += (
-            '<tr class="prow">'
-            f'<td class="lbl">{html_escape(str(r["Chỉ số"]))}</td>'
-            f'<td>{html_escape(val)}</td>'
-            f'<td class="txt">{html_escape(str(r["Khoảng tham chiếu"])) if pd.notna(r["Khoảng tham chiếu"]) else ""}</td>'
-            f'<td class="txt">{html_escape(str(r["Đơn vị"])) if pd.notna(r["Đơn vị"]) else ""}</td>'
-            f'<td class="txt">{eval_html}</td>'
-            '</tr>')
-    st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Chỉ số</th><th>Kết quả</th><th class="txt">Ngưỡng</th>
-<th class="txt">Đơn vị</th><th class="txt">Đánh giá</th></tr></thead>
-<tbody>{rows_html}</tbody>
-</table></div>
-""", unsafe_allow_html=True)
-    if _paged:
-        _render_table_pagination(_num_pages, "hm_full_tbl_page",
-                                   f"Hiển thị chỉ số {_start + 1}–{_end} / {len(_panel)}")
-
-
-def render_health_log_table(s_num, is_abn):
-    """Bảng từng lần đo của 1 chỉ số, dưới biểu đồ theo dõi (Sức khoẻ -> Báo cáo, mục "2. Biểu đồ
-    theo dõi") -- dùng cùng khung .dtbl (viền/nền/header dính) với các bảng Báo cáo Thời gian
-    (render_data_table/render_detail_table) thay vì st.dataframe() mặc định, cho đồng bộ giao diện
-    toàn app thay vì lạc phong cách ở riêng trang này."""
-    _tbl = s_num[['Ngày lấy mẫu', 'Giá trị (gốc)', 'Đơn vị', 'Khoảng tham chiếu']].copy()
-    _tbl['Bất thường'] = list(is_abn)
-    _tbl = _tbl.sort_values('Ngày lấy mẫu', ascending=False)
-    _start, _end, _num_pages, _paged = _table_page_slice(len(_tbl), "hm_log_tbl_page")
-    _tbl = _tbl.iloc[_start:_end]
-    rows_html = ''
-    for _, r in _tbl.iterrows():
-        _status = "<span style='color:#ff3b30;font-weight:600;'>⚠️ Bất thường</span>" if r['Bất thường'] else ''
-        rows_html += (
-            '<tr class="prow">'
-            f'<td class="lbl">{r["Ngày lấy mẫu"]:%d/%m/%Y}</td>'
-            f'<td>{html_escape(str(r["Giá trị (gốc)"]))}</td>'
-            f'<td class="txt">{html_escape(str(r["Đơn vị"])) if pd.notna(r["Đơn vị"]) else ""}</td>'
-            f'<td class="txt">{html_escape(str(r["Khoảng tham chiếu"])) if pd.notna(r["Khoảng tham chiếu"]) else ""}</td>'
-            f'<td class="txt">{_status}</td>'
-            '</tr>')
-    st.markdown(DTBL_CSS + f"""
-<div class="dtbl-wrap"><table class="dtbl">
-<thead><tr><th class="lbl">Ngày lấy mẫu</th><th>Giá trị</th><th class="txt">Đơn vị</th>
-<th class="txt">Khoảng tham chiếu</th><th class="txt">Trạng thái</th></tr></thead>
-<tbody>{rows_html}</tbody>
-</table></div>
-""", unsafe_allow_html=True)
-    if _paged:
-        _render_table_pagination(_num_pages, "hm_log_tbl_page",
-                                   f"Hiển thị lần đo {_start + 1}–{_end} / {len(is_abn)}")
-
-
 def render_period_table(df, time_col, key):
     """Bảng theo kỳ cho MỘT nhóm/dự án: mỗi kỳ (Tuần/Tháng) là một dòng,
     các cột Số giờ (tô heat) / Số cây / Số ngày, kèm dòng Tổng (LUÔN hiện, không phân trang --
@@ -7076,35 +6275,15 @@ def render_period_table(df, time_col, key):
                                    f"Hiển thị {period_name.lower()} {_start + 1}–{_end} / {len(periods)}")
 
 
-# --- Helpers trang Trợ giúp: tour cuộn dọc, mọi thẻ/minh hoạ vẽ bằng HTML thuần ---
+# --- Helpers chương cuộn dọc (dùng chung cho các trang báo cáo/nội dung dài, xem sec_chapter) ---
 # Chỉ dùng token màu (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở dark mode và mọi
 # màu accent. HTML build thành chuỗi liền mạch (không dòng trống giữa khối) -- markdown parser
-# của st.markdown cắt khối HTML tại dòng trống. CSS namespace "help-" nằm trong khối CSS chính.
-
-_HELP_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
-
-
-def sec_kbd(*keys):
-    """Dãy phím kiểu keycap: sec_kbd("Ctrl/Cmd", "Enter") -> <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
-    Trả về string HTML để nhúng vào bảng/đoạn văn khác, không tự render."""
-    return "<span class='sec-kplus'>+</span>".join(
-        f"<kbd class='sec-kbd'>{k}</kbd>" for k in keys)
-
-
-def sec_table(headers, rows):
-    """Bảng tra nhanh (cheat-sheet). rows: list[list[str]], cell là HTML thô (nhúng được
-    sec_kbd()/chip) -- chỉ đưa nội dung tĩnh viết tay vào đây, không đưa dữ liệu người dùng.
-    Trả về string HTML (bọc sẵn khối cuộn ngang cho màn hẹp)."""
-    _thead = "".join(f"<th>{h}</th>" for h in headers)
-    _tbody = "".join(
-        "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
-    return ("<div class='sec-tblwrap'><table class='sec-tbl'>"
-            f"<thead><tr>{_thead}</tr></thead><tbody>{_tbody}</tbody></table></div>")
+# của st.markdown cắt khối HTML tại dòng trống.
 
 
 def sec_chapter(anchor, num, title, lead=None, tight_top=False, badge=None):
-    """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (Trợ giúp, và các trang
-    báo cáo/nội dung đọc đã chuyển từ accordion sang bố cục này): ô vuông số thứ tự nhỏ + tiêu đề +
+    """Header 1 chương -- dùng chung cho mọi trang cuộn dọc kiểu "chương" (các trang báo cáo/nội
+    dung đọc đã chuyển từ accordion sang bố cục này): ô vuông số thứ tự nhỏ + tiêu đề +
     badge tuỳ chọn + kẻ ngang mở, tất cả trên CÙNG 1 hàng canh giữa dọc. anchor là id cho
     chip mục lục nhảy tới (CSS scroll-margin-top của .sec-ch chừa chỗ cho header fixed của
     Streamlit khỏi che tiêu đề).
@@ -7118,10 +6297,10 @@ def sec_chapter(anchor, num, title, lead=None, tight_top=False, badge=None):
     như block thường) tạo khoảng trắng rộng bất thường ngay dưới billboard, trong khi giữa các
     chương với nhau (2 trở đi) khoảng cách đó vẫn cần giữ nguyên.
 
-    badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd "Lần khám 16/07/2026" ở "Chỉ số bất thường"
-    của Sức khoẻ) -- tách phần thông tin động (ngày/giá trị cụ thể) ra khỏi CHÍNH văn bản tiêu đề,
-    để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ liệu hiện dưới dạng chip cạnh bên
-    thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề, trước kẻ ngang."""
+    badge=None/"" -> bỏ hẳn chip nhỏ cạnh tiêu đề (vd ngày/giá trị cụ thể) -- tách phần thông tin
+    động ra khỏi CHÍNH văn bản tiêu đề, để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ
+    liệu hiện dưới dạng chip cạnh bên thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề,
+    trước kẻ ngang."""
     _num_html = f"<span class='sec-ch-num'>{num}</span>" if num is not None else ""
     _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
@@ -7134,14 +6313,14 @@ def sec_chapter(anchor, num, title, lead=None, tight_top=False, badge=None):
 
 
 def sec_block(html):
-    """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) của trang
-    Hướng dẫn bản cũ -- không cần key container nên không đụng rule CSS glass-card chung)."""
+    """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) -- không cần key
+    container nên không đụng rule CSS glass-card chung)."""
     st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
 
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
     """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
-    -> Tổng quan/Chi tiết, Sức khoẻ, Tuỳ biến, Trợ giúp): badge TRÒN bên trái (số to + nhãn kỳ) +
+    -> Tổng quan/Chi tiết, Tuỳ biến): badge TRÒN bên trái (số to + nhãn kỳ) +
     nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi đường kẻ dọc).
     Badge tròn dùng chung `.tbcircle-*` với billboard Hôm nay (`_render_today_billboard()`) -- xác
     nhận với người dùng đổi hẳn khỏi khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.pbill-num`/`.pbill-label`
@@ -7195,52 +6374,6 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
                 with c_toc:
                     _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
                     st.markdown(f"<div class='tbill-toccol'>{_chips_html}</div>", unsafe_allow_html=True)
-
-
-def help_faq_item(question, answer_md):
-    """1 câu hỏi FAQ = expander native (đã ăn style expander sẵn có của app). Cố ý KHÔNG đánh
-    số như expander trang báo cáo -- FAQ tra theo câu hỏi, không đọc tuần tự."""
-    with st.expander(question):
-        st.markdown(answer_md)
-
-
-def render_help_changelog(entries):
-    """Timeline "Nhật ký phát triển": mỗi entry là 1 thẻ kiểu .sec-card gắn chấm tròn accent nối
-    đường dọc bên trái (xem CSS .help-tl*), header gồm nhãn PR + 3 chip, rồi tiêu đề đậm + bullets
-    (hỗ trợ **đậm** kiểu markdown).
-
-    entries: list[dict] khai báo tay, mỗi dict gồm pr / title / bullets / date / pr_lines /
-    total_lines. Giữ nguyên ngữ nghĩa 2 chip số liệu của guide_update() bản cũ, cộng thêm 1 chip
-    ngày mới:
-    - date: ngày merge (dd/mm/yyyy) của PR MỚI NHẤT trong cụm pr, tra qua `pull_request_read` --
-      chip nền xám, đứng đầu tiên.
-    - total_lines: tổng số dòng CỦA CẢ app.py (wc -l) tại commit merge PR mới nhất trong cụm
-      (tra qua `git show <commit>:app.py | wc -l`) -- chip nền xám, đứng giữa.
-    - pr_lines: tổng số dòng đổi (additions+deletions, tra qua GitHub API lúc viết mục) của PR
-      MỚI NHẤT trong cụm pr (vd pr="182-184" -> số dòng của #184) -- chip nền accent, đứng cuối.
-    2 cụm PR "132,133,136,137" và "125,126,139,140" không còn commit gốc riêng trong lịch sử git
-    (đã bị squash/rebase gộp) -- dùng tạm số dòng tại commit gần nhất còn truy được (#142); ngày
-    merge của cả 2 cụm này tra theo đúng PR mới nhất trong cụm (#137 và #140).
-    Cả 3 trường đều KHÔNG tự tính lại lúc runtime (app không gọi GitHub API/git khi chạy) --
-    số tĩnh, điền tay khi thêm mục mới."""
-    _parts = ["<div class='help-tl'>"]
-    for e in entries:
-        _chips = ""
-        if e.get("date"):
-            _chips += f"<span class='help-chip'>{e['date']}</span>"
-        if e.get("total_lines") is not None:
-            _chips += f"<span class='help-chip'>{e['total_lines']} dòng mã nguồn</span>"
-        if e.get("pr_lines") is not None:
-            _chips += f"<span class='help-chip help-chip-acc'>{e['pr_lines']} dòng thay đổi</span>"
-        _lis = "".join(
-            "<li>" + _HELP_BOLD_RE.sub(r"<b>\1</b>", b) + "</li>" for b in e["bullets"])
-        _parts.append(
-            f"<div class='help-tl-item'><span class='help-tl-dot'></span>"
-            f"<div class='help-tl-head'><span class='help-tl-pr'>PR #{e['pr']}</span>{_chips}</div>"
-            f"<div class='help-tl-title'>{e['title']}</div>"
-            f"<ul class='help-tl-ul'>{_lis}</ul></div>")
-    _parts.append("</div>")
-    st.markdown("".join(_parts), unsafe_allow_html=True)
 
 
 # --- FRAGMENT: cô lập rerun cho từng mục biểu đồ có bộ điều khiển riêng ---
@@ -7791,20 +6924,17 @@ if not _has_supabase_secrets and not _USE_FAKE_DATA:
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang font thật tự host
 # (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác lúc CHẠY THẬT;
 # lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi nhúng thẳng vào assets/
-# fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 8 (BODY_FONTS, tab Tuỳ
-# biến -> sub-page "Giao diện", mặc định Manrope, lấy nguyên bộ 8 font từ mockup "Tuỳ Chỉnh Giao
-# Diện.dc.html" -- xem chú thích ở khai báo BODY_FONTS). Biến trục (variable font, wght 200-800
-# trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ payload hơn hẳn vì app dùng
-# nhiều mức đậm nhạt khác nhau (400/500/600/700/800) rải khắp label/nút/chip/nav -- 7/8 font đều có
-# bản variable phủ đủ dải này (đã xác minh trước khi tải). Riêng "Be Vietnam Pro" KHÔNG có bản
-# variable trên Google Fonts (khác biệt DUY NHẤT, xem key "weights" ở BODY_FONTS) nên nhúng nhiều
-# file tĩnh (1 file/mức đậm) thay vì 1 file biến trục.
+# fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 5 (BODY_FONTS, tab Tuỳ
+# biến -> sub-page "Giao diện", mặc định Inter -- xem chú thích ở khai báo BODY_FONTS). Biến trục
+# (variable font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ
+# payload hơn hẳn vì app dùng nhiều mức đậm nhạt khác nhau (400/500/600/700/800) rải khắp
+# label/nút/chip/nav -- cả 5 font đều có bản variable phủ đủ dải này (đã xác minh trước khi tải).
 # 3 file riêng theo unicode-range (latin/latin-ext/vietnamese, bỏ cyrillic/hy lạp không dùng tới)
 # đúng cách Google Fonts tự chia subset cho MỌI font (cùng bộ unicode-range, đã xác minh) -- BẮT
 # BUỘC có "vietnamese" (khác _LOGO_FONT_FACE chỉ cần "latin" vì wordmark "Forest"/"Dashboard" là
-# tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app -- đã xác minh cả 8
+# tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app -- đã xác minh cả 5
 # font đều có subset "vietnamese" trước khi chọn. CHỈ tải/nhúng ĐÚNG 1 font đang chọn (không nhúng
-# sẵn cả 8) để không đội payload trang lên vô ích.
+# sẵn cả 5) để không đội payload trang lên vô ích.
 @st.cache_resource
 def _body_font_b64(file_prefix, weights=None):
     """weights=None (font biến trục) -> đọc `<file_prefix>-<subset>.woff2`, trả {subset: b64}.
@@ -7948,7 +7078,7 @@ _TOK = dict(BG_PALETTES[BG_PALETTE])
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 # --card-radius/--card-border-w/--card-shadow (kiểu thẻ) và --card-pad/--card-gap (mật độ) -- 2
 # trục độc lập với bảng màu nền, xem CARD_STYLES/CARD_DENSITY. Áp cho nhóm "thẻ nội dung chung"
-# (.sec-card, .hmtl-card, .dtl-card, container chuẩn...) -- KHÔNG áp --card-pad/--card-gap cho
+# (.sec-card, .dtl-card, container chuẩn...) -- KHÔNG áp --card-pad/--card-gap cho
 # thẻ có padding tinh chỉnh riêng theo nội dung đặc thù (.quotes-card, .dtl-track...).
 # --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho "Kính mờ"/"Viền
 # gradient" (xem CARD_STYLES) -- mặc định var(--card)/none/none, vô hại với 6 kiểu còn lại. Áp qua
@@ -8066,7 +7196,6 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .sec-card),
     [data-testid="stMarkdownContainer"]:has(> .catbars-card),
     [data-testid="stMarkdownContainer"]:has(> .quotes-card),
-    [data-testid="stMarkdownContainer"]:has(> .hmtl-item),
     [data-testid="stMarkdownContainer"]:has(> .dtbl-wrap) {
         margin-bottom: 0 !important;
     }
@@ -8140,83 +7269,6 @@ _MAIN_CSS = """
        mockup vẽ dạng danh sách dòng trần, không phải chip. */
     .hlt-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .hlt-item { font-size: 13.5px; color: var(--text); line-height: 1.5; }
-
-    /* Sub-tab "Lịch sử" (Sức khoẻ, _render_health_history()) -- dòng thời gian các lần khám:
-       chấm + đường nối bên trái. Mỗi .hmtl-item tự vẽ đoạn đường của riêng nó, kéo dài quá
-       margin-bottom để nối liền sang chấm kế tiếp -- không dùng 1 đường kẻ chung xuyên suốt vì
-       giữa các thẻ còn chèn expander sửa/xoá là widget Streamlit thật, không nằm trong cùng khối
-       HTML để vẽ đường kẻ liên tục qua được. */
-    .hmtl-item { position: relative; padding-left: 26px; margin-bottom: 16px; }
-    .hmtl-item:last-child { margin-bottom: 0; }
-    .hmtl-dot { position: absolute; left: 2px; top: 5px; width: 11px; height: 11px; border-radius: 50%;
-        background: var(--accent); box-shadow: 0 0 0 3px var(--card); z-index: 1; }
-    .hmtl-dot.warn { background: #ff3b30; }
-    .hmtl-line { position: absolute; left: 7px; top: 16px; bottom: -16px; width: 2px; background: var(--divider); }
-    .hmtl-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
-        padding: 14px 16px; box-shadow: var(--card-shadow); }
-    .hmtl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        flex-wrap: wrap; margin-bottom: 8px; }
-    .hmtl-date { font-size: 15px; font-weight: 700; color: var(--text); }
-    .hmtl-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 9px; white-space: nowrap; }
-    .hmtl-badge.bad { background: rgba(255,59,48,0.12); color: #ff3b30; }
-    .hmtl-badge.ok { background: rgba(52,199,89,0.12); color: #34c759; }
-    .hmtl-grp { margin-top: 10px; }
-    .hmtl-grp:first-of-type { margin-top: 0; }
-    /* Chip chỉ số bất thường (ngoài khoảng tham chiếu) -- tô đỏ, dùng CHUNG khuôn .jchip (đã có
-       ck/cv) thêm 1 mũi tên Material lên/xuống tuỳ Giá trị vượt Ref cao hay dưới Ref thấp. */
-    .jchip.abn { background: rgba(255,59,48,0.10); }
-    .jchip.abn .cv { color: #ff3b30; }
-    /* Sub-tab "Báo cáo" (_render_health_report()) -- 2 khối mới theo mockup: card chi tiết chỉ
-       số bất thường (chương 1) và lưới mini-card xu hướng (chương 2), CÙNG khuôn .hmtl-card cho
-       đồng bộ với các thẻ khác của trang Sức khoẻ (Lịch sử, Dữ liệu đầu vào). */
-    .hbn-grid, .htrend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px; margin-top: 10px; }
-    .hbn-value { font-size: 28px; font-weight: 800; color: var(--text); margin-top: 4px; line-height: 1; }
-    .hbn-value .hbn-unit { font-size: 14px; font-weight: 600; color: var(--text-2); margin-left: 4px; }
-    .hbn-delta { font-size: 12.5px; font-weight: 600; color: #ff3b30; margin-top: 6px; }
-    .hbn-delta span[style] { vertical-align: -2px; margin-right: 2px; }
-    .htrend-card .hmtl-head { margin-bottom: 12px; }
-    .htrend-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
-    .htrend-title .htrend-unit { font-size: 11.5px; font-weight: 500; color: var(--text-2); }
-    .htrend-bars { display: flex; align-items: flex-end; gap: 10px; height: 88px; }
-    .htrend-bar-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center;
-        justify-content: flex-end; height: 100%; }
-    .htrend-bar-val { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 4px;
-        white-space: nowrap; }
-    .htrend-bar-val.abn { color: #ff3b30; }
-    .htrend-bar { width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: var(--accent); }
-    .htrend-bar.abn { background: #ff3b30; }
-    .htrend-bar-date { font-size: 10.5px; color: var(--text-2); margin-top: 5px; }
-    .htrend-caption { font-size: 12.5px; color: var(--text-2); margin-top: 10px; }
-    /* Chương 3 "Bảng xét nghiệm đầy đủ" -- text đánh giá màu theo trạng thái, dùng CHUNG 2 màu
-       đỏ/xanh với mọi nơi khác của Sức khoẻ (không có mức "sát ngưỡng" -- xem docstring
-       _health_is_abnormal, quyết định giữ nhị phân đã xác nhận với người dùng). */
-    .dtbl .heval-bad { color: #ff3b30; font-weight: 600; }
-    .dtbl .heval-ok { color: #34c759; font-weight: 600; }
-    /* Nhãn widget (Nhóm/Chỉ số/Ngày lấy mẫu/Năm...) trong trang Sức khoẻ -- mặc định Streamlit
-       mảnh + nhạt màu, dễ lướt qua khi nhãn chính là nội dung cần đọc trước (chọn ĐÚNG Nhóm/Chỉ
-       số muốn xem, không phải phụ chú). Đậm + rõ hơn, chỉ áp dụng trong phạm vi trang Sức khoẻ
-       (mọi widget ở đây đặt key tiền tố "hm_") -- không đổi nhãn widget ở các trang khác. */
-    [class*="st-key-hm_"] [data-testid="stWidgetLabel"] p {
-        font-weight: 700 !important; color: var(--text) !important; font-size: 13.5px !important;
-    }
-    /* Expander "Sửa / xoá xét nghiệm đã nhập" (_render_health_history()) -- ghi đè riêng trong
-       phạm vi container key="hm_hist_edit" để trông như 1 thẻ hộp khớp .hmtl-card phía trên, thay
-       vì tiêu đề gạch chân kiểu chương báo cáo (mặc định của [data-testid="stExpander"], xem rule
-       phía dưới) sẽ lạc tông với timeline card ngay trên nó. CÙNG khuôn với FAQ (Trợ giúp, key=
-       "help_faq") -- tái dùng đúng pattern đã có, không phát sinh style mới. */
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details {
-        background: var(--card) !important; border: var(--card-border-w) solid var(--border) !important;
-        border-radius: var(--card-radius) !important; box-shadow: var(--card-shadow) !important; }
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary {
-        padding: 12px 16px !important; border-bottom: none !important; }
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] summary p {
-        font-size: 14px !important; font-weight: 600 !important; color: var(--text-2) !important; }
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details[open] > summary {
-        border-bottom: 1px solid var(--divider) !important; }
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
-        padding: 10px 16px 14px !important; }
 
     .glass-card {
         background: var(--card);
@@ -8323,7 +7375,7 @@ _MAIN_CSS = """
 
     /* ===== Bảng tổng quan gọn (render_stat_panel()) -- lưới thẻ hero + 1 thẻ list dòng bên dưới,
        khớp Hôm nay.dc.html (đợt redesign Apple/macOS-inspired), THAY cho khuôn chip-pill cũ. Áp
-       dụng chung cho MỌI trang gọi hàm này (Hôm nay/Báo cáo/Sách/Gundam/Sức khoẻ). ===== */
+       dụng chung cho MỌI trang gọi hàm này (Hôm nay/Báo cáo/Sách/Gundam). ===== */
     /* Đổi từ lưới N thẻ .glass-card riêng (mỗi số 1 khối border/shadow/gap 14px) sang 1 thẻ
        .glass-card DUY NHẤT chứa các ô .sp-tile ngăn nhau bằng vạch dọc mảnh -- gọn hơn hẳn về
        chiều cao/khoảng trống (padding+border+shadow không còn nhân N lần). flex-wrap để tự xuống dòng nếu quá nhiều ô/màn hẹp
@@ -8453,7 +7505,7 @@ _MAIN_CSS = """
        thuộc tính kind="segmented_controlActive" nữa, "đang chọn" giờ đánh dấu bằng
        data-selected="true" (cùng thuộc tính dùng cho tab đang chọn ở st.tabs(), xem bên dưới) --
        toàn bộ 3 selector kind="segmented_controlActive" trong khối CSS này (nút nav chính, bộ
-       lọc biểu đồ, sub-tab Báo cáo/Sức khoẻ) đã CHẾT sau khi nâng cấp Streamlit, chọn lại theo
+       lọc biểu đồ, sub-tab Báo cáo) đã CHẾT sau khi nâng cấp Streamlit, chọn lại theo
        thuộc tính mới. */
     button[data-selected="true"] {
         background-color: var(--accent) !important;
@@ -8472,7 +7524,7 @@ _MAIN_CSS = """
        không quyết định layout). Phải đặt gap/flex-wrap/justify-content lên đúng
        [role="radiogroup"] thì khoảng cách mới thật sự hiện ra. Áp DÙNG CHUNG cho mọi
        [data-testid="stButtonGroup"] -- 2 nơi cố tình khác kiểu (tab gạch chân ở "Chọn kỳ xem"/
-       "Xem theo", khối .st-key-bc_sub_picker/.st-key-hm_sub_picker ngay dưới) tự ghi đè lại được
+       "Xem theo", khối .st-key-bc_sub_picker ngay dưới) tự ghi đè lại được
        vì đứng SAU trong stylesheet này, cùng độ đặc hiệu selector nên nguồn sau thắng (xem thêm
        ghi chú "gap:0" ở khối đó). */
     [data-testid="stButtonGroup"] [role="radiogroup"] { gap: 6px !important; }
@@ -8583,8 +7635,8 @@ _MAIN_CSS = """
     [data-testid="stSidebar"] [class*="st-key-navseg_"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
-    /* Đường kẻ ngăn nhóm "trang nội dung" (_NAV_GROUP_A) với nhóm "cài đặt/trợ giúp"
-       (_NAV_GROUP_B: Tuỳ biến, Trợ giúp) -- mockup có 1 divider ở đúng vị trí này. TRƯỚC ĐÂY dựng
+    /* Đường kẻ ngăn nhóm "trang nội dung" (_NAV_GROUP_A) với nhóm "cài đặt"
+       (_NAV_GROUP_B: Tuỳ biến) -- mockup có 1 divider ở đúng vị trí này. TRƯỚC ĐÂY dựng
        bằng nth-child(7) trên 1 radiogroup 8 nút duy nhất; giờ nav chính RẢI RÁC thành nhiều
        segmented_control tuỳ trang đang active (xem _render_nav_group) nên không còn vị trí
        nth-child cố định -- thay bằng 1 <div class="sidebar-nav-divider"> tường minh, render giữa
@@ -8593,7 +7645,7 @@ _MAIN_CSS = """
         border-top: 1px solid var(--divider);
         margin: 8px 0;
     }
-    /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo/Chọn mục của Báo cáo/Sức khoẻ/Tuỳ biến/Nhật ký đọc
+    /* Sub-nav cấp 2 (Chọn kỳ xem/Xem theo/Chọn mục của Báo cáo/Tuỳ biến/Nhật ký đọc
        sách/Gundam) render NGAY DƯỚI nav chính trong CÙNG sidebar (xem khối "with st.sidebar" ngay
        sau khi "nav" được xác định trong dispatch) thay vì đứng ở đầu nội dung trang -- xác nhận
        với người dùng đổi kiến trúc điều hướng, áp dụng ĐỒNG BỘ cho cả 5 sub-nav trong app (Sách/
@@ -8609,20 +7661,17 @@ _MAIN_CSS = """
        KHÔNG phải class chính xác) vì Sách dùng key "rl_view_tabs_picker", Gundam
        "rl_view_tabs_gd_picker" -- chọn theo class chính xác chỉ khớp 1 trong 2 trang.  */
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"],
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"],
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"],
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] {
         justify-content: flex-start !important;
         margin: 2px 0 10px 0 !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] [role="radiogroup"],
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] [role="radiogroup"] {
         flex-direction: column !important; flex-wrap: nowrap !important; width: 100% !important; gap: 2px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button,
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button,
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button,
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button {
         width: 100% !important; justify-content: flex-start !important; text-align: left !important;
@@ -8632,13 +7681,11 @@ _MAIN_CSS = """
         font-size: 12.5px !important; font-weight: 600 !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button p,
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button p,
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button p,
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button p {
         text-align: left !important; font-size: 12.5px !important; font-weight: 600 !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button > div,
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button > div,
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button > div,
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button > div {
         justify-content: flex-start !important;
@@ -8646,13 +7693,11 @@ _MAIN_CSS = """
         gap: 8px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"] {
         font-size: 15px !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]),
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]) {
         background-color: transparent !important;
@@ -8660,7 +7705,6 @@ _MAIN_CSS = """
         color: var(--text-2) !important;
     }
     [data-testid="stSidebar"] .st-key-bc_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
-    [data-testid="stSidebar"] .st-key-hm_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
     [data-testid="stSidebar"] .st-key-tb_sub_picker [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover,
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
@@ -8703,9 +7747,9 @@ _MAIN_CSS = """
     /* st.tabs() tự vẽ thêm 1 vạch xám full-width bên dưới toàn bộ hàng tab -- ::after của
        [role="tablist"] trong markup Streamlit >=1.59 (trước là 1 element riêng
        data-baseweb="tab-border", đã đổi hẳn) -- không có ở segmented_control (tự dựng, không có
-       vạch này). Ẩn CHUNG cho các st.tabs() còn lại trong app (Tuỳ biến -> "1. Dữ liệu đầu vào",
-       sub-tab Hướng dẫn -- Sách/Gundam đã đổi hẳn sang segmented_control ở trên, không còn
-       st.tabs() nào ở 2 trang đó nữa) -- xác nhận với người dùng: nút đang chọn ở MỌI nav bar
+       vạch này). Ẩn CHUNG cho các st.tabs() còn lại trong app (Tuỳ biến -> "1. Dữ liệu đầu vào" --
+       Sách/Gundam đã đổi hẳn sang segmented_control ở trên, không còn st.tabs() ở 2 trang đó nữa)
+       -- xác nhận với người dùng: nút đang chọn ở MỌI nav bar
        sub-tab, dù dựng bằng segmented_control hay st.tabs(), chỉ nên còn lại đúng 1 đường kẻ màu
        accent bên dưới, không kèm vạch xám full-width phía sau tạo cảm giác "đường đúp" -- cùng
        nguyên tắc "đồng bộ" đã áp cho màu chữ/vạch chọn ở rule .react-aria-SelectionIndicator ngay
@@ -8934,7 +7978,7 @@ _MAIN_CSS = """
         /* KHÔNG để <input> giãn hết chỗ (mặc định BaseWeb flex:1): nó sẽ đẩy icon ::before dạt hẳn
            sang mép trái, trong khi mockup có cụm icon+ngày CĂN GIỮA thành 1 khối. Ghim bề rộng vừa
            đúng nội dung bằng đơn vị `ch` (bề rộng chữ số "0" của CHÍNH font đang dùng) chứ không
-           phải px cứng -- app cho người dùng đổi giữa 8 font thân chữ (BODY_FONTS), px cứng sẽ
+           phải px cứng -- app cho người dùng đổi giữa các font thân chữ (BODY_FONTS), px cứng sẽ
            hụt/thừa tuỳ font. Cả 3 st.date_input trong app đều hiển thị 10 ký tự (dd/mm/yyyy hoặc
            yyyy/mm/dd) nên 10ch phủ đủ, dấu "/" hẹp hơn chữ số nên còn dư nhẹ. */
         flex: 0 0 auto !important;
@@ -8979,7 +8023,7 @@ _MAIN_CSS = """
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
 
-    /* Mọi st.tabs() còn lại trong app ("1. Dữ liệu đầu vào" ở Tuỳ biến, sub-tab ở Hướng dẫn --
+    /* Mọi st.tabs() còn lại trong app ("1. Dữ liệu đầu vào" ở Tuỳ biến --
        Sách/Gundam đã đổi sang segmented_control, không còn dùng st.tabs() nữa): tab đang chọn +
        vạch gạch chân mặc định lấy theo primaryColor
        cứng trong .streamlit/config.toml (#00a3ad) chứ KHÔNG theo accent đang chọn -- override
@@ -9124,12 +8168,9 @@ _MAIN_CSS = """
         padding-bottom: 32px !important;
     }
 
-    /* ===== Trang Trợ giúp (tour cuộn dọc, namespace help-) =====
-       Toàn bộ thẻ/minh hoạ của trang vẽ bằng HTML thuần qua st.markdown, chỉ dùng token màu
-       (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent.
-       Billboard đầu trang dùng chung render_period_billboard() với mọi trang khác (đã bỏ hẳn
-       sec_hero() riêng -- xác nhận với người dùng: nền phẳng + viền mảnh của nó trông khác biệt
-       hẳn "kính mờ" billboard mọi nơi khác, không còn lý do giữ ngoại lệ). */
+    /* ===== Chương cuộn dọc dùng chung (sec_chapter/sec_block, xem docstring) =====
+       Toàn bộ thẻ/minh hoạ dựng bằng HTML thuần qua st.markdown, chỉ dùng token màu
+       (var(--...), rgba(var(--accent-rgb),...)) nên tự đúng ở cả dark mode lẫn mọi màu accent. */
     /* Billboard Hôm nay: hiệu ứng kính mờ (frosted/liquid glass) thật -- nền phớt accent bán
        trong suốt + backdrop-filter blur/saturate làm mờ VÀ rực màu hoạ tiết chấm nền trang đứng
        sau nó (khác bản trước chỉ có rgba phẳng, chấm nền vẫn hiện SẮC NÉT xuyên qua, chưa ra được
@@ -9137,7 +8178,7 @@ _MAIN_CSS = """
        filter:drop-shadow (không phải box-shadow) giữ nguyên cho bóng "tờ giấy" đổ ra ngoài khung
        kính, 2 filter (backdrop-filter + filter) hoạt động độc lập, không xung đột. -webkit- prefix
        bắt buộc cho Safari (chưa hỗ trợ backdrop-filter không tiền tố ở nhiều bản). Liệt kê ĐỦ MỌI
-       key billboard trong app ở đây (kể cả help_billboard/tbgd_billboard) -- selector khớp CHÍNH
+       key billboard trong app ở đây (kể cả tbgd_billboard) -- selector khớp CHÍNH
        XÁC theo key, không dùng prefix chung.
        background/backdrop-filter đọc qua var(--billboard-bg)/var(--billboard-backdrop) (tính ở
        khối :root, xem _billboard_bg/_billboard_backdrop) thay vì hardcode rgba/blur cố định --
@@ -9145,7 +8186,7 @@ _MAIN_CSS = """
        phía sau) để billboard vẫn là 1 "thẻ" sáng/chữ tối như light theme bình thường, xác nhận
        với người dùng. */
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
-    .st-key-tbgd_billboard, .st-key-help_billboard {
+    .st-key-tbgd_billboard {
         background: var(--billboard-bg) !important;
         backdrop-filter: var(--billboard-backdrop);
         -webkit-backdrop-filter: var(--billboard-backdrop);
@@ -9253,92 +8294,9 @@ _MAIN_CSS = """
     .sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 12px; margin: 10px 0; }
     .sec-grid .sec-card { margin: 0; }
-    .sec-kbd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12px; font-weight: 600; color: var(--text); background: var(--card);
-        border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 6px;
-        padding: 1px 7px; line-height: 1.5; }
-    .sec-kplus { color: var(--text-3); font-size: 11px; margin: 0 3px; }
-    .sec-tblwrap { overflow-x: auto; }
-    .sec-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .sec-tbl th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-        color: var(--text-2); text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--border); }
-    .sec-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--text);
-        vertical-align: top; line-height: 1.5; }
-    .sec-tbl tr:last-child td { border-bottom: none; }
-    .sec-tbl td:first-child { white-space: nowrap; }
-    .help-chip { display: inline-block; font-size: 11px; font-weight: 600; color: var(--text-2);
-        background: var(--chip); border-radius: 999px; padding: 2px 9px; }
-    .help-chip-acc { color: var(--accent); background: rgba(var(--accent-rgb),0.12); }
-    /* Sơ đồ luồng dữ liệu (chương Nạp dữ liệu & đồng bộ) */
-    .sec-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
-    .sec-flow-node { font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--chip);
-        border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
-    .sec-flow-hub { border-color: var(--accent); color: var(--accent-dark);
-        background: rgba(var(--accent-rgb),0.10); }
-    .sec-flow-arr::after { content: "→"; color: var(--text-3); font-size: 14px; padding: 0 2px; }
-    .sec-flow-col { display: flex; flex-direction: column; gap: 6px; }
-    /* Minh hoạ heatmap thu nhỏ: 8 bậc alpha theo accent, nhại thang màu Biểu đồ lịch thật */
-    .sec-heat { display: grid; grid-template-columns: repeat(14, 13px); gap: 3px; margin: 12px 0 4px; }
-    .sec-heat i { width: 13px; height: 13px; border-radius: 3px; background: rgba(var(--accent-rgb),0.07); }
-    .sec-heat .h1 { background: rgba(var(--accent-rgb),0.18); }
-    .sec-heat .h2 { background: rgba(var(--accent-rgb),0.30); }
-    .sec-heat .h3 { background: rgba(var(--accent-rgb),0.42); }
-    .sec-heat .h4 { background: rgba(var(--accent-rgb),0.55); }
-    .sec-heat .h5 { background: rgba(var(--accent-rgb),0.68); }
-    .sec-heat .h6 { background: rgba(var(--accent-rgb),0.82); }
-    .sec-heat .h7 { background: rgba(var(--accent-rgb),0.95); }
-    /* Minh hoạ dòng thời gian trong ngày */
-    .sec-daybar { position: relative; height: 28px; border-radius: 7px; background: var(--chip);
-        margin: 12px 0 4px; overflow: hidden; }
-    .sec-daybar b { position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
-        background: rgba(var(--accent-rgb),0.55); }
-    .sec-daybar b.d2 { background: rgba(var(--accent-rgb),0.85); }
-    .sec-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3);
-        margin-top: 3px; }
-    /* Minh hoạ xu hướng + đường trung bình động */
-    .sec-bars { position: relative; display: flex; align-items: flex-end; gap: 5px; height: 60px;
-        margin: 12px 0 4px; }
-    .sec-bars i { width: 9px; border-radius: 2px 2px 0 0; background: rgba(var(--accent-rgb),0.50); }
-    .sec-bars .avg { position: absolute; left: 0; right: 0; top: 38%;
-        border-top: 2px dashed var(--accent); }
-    /* Timeline changelog (chương Nhật ký phát triển) -- mỗi mục là 1 .sec-card thật (cùng nền/
-       viền/bo góc/shadow với sec-card ở các chương khác cho đồng bộ), đường dọc + chấm tròn accent
-       chạy dọc theo lề trái của toàn khối .help-tl để vẫn giữ cảm giác timeline. */
-    .help-tl { margin: 8px 0; padding-left: 24px; border-left: 2px solid var(--divider); }
-    .help-tl-item { position: relative; background: var(--card); border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: 14px 16px 16px;
-        margin: 0 0 14px; font-size: 14px; color: var(--text); line-height: 1.6; }
-    .help-tl-item:last-child { margin-bottom: 0; }
-    .help-tl-dot { position: absolute; left: -31px; top: 19px; width: 10px; height: 10px;
-        border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
-    .help-tl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .help-tl-pr { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
-        color: var(--text-2); }
-    .help-tl-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 6px 0 2px; }
-    .help-tl-ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--text);
-        line-height: 1.55; }
-    .help-tl-ul li { margin: 3px 0; }
-    /* FAQ (chương Câu hỏi thường gặp) -- expander native đã có style "tiêu đề gạch chân" dùng
-       chung cho expander báo cáo (rule [data-testid="stExpander"] phía trên), nhưng ở đây cố ý
-       ghi đè riêng trong phạm vi container key="help_faq" để mỗi câu hỏi trông như 1 sec-card thu
-       gọn/mở ra được -- đồng bộ với mọi khối nội dung khác trên trang Trợ giúp, thay vì lạc tông
-       kiểu "heading gạch chân" của các trang báo cáo. */
-    [class*="st-key-help_faq"] [data-testid="stExpander"] { margin: 0 0 10px !important; }
-    [class*="st-key-help_faq"] [data-testid="stExpander"] details {
-        background: var(--card) !important; border: var(--card-border-w) solid var(--border) !important;
-        border-radius: var(--card-radius) !important; box-shadow: var(--card-shadow) !important; }
-    [class*="st-key-help_faq"] [data-testid="stExpander"] summary {
-        padding: 12px 16px !important; border-bottom: none !important; }
-    [class*="st-key-help_faq"] [data-testid="stExpander"] summary p {
-        font-size: 14.5px !important; font-weight: 600 !important; }
-    [class*="st-key-help_faq"] [data-testid="stExpander"] details[open] > summary {
-        border-bottom: 1px solid var(--divider) !important; }
-    [class*="st-key-help_faq"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
-        padding: 10px 16px 14px !important; font-size: 14px !important; line-height: 1.6 !important; }
     /* "Sửa gán series/sách tự động" (_render_reading_series_override(), Sách/Gundam -> Tổng quan)
-       -- cùng khuôn hm_hist_edit/help_faq phía trên: expander này đứng trực tiếp trên nền trang,
-       ghi đè thành 1 thẻ var(--card) để tiêu đề/caption không mất tương phản trên Bảng màu nền cố
-       định tông đậm. */
+       -- expander này đứng trực tiếp trên nền trang, ghi đè thành 1 thẻ var(--card) để tiêu đề/
+       caption không mất tương phản trên Bảng màu nền cố định tông đậm. */
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details {
         background: var(--card) !important; border: var(--card-border-w) solid var(--border) !important;
@@ -9351,11 +8309,6 @@ _MAIN_CSS = """
         border-bottom: 1px solid var(--divider) !important; }
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
         padding: 10px 16px 14px !important; }
-    @media (max-width: 640px) {
-        .sec-flow { flex-direction: column; align-items: flex-start; }
-        .sec-flow-arr::after { content: "↓"; padding: 0; }
-        .sec-heat { grid-template-columns: repeat(10, 13px); }
-    }
 
     /* ===== Nhật ký & Ngày này năm trước: thẻ có kẻ dọc trái/phải =====
        Dựng bằng HTML tự thân (1 khối st.markdown duy nhất mỗi thẻ) thay vì st.columns()
@@ -9613,7 +8566,7 @@ _MAIN_CSS = """
        khung/padding/bo góc/margin khai báo tiếp ở đây, tách khỏi rule màu để không lặp lại toàn
        bộ khối mỗi lần chỉnh 1 trong 2 nhóm thuộc tính. */
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
-    .st-key-tbgd_billboard, .st-key-help_billboard {
+    .st-key-tbgd_billboard {
         border-color: var(--border) !important;
         /* padding-bottom 16px -> 24px: cột mục lục dọc (.tbill-toccol) thường cao hơn 2 cột badge/
            nội dung bên cạnh (canh giữa theo chiều cao hàng), nên mép dưới billboard cần dư dả hơn
@@ -9637,29 +8590,24 @@ _MAIN_CSS = """
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
     [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         align-self: center !important;
     }
     /* Mọi cột KHÔNG PHẢI cột đầu (badge/tờ lịch) trong hàng billboard -- đệm trái 24px + đường kẻ
        dọc ngăn cách, khớp mockup (nội dung ở giữa, mục lục dọc bên phải khi có `chips`, xem
-       docstring render_period_billboard()/_render_today_billboard()). Trước đây chỉ đệm trái
-       ĐÚNG cột CUỐI (khi billboard chỉ có 2 cột) -- đổi `:last-child` thành `:not(:first-child)`
-       để áp đúng CẢ 2 cột khi billboard có 3 cột (nội dung GIỮA cũng cần đệm/kẻ, không chỉ mục
-       lục cột cuối). Trang Trợ giúp (key="help_billboard") từng bị SÓT khỏi danh sách này (bug
-       thật đã gặp, ảnh chụp người dùng gửi thiếu hẳn đường kẻ dọc) -- đã thêm help_billboard_row. */
+       docstring render_period_billboard()/_render_today_billboard()). Áp cho CẢ 2 cột khi billboard
+       có 3 cột (nội dung GIỮA cũng cần đệm/kẻ, không chỉ mục lục cột cuối), không chỉ cột cuối. */
     [class*="st-key-tbill_daterow"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-bc_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-bc_billboard_detail_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
     [class*="st-key-tb_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
-    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child),
-    [class*="st-key-help_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
+    [class*="st-key-tbgd_billboard_row"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:first-child) {
         padding-left: 24px !important;
         border-left: 1px solid var(--divider);
     }
     /* Badge tròn billboard (Apple/macOS-inspired, khớp Hôm nay.dc.html) -- DÙNG CHUNG cho MỌI
-       billboard trong app (Hôm nay `_render_today_billboard()` lẫn Báo cáo/Sách/Gundam/Sức khoẻ/
-       Tuỳ biến/Trợ giúp qua `render_period_billboard()`) -- xác nhận với người dùng đổi hẳn khỏi
+       billboard trong app (Hôm nay `_render_today_billboard()` lẫn Báo cáo/Sách/Gundam/
+       Tuỳ biến qua `render_period_billboard()`) -- xác nhận với người dùng đổi hẳn khỏi
        khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.tbill-date`/`.tbill-meta`/`.pbill-num`/`.pbill-label`,
        đã bỏ hoàn toàn) để MỌI cột badge trong app đồng bộ 1 kiểu. vertical_alignment="center" của
        st.columns cha đã canh khối này theo tâm so với cột khác cao hơn bên cạnh. */
@@ -9681,7 +8629,7 @@ _MAIN_CSS = """
         opacity: 0.9; margin-top: 1px; }
     .tbcircle-dow { font-size: 14px; font-weight: 700; color: var(--text); margin-top: 9px; }
     .tbcircle-meta { font-size: 11.5px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
-    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ
+    /* Cột mục lục DỌC của MỌI billboard (Hôm nay lẫn Báo cáo/Sách/Gundam/Tuỳ biến/Trợ
        giúp qua render_period_billboard()) -- khác .sec-toc hàng-ngang-wrap cũ đã bỏ hẳn, tái dùng
        nguyên .sec-toc-chip cho từng chip, chỉ đổi container thành flex-column. border-left/
        padding-left của CHÍNH cột này đã xử lý ở rule gộp ":not(:first-child)" phía trên -- không
@@ -9952,8 +8900,8 @@ _MAIN_CSS = """
 
     /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- "Kính mờ"/"Viền gradient" (xem CARD_STYLES, _card_style_vars)
        cần thêm background/backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc,
-       nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/hmtl-card/glass-card/
-       sec-card/quotes-card/help-tl-item/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
+       nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
+       sec-card/quotes-card/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
        khối tự viết riêng "background: var(--card); border: var(--card-border-w) solid
        var(--border);" theo TỪNG rule, không có 1 điểm nối chung để đổi background-image/backdrop.
        Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
@@ -9962,10 +8910,7 @@ _MAIN_CSS = """
        var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 6 kiểu thẻ còn lại,
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
-    .dtl-card, .dtbl-wrap, .catbars-card, .hmtl-card, .glass-card, .sec-card, .quotes-card,
-    .help-tl-item,
-    [class*="st-key-hm_hist_edit"] [data-testid="stExpander"] details,
-    [class*="st-key-help_faq"] [data-testid="stExpander"] details,
+    .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card,
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
@@ -9985,7 +8930,7 @@ st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
 # nav nằm trong st.sidebar; .block-container chính không còn phải chừa chỗ cho thanh nav ngang
 # nữa. Nav chính KHÔNG còn là 1 segmented_control duy nhất -- xem _render_nav_group() bên dưới:
-# mỗi trang có sub-nav (Báo cáo/Sức khoẻ/Tuỳ biến) tự chẻ cụm nav chứa nó thành nhiều đoạn
+# mỗi trang có sub-nav (Báo cáo/Tuỳ biến) tự chẻ cụm nav chứa nó thành nhiều đoạn
 # segmented_control riêng để chèn sub-nav NGAY SAU nút của đúng trang đó, thay vì sub-nav luôn rơi
 # xuống cuối toàn bộ nav chính (xác nhận với người dùng đổi lại cách bố trí này).
 with st.sidebar:
@@ -10000,10 +8945,8 @@ NAV = {
     "Báo cáo": ":material/bar_chart:",
     "Nhật ký đọc sách": ":material/menu_book:",
     "Gundam": ":material/shield:",
-    "Sức khoẻ": ":material/monitor_heart:",
     "Tìm kiếm": ":material/search:",
     "Tuỳ biến": ":material/tune:",
-    "Hướng dẫn": ":material/help:",
 }
 # Nhãn ngắn để các tab vừa 1 hàng (key trang giữ nguyên).
 NAV_SHORT = {
@@ -10011,22 +8954,20 @@ NAV_SHORT = {
     "Báo cáo": "Báo cáo",
     "Nhật ký đọc sách": "Sách",
     "Gundam": "Gundam",
-    "Sức khoẻ": "Sức khoẻ",
     "Tìm kiếm": "Tìm kiếm",
     "Tuỳ biến": "Tuỳ biến",
-    "Hướng dẫn": "Trợ giúp",
 }
 # 2 cụm nav chính, cách nhau bởi 1 divider cố định (mockup) -- KHÔNG còn dựng bằng CSS nth-child
 # trên 1 radiogroup 8 nút duy nhất (cách cũ) vì số lượng radiogroup thực tế trên trang giờ thay
 # đổi theo "nav" (xem _render_nav_group). Divider là 1 <div> tường minh giữa 2 lần gọi hàm đó.
-_NAV_GROUP_A = ["Hôm nay", "Báo cáo", "Nhật ký đọc sách", "Gundam", "Sức khoẻ", "Tìm kiếm"]
-_NAV_GROUP_B = ["Tuỳ biến", "Hướng dẫn"]
+_NAV_GROUP_A = ["Hôm nay", "Báo cáo", "Nhật ký đọc sách", "Gundam", "Tìm kiếm"]
+_NAV_GROUP_B = ["Tuỳ biến"]
 # Slug ASCII cho từng trang, dùng để dựng key WIDGET duy nhất theo (cụm, biến thể, trang) ở
 # _render_nav_group() -- KHÔNG dùng thẳng tên trang (dấu tiếng Việt/khoảng trắng) làm key vì
 # Streamlit sinh class CSS "st-key-<key>" trực tiếp từ key, ký tự lạ trong đó không an toàn.
 _NAV_SLUG = {
     "Hôm nay": "homnay", "Báo cáo": "baocao", "Nhật ký đọc sách": "sach", "Gundam": "gundam",
-    "Sức khoẻ": "suckhoe", "Tìm kiếm": "timkiem", "Tuỳ biến": "tuybien", "Hướng dẫn": "huongdan",
+    "Tìm kiếm": "timkiem", "Tuỳ biến": "tuybien",
 }
 
 df = prep_analysis_data()
@@ -10046,7 +8987,7 @@ else:
 # Khởi tạo nav từ URL (?nav=<trang>) -> deep-link & giữ trang khi F5/refresh.
 # Chỉ đặt khi session chưa có để không ghi đè lựa chọn người dùng đang thao tác. "nav" giờ KHÔNG
 # còn là key CỦA 1 widget cụ thể (widget đã chẻ thành nhiều đoạn nav_*, xem dưới) -- đây thuần là
-# 1 biến trạng thái logic, đọc/ghi y hệt cách bc_sub/hm_sub/tb_sub đã dùng từ trước.
+# 1 biến trạng thái logic, đọc/ghi y hệt cách bc_sub/tb_sub đã dùng từ trước.
 if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
     st.session_state["nav"] = _q if _q in NAV else "Hôm nay"
@@ -10066,8 +9007,8 @@ BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material
 # Click biểu đồ Xu hướng/Theo khung giờ (render_trend_fig/render_hourly_chart) nhảy sang sub-tab
 # "Dự án" qua cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["bc_sub_picker"] tại chỗ
 # bấm, vì widget segmented_control (key="bc_sub_picker", render trong sidebar bên dưới) đã
-# instantiate rồi trong CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở
-# "_hm_sub_jump" ngay dưới) -- phải set TRƯỚC dòng segmented_control, nên xử lý ở đây, trước khi
+# instantiate rồi trong CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở khối xử lý
+# cờ này ngay dưới) -- phải set TRƯỚC dòng segmented_control, nên xử lý ở đây, trước khi
 # "bc_sub" tự đọc query param. Set CẢ 2 key (bc_sub_picker VÀ bc_sub) vì "bc_sub" tuy không phải
 # key widget nhưng segmented_control CHỈ đọc default= khi key CHƯA từng có giá trị -- đã ghé "Báo
 # cáo" 1 lần trong phiên thì bc_sub_picker đã có state riêng, set mỗi bc_sub sẽ không đổi được tab
@@ -10084,31 +9025,7 @@ if nav == "Báo cáo":
 elif "sub" in st.query_params:
     del st.query_params["sub"]
 
-# Sub-page của "Sức khoẻ" (Báo cáo/Lịch sử/Dữ liệu đầu vào) -- CÙNG 1 pattern hệt BAOCAO_SUBS ở
-# trên (segmented_control trong sidebar + query param riêng), không dùng st.tabs() -- khác tab
-# Hướng dẫn (nội dung tĩnh, không cần deep-link) ở chỗ đây là trang thao tác, cần chia sẻ được
-# link/nhảy sang đúng sub-tab bằng code (vd sau khi Lưu ở "Dữ liệu đầu vào" có thể tự chuyển sang
-# "Báo cáo"). Query param riêng "hsub" (không dùng chung "sub" với Báo cáo) để 2 trang không giẫm
-# state.
-SUCKHOE_SUBS = ["Báo cáo", "Lịch sử", "Dữ liệu đầu vào"]
-SUCKHOE_SUB_ICONS_MD = {"Báo cáo": ":material/monitoring:", "Lịch sử": ":material/history:",
-                        "Dữ liệu đầu vào": ":material/edit_note:"}
-# Nút "Sửa" ở card "Lần khám gần nhất" (_render_health_input()) nhảy sang sub-tab Lịch sử qua cờ
-# chờ xử lý này -- xử lý ở đây (trước dòng segmented_control key="hm_sub_picker" trong sidebar bên
-# dưới), CÙNG gotcha/pattern với "_bc_sub_jump" ở trên.
-if "_hm_sub_jump" in st.session_state:
-    _hm_jump = st.session_state.pop("_hm_sub_jump")
-    st.session_state["hm_sub_picker"] = _hm_jump
-    st.session_state["hm_sub"] = _hm_jump
-elif "hm_sub" not in st.session_state:
-    _qs_hm = st.query_params.get("hsub")
-    st.session_state["hm_sub"] = _qs_hm if _qs_hm in SUCKHOE_SUBS else "Báo cáo"
-if nav == "Sức khoẻ":
-    st.query_params["hsub"] = st.session_state["hm_sub"]
-elif "hsub" in st.query_params:
-    del st.query_params["hsub"]
-
-# Sub-page của "Tuỳ biến" (Tổng quan/Giao diện) -- CÙNG 1 pattern hệt SUCKHOE_SUBS ở trên. "Giao
+# Sub-page của "Tuỳ biến" (Tổng quan/Giao diện) -- CÙNG 1 pattern hệt BAOCAO_SUBS ở trên. "Giao
 # diện" tách khỏi chuỗi chương cuộn dọc "Tổng quan" (trước đây là chương "3. Giao diện") thành 1
 # sub-page riêng theo mockup "Tuỳ Chỉnh Giao Diện.dc.html" -- bố cục 2 cột (6 trục cá nhân hoá +
 # xem trước trực tiếp), khác hẳn khuôn billboard+chip-TOC-cuộn-trang của "Tổng quan" nên cần tách
@@ -10127,7 +9044,7 @@ elif "tsub" in st.query_params:
 # TUYBIEN_SUBS ở trên, tách khỏi render_reading_log() (dùng chung cho cả 2 trang, xem nơi gọi) để
 # render được trong sidebar thay vì đứng ở đầu nội dung trang như trước. Sách có thêm sub-tab
 # "Trích dẫn" mà Gundam không có (xem tham số show_favorites truyền vào render_reading_log()).
-# KHÔNG có query param riêng lưu TÊN sub-tab (khác Báo cáo/Sức khoẻ/Tuỳ biến) -- link nhảy tới 1
+# KHÔNG có query param riêng lưu TÊN sub-tab (khác Báo cáo/Tuỳ biến) -- link nhảy tới 1
 # cuốn/series cụ thể dùng `?book=`/`?series=` (đọc lại trong _render_reading_detail(), không đọc ở
 # đây) chỉ để quyết định sub-tab KHỞI ĐẦU là "Chi tiết" hay không, không cần đồng bộ 2 chiều.
 SACH_SUBS = ["Tổng quan", "Trích dẫn", "Chi tiết"]
@@ -10149,7 +9066,6 @@ _NAV_SUBNAV = {
     "Báo cáo": (BAOCAO_SUBS, BAOCAO_SUB_ICONS_MD, "bc_sub", "bc_sub_picker", "sub", "Chọn kỳ xem"),
     "Nhật ký đọc sách": (SACH_SUBS, SACH_SUB_ICONS_MD, "rl_view_tabs", "rl_view_tabs_picker", None, "Chọn mục"),
     "Gundam": (GUNDAM_SUBS, GUNDAM_SUB_ICONS_MD, "rl_view_tabs_gd", "rl_view_tabs_gd_picker", None, "Chọn mục"),
-    "Sức khoẻ": (SUCKHOE_SUBS, SUCKHOE_SUB_ICONS_MD, "hm_sub", "hm_sub_picker", "hsub", "Xem theo"),
     "Tuỳ biến": (TUYBIEN_SUBS, TUYBIEN_SUB_ICONS_MD, "tb_sub", "tb_sub_picker", "tsub", "Xem theo"),
 }
 
@@ -10298,9 +9214,9 @@ def _inject_keyboard_shortcuts():
     # hướng nav (số 1-7, n, một phần /, cả ← → vì activeNavLabel() luôn trả null) im lặng không
     # hoạt động, không báo lỗi console (phát hiện qua báo cáo thực tế + Playwright, không phải suy
     # đoán). Scope theo [class*="st-key-navseg_"] (thay vì query toàn document như bản cũ) để không
-    # lỡ khớp nhầm 1 segmented_control khác cùng trang có label trùng tình cờ (vd "Báo cáo" vừa là
-    # tên trang chính vừa là tên 1 sub-tab của Sức khoẻ -- sub-tab đó KHÔNG dùng key "navseg_*" nên
-    # không lọt vào scope này).
+    # lỡ khớp nhầm 1 segmented_control khác cùng trang có label trùng tình cờ (vd "Tổng quan" vừa là
+    # tên 1 sub-tab Báo cáo vừa là tên 1 sub-tab Tuỳ biến -- các sub-tab đó KHÔNG dùng key
+    # "navseg_*" nên không lọt vào scope này).
     js = (
         "<script>\n"
         "(function(){\n"
@@ -10686,7 +9602,7 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
     vào 1 khối duy nhất, xếp thành 3 cột (badge tròn | trích dẫn | mục lục dọc) ngăn cách bởi
     đường kẻ dọc -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired), THAY cho khuôn "tờ
     lịch xé" cũ. Dùng CSS `.tbcircle-*` -- DÙNG CHUNG với `render_period_billboard()` (billboard
-    Báo cáo/Sách/Gundam/Sức khoẻ/Tuỳ biến/Trợ giúp cũng đã đổi sang badge tròn này, không còn
+    Báo cáo/Sách/Gundam/Tuỳ biến cũng đã đổi sang badge tròn này, không còn
     khuôn "tờ lịch xé" ở bất kỳ đâu trong app). Khác biệt duy nhất: Hôm nay không cần `.tbcircle-tab`
     (nhãn kỳ dạng viên thuốc phía trên badge) vì tháng đã hiện gọn trong `.tbcircle-mon` bên trong
     vòng tròn (chỉ 3-4 ký tự "Th8", khác tab_label các trang khác dài hơn hẳn).
@@ -11569,8 +10485,8 @@ elif nav == "Báo cáo":
             # (_grp_sel_jump -- dùng bởi click biểu đồ Xu hướng/Theo khung giờ, xem
             # render_trend_fig/render_hourly_chart). PHẢI đặt TRƯỚC st.selectbox(key="grp_sel")
             # ngay dưới, nếu không sẽ StreamlitAPIException vì widget đã instantiate trong lượt
-            # chạy này -- đúng gotcha đã gặp và vá ở _hm_sub_jump (render_health_page(), gần dòng
-            # 5056), copy y hệt cơ chế đó. frag_trend(df_g, "trend_grp", "Dự án") gọi bên dưới
+            # chạy này -- đúng gotcha đã gặp và vá ở _bc_sub_jump (gần đầu dispatch), copy y hệt cơ
+            # chế đó. frag_trend(df_g, "trend_grp", "Dự án") gọi bên dưới
             # CHÍNH XÁC trong nhánh này, sau dòng grp_sel -- xác nhận rủi ro có thật.
             if "_grp_sel_jump" in st.session_state:
                 st.session_state["grp_sel"] = st.session_state.pop("_grp_sel_jump")
@@ -11818,18 +10734,13 @@ elif nav == "Gundam":
             extra_overview=lambda: _render_reading_series_override(
                 gundam_sessions, rl_gundam, gundam_df, gundam_overrides,
                 save_gundam_override, delete_gundam_override, "series", "gundam"))
-# ==========================================
-# TRANG: SỨC KHOẺ
-# ==========================================
-elif nav == "Sức khoẻ":
-    render_health_page()
 elif nav == "Tìm kiếm":
     render_search()
 # ==========================================
 # TAB TUỲ BIẾN
 # ==========================================
 elif nav == "Tuỳ biến":
-    # Sub-page "Tổng quan"/"Giao diện" (TUYBIEN_SUBS, xem khai báo cạnh SUCKHOE_SUBS) -- widget
+    # Sub-page "Tổng quan"/"Giao diện" (TUYBIEN_SUBS, xem khai báo cạnh BAOCAO_SUBS) -- widget
     # picker render trong sidebar (khối "with st.sidebar" ngay sau khi "nav" được xác định), ở đây
     # chỉ đọc lại session_state đã đồng bộ. "Giao diện" tách hẳn khỏi chuỗi chương cuộn dọc bên
     # dưới vì bố cục mockup của nó (2 cột: trục cá nhân hoá + xem trước trực tiếp) không khớp
@@ -12000,7 +10911,7 @@ elif nav == "Tuỳ biến":
                         rl_df, rl_stats, rl_missing = parse_reading_log_shortcut_csv(rl_file)
                         if rl_missing:
                             st.error("File thiếu cột: " + ", ".join(rl_missing) + " — cần đúng 3 cột "
-                                      "'list|title|completed_date' (xem hướng dẫn tạo Shortcut trong tab Hướng dẫn).")
+                                      "'list|title|completed_date'.")
                         elif rl_df.empty:
                             st.warning("Không đọc được dòng hợp lệ nào trong file.")
                         else:
@@ -12301,8 +11212,6 @@ elif nav == "Tuỳ biến":
                             parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
                         if SETTINGS_FILE in names:
                             parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
-                        if HEALTH_METRICS_FILE in names:
-                            parts.append(f"Sức khoẻ **{len(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))}** chỉ số")
                         if KINDLE_HIGHLIGHTS_FILE in names:
                             parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
                         if DELETED_KINDLE_FILE in names:
@@ -12342,10 +11251,6 @@ elif nav == "Tuỳ biến":
                         save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
                     if SETTINGS_FILE in names:
                         save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
-                    if HEALTH_METRICS_FILE in names:
-                        # KHÔNG dtype=str -- khác các bảng trên, bảng này có cột số thực (Giá trị/Ref thấp/Ref
-                        # cao) cần pandas tự suy kiểu để pd.isna() nhận diện đúng ô trống.
-                        save_health_metrics_raw_bulk(pd.read_csv(io.BytesIO(_z.read(HEALTH_METRICS_FILE))))
                     # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
                     # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
                     # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
@@ -12383,7 +11288,6 @@ elif nav == "Tuỳ biến":
                 _sb_delete_all("work_calendar", "uid")
                 _sb_delete_all("reading_log", "uid")
                 _sb_delete_all("settings", "key")
-                _sb_delete_all("health_metrics", "id")
                 _sb_delete_all("kindle_highlights", "dedupe_hash")
                 _sb_delete_all("kindle_book_map", "kindle_title")
                 _sb_delete_all("deleted_kindle_highlights", "dedupe_hash")
@@ -12451,7 +11355,6 @@ elif nav == "Tuỳ biến":
                                           (WORK_CALENDAR_FILE, load_work_calendar()),
                                           (READING_LOG_FILE, load_reading_log()),
                                           (SETTINGS_FILE, _settings_df),
-                                          (HEALTH_METRICS_FILE, load_health_metrics()),
                                           (KINDLE_HIGHLIGHTS_FILE, load_kindle_highlights()),
                                           (KINDLE_BOOK_MAP_FILE, load_kindle_book_map()),
                                           (DELETED_KINDLE_FILE, load_deleted_kindle()),
@@ -12534,14 +11437,3 @@ elif nav == "Tuỳ biến":
                 if paged:
                     _render_table_pagination(num_pages, "db_page",
                                                f"Hiển thị phiên {_start + 1}–{_end} / {len(disp_db)}")
-
-# ==========================================
-# TAB HƯỚNG DẪN
-# ==========================================
-elif nav == "Hướng dẫn":
-    render_help_page(
-        st=st, json=json, health_metrics_json_example=HEALTH_METRICS_JSON_EXAMPLE,
-        render_period_billboard=render_period_billboard, sec_chapter=sec_chapter,
-        sec_block=sec_block, sec_kbd=sec_kbd, sec_table=sec_table,
-        help_faq_item=help_faq_item, render_help_changelog=render_help_changelog,
-    )

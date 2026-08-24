@@ -427,30 +427,26 @@ CONTENT_WIDTHS = {
 # "file_prefix" khớp tên file trong assets/fonts/ (vd Inter-Variable-latin.woff2), "family" là tên
 # CSS font-family thật.
 #
-# Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen bộ 8 font trước -- Manrope/Be Vietnam
-# Pro/Plus Jakarta Sans/Nunito/Literata/Lora/Roboto Slab/Oswald -- muốn 1 bộ "hoàn toàn khác"). 8
-# font mới: Inter (sans trung tính sắc nét, MẶC ĐỊNH mới), Archivo (grotesque khổ rộng), Epilogue
-# (hình học đặc trưng), Unbounded (display bo khối đậm), Fraunces (serif ấm/tương phản cao, có trục
-# opsz), Newsreader (serif kiểu báo/tạp chí), Bitter (slab serif mềm hơn Roboto Slab cũ), Big
-# Shoulders Text (condensed công nghiệp, thay vai trò "sans nén cao" của Oswald cũ). Đã xác minh cả
-# 8 đều có bản variable phủ đủ wght 200-800 trong 1 file (như bộ cũ, TRỪ Be Vietnam Pro) VÀ đủ 3
-# subset latin/latin-ext/vietnamese trước khi tải (không font nào cần cơ chế "weights" nhiều file
-# tĩnh như Be Vietnam Pro cũ nữa).
+# Đợt đổi mới thứ 3 (xác nhận với người dùng: bộ 8 font trước -- Inter/Archivo/Epilogue/Unbounded/
+# Fraunces/Newsreader/Bitter/Big Shoulders Text -- có nhiều lựa chọn quá cách điệu/khó đọc, muốn về
+# lại các font truyền thống, readability cao). Rút còn 5 font, bỏ hẳn 4 lựa chọn cách điệu/display
+# (Archivo, Epilogue, Unbounded, Big Shoulders Text) và Fraunces (serif tương phản cao, cũng thiên
+# về trang trí hơn là đọc dài); giữ Inter (sans trung tính, MẶC ĐỊNH) và Newsreader/Bitter (đã có
+# sẵn, đọc tốt); thêm Source Sans 3 (sans nhân văn cổ điển) và Literata (serif thiết kế riêng cho
+# đọc dài, từng có trong bộ font đầu tiên của app -- không ngại trùng lựa chọn cũ). Đã xác minh cả 5
+# đều có bản variable phủ đủ wght 200-800 trong 1 file và đủ 3 subset latin/latin-ext/vietnamese.
 #
 # QUAN TRỌNG: "Manrope" (font khung vỏ CỐ ĐỊNH cho sidebar/date-picker, xem _UI_FONT trong app.py)
 # KHÔNG còn là 1 key trong dict này -- đã tách riêng khỏi trục "Font thân chữ" (đọc thẳng
-# "Manrope-Variable" qua _body_font_b64(), không tra cứu qua BODY_FONTS[_UI_FONT] nữa) để 8 lựa
+# "Manrope-Variable" qua _body_font_b64(), không tra cứu qua BODY_FONTS[_UI_FONT] nữa) để các lựa
 # chọn ở đây có thể thay hẳn mà không phá khung vỏ cố định. File Manrope-Variable-*.woff2 trong
-# assets/fonts/ VẪN GIỮ NGUYÊN (đang dùng cho khung vỏ), dù không còn hiện trong danh sách 8 lựa
+# assets/fonts/ VẪN GIỮ NGUYÊN (đang dùng cho khung vỏ), dù không còn hiện trong danh sách lựa
 # chọn này.
 BODY_FONTS = {
     "Inter": {"family": "Inter", "file_prefix": "Inter-Variable"},          # mặc định
-    "Archivo": {"family": "Archivo", "file_prefix": "Archivo-Variable"},
-    "Epilogue": {"family": "Epilogue", "file_prefix": "Epilogue-Variable"},
-    "Unbounded": {"family": "Unbounded", "file_prefix": "Unbounded-Variable"},
-    "Fraunces": {"family": "Fraunces", "file_prefix": "Fraunces-Variable"},
+    "Source Sans 3": {"family": "Source Sans 3", "file_prefix": "SourceSans3-Variable"},
     "Newsreader": {"family": "Newsreader", "file_prefix": "Newsreader-Variable"},
+    "Literata": {"family": "Literata", "file_prefix": "Literata-Variable"},
     "Bitter": {"family": "Bitter", "file_prefix": "Bitter-Variable"},
-    "Big Shoulders Text": {"family": "Big Shoulders Text", "file_prefix": "BigShouldersText-Variable"},
 }
 
