@@ -5527,6 +5527,100 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix="", show_added_date=F
                             st.rerun()
 
 
+def render_same_day_last_week(sel, df_all):
+    """"Ngày này tuần trước": đúng ngày (sel - 7 ngày), CÙNG bộ nguồn/chip với render_on_this_day
+    (kỷ lục → lịch → đọc sách → số liệu phiên → ghi chú nhanh → ghi chú chính) nhưng chỉ 1 dòng
+    duy nhất (không lặp qua nhiều năm) -- dùng khuôn `.jdate` kiểu Thứ to + dd/mm của
+    render_notes_journal() thay vì khuôn năm to của render_on_this_day (không có khái niệm "năm"
+    ở đây, chỉ có đúng 1 ngày cụ thể)."""
+    target = sel - timedelta(days=7)
+    day_badges = _compute_alltime_records(df_all)["day_badges"]
+
+    day_df = df_all[df_all['Ngày'] == target]
+    stats = None
+    if not day_df.empty:
+        stats = (day_df['Thời lượng (Phút)'].sum() / 60, len(day_df))
+
+    note_text = None
+    nd = load_notes()
+    if not nd.empty:
+        nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce')).dropna(subset=['_d'])
+        _r = nd[nd['_d'].dt.date == target]
+        if not _r.empty:
+            note_text = str(_r.iloc[0]['Ghi chú'])
+
+    events = None
+    wc = load_work_calendar()
+    if not wc.empty:
+        _e = wc[wc['Thời gian bắt đầu'].dt.date == target]
+        if not _e.empty:
+            events = _e.sort_values('Thời gian bắt đầu')
+
+    reading = None
+    rl = load_reading_log()
+    if not rl.empty:
+        _rr = rl[rl['Ngày hoàn thành'].dt.date == target]
+        if not _rr.empty:
+            reading = _rr
+
+    quick = None
+    qn = load_quick_notes()
+    if not qn.empty:
+        _q = qn[qn['Thời gian'].dt.date == target]
+        if not _q.empty:
+            quick = _q
+
+    rec = day_badges.get(target)
+
+    if stats is None and note_text is None and events is None and reading is None and quick is None and not rec:
+        _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
+                "fill='var(--text-4)'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
+                "2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/></svg>")
+        st.markdown(
+            "<div class='glass-card' style='padding:22px 18px;text-align:center;'>"
+            f"<div style='margin-bottom:8px;'>{_cal}</div>"
+            "<div style='font-size:1.0rem;font-weight:600;color:var(--text);'>"
+            f"Không có hoạt động nào vào {target:%d/%m/%Y}</div>"
+            "<div style='font-size:13px;color:var(--text-2);margin-top:4px;'>"
+            "Ghi chú, lịch hoặc phần đọc sách của tuần trước sẽ hiện ở đây khi có.</div></div>",
+            unsafe_allow_html=True)
+        return
+
+    def _chip(k, v):
+        return f"<span class='jchip'><span class='ck'>{k}</span><span class='cv'>{v}</span></span>"
+
+    rec_html = _record_chips_html(rec)
+    cal_html = ''
+    if events is not None:
+        _cchips = ''.join(
+            f"<span class='jchip'><span class='ck'>{r['Thời gian bắt đầu']:%H:%M}</span>"
+            f"<span class='cv'>{html_escape(str(r['Tiêu đề']))}</span></span>"
+            for _, r in events.iterrows())
+        cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{_cchips}</div>"
+    read_html = _book_chips_html(reading) if reading is not None else ''
+    chips_html = ''
+    if stats is not None:
+        hrs, ss = stats
+        avg = (hrs * 60 / ss) if ss else 0
+        _chips = _chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
+        chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
+    qnote_html = _quick_note_chips_html(quick) if quick is not None else ''
+    note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{note_text}</div>"
+                  if note_text else '')
+
+    wd = VN_DAYS.get(pd.Timestamp(target).day_name(), "")
+    _href = _day_link_href(target)
+    row_html = (
+        "<div class='jrow'>"
+        f"<a class='jdate-link' href='{_href}' target='_self'>"
+        f"<div class='jdate'><div class='jdowbig'>{wd}</div><div class='jdm'>{target:%d/%m}</div></div></a>"
+        f"<div>{rec_html}{cal_html}{read_html}{chips_html}{qnote_html}{note_block}</div>"
+        "</div>"
+    )
+    with st.container(border=True, key="jcard_lastweek"):
+        st.markdown(f"<div class='jrows'>{row_html}</div>", unsafe_allow_html=True)
+
+
 def render_on_this_day(sel, df_all):
     """“Ngày này năm trước”: khớp cùng ngày/tháng ở các năm trước (từ phiên + ghi chú),
     mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc. Mỗi dòng năm cũng
@@ -8304,12 +8398,13 @@ _MAIN_CSS = """
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
-    /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) -- giới hạn ghi chú chính tối đa
-       5 dòng, cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định
-       (dùng chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: mục
-       này chỉ để LƯỚT nhanh nhiều năm cùng lúc, xem chi tiết thì bấm vào ngày/năm đó (đã có sẵn
-       link .jdate-link). Scope RIÊNG .st-key-jcard_otd, không đụng .note-html ở các nơi khác. */
-    .st-key-jcard_otd .note-html {
+    /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) và "Ngày này tuần trước"
+       (jcard_lastweek, xem render_same_day_last_week()) -- giới hạn ghi chú chính tối đa 5 dòng,
+       cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định (dùng
+       chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: 2 mục này
+       chỉ để LƯỚT nhanh, xem chi tiết thì bấm vào ngày đó (đã có sẵn link .jdate-link). Scope
+       RIÊNG .st-key-jcard_otd/.st-key-jcard_lastweek, không đụng .note-html ở các nơi khác. */
+    .st-key-jcard_otd .note-html, .st-key-jcard_lastweek .note-html {
         display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
     }
     .jdate { text-align: center; }
@@ -9689,21 +9784,27 @@ def render_day_report(df):
 
     # Billboard đầu trang: gộp "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục vào 1 khối
     # duy nhất (xem docstring _render_today_billboard()). Bộ chip khác nhau tuỳ ngày trống hay có
-    # phiên (2 mục không đánh số vs 5 mục đánh số 1-5, xem 2 nhánh bên dưới).
-    # "Ngày này năm trước" dời XUỐNG CUỐI (chương 5, sau "Danh sách phiên") -- xác nhận với người
-    # dùng đổi lại khỏi vị trí "ngay sau Ghi chú ngày" của lần dọn dẹp trước (xem Nhật ký phát
-    # triển), giờ chỉ còn là mục tham khảo phụ đọc thêm cuối trang, không còn ở đầu.
-    _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này năm trước")]
+    # phiên (3 mục không đánh số vs 6 mục đánh số 1-6, xem 2 nhánh bên dưới).
+    # "Ngày này tuần trước"/"Ngày này năm trước" dời XUỐNG CUỐI (2 chương cuối, sau "Danh sách
+    # phiên") -- xác nhận với người dùng đổi lại khỏi vị trí "ngay sau Ghi chú ngày" của lần dọn
+    # dẹp trước (xem Nhật ký phát triển), giờ chỉ còn là mục tham khảo phụ đọc thêm cuối trang,
+    # không còn ở đầu. "Ngày này tuần trước" (render_same_day_last_week(), chỉ 1 ngày cụ thể)
+    # đứng NGAY TRÊN "Ngày này năm trước" (render_on_this_day(), lặp qua nhiều năm) -- xác nhận
+    # với người dùng: hợp nhịp làm việc theo tuần hơn, nên đọc trước mục theo năm.
+    _hero_chips = ([("today-ch1", "1 · Ghi chú ngày"), ("today-ch2", "2 · Ngày này tuần trước"),
+                     ("today-ch3", "3 · Ngày này năm trước")]
                    if day_df.empty else
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
                     ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
-                    ("today-ch5", "5 · Ngày này năm trước")])
+                    ("today-ch5", "5 · Ngày này tuần trước"), ("today-ch6", "6 · Ngày này năm trước")])
     _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(sel), _hero_chips)
 
     if day_df.empty:
         sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
         render_note_editor(sel, sel_day_badges)
-        sec_chapter("today-ch2", 2, "Ngày này năm trước")
+        sec_chapter("today-ch2", 2, "Ngày này tuần trước")
+        render_same_day_last_week(sel, df)
+        sec_chapter("today-ch3", 3, "Ngày này năm trước")
         render_on_this_day(sel, df)
     else:
         sec_chapter("today-ch1", 1, "Tổng quan ngày", tight_top=True)
@@ -9813,7 +9914,10 @@ def render_day_report(df):
             _render_table_pagination(_num_pages, "today_sess_tbl_page",
                                        f"Hiển thị phiên {_start + 1}–{_end} / {len(_day_sorted)}")
 
-        sec_chapter("today-ch5", 5, "Ngày này năm trước")
+        sec_chapter("today-ch5", 5, "Ngày này tuần trước")
+        render_same_day_last_week(sel, df)
+
+        sec_chapter("today-ch6", 6, "Ngày này năm trước")
         render_on_this_day(sel, df)
 
 
