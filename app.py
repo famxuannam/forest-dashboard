@@ -6444,9 +6444,15 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
     "..._detail_row" không còn chứa nguyên vẹn chuỗi con "billboard_row")."""
     def _tbcircle_num_fs(v):
         # 1-2 ký tự (số ngày kiểu Hôm nay) giữ nguyên 34px gốc; chuỗi dài hơn (giờ/phút, số phiên,
-        # số dòng mã nguồn...) tự thu nhỏ dần để không tràn khỏi vòng tròn 96px.
+        # số dòng mã nguồn...) tự thu nhỏ dần để không tràn khỏi vòng tròn 96px. Thêm 2 bậc
+        # 6/≥7 ký tự (trước đây dồn chung vào 1 mức 18px duy nhất cho MỌI chuỗi ≥5 ký tự) -- xác
+        # nhận với người dùng qua ảnh chụp thật: chuỗi dài kiểu "422h58′" (7 ký tự, dữ liệu tích
+        # luỹ nhiều năm) ở 18px vẫn sát mép vòng tròn, thiếu hẳn khoảng thở 2 bên. Đã đo lại bằng
+        # Playwright (getBoundingClientRect thật, không ước lượng): "422h58′" ở 15px rộng ~56px,
+        # "1281h05′" (8 ký tự) ở 15px rộng ~59px -- cả 2 đều dư ít nhất ~18px mỗi bên trong vòng
+        # tròn 96px, đủ thoáng.
         n = len(str(v))
-        return 34 if n <= 2 else 28 if n == 3 else 22 if n == 4 else 18
+        return 34 if n <= 2 else 28 if n == 3 else 24 if n == 4 else 20 if n == 5 else 17 if n == 6 else 15
     _left_html = (
         "<div class='tbcircle-wrap'>"
         f"<div class='tbcircle-tab'>{tab_label}</div>"
@@ -8697,8 +8703,10 @@ _MAIN_CSS = """
         border-color: var(--border) !important;
         /* padding-bottom 16px -> 24px: cột mục lục dọc (.tbill-toccol) thường cao hơn 2 cột badge/
            nội dung bên cạnh (canh giữa theo chiều cao hàng), nên mép dưới billboard cần dư dả hơn
-           để chip mục lục cuối cùng không sát viền (bug thật đã gặp, xem screenshot người dùng). */
-        padding: 14px 20px 16px !important;
+           để chip mục lục cuối cùng không sát viền (bug thật đã gặp, xem screenshot người dùng).
+           Rule vẫn ghi 16px dù comment đã nói 24px (lệch thật, phát hiện lại qua ảnh chụp khác --
+           billboard NGOÀI Hôm nay, cột badge/nội dung sát mép dưới) -- sửa cho khớp đúng comment. */
+        padding: 14px 20px 24px !important;
         border-radius: 12px !important;
         margin: 0 0 6px !important;
     }
