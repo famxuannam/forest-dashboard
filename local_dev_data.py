@@ -14,6 +14,7 @@ class _FakeTable:
     def __init__(self, store, name):
         self.store, self.name = store, name
         self._op, self._payload, self._filters, self._orders, self._span = "select", None, [], [], None
+        self._negate = False
 
     def select(self, fields="*"):
         self._op, self._payload = "select", fields
@@ -49,10 +50,14 @@ class _FakeTable:
 
     @property
     def not_(self):
+        self._negate = True
         return self
 
     def is_(self, key, value):
-        self._filters.append((key, "not_null" if value == "null" else "eq", value))
+        is_null = value == "null"
+        op = "not_null" if (is_null == self._negate) else "null"
+        self._filters.append((key, op, value))
+        self._negate = False
         return self
 
     def order(self, key):
@@ -67,7 +72,8 @@ class _FakeTable:
         for key, op, value in self._filters:
             actual = row.get(key)
             if (op == "eq" and actual != value) or (op == "gte" and (actual is None or actual < value)) \
-                    or (op == "lt" and (actual is None or actual >= value)) or (op == "not_null" and actual is None):
+                    or (op == "lt" and (actual is None or actual >= value)) or (op == "not_null" and actual is None) \
+                    or (op == "null" and actual is not None):
                 return False
         return True
 
@@ -94,7 +100,7 @@ class _FakeTable:
                     rows.append(record)
             return _FakeResponse(records)
         for key in reversed(self._orders):
-            matched.sort(key=lambda r: (r.get(key) is None, str(r.get(key, ""))))
+            matched.sort(key=lambda r, key=key: (r.get(key) is None, r.get(key)))
         if self._span:
             matched = matched[self._span[0]:self._span[1] + 1]
         if self._payload and self._payload != "*":
