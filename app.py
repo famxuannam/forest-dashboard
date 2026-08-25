@@ -9299,12 +9299,49 @@ def _sidebar_record_html(df):
     )
 
 
+def _sidebar_date_badge_html(df):
+    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
+    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
+    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
+    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
+    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy, và chỉ
+    đúng khi đang xem đúng hôm nay. Tái dùng NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi
+    billboard khác trong app), không tự chế khuôn badge mới. Trả về (html, có_dòng_cập_nhật) --
+    caller chỉ gọi `_inject_relative_time_ticker()` khi có dòng "Cập nhật gần nhất"."""
+    today = _today_vn()
+    active_days = sorted(df['Ngày'].dropna().unique())
+    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
+    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
+            if today in active_days else "không có hoạt động")
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
+    _mon_abbr = f"Th{today.month}"
+    html = (
+        "<div class='sb-widget'><div class='tbcircle-wrap'>"
+        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
+        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
+        f"<div class='tbcircle-dow'>{vn_dow}</div>"
+        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
+    )
+    return html, bool(_upd_line)
+
+
 with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
     if not df.empty:
         st.markdown(_sidebar_today_stats_html(df) + _sidebar_record_html(df), unsafe_allow_html=True)
+        _date_badge_html, _date_badge_has_upd = _sidebar_date_badge_html(df)
+        st.markdown(_date_badge_html, unsafe_allow_html=True)
+        if _date_badge_has_upd:
+            _inject_relative_time_ticker()
 
 
 def _inject_keyboard_shortcuts():
@@ -9756,58 +9793,32 @@ def _shuffle_daily_quote():
     st.session_state["kq_daily_idx"] = new_idx
 
 
-def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
-    """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
-    vào 1 khối duy nhất, xếp thành 3 cột (badge tròn | trích dẫn | mục lục dọc) ngăn cách bởi
-    đường kẻ dọc -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired), THAY cho khuôn "tờ
-    lịch xé" cũ. Dùng CSS `.tbcircle-*` -- DÙNG CHUNG với `render_period_billboard()` (billboard
-    Báo cáo/Sách/Gundam/Tuỳ biến cũng đã đổi sang badge tròn này, không còn
-    khuôn "tờ lịch xé" ở bất kỳ đâu trong app). Khác biệt duy nhất: Hôm nay không cần `.tbcircle-tab`
-    (nhãn kỳ dạng viên thuốc phía trên badge) vì tháng đã hiện gọn trong `.tbcircle-mon` bên trong
-    vòng tròn (chỉ 3-4 ký tự "Th8", khác tab_label các trang khác dài hơn hẳn).
+def _render_today_billboard(kq, hero_chips):
+    """Billboard đầu trang Hôm nay: gộp card "Trích dẫn hôm nay" + chip mục lục vào 1 khối, xếp
+    thành 2 cột (trích dẫn | mục lục dọc) ngăn cách bởi đường kẻ dọc -- khớp `Hôm nay.dc.html`
+    (đợt redesign Apple/macOS-inspired). Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt
+    động X/Y" + "Cập nhật gần nhất") KHÔNG còn ở đây -- dời sang sidebar
+    (`_sidebar_date_badge_html()`, xem khối "with st.sidebar" ở đầu file) vì đó là thông tin luôn
+    đúng cho NGÀY HÔM NAY thật (`_today_vn()`), không đổi theo ngày đang browse qua day_picker
+    trên trang này -- hợp làm 1 khối LUÔN hiện ở mọi trang hơn là kẹt trong billboard chỉ trang
+    này mới thấy (xác nhận với người dùng qua ảnh chụp mockup sidebar).
 
     Cột phải "mục lục" (`hero_chips`) xếp DỌC (khác `.sec-toc` hàng-ngang-wrap dùng ở nơi khác) --
     dùng class `.tbill-toccol` bọc ngoài, tái dùng nguyên `.sec-toc-chip` cho từng chip.
 
-    Cột giữa (trích dẫn) vắng mặt hẳn (chưa import trích dẫn nào) thì chỉ còn 2 cột (badge | mục
-    lục) -- không chia 3 cột.
+    Không có trích dẫn (chưa import trích dẫn nào) thì chỉ còn mục lục, render thẳng không cần
+    st.columns (khác bản 2/3-cột trước đây, giờ ít nhất còn 1 cột nên không cần chia).
 
     Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
     do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
     cũ (đã gộp vào đây)."""
-    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_line = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        # epoch UTC thật (không lệch theo múi giờ máy chủ/máy khách) cho JS ticker tự cập nhật
-        # "X trước" mỗi 30s -- xem _inject_relative_time_ticker().
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
-
-    _mon_abbr = f"Th{sel.month}"
-    _badge_html = (
-        "<div class='tbcircle-wrap'>"
-        f"<div class='tbcircle'><div class='tbcircle-num'>{sel.day}</div>"
-        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
-        f"<div class='tbcircle-dow'>{vn_dow}</div>"
-        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
-
     _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
     _toc_html = f"<div class='tbill-toccol'>{_chips_html}</div>"
 
     with st.container(key="today_billboard", border=True):
-        with st.container(key="tbill_daterow"):
-            if kq is not None:
-                c_date, c_quote, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
-            else:
-                c_date, c_toc = st.columns([1, 1], vertical_alignment="center")
-                c_quote = None
-            with c_date:
-                st.markdown(_badge_html, unsafe_allow_html=True)
-            if c_quote is not None:
+        if kq is not None:
+            with st.container(key="tbill_daterow"):
+                c_quote, c_toc = st.columns([2, 1], vertical_alignment="center")
                 with c_quote:
                     st.markdown(
                         "<div class='kq-daily-mark'>“</div>"
@@ -9837,11 +9848,10 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                                          help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                                 st.rerun()
-            with c_toc:
-                st.markdown(_toc_html, unsafe_allow_html=True)
-
-    if _upd_line:
-        _inject_relative_time_ticker()
+                with c_toc:
+                    st.markdown(_toc_html, unsafe_allow_html=True)
+        else:
+            st.markdown(_toc_html, unsafe_allow_html=True)
 
 
 def render_day_report(df):
@@ -9885,7 +9895,7 @@ def render_day_report(df):
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
                     ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này tuần trước"), ("today-ch6", "6 · Ngày này năm trước")])
-    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(sel), _hero_chips)
+    _render_today_billboard(_kindle_quote_of_day(sel), _hero_chips)
 
     if day_df.empty:
         sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
