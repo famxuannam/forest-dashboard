@@ -7674,8 +7674,14 @@ _MAIN_CSS = """
        nhau; trục "Font thân chữ" ở Tuỳ biến từ nay chỉ đổi phần NỘI DUNG (thẻ số liệu, ghi chú,
        bảng...). !important là BẮT BUỘC: rule "html, body, .stApp, .stApp.stApp *:not(...)" áp
        BODY_FONT có độ đặc hiệu 2 class + universal, cao hơn hẳn các selector ở đây nên không
-       có !important sẽ thua dù đứng sau trong nguồn (đúng bug đã ghi ở .kq-daily-text). */
-    [data-testid="stSidebar"], [data-testid="stSidebar"] *:not([data-testid="stIconMaterial"]) {
+       có !important sẽ thua dù đứng sau trong nguồn (đúng bug đã ghi ở .kq-daily-text). Loại
+       trừ thêm `[style*="Material Symbols Rounded"]` (icon tự vẽ của app, xem _mi()) -- KHÁC
+       khối ".stApp.stApp *" phía trên (không !important, inline style tự thắng): rule NÀY có
+       !important nên sẽ đè cả inline style nếu không loại trừ tường minh, khiến icon _mi() dùng
+       trong sidebar (badge "Hôm nay"/"Kỷ lục") in ra tên ligature thô ("wb_sunny") thay vì icon
+       -- bug thật đã gặp khi thêm 2 badge đó. */
+    [data-testid="stSidebar"],
+    [data-testid="stSidebar"] *:not([data-testid="stIconMaterial"]):not([style*="Material Symbols Rounded"]) {
         font-family: var(--font-ui) !important;
     }
     /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
@@ -7803,6 +7809,42 @@ _MAIN_CSS = """
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
+    /* "Hôm nay" thu nhỏ + "Kỷ lục" xoay theo ngày -- 2 khối LUÔN hiện dưới nav, KHÔNG đổi theo
+       trang đang xem (xác nhận với người dùng qua mockup "Khoảng Trống Sidebar") -- tận dụng
+       khoảng trắng cố định dưới nav vì sidebar khoá mở suốt phiên
+       (initial_sidebar_state="locked"). Nền/viền dùng ĐÚNG token --card/--divider như thẻ nội
+       dung thường, không tự chế màu riêng cho sidebar. */
+    .sb-widget {
+        background: var(--card); border: 1px solid var(--divider); border-radius: 10px;
+        padding: 10px 12px; margin-top: 10px;
+    }
+    /* "span.sb-widget-title-txt" tách riêng khỏi icon -- text-transform:uppercase áp trực tiếp
+       lên .sb-widget-title (bọc cả icon _mi()) sẽ HOA HOÁ luôn ligature-name bên trong span icon
+       (vd "wb_sunny" -> "WB_SUNNY"), khiến Material Symbols không nhận ra ligature và in chữ
+       thô thay vì icon -- bug thật đã gặp khi thử, xem mọi chỗ _mi() khác trong app đều tránh
+       nằm trong 1 khối uppercase cha. */
+    .sb-widget-title {
+        font-size: 11px; font-weight: 700; color: var(--text-3);
+        display: flex; align-items: center; gap: 5px; margin-bottom: 7px;
+    }
+    .sb-widget-title-txt { text-transform: uppercase; letter-spacing: .02em; }
+    .sb-stat-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-size: 12.5px; color: var(--text-2); padding: 2px 0;
+    }
+    .sb-stat-row b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .sb-record { display: flex; align-items: flex-start; gap: 8px; }
+    .sb-record-ic {
+        width: 24px; height: 24px; border-radius: 50%; background: rgba(var(--accent-rgb),0.14);
+        color: var(--accent-dark); display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .sb-record-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .sb-record-tx b { font-size: 12px; color: var(--text); }
+    .sb-record-tx small { font-size: 11px; color: var(--text-3); }
+    .sb-record-dots { display: flex; gap: 4px; margin-top: 8px; }
+    .sb-record-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--divider); display: block; }
+    .sb-record-dots i.on { background: var(--accent); }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -8988,6 +9030,50 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
+# df tính SỚM hơn vị trí cũ (ngay trước khối brand sidebar, thay vì sau NAV/_NAV_GROUP_*) --
+# badge "Ngày đang xem" (_sidebar_date_badge_html(), xem khối "with st.sidebar" ngay dưới) render
+# NGAY DƯỚI logo, cần df đã có sẵn tại đó. NAV/_NAV_GROUP_*/_NAV_SLUG khai báo ngay sau không phụ
+# thuộc df nên không ảnh hưởng gì khi đổi thứ tự này.
+df = prep_analysis_data()
+
+
+def _sidebar_date_badge_html(df):
+    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
+    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
+    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
+    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
+    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy, và chỉ
+    đúng khi đang xem đúng hôm nay. Tái dùng NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi
+    billboard khác trong app), không tự chế khuôn badge mới. Trả về (html, có_dòng_cập_nhật) --
+    caller chỉ gọi `_inject_relative_time_ticker()` khi có dòng "Cập nhật gần nhất".
+
+    Render NGAY DƯỚI logo (khối "with st.sidebar" đầu tiên, TRƯỚC nav) -- xác nhận với người
+    dùng: đây là badge "trạng thái hôm nay", hợp đứng cạnh thương hiệu ở đầu sidebar hơn là lẫn
+    với 2 khối số liệu/kỷ lục CĂN DƯỚI (khối "with st.sidebar" thứ 2, SAU nav)."""
+    today = _today_vn()
+    active_days = sorted(df['Ngày'].dropna().unique())
+    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
+    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
+            if today in active_days else "không có hoạt động")
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
+    _mon_abbr = f"Th{today.month}"
+    html = (
+        "<div class='sb-widget'><div class='tbcircle-wrap'>"
+        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
+        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
+        f"<div class='tbcircle-dow'>{vn_dow}</div>"
+        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
+    )
+    return html, bool(_upd_line)
+
+
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
 # nav nằm trong st.sidebar; .block-container chính không còn phải chừa chỗ cho thanh nav ngang
@@ -9000,6 +9086,11 @@ with st.sidebar:
         f"<div style='margin:0 0 1.1em 0;'>{_sidebar_brand_html()}</div>",
         unsafe_allow_html=True,
     )
+    if not df.empty:
+        _date_badge_html, _date_badge_has_upd = _sidebar_date_badge_html(df)
+        st.markdown(_date_badge_html, unsafe_allow_html=True)
+        if _date_badge_has_upd:
+            _inject_relative_time_ticker()
 
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
@@ -9032,7 +9123,8 @@ _NAV_SLUG = {
     "Tìm kiếm": "timkiem", "Tuỳ biến": "tuybien",
 }
 
-df = prep_analysis_data()
+# df đã tính SỚM hơn (ngay trước khối brand sidebar, xem comment ở đó) -- không gọi lại
+# prep_analysis_data() lần 2 ở đây.
 DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
 
 # Bản đồ màu cố định: mỗi Nhóm luôn giữ một màu xuyên suốt mọi biểu đồ/tab; Dự án con trong
@@ -9204,10 +9296,65 @@ def _render_nav_group(items, group_key):
     else:
         _render_nav_segment(items, f"navseg_{group_key}_full_{slug}")
 
+def _sidebar_today_stats_html(df):
+    """Khối "Hôm nay" thu nhỏ, LUÔN hiện dưới nav (mọi trang, không riêng "Hôm nay") -- đọc thẳng
+    từ df đã load qua prep_analysis_data() + _streak_stats() (đã dùng cho Sách/Gundam), không
+    query/tính gì thêm. Xác nhận với người dùng (mockup "Khoảng Trống Sidebar"): CHỈ hiển thị
+    thuần, không kèm lời nhắc kiểu _streak_nudge() -- app chỉ hồi cứu, không đặt mục tiêu/nhắc nhở."""
+    today = _today_vn()
+    day_df = df[df['Ngày'] == today]
+    hrs = day_df['Thời lượng (Phút)'].sum() / 60
+    streak = _streak_stats(df)["current"]
+    return (
+        "<div class='sb-widget'>"
+        f"<div class='sb-widget-title'>{_mi('wb_sunny', 12)}<span class='sb-widget-title-txt'>Hôm nay</span></div>"
+        f"<div class='sb-stat-row'><span>Giờ tập trung</span><b>{_fmt_hours_short(hrs)}</b></div>"
+        f"<div class='sb-stat-row'><span>Số phiên</span><b>{len(day_df)}</b></div>"
+        f"<div class='sb-stat-row'><span>Chuỗi ngày</span><b>{streak}</b></div>"
+        "</div>"
+    )
+
+
+def _sidebar_record_html(df):
+    """Khối "Kỷ lục" toàn thời gian, xoay theo NGÀY TRONG NĂM (đổi mỗi ngày, không cần JS/timer
+    nào vì sidebar re-render mỗi rerun) -- lấy thẳng từ _compute_alltime_records()/
+    _longest_streak_range()/_streak_stats() đã tính sẵn cho nơi khác trong app, không thêm phép
+    tính mới. Thuần hiển thị, không kèm lời nhắc như _streak_nudge() (xem docstring
+    _sidebar_today_stats_html)."""
+    records = []
+    top3 = _compute_alltime_records(df)["overall_top3"]
+    if top3:
+        d, h = top3[0]["date"], top3[0]["hours"]
+        records.append(("emoji_events", "Ngày dài nhất", f"{pd.Timestamp(d):%d/%m/%Y} · {_fmt_hours_short(h)}"))
+    lsr = _longest_streak_range(df)
+    if lsr:
+        d0, d1, n = lsr
+        records.append(("local_fire_department", "Chuỗi dài nhất",
+                         f"{n} ngày ({pd.Timestamp(d0):%d/%m} – {pd.Timestamp(d1):%d/%m})"))
+    total = _streak_stats(df)["total"]
+    if total:
+        records.append(("calendar_month", "Tổng ngày hoạt động", f"{total} ngày"))
+    if not records:
+        return ""
+    idx = _today_vn().timetuple().tm_yday % len(records)
+    icon, title, sub = records[idx]
+    dots = "".join(f"<i class='{'on' if i == idx else ''}'></i>" for i in range(len(records)))
+    return (
+        "<div class='sb-widget'>"
+        f"<div class='sb-widget-title'>{_mi('workspace_premium', 12)}<span class='sb-widget-title-txt'>Kỷ lục</span></div>"
+        f"<div class='sb-record'><span class='sb-record-ic'>{_mi(icon, 15)}</span>"
+        f"<span class='sb-record-tx'><b>{title}</b><small>{sub}</small></span></div>"
+        f"<div class='sb-record-dots'>{dots}</div>"
+        "</div>"
+    )
+
+
 with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
+    if not df.empty:
+        st.markdown(_sidebar_today_stats_html(df) + _sidebar_record_html(df), unsafe_allow_html=True)
 
 
 def _inject_keyboard_shortcuts():
@@ -9659,58 +9806,32 @@ def _shuffle_daily_quote():
     st.session_state["kq_daily_idx"] = new_idx
 
 
-def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips):
-    """Billboard đầu trang Hôm nay: gộp card "Ngày đang xem" + "Trích dẫn hôm nay" + chip mục lục
-    vào 1 khối duy nhất, xếp thành 3 cột (badge tròn | trích dẫn | mục lục dọc) ngăn cách bởi
-    đường kẻ dọc -- khớp `Hôm nay.dc.html` (đợt redesign Apple/macOS-inspired), THAY cho khuôn "tờ
-    lịch xé" cũ. Dùng CSS `.tbcircle-*` -- DÙNG CHUNG với `render_period_billboard()` (billboard
-    Báo cáo/Sách/Gundam/Tuỳ biến cũng đã đổi sang badge tròn này, không còn
-    khuôn "tờ lịch xé" ở bất kỳ đâu trong app). Khác biệt duy nhất: Hôm nay không cần `.tbcircle-tab`
-    (nhãn kỳ dạng viên thuốc phía trên badge) vì tháng đã hiện gọn trong `.tbcircle-mon` bên trong
-    vòng tròn (chỉ 3-4 ký tự "Th8", khác tab_label các trang khác dài hơn hẳn).
+def _render_today_billboard(kq, hero_chips):
+    """Billboard đầu trang Hôm nay: gộp card "Trích dẫn hôm nay" + chip mục lục vào 1 khối, xếp
+    thành 2 cột (trích dẫn | mục lục dọc) ngăn cách bởi đường kẻ dọc -- khớp `Hôm nay.dc.html`
+    (đợt redesign Apple/macOS-inspired). Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt
+    động X/Y" + "Cập nhật gần nhất") KHÔNG còn ở đây -- dời sang sidebar
+    (`_sidebar_date_badge_html()`, xem khối "with st.sidebar" ở đầu file) vì đó là thông tin luôn
+    đúng cho NGÀY HÔM NAY thật (`_today_vn()`), không đổi theo ngày đang browse qua day_picker
+    trên trang này -- hợp làm 1 khối LUÔN hiện ở mọi trang hơn là kẹt trong billboard chỉ trang
+    này mới thấy (xác nhận với người dùng qua ảnh chụp mockup sidebar).
 
     Cột phải "mục lục" (`hero_chips`) xếp DỌC (khác `.sec-toc` hàng-ngang-wrap dùng ở nơi khác) --
     dùng class `.tbill-toccol` bọc ngoài, tái dùng nguyên `.sec-toc-chip` cho từng chip.
 
-    Cột giữa (trích dẫn) vắng mặt hẳn (chưa import trích dẫn nào) thì chỉ còn 2 cột (badge | mục
-    lục) -- không chia 3 cột.
+    Không có trích dẫn (chưa import trích dẫn nào) thì chỉ còn mục lục, render thẳng không cần
+    st.columns (khác bản 2/3-cột trước đây, giờ ít nhất còn 1 cột nên không cần chia).
 
     Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
     do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
     cũ (đã gộp vào đây)."""
-    _sub = "không có hoạt động" if day_df.empty else f"ngày hoạt động {active_days.index(sel) + 1}/{len(active_days)}"
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_line = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        # epoch UTC thật (không lệch theo múi giờ máy chủ/máy khách) cho JS ticker tự cập nhật
-        # "X trước" mỗi 30s -- xem _inject_relative_time_ticker().
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
-
-    _mon_abbr = f"Th{sel.month}"
-    _badge_html = (
-        "<div class='tbcircle-wrap'>"
-        f"<div class='tbcircle'><div class='tbcircle-num'>{sel.day}</div>"
-        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
-        f"<div class='tbcircle-dow'>{vn_dow}</div>"
-        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div>")
-
     _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in hero_chips)
     _toc_html = f"<div class='tbill-toccol'>{_chips_html}</div>"
 
     with st.container(key="today_billboard", border=True):
-        with st.container(key="tbill_daterow"):
-            if kq is not None:
-                c_date, c_quote, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
-            else:
-                c_date, c_toc = st.columns([1, 1], vertical_alignment="center")
-                c_quote = None
-            with c_date:
-                st.markdown(_badge_html, unsafe_allow_html=True)
-            if c_quote is not None:
+        if kq is not None:
+            with st.container(key="tbill_daterow"):
+                c_quote, c_toc = st.columns([2, 1], vertical_alignment="center")
                 with c_quote:
                     st.markdown(
                         "<div class='kq-daily-mark'>“</div>"
@@ -9740,11 +9861,10 @@ def _render_today_billboard(sel, vn_dow, active_days, day_df, df, kq, hero_chips
                                          help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                                 st.rerun()
-            with c_toc:
-                st.markdown(_toc_html, unsafe_allow_html=True)
-
-    if _upd_line:
-        _inject_relative_time_ticker()
+                with c_toc:
+                    st.markdown(_toc_html, unsafe_allow_html=True)
+        else:
+            st.markdown(_toc_html, unsafe_allow_html=True)
 
 
 def render_day_report(df):
@@ -9788,7 +9908,7 @@ def render_day_report(df):
                    [("today-ch1", "1 · Tổng quan ngày"), ("today-ch2", "2 · Phân bổ thời gian"),
                     ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này tuần trước"), ("today-ch6", "6 · Ngày này năm trước")])
-    _render_today_billboard(sel, vn_dow, active_days, day_df, df, _kindle_quote_of_day(sel), _hero_chips)
+    _render_today_billboard(_kindle_quote_of_day(sel), _hero_chips)
 
     if day_df.empty:
         sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
