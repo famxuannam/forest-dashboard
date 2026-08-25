@@ -7864,27 +7864,14 @@ _MAIN_CSS = """
     .sb-record-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .sb-record-tx b { font-size: 12px; color: var(--text); }
     .sb-record-tx small { font-size: 11px; color: var(--text-3); }
-    /* CĂN DƯỚI nhóm 4 khối trên (xác nhận với người dùng: "cho các sidebar căn lề bên dưới")
-       -- toàn bộ sidebar (nav + nhóm này) sống CHUNG 1 flex column duy nhất
-       ([data-testid="stVerticalBlock"] TRỰC TIẾP dưới stSidebarUserContent, đã xác nhận qua
-       Playwright: mọi lần gọi `with st.sidebar:` trong code CHỈ nối thêm phần tử vào ĐÚNG 1
-       khối này, không tạo khối con riêng) -- ép chiều cao tối thiểu bằng viewport (trừ padding)
-       để có "chỗ trống" đẩy xuống, rồi margin-top:auto tự đẩy nhóm sát đáy. margin:auto CHỈ có
-       tác dụng trên chính PHẦN TỬ FLEX ITEM (con TRỰC TIẾP của flex container) -- `st.container`
-       bọc `sb_bottom_group` thêm 1 lớp `[data-testid="stLayoutWrapper"]` NGOÀI chính
-       stVerticalBlock mang class `.st-key-sb_bottom_group` (đã xác nhận qua Playwright DOM thật:
-       margin-top:auto đặt thẳng lên `.st-key-sb_bottom_group` KHÔNG có tác dụng gì vì nó là CHÁU
-       chứ không phải CON của flex container ngoài cùng) -- phải nhắm đúng `stLayoutWrapper` đó.
-       Chỉ chọn ĐÚNG 1 cấp lồng `> div >` (không dùng khớp hậu duệ chung chung) để không lỡ áp
-       min-height cho vertical block LỒNG BÊN TRONG (vd chính sb_bottom_group cũng là 1
-       stVerticalBlock khác). */
-    [data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"] {
-        min-height: calc(100vh - 2rem);
-    }
-    [data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"]
-        > [data-testid="stLayoutWrapper"]:has(.st-key-sb_bottom_group) {
-        margin-top: auto !important;
-    }
+    /* Nhóm 4 khối (Thứ/Hôm nay/Sách đang đọc/Gundam đang xem) TỪNG được ép CĂN DƯỚI thật (min-
+       height: calc(100vh - 2rem) trên stVerticalBlock ngoài cùng + margin-top:auto trên
+       stLayoutWrapper bọc sb_bottom_group) -- ĐÃ BỎ (xác nhận với người dùng qua ảnh chụp thật
+       trên điện thoại): 100vh trên mobile không trừ được thanh công cụ trình duyệt (thu/hiện tuỳ
+       lúc cuộn) như 100dvh, khiến min-height tính dư ra 1 khoảng trống lớn ngay giữa nav và nhóm
+       widget, buộc phải cuộn thêm để thấy nhóm widget dù nội dung thực tế đủ ngắn để không cần
+       cuộn. Quay lại luồng thường (nhóm widget đứng NGAY SAU nav, không đẩy xuống đáy) -- đơn
+       giản, không phụ thuộc chiều cao viewport thật của từng trình duyệt/thiết bị. */
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -9299,9 +9286,9 @@ def _sidebar_date_badge_html(df):
     badge mới. Trả về (html, có_dòng_cập_nhật) -- caller chỉ gọi `_inject_relative_time_ticker()`
     khi có dòng "Cập nhật gần nhất".
 
-    Là khối ĐẦU TIÊN trong nhóm CĂN DƯỚI sidebar (`sb_bottom_group`, xem khối "with st.sidebar"
-    cuối file) -- xác nhận với người dùng thứ tự Thứ -> Số liệu hôm nay -> Sách đang đọc -> Gundam
-    đang xem, cả nhóm dồn xuống đáy sidebar thay vì đứng ngay dưới logo như bản trước đó."""
+    Là khối ĐẦU TIÊN trong nhóm 4 khối đứng NGAY SAU nav (xem khối "with st.sidebar" cuối file)
+    -- xác nhận với người dùng thứ tự Thứ -> Số liệu hôm nay -> Sách đang đọc -> Gundam đang
+    xem, đứng SAU nav thay vì ngay dưới logo như bản trước đó."""
     today = _today_vn()
     active_days = sorted(df['Ngày'].dropna().unique())
     vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
@@ -9386,25 +9373,26 @@ with st.sidebar:
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
     if not df.empty:
-        # Nhóm CĂN DƯỚI (xác nhận với người dùng): Thứ -> Số liệu hôm nay -> Sách đang đọc gần
-        # nhất -> Gundam đang xem gần nhất, dồn hẳn xuống đáy sidebar (CSS `.st-key-sb_bottom_group`
-        # margin-top:auto trong flex column của stVerticalBlock sidebar) thay vì chỉ đứng cuối
-        # luồng bình thường -- 2 khối trước (badge/số liệu) không đổi, "Kỷ lục" đã bỏ hẳn (không
-        # cần nữa, xác nhận với người dùng) thay bằng 2 khối "đang đọc/đang xem gần nhất" mới.
-        with st.container(key="sb_bottom_group"):
-            _badge_html, _badge_has_upd = _sidebar_date_badge_html(df)
-            _bottom_html = (
-                _badge_html
-                + _sidebar_today_stats_html(df)
-                + _sidebar_recent_activity_html(df, BOOKS_GROUP,
-                                                 lambda v: not _is_gundam_list(v),
-                                                 "menu_book", "Đang đọc", "phần đã đọc", "book")
-                + _sidebar_recent_activity_html(df, GUNDAM_TAG, _is_gundam_list,
-                                                 "shield", "Đang xem", "tập đã xem", "gundam")
-            )
-            st.markdown(_bottom_html, unsafe_allow_html=True)
-            if _badge_has_upd:
-                _inject_relative_time_ticker()
+        # Thứ -> Số liệu hôm nay -> Sách đang đọc gần nhất -> Gundam đang xem gần nhất, đứng
+        # NGAY SAU nav trong luồng thường (KHÔNG còn ép căn đáy bằng margin-top:auto/min-height
+        # 100vh -- bỏ theo phản hồi thực tế trên điện thoại, xem chú thích CSS `.sb-widget` phía
+        # trên: 100vh không trừ được thanh công cụ trình duyệt di động, tạo khoảng trống giữa nav
+        # và nhóm này, buộc phải cuộn thêm dù nội dung đủ ngắn để không cần cuộn). "Kỷ lục" đã bỏ
+        # hẳn (không cần nữa, xác nhận với người dùng), thay bằng 2 khối "đang đọc/đang xem gần
+        # nhất" mới.
+        _badge_html, _badge_has_upd = _sidebar_date_badge_html(df)
+        _bottom_html = (
+            _badge_html
+            + _sidebar_today_stats_html(df)
+            + _sidebar_recent_activity_html(df, BOOKS_GROUP,
+                                             lambda v: not _is_gundam_list(v),
+                                             "menu_book", "Đang đọc", "phần đã đọc", "book")
+            + _sidebar_recent_activity_html(df, GUNDAM_TAG, _is_gundam_list,
+                                             "shield", "Đang xem", "tập đã xem", "gundam")
+        )
+        st.markdown(_bottom_html, unsafe_allow_html=True)
+        if _badge_has_upd:
+            _inject_relative_time_ticker()
 
 
 def _inject_keyboard_shortcuts():
