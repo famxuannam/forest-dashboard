@@ -8398,15 +8398,6 @@ _MAIN_CSS = """
         .jrows .jrow { grid-template-columns: 1fr; row-gap: 6px; }
         .jrows .jrow > .jdate, .jrows .jrow > a.jdate-link { border-right: none; padding-right: 0; }
     }
-    /* "Ngày này năm trước" (jcard_otd, xem render_on_this_day()) và "Ngày này tuần trước"
-       (jcard_lastweek, xem render_same_day_last_week()) -- giới hạn ghi chú chính tối đa 5 dòng,
-       cắt bớt phần dư bằng "..." thay vì hiện trọn ghi chú dài như .note-html mặc định (dùng
-       chung ở render_note_editor()/render_notes_journal()) -- xác nhận với người dùng: 2 mục này
-       chỉ để LƯỚT nhanh, xem chi tiết thì bấm vào ngày đó (đã có sẵn link .jdate-link). Scope
-       RIÊNG .st-key-jcard_otd/.st-key-jcard_lastweek, không đụng .note-html ở các nơi khác. */
-    .st-key-jcard_otd .note-html, .st-key-jcard_lastweek .note-html {
-        display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
-    }
     .jdate { text-align: center; }
     .jdate { text-align: center; }
     /* Tên Dự án/Nhóm/Sách/Gundam có thể bấm (Bảng số liệu, chip Nhật ký, thanh Phân bổ, Timeline,
