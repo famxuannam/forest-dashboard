@@ -7826,11 +7826,11 @@ _MAIN_CSS = """
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
-    /* "Hôm nay" thu nhỏ + "Kỷ lục" xoay theo ngày -- 2 khối LUÔN hiện dưới nav, KHÔNG đổi theo
-       trang đang xem (xác nhận với người dùng qua mockup "Khoảng Trống Sidebar") -- tận dụng
-       khoảng trắng cố định dưới nav vì sidebar khoá mở suốt phiên
-       (initial_sidebar_state="locked"). Nền/viền dùng ĐÚNG token --card/--divider như thẻ nội
-       dung thường, không tự chế màu riêng cho sidebar. */
+    /* Nhóm "Thứ/Hôm nay/Sách đang đọc/Gundam đang xem" -- LUÔN hiện, KHÔNG đổi theo trang đang
+       xem (xác nhận với người dùng qua mockup "Khoảng Trống Sidebar") -- tận dụng khoảng trắng
+       cố định dưới nav vì sidebar khoá mở suốt phiên (initial_sidebar_state="locked"). Nền/viền
+       dùng ĐÚNG token --card/--divider như thẻ nội dung thường, không tự chế màu riêng cho
+       sidebar. */
     .sb-widget {
         background: var(--card); border: 1px solid var(--divider); border-radius: 10px;
         padding: 10px 12px; margin-top: 10px;
@@ -7859,9 +7859,27 @@ _MAIN_CSS = """
     .sb-record-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .sb-record-tx b { font-size: 12px; color: var(--text); }
     .sb-record-tx small { font-size: 11px; color: var(--text-3); }
-    .sb-record-dots { display: flex; gap: 4px; margin-top: 8px; }
-    .sb-record-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--divider); display: block; }
-    .sb-record-dots i.on { background: var(--accent); }
+    /* CĂN DƯỚI nhóm 4 khối trên (xác nhận với người dùng: "cho các sidebar căn lề bên dưới")
+       -- toàn bộ sidebar (nav + nhóm này) sống CHUNG 1 flex column duy nhất
+       ([data-testid="stVerticalBlock"] TRỰC TIẾP dưới stSidebarUserContent, đã xác nhận qua
+       Playwright: mọi lần gọi `with st.sidebar:` trong code CHỈ nối thêm phần tử vào ĐÚNG 1
+       khối này, không tạo khối con riêng) -- ép chiều cao tối thiểu bằng viewport (trừ padding)
+       để có "chỗ trống" đẩy xuống, rồi margin-top:auto tự đẩy nhóm sát đáy. margin:auto CHỈ có
+       tác dụng trên chính PHẦN TỬ FLEX ITEM (con TRỰC TIẾP của flex container) -- `st.container`
+       bọc `sb_bottom_group` thêm 1 lớp `[data-testid="stLayoutWrapper"]` NGOÀI chính
+       stVerticalBlock mang class `.st-key-sb_bottom_group` (đã xác nhận qua Playwright DOM thật:
+       margin-top:auto đặt thẳng lên `.st-key-sb_bottom_group` KHÔNG có tác dụng gì vì nó là CHÁU
+       chứ không phải CON của flex container ngoài cùng) -- phải nhắm đúng `stLayoutWrapper` đó.
+       Chỉ chọn ĐÚNG 1 cấp lồng `> div >` (không dùng khớp hậu duệ chung chung) để không lỡ áp
+       min-height cho vertical block LỒNG BÊN TRONG (vd chính sb_bottom_group cũng là 1
+       stVerticalBlock khác). */
+    [data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"] {
+        min-height: calc(100vh - 2rem);
+    }
+    [data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"]
+        > [data-testid="stLayoutWrapper"]:has(.st-key-sb_bottom_group) {
+        margin-top: auto !important;
+    }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -9047,49 +9065,7 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
-# df tính SỚM hơn vị trí cũ (ngay trước khối brand sidebar, thay vì sau NAV/_NAV_GROUP_*) --
-# badge "Ngày đang xem" (_sidebar_date_badge_html(), xem khối "with st.sidebar" ngay dưới) render
-# NGAY DƯỚI logo, cần df đã có sẵn tại đó. NAV/_NAV_GROUP_*/_NAV_SLUG khai báo ngay sau không phụ
-# thuộc df nên không ảnh hưởng gì khi đổi thứ tự này.
 df = prep_analysis_data()
-
-
-def _sidebar_date_badge_html(df):
-    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
-    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
-    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
-    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
-    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy, và chỉ
-    đúng khi đang xem đúng hôm nay. Tái dùng NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi
-    billboard khác trong app), không tự chế khuôn badge mới. Trả về (html, có_dòng_cập_nhật) --
-    caller chỉ gọi `_inject_relative_time_ticker()` khi có dòng "Cập nhật gần nhất".
-
-    Render NGAY DƯỚI logo (khối "with st.sidebar" đầu tiên, TRƯỚC nav) -- xác nhận với người
-    dùng: đây là badge "trạng thái hôm nay", hợp đứng cạnh thương hiệu ở đầu sidebar hơn là lẫn
-    với 2 khối số liệu/kỷ lục CĂN DƯỚI (khối "with st.sidebar" thứ 2, SAU nav)."""
-    today = _today_vn()
-    active_days = sorted(df['Ngày'].dropna().unique())
-    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
-    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
-            if today in active_days else "không có hoạt động")
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_line = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
-    _mon_abbr = f"Th{today.month}"
-    html = (
-        "<div class='sb-widget'><div class='tbcircle-wrap'>"
-        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
-        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
-        f"<div class='tbcircle-dow'>{vn_dow}</div>"
-        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
-    )
-    return html, bool(_upd_line)
-
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
@@ -9103,11 +9079,6 @@ with st.sidebar:
         f"<div style='margin:0 0 1.1em 0;'>{_sidebar_brand_html()}</div>",
         unsafe_allow_html=True,
     )
-    if not df.empty:
-        _date_badge_html, _date_badge_has_upd = _sidebar_date_badge_html(df)
-        st.markdown(_date_badge_html, unsafe_allow_html=True)
-        if _date_badge_has_upd:
-            _inject_relative_time_ticker()
 
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
@@ -9313,11 +9284,48 @@ def _render_nav_group(items, group_key):
     else:
         _render_nav_segment(items, f"navseg_{group_key}_full_{slug}")
 
+def _sidebar_date_badge_html(df):
+    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
+    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
+    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
+    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
+    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy. Tái dùng
+    NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi billboard khác trong app), không tự chế khuôn
+    badge mới. Trả về (html, có_dòng_cập_nhật) -- caller chỉ gọi `_inject_relative_time_ticker()`
+    khi có dòng "Cập nhật gần nhất".
+
+    Là khối ĐẦU TIÊN trong nhóm CĂN DƯỚI sidebar (`sb_bottom_group`, xem khối "with st.sidebar"
+    cuối file) -- xác nhận với người dùng thứ tự Thứ -> Số liệu hôm nay -> Sách đang đọc -> Gundam
+    đang xem, cả nhóm dồn xuống đáy sidebar thay vì đứng ngay dưới logo như bản trước đó."""
+    today = _today_vn()
+    active_days = sorted(df['Ngày'].dropna().unique())
+    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
+    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
+            if today in active_days else "không có hoạt động")
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
+    _mon_abbr = f"Th{today.month}"
+    html = (
+        "<div class='sb-widget'><div class='tbcircle-wrap'>"
+        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
+        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
+        f"<div class='tbcircle-dow'>{vn_dow}</div>"
+        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
+    )
+    return html, bool(_upd_line)
+
+
 def _sidebar_today_stats_html(df):
-    """Khối "Hôm nay" thu nhỏ, LUÔN hiện dưới nav (mọi trang, không riêng "Hôm nay") -- đọc thẳng
-    từ df đã load qua prep_analysis_data() + _streak_stats() (đã dùng cho Sách/Gundam), không
-    query/tính gì thêm. Xác nhận với người dùng (mockup "Khoảng Trống Sidebar"): CHỈ hiển thị
-    thuần, không kèm lời nhắc kiểu _streak_nudge() -- app chỉ hồi cứu, không đặt mục tiêu/nhắc nhở."""
+    """Khối "Hôm nay" thu nhỏ, LUÔN hiện ở mọi trang (không riêng "Hôm nay") -- đọc thẳng từ df
+    đã load qua prep_analysis_data() + _streak_stats() (đã dùng cho Sách/Gundam), không query/
+    tính gì thêm. Xác nhận với người dùng (mockup "Khoảng Trống Sidebar"): CHỈ hiển thị thuần,
+    không kèm lời nhắc kiểu _streak_nudge() -- app chỉ hồi cứu, không đặt mục tiêu/nhắc nhở."""
     today = _today_vn()
     day_df = df[df['Ngày'] == today]
     hrs = day_df['Thời lượng (Phút)'].sum() / 60
@@ -9332,36 +9340,38 @@ def _sidebar_today_stats_html(df):
     )
 
 
-def _sidebar_record_html(df):
-    """Khối "Kỷ lục" toàn thời gian, xoay theo NGÀY TRONG NĂM (đổi mỗi ngày, không cần JS/timer
-    nào vì sidebar re-render mỗi rerun) -- lấy thẳng từ _compute_alltime_records()/
-    _longest_streak_range()/_streak_stats() đã tính sẵn cho nơi khác trong app, không thêm phép
-    tính mới. Thuần hiển thị, không kèm lời nhắc như _streak_nudge() (xem docstring
-    _sidebar_today_stats_html)."""
-    records = []
-    top3 = _compute_alltime_records(df)["overall_top3"]
-    if top3:
-        d, h = top3[0]["date"], top3[0]["hours"]
-        records.append(("emoji_events", "Ngày dài nhất", f"{pd.Timestamp(d):%d/%m/%Y} · {_fmt_hours_short(h)}"))
-    lsr = _longest_streak_range(df)
-    if lsr:
-        d0, d1, n = lsr
-        records.append(("local_fire_department", "Chuỗi dài nhất",
-                         f"{n} ngày ({pd.Timestamp(d0):%d/%m} – {pd.Timestamp(d1):%d/%m})"))
-    total = _streak_stats(df)["total"]
-    if total:
-        records.append(("calendar_month", "Tổng ngày hoạt động", f"{total} ngày"))
-    if not records:
+def _sidebar_recent_activity_html(df, group_val, rl_filter, icon, title, part_label, link_kind):
+    """Khung dùng chung cho "Sách đang đọc gần nhất"/"Gundam đang xem gần nhất": gộp 2 nguồn
+    (phiên Forest nhóm `group_val` + Reminders lọc qua `rl_filter`) để tìm ĐÚNG 1 cuốn/series có
+    hoạt động MỚI NHẤT -- rút gọn hơn hẳn "t" của render_reading_log() (không cần dựng lại Trạng
+    thái/Bắt đầu/Số ngày... cho 1 chip nhỏ ở sidebar). 'Dự án' của phiên Forest nhóm này đã được
+    prep_analysis_data() suy luận SẴN thành đúng tên cuốn/series (qua _assign_reading_sessions()),
+    không cần suy luận lại ở đây. Trả về '' nếu chưa có hoạt động nào (ẩn hẳn khối, giống
+    _sidebar_record_html cũ)."""
+    sessions = df[df['Nhóm'] == group_val]
+    rl_all = load_reading_log()
+    rl = rl_all[rl_all['Sách (gốc)'].map(rl_filter)] if not rl_all.empty else rl_all
+
+    latest = {}
+    if not sessions.empty:
+        for name, d in sessions.groupby('Dự án')['Ngày'].max().items():
+            latest[name] = pd.Timestamp(d)
+    if not rl.empty:
+        for name, d in rl.groupby('Cuốn sách')['Ngày hoàn thành'].max().items():
+            d = pd.Timestamp(d)
+            if name not in latest or d > latest[name]:
+                latest[name] = d
+    if not latest:
         return ""
-    idx = _today_vn().timetuple().tm_yday % len(records)
-    icon, title, sub = records[idx]
-    dots = "".join(f"<i class='{'on' if i == idx else ''}'></i>" for i in range(len(records)))
+    name = max(latest, key=latest.get)
+    n_parts = len(rl[rl['Cuốn sách'] == name]) if not rl.empty else 0
+    _sub = f"{n_parts} {part_label} · " if n_parts else ""
     return (
         "<div class='sb-widget'>"
-        f"<div class='sb-widget-title'>{_mi('workspace_premium', 12)}<span class='sb-widget-title-txt'>Kỷ lục</span></div>"
+        f"<div class='sb-widget-title'>{_mi(icon, 12)}<span class='sb-widget-title-txt'>{title}</span></div>"
         f"<div class='sb-record'><span class='sb-record-ic'>{_mi(icon, 15)}</span>"
-        f"<span class='sb-record-tx'><b>{title}</b><small>{sub}</small></span></div>"
-        f"<div class='sb-record-dots'>{dots}</div>"
+        f"<span class='sb-record-tx'><b>{_entity_link_html(name, link_kind)}</b>"
+        f"<small>{_sub}{format_relative(latest[name])}</small></span></div>"
         "</div>"
     )
 
@@ -9371,7 +9381,25 @@ with st.sidebar:
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
     if not df.empty:
-        st.markdown(_sidebar_today_stats_html(df) + _sidebar_record_html(df), unsafe_allow_html=True)
+        # Nhóm CĂN DƯỚI (xác nhận với người dùng): Thứ -> Số liệu hôm nay -> Sách đang đọc gần
+        # nhất -> Gundam đang xem gần nhất, dồn hẳn xuống đáy sidebar (CSS `.st-key-sb_bottom_group`
+        # margin-top:auto trong flex column của stVerticalBlock sidebar) thay vì chỉ đứng cuối
+        # luồng bình thường -- 2 khối trước (badge/số liệu) không đổi, "Kỷ lục" đã bỏ hẳn (không
+        # cần nữa, xác nhận với người dùng) thay bằng 2 khối "đang đọc/đang xem gần nhất" mới.
+        with st.container(key="sb_bottom_group"):
+            _badge_html, _badge_has_upd = _sidebar_date_badge_html(df)
+            _bottom_html = (
+                _badge_html
+                + _sidebar_today_stats_html(df)
+                + _sidebar_recent_activity_html(df, BOOKS_GROUP,
+                                                 lambda v: not _is_gundam_list(v),
+                                                 "menu_book", "Đang đọc", "phần đã đọc", "book")
+                + _sidebar_recent_activity_html(df, GUNDAM_TAG, _is_gundam_list,
+                                                 "shield", "Đang xem", "tập đã xem", "gundam")
+            )
+            st.markdown(_bottom_html, unsafe_allow_html=True)
+            if _badge_has_upd:
+                _inject_relative_time_ticker()
 
 
 def _inject_keyboard_shortcuts():
