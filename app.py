@@ -8236,6 +8236,15 @@ _MAIN_CSS = """
         /* 2 thẻ list (.sp-lcols) xếp dọc trên mobile thay vì cạnh nhau -- màn hẹp không đủ chỗ
            cho 2 cột mà vẫn đọc được các dòng nhãn/giá trị. */
         .sp-lcols { flex-direction: column; gap: 10px; }
+        /* "flex: 1 1 0" ở rule gốc (.sp-lcols > .sp-listcard, cho layout NGANG 2 cột trên desktop)
+           đổi ý nghĩa khi .sp-lcols chuyển sang flex-direction:column ở trên -- trục chính giờ là
+           CHIỀU DỌC, flex-basis:0 khiến mỗi thẻ co về gần 0 chiều cao (bug flexbox: item có
+           overflow khác "visible" như .sp-listcard{overflow:hidden} lấy min-height tự động = 0
+           thay vì theo nội dung, kết hợp flex-basis:0 trong container auto-height làm co ngót),
+           cắt mất gần hết nội dung bên trong -- bug thật đã phát hiện (ảnh chụp người dùng gửi:
+           2 thẻ "So sánh"/"Mốc trong ngày" ở "Hôm nay" gần như trống trơn trên mobile). Trả về
+           chiều cao TỰ NHIÊN theo nội dung thay vì chia đều theo flex-grow. */
+        .sp-lcols > .sp-listcard { flex: none !important; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
