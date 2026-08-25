@@ -7674,8 +7674,14 @@ _MAIN_CSS = """
        nhau; trục "Font thân chữ" ở Tuỳ biến từ nay chỉ đổi phần NỘI DUNG (thẻ số liệu, ghi chú,
        bảng...). !important là BẮT BUỘC: rule "html, body, .stApp, .stApp.stApp *:not(...)" áp
        BODY_FONT có độ đặc hiệu 2 class + universal, cao hơn hẳn các selector ở đây nên không
-       có !important sẽ thua dù đứng sau trong nguồn (đúng bug đã ghi ở .kq-daily-text). */
-    [data-testid="stSidebar"], [data-testid="stSidebar"] *:not([data-testid="stIconMaterial"]) {
+       có !important sẽ thua dù đứng sau trong nguồn (đúng bug đã ghi ở .kq-daily-text). Loại
+       trừ thêm `[style*="Material Symbols Rounded"]` (icon tự vẽ của app, xem _mi()) -- KHÁC
+       khối ".stApp.stApp *" phía trên (không !important, inline style tự thắng): rule NÀY có
+       !important nên sẽ đè cả inline style nếu không loại trừ tường minh, khiến icon _mi() dùng
+       trong sidebar (badge "Hôm nay"/"Kỷ lục") in ra tên ligature thô ("wb_sunny") thay vì icon
+       -- bug thật đã gặp khi thêm 2 badge đó. */
+    [data-testid="stSidebar"],
+    [data-testid="stSidebar"] *:not([data-testid="stIconMaterial"]):not([style*="Material Symbols Rounded"]) {
         font-family: var(--font-ui) !important;
     }
     /* Nav bên trong sidebar: đổi từ hàng ngang căn giữa (top bar cũ) sang cột dọc căn trái, mỗi
@@ -7803,6 +7809,42 @@ _MAIN_CSS = """
     [data-testid="stSidebar"] [class*="st-key-rl_view_tabs"] [data-testid="stButtonGroup"] button:not([data-selected="true"]):hover {
         background-color: var(--chip) !important;
     }
+    /* "Hôm nay" thu nhỏ + "Kỷ lục" xoay theo ngày -- 2 khối LUÔN hiện dưới nav, KHÔNG đổi theo
+       trang đang xem (xác nhận với người dùng qua mockup "Khoảng Trống Sidebar") -- tận dụng
+       khoảng trắng cố định dưới nav vì sidebar khoá mở suốt phiên
+       (initial_sidebar_state="locked"). Nền/viền dùng ĐÚNG token --card/--divider như thẻ nội
+       dung thường, không tự chế màu riêng cho sidebar. */
+    .sb-widget {
+        background: var(--card); border: 1px solid var(--divider); border-radius: 10px;
+        padding: 10px 12px; margin-top: 10px;
+    }
+    /* "span.sb-widget-title-txt" tách riêng khỏi icon -- text-transform:uppercase áp trực tiếp
+       lên .sb-widget-title (bọc cả icon _mi()) sẽ HOA HOÁ luôn ligature-name bên trong span icon
+       (vd "wb_sunny" -> "WB_SUNNY"), khiến Material Symbols không nhận ra ligature và in chữ
+       thô thay vì icon -- bug thật đã gặp khi thử, xem mọi chỗ _mi() khác trong app đều tránh
+       nằm trong 1 khối uppercase cha. */
+    .sb-widget-title {
+        font-size: 11px; font-weight: 700; color: var(--text-3);
+        display: flex; align-items: center; gap: 5px; margin-bottom: 7px;
+    }
+    .sb-widget-title-txt { text-transform: uppercase; letter-spacing: .02em; }
+    .sb-stat-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-size: 12.5px; color: var(--text-2); padding: 2px 0;
+    }
+    .sb-stat-row b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .sb-record { display: flex; align-items: flex-start; gap: 8px; }
+    .sb-record-ic {
+        width: 24px; height: 24px; border-radius: 50%; background: rgba(var(--accent-rgb),0.14);
+        color: var(--accent-dark); display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .sb-record-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .sb-record-tx b { font-size: 12px; color: var(--text); }
+    .sb-record-tx small { font-size: 11px; color: var(--text-3); }
+    .sb-record-dots { display: flex; gap: 4px; margin-top: 8px; }
+    .sb-record-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--divider); display: block; }
+    .sb-record-dots i.on { background: var(--accent); }
     /* Nút CHƯA chọn trong MỌI segmented_control (nav chính + bộ lọc biểu đồ "Phân loại"/"Khoảng
        thời gian"/"Xem theo"/"Gộp theo"...): nền var(--card) khớp màu mọi card khác trong app (mặc
        định Streamlit/BaseWeb không đặt nền riêng cho nút chưa chọn, rơi về nền trắng/xám trung
@@ -9204,10 +9246,65 @@ def _render_nav_group(items, group_key):
     else:
         _render_nav_segment(items, f"navseg_{group_key}_full_{slug}")
 
+def _sidebar_today_stats_html(df):
+    """Khối "Hôm nay" thu nhỏ, LUÔN hiện dưới nav (mọi trang, không riêng "Hôm nay") -- đọc thẳng
+    từ df đã load qua prep_analysis_data() + _streak_stats() (đã dùng cho Sách/Gundam), không
+    query/tính gì thêm. Xác nhận với người dùng (mockup "Khoảng Trống Sidebar"): CHỈ hiển thị
+    thuần, không kèm lời nhắc kiểu _streak_nudge() -- app chỉ hồi cứu, không đặt mục tiêu/nhắc nhở."""
+    today = _today_vn()
+    day_df = df[df['Ngày'] == today]
+    hrs = day_df['Thời lượng (Phút)'].sum() / 60
+    streak = _streak_stats(df)["current"]
+    return (
+        "<div class='sb-widget'>"
+        f"<div class='sb-widget-title'>{_mi('wb_sunny', 12)}<span class='sb-widget-title-txt'>Hôm nay</span></div>"
+        f"<div class='sb-stat-row'><span>Giờ tập trung</span><b>{_fmt_hours_short(hrs)}</b></div>"
+        f"<div class='sb-stat-row'><span>Số phiên</span><b>{len(day_df)}</b></div>"
+        f"<div class='sb-stat-row'><span>Chuỗi ngày</span><b>{streak}</b></div>"
+        "</div>"
+    )
+
+
+def _sidebar_record_html(df):
+    """Khối "Kỷ lục" toàn thời gian, xoay theo NGÀY TRONG NĂM (đổi mỗi ngày, không cần JS/timer
+    nào vì sidebar re-render mỗi rerun) -- lấy thẳng từ _compute_alltime_records()/
+    _longest_streak_range()/_streak_stats() đã tính sẵn cho nơi khác trong app, không thêm phép
+    tính mới. Thuần hiển thị, không kèm lời nhắc như _streak_nudge() (xem docstring
+    _sidebar_today_stats_html)."""
+    records = []
+    top3 = _compute_alltime_records(df)["overall_top3"]
+    if top3:
+        d, h = top3[0]["date"], top3[0]["hours"]
+        records.append(("emoji_events", "Ngày dài nhất", f"{pd.Timestamp(d):%d/%m/%Y} · {_fmt_hours_short(h)}"))
+    lsr = _longest_streak_range(df)
+    if lsr:
+        d0, d1, n = lsr
+        records.append(("local_fire_department", "Chuỗi dài nhất",
+                         f"{n} ngày ({pd.Timestamp(d0):%d/%m} – {pd.Timestamp(d1):%d/%m})"))
+    total = _streak_stats(df)["total"]
+    if total:
+        records.append(("calendar_month", "Tổng ngày hoạt động", f"{total} ngày"))
+    if not records:
+        return ""
+    idx = _today_vn().timetuple().tm_yday % len(records)
+    icon, title, sub = records[idx]
+    dots = "".join(f"<i class='{'on' if i == idx else ''}'></i>" for i in range(len(records)))
+    return (
+        "<div class='sb-widget'>"
+        f"<div class='sb-widget-title'>{_mi('workspace_premium', 12)}<span class='sb-widget-title-txt'>Kỷ lục</span></div>"
+        f"<div class='sb-record'><span class='sb-record-ic'>{_mi(icon, 15)}</span>"
+        f"<span class='sb-record-tx'><b>{title}</b><small>{sub}</small></span></div>"
+        f"<div class='sb-record-dots'>{dots}</div>"
+        "</div>"
+    )
+
+
 with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
+    if not df.empty:
+        st.markdown(_sidebar_today_stats_html(df) + _sidebar_record_html(df), unsafe_allow_html=True)
 
 
 def _inject_keyboard_shortcuts():
