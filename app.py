@@ -7668,6 +7668,23 @@ _MAIN_CSS = """
         padding-top: 1rem;
     }
     [data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
+    /* ẨN HẲN [data-testid="stHeader"] (thanh "Deploy"/⋮) TỪ 768px TRỞ LÊN -- xác nhận với người
+       dùng (muốn đẩy logo/badge sidebar lên cao nhất có thể, phần đệm 4rem phía trên chỉ để né
+       header che mất). CHỈ áp dụng ≥768px (khớp đúng breakpoint Streamlit tự chuyển
+       initial_sidebar_state="locked" -> "auto" ở comment st.set_page_config phía trên) -- KHÔNG
+       ẩn ở màn hẹp hơn vì đã xác nhận qua Playwright: nút mở lại sidebar khi nó tự sập thành
+       drawer trên mobile (`[data-testid="stExpandSidebarButton"]`) là con cháu THẬT SỰ của
+       chính stHeader (chain DOM: stExpandSidebarButton -> ... -> stToolbar -> stHeader), ẩn cả
+       header ở mobile sẽ mất luôn nút đó, không còn cách mở lại sidebar sau khi sập -- bug thật
+       sẽ gặp nếu ẩn vô điều kiện. Ở ≥768px sidebar luôn khoá mở (không có nút thu/gọn nào sống
+       trong header, xem comment initial_sidebar_state), nên ẩn an toàn tuyệt đối. */
+    @media (min-width: 768px) {
+        [data-testid="stHeader"] { display: none !important; }
+        /* Không còn header đè lên nữa -> padding chỉ cần đủ thở, không cần né 60px như bản gốc. */
+        [data-testid="stSidebar"] { padding-top: 0.75rem !important; }
+        [data-testid="stSidebar"] > div:first-child { padding-top: 0.75rem !important; }
+        .block-container { padding-top: 1.5rem !important; }
+    }
     /* FONT KHUNG VỎ CỐ ĐỊNH -- sidebar (thương hiệu + nav) và bộ chọn ngày/kỳ dùng var(--font-ui)
        (Manrope, khai báo ở khối :root, xem _UI_FONT/_UI_FONT_STACK) thay vì font thân chữ đang
        chọn. Xác nhận với người dùng: 2 cụm này là "khung vỏ" điều hướng, phải luôn nhất quán với
