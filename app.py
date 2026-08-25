@@ -9030,6 +9030,50 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
+# df tính SỚM hơn vị trí cũ (ngay trước khối brand sidebar, thay vì sau NAV/_NAV_GROUP_*) --
+# badge "Ngày đang xem" (_sidebar_date_badge_html(), xem khối "with st.sidebar" ngay dưới) render
+# NGAY DƯỚI logo, cần df đã có sẵn tại đó. NAV/_NAV_GROUP_*/_NAV_SLUG khai báo ngay sau không phụ
+# thuộc df nên không ảnh hưởng gì khi đổi thứ tự này.
+df = prep_analysis_data()
+
+
+def _sidebar_date_badge_html(df):
+    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
+    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
+    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
+    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
+    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy, và chỉ
+    đúng khi đang xem đúng hôm nay. Tái dùng NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi
+    billboard khác trong app), không tự chế khuôn badge mới. Trả về (html, có_dòng_cập_nhật) --
+    caller chỉ gọi `_inject_relative_time_ticker()` khi có dòng "Cập nhật gần nhất".
+
+    Render NGAY DƯỚI logo (khối "with st.sidebar" đầu tiên, TRƯỚC nav) -- xác nhận với người
+    dùng: đây là badge "trạng thái hôm nay", hợp đứng cạnh thương hiệu ở đầu sidebar hơn là lẫn
+    với 2 khối số liệu/kỷ lục CĂN DƯỚI (khối "with st.sidebar" thứ 2, SAU nav)."""
+    today = _today_vn()
+    active_days = sorted(df['Ngày'].dropna().unique())
+    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
+    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
+            if today in active_days else "không có hoạt động")
+    _last_dt = df['Thời gian kết thúc'].max()
+    _upd_line = ''
+    if pd.notna(_last_dt):
+        _last_ts = pd.Timestamp(_last_dt)
+        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
+        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
+        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
+                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
+    _mon_abbr = f"Th{today.month}"
+    html = (
+        "<div class='sb-widget'><div class='tbcircle-wrap'>"
+        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
+        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
+        f"<div class='tbcircle-dow'>{vn_dow}</div>"
+        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
+    )
+    return html, bool(_upd_line)
+
+
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
 # nav nằm trong st.sidebar; .block-container chính không còn phải chừa chỗ cho thanh nav ngang
@@ -9042,6 +9086,11 @@ with st.sidebar:
         f"<div style='margin:0 0 1.1em 0;'>{_sidebar_brand_html()}</div>",
         unsafe_allow_html=True,
     )
+    if not df.empty:
+        _date_badge_html, _date_badge_has_upd = _sidebar_date_badge_html(df)
+        st.markdown(_date_badge_html, unsafe_allow_html=True)
+        if _date_badge_has_upd:
+            _inject_relative_time_ticker()
 
 # Key = định danh trang (dùng cho dispatch & deep-link ?nav=); nhãn hiển thị rút gọn ở NAV_SHORT.
 NAV = {
@@ -9074,7 +9123,8 @@ _NAV_SLUG = {
     "Tìm kiếm": "timkiem", "Tuỳ biến": "tuybien",
 }
 
-df = prep_analysis_data()
+# df đã tính SỚM hơn (ngay trước khối brand sidebar, xem comment ở đó) -- không gọi lại
+# prep_analysis_data() lần 2 ở đây.
 DAYS_ORDER = list(VN_DAYS.values())  # đúng thứ tự Thứ Hai..Chủ Nhật vì VN_DAYS khai báo sẵn theo thứ tự này -- giữ 1 nguồn duy nhất thay vì lặp lại chuỗi chữ ở đây, tránh lệch nếu VN_DAYS đổi cách viết sau này
 
 # Bản đồ màu cố định: mỗi Nhóm luôn giữ một màu xuyên suốt mọi biểu đồ/tab; Dự án con trong
@@ -9299,49 +9349,12 @@ def _sidebar_record_html(df):
     )
 
 
-def _sidebar_date_badge_html(df):
-    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
-    DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
-    người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
-    "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
-    làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy, và chỉ
-    đúng khi đang xem đúng hôm nay. Tái dùng NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi
-    billboard khác trong app), không tự chế khuôn badge mới. Trả về (html, có_dòng_cập_nhật) --
-    caller chỉ gọi `_inject_relative_time_ticker()` khi có dòng "Cập nhật gần nhất"."""
-    today = _today_vn()
-    active_days = sorted(df['Ngày'].dropna().unique())
-    vn_dow = VN_DAYS.get(pd.Timestamp(today).day_name(), "")
-    _sub = (f"ngày hoạt động {active_days.index(today) + 1}/{len(active_days)}"
-            if today in active_days else "không có hoạt động")
-    _last_dt = df['Thời gian kết thúc'].max()
-    _upd_line = ''
-    if pd.notna(_last_dt):
-        _last_ts = pd.Timestamp(_last_dt)
-        _abs_str = _last_ts.strftime('%H:%M · %d/%m/%Y')
-        _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
-        _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
-                     f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
-    _mon_abbr = f"Th{today.month}"
-    html = (
-        "<div class='sb-widget'><div class='tbcircle-wrap'>"
-        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
-        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
-        f"<div class='tbcircle-dow'>{vn_dow}</div>"
-        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
-    )
-    return html, bool(_upd_line)
-
-
 with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
     if not df.empty:
         st.markdown(_sidebar_today_stats_html(df) + _sidebar_record_html(df), unsafe_allow_html=True)
-        _date_badge_html, _date_badge_has_upd = _sidebar_date_badge_html(df)
-        st.markdown(_date_badge_html, unsafe_allow_html=True)
-        if _date_badge_has_upd:
-            _inject_relative_time_ticker()
 
 
 def _inject_keyboard_shortcuts():
