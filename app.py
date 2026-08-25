@@ -7131,33 +7131,30 @@ _TABLE_FONT_FACE = "".join(
 )
 
 # Font "Trích dẫn hôm nay" (Hôm nay -- .kq-daily-mark/-text/-src, xem _render_daily_quote_card())
-# -- Cormorant Garamond, tự host giống 2 font trên. Chọn qua mockup ảnh gửi người dùng duyệt (đã
-# thử 6 phương án, chọn phương án "mảnh, cao, trang trọng" này). CHỈ 2 kiểu chữ đang dùng thật
-# (SemiBold Italic 600 cho mark+quote text, Bold 700 thường cho tên sách/tác giả) x 2 subset
-# (latin + vietnamese -- trích dẫn chỉ tiếng Anh gốc hoặc tiếng Việt dịch, không cần latin-ext/
-# cyrillic như Manrope phải phủ rộng cho toàn bộ UI).
+# -- Dancing Script, tự host giống 2 font trên. THAY Cormorant Garamond (bản đầu, "mảnh, cao,
+# trang trọng") -- xác nhận với người dùng qua ảnh chụp: nét quá mảnh của kiểu chữ nghiêng cổ
+# điển đó khó đọc ở size nhỏ, đổi sang 1 kiểu "chữ viết tay" thật (script, không phải serif
+# nghiêng) nhưng nét đều/tròn hơn nên dễ đọc hơn. Variable font (wght 400-700 1 file, giống cách
+# _BODY_FONT_FACE host Inter/Manrope...) -- KHÔNG còn 2 style tĩnh SemiBoldItalic/Bold như
+# Cormorant vì Dancing Script vốn đã nghiêng sẵn (script), không có mặt chữ "italic" riêng --
+# đặt font-style:normal ở CSS dùng nó (.kq-daily-*), tránh trình duyệt tự "nghiêng giả" (faux
+# italic) đè thêm lên chữ vốn đã nghiêng. Dùng lại _BODY_FONT_RANGES (latin/latin-ext/vietnamese)
+# thay vì tự định nghĩa lại 2 subset latin/vietnamese như bản Cormorant cũ -- đã xác nhận Dancing
+# Script (khác nhiều font script khác) CÓ subset vietnamese đầy đủ trên Google Fonts.
 @st.cache_resource
 def _quote_font_b64():
     out = {}
-    for style_name in ("SemiBoldItalic", "Bold"):
-        for subset in ("latin", "vietnamese"):
-            with open(os.path.join("assets", "fonts", f"CormorantGaramond-{style_name}-{subset}.woff2"), "rb") as f:
-                out[(style_name, subset)] = base64.b64encode(f.read()).decode()
+    for subset in ("latin", "latin-ext", "vietnamese"):
+        with open(os.path.join("assets", "fonts", f"DancingScript-Variable-{subset}.woff2"), "rb") as f:
+            out[subset] = base64.b64encode(f.read()).decode()
     return out
 
-_QUOTE_FONT_STYLES = {"SemiBoldItalic": ("italic", 600), "Bold": ("normal", 700)}
-_QUOTE_FONT_RANGES = {
-    "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
-    "vietnamese": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
-}
 _quote_font_b64_cache = _quote_font_b64()
 _QUOTE_FONT_FACE = "".join(
-    "@font-face { font-family:'Cormorant Garamond'; "
-    f"font-style:{_style}; font-weight:{_weight}; font-display:swap; "
-    f"src:url(data:font/woff2;base64,{_quote_font_b64_cache[(_style_name, _subset)]}) format('woff2'); "
+    "@font-face { font-family:'Dancing Script'; font-style:normal; font-weight:400 700; "
+    f"font-display:swap; src:url(data:font/woff2;base64,{_quote_font_b64_cache[_name]}) format('woff2'); "
     f"unicode-range:{_ranges}; }}"
-    for _style_name, (_style, _weight) in _QUOTE_FONT_STYLES.items()
-    for _subset, _ranges in _QUOTE_FONT_RANGES.items()
+    for _name, _ranges in _BODY_FONT_RANGES.items()
 )
 
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
@@ -8342,15 +8339,16 @@ _MAIN_CSS = """
     .pbill-sub { font-size: 17px; color: var(--text-2); max-width: 640px; line-height: 1.55;
         margin-top: 8px; }
     /* Billboard Sách (Tổng quan) -- cột phải khác Tuần/Báo cáo (kicker "ĐANG ĐỌC" + tên sách/tác
-       giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Cormorant Garamond với trích
+       giả thay vì tiêu đề/mô tả câu văn) -- font tác giả dùng chung Dancing Script với trích
        dẫn Kindle billboard Hôm nay (_QUOTE_FONT_FACE) cho đồng bộ "chữ viết tay" ở mọi nơi trích
-       tên riêng/tác giả trong app. */
+       tên riêng/tác giả trong app. font-style:normal (không phải italic) -- xem chú thích
+       .kq-daily-text: Dancing Script vốn đã nghiêng sẵn (script), italic sẽ bị "nghiêng giả". */
     .pbill-kicker { font-size: 12.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
         color: var(--text-2); }
     .pbill-booktitle { font-size: 31px; font-weight: 800; color: var(--text); line-height: 1.2;
         margin-top: 4px; }
     .pbill-author { font-size: 18px; color: var(--text-2); font-weight: 600;
-        font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; }
+        font-family: 'Dancing Script', cursive; font-style: normal; }
     /* Tiêu đề mỗi cuốn sách trong sub-tab "Trích dẫn" (_render_kindle_quotes_tab()) -- tái
        dùng .pbill-booktitle/.pbill-author (tên sách + tác giả) kèm đường kẻ ngăn cách + badge đếm
        số trích dẫn, THAY cho nhãn "Chương N" (không hợp ngữ cảnh 1 danh sách trích dẫn đã lưu,
@@ -8830,22 +8828,28 @@ _MAIN_CSS = """
        BODY_FONTS/_body_font_b64() nhưng thiếu !important nên chưa thật sự bất biến). */
     /* Bản gọn ban đầu (16px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) -- nới
        lại giữa chừng (18px), rồi lên 20px (bản gốc trước khi thu gọn) khi đổi sang bố cục 1 cột --
-       billboard rộng rãi hơn hẳn, phóng to cho dễ nhìn. */
+       billboard rộng rãi hơn hẳn, phóng to cho dễ nhìn. Sau đó đổi font Cormorant Garamond (nghiêng
+       cổ điển, nét mảnh) -> Dancing Script (script/chữ viết tay, nét đều hơn) + text lên 26px
+       (xác nhận với người dùng: dễ đọc hơn Cormorant ở size cũ, chữ viết tay cần cỡ lớn hơn serif
+       thường mới rõ nét) -- mark/src KHÔNG đổi size, chỉ đổi font. font-style:normal (KHÔNG phải
+       italic như Cormorant) vì Dancing Script vốn đã nghiêng sẵn (đúng bản chất script), đặt
+       italic sẽ bị trình duyệt "nghiêng giả" (faux italic) chồng thêm lên chữ vốn đã nghiêng,
+       méo nét. */
     .kq-daily-mark { font-size: 50px; line-height: 1; color: var(--accent);
-        font-family: 'Cormorant Garamond', Georgia, serif !important; font-weight: 600; font-style: italic;
+        font-family: 'Dancing Script', cursive !important; font-weight: 600; font-style: normal;
         opacity: .5; margin-bottom: -10px; }
-    .kq-daily-text { font-size: 20px; line-height: 1.42; font-weight: 600; color: var(--text);
-        font-family: 'Cormorant Garamond', Georgia, serif !important; font-style: italic; white-space: pre-wrap; }
+    .kq-daily-text { font-size: 26px; line-height: 1.42; font-weight: 600; color: var(--text);
+        font-family: 'Dancing Script', cursive !important; font-style: normal; white-space: pre-wrap; }
     .kq-daily-src { margin: 0; font-size: 16px; color: var(--text); font-weight: 700;
-        font-family: 'Cormorant Garamond', Georgia, serif !important; text-align: right; }
+        font-family: 'Dancing Script', cursive !important; text-align: right; }
     /* Tên sách trong "Trích dẫn hôm nay" là <a class="entity-link"> (xem _entity_link_html()) --
        CÙNG bug !important đã ghi ở .kq-daily-text phía trên: rule font thân chữ toàn app khớp
        TRỰC TIẾP thẻ <a> này (không phải qua kế thừa từ .kq-daily-src), nên luôn thắng bất kể
        .kq-daily-src có !important hay không -- font-family phải khai báo lại tường minh ngay trên
        chính thẻ <a>, không đủ nếu chỉ đặt ở div cha. Ảnh chụp người dùng gửi: tên sách hiện sai
-       hẳn sang font thân chữ (Manrope) trong khi tác giả/nội dung trích dẫn vẫn đúng Cormorant
-       Garamond. */
-    .kq-daily-src a { font-family: 'Cormorant Garamond', Georgia, serif !important; }
+       hẳn sang font thân chữ (Manrope) trong khi tác giả/nội dung trích dẫn vẫn đúng font trích
+       dẫn cố định. */
+    .kq-daily-src a { font-family: 'Dancing Script', cursive !important; }
     /* Ghi chú ngày (Báo cáo ngày): bố cục 2 cột giống .jrows .jrow, nhưng dựng bằng st.columns()
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
