@@ -7828,11 +7828,16 @@ _MAIN_CSS = """
     }
     /* Nhóm "Thứ/Hôm nay/Sách đang đọc/Gundam đang xem" -- LUÔN hiện, KHÔNG đổi theo trang đang
        xem (xác nhận với người dùng qua mockup "Khoảng Trống Sidebar") -- tận dụng khoảng trắng
-       cố định dưới nav vì sidebar khoá mở suốt phiên (initial_sidebar_state="locked"). Nền/viền
-       dùng ĐÚNG token --card/--divider như thẻ nội dung thường, không tự chế màu riêng cho
-       sidebar. */
+       cố định dưới nav vì sidebar khoá mở suốt phiên (initial_sidebar_state="locked"). Dùng ĐÚNG
+       3 token --card-radius/--card-border-w/--card-shadow (trục "Kiểu thẻ", Tuỳ biến -> Giao
+       diện) + var(--border) giống MỌI thẻ nội dung chính (.sec-card/.catbars-card...) -- xác
+       nhận với người dùng: card sidebar phải đổi theo kiểu thẻ đang chọn y hệt card nội dung
+       chính, không tự chế viền/bo góc cố định riêng. padding/margin GIỮ nguyên tự chỉnh riêng
+       (không dùng --card-pad/--card-gap) vì sidebar hẹp hơn hẳn cột nội dung chính -- cùng lý do
+       .quotes-card/.dtl-track không dùng --card-pad (xem theming.md). */
     .sb-widget {
-        background: var(--card); border: 1px solid var(--divider); border-radius: 10px;
+        background: var(--card); border: var(--card-border-w) solid var(--border);
+        border-radius: var(--card-radius); box-shadow: var(--card-shadow);
         padding: 10px 12px; margin-top: 10px;
     }
     /* "span.sb-widget-title-txt" tách riêng khỏi icon -- text-transform:uppercase áp trực tiếp
@@ -9049,7 +9054,7 @@ _MAIN_CSS = """
        var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 6 kiểu thẻ còn lại,
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
-    .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card,
+    .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card, .sb-widget,
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
