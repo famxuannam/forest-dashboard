@@ -2501,7 +2501,10 @@ def _avg_session_min(df):
 def _session_flow_stats(day_df, gap_min=15):
     """Khối tập trung liền mạch dài nhất (các phiên cách nhau < gap_min phút gộp làm 1 khối) +
     khoảng nghỉ dài nhất giữa 2 khối, tính từ Thời gian bắt đầu/kết thúc của 1 ngày. Trả
-    (longest_block_min, longest_gap_min); gap là None nếu chỉ có 1 khối (không có gì để so)."""
+    (longest_block_min, longest_gap_min); gap là None nếu chỉ có 1 khối (không có gì để so).
+    day_df rỗng -> (0, None)."""
+    if day_df.empty:
+        return 0, None
     d = day_df.sort_values('Thời gian bắt đầu')
     starts = pd.to_datetime(d['Thời gian bắt đầu']).tolist()
     ends = pd.to_datetime(d['Thời gian kết thúc']).tolist()
@@ -3086,6 +3089,35 @@ def _render_reading_series_override(tag_sessions, rl_subset, assigned_df, overri
             st.rerun()
 
 
+def _kindle_note_children(df):
+    """Lồng ghi chú Kindle xuống dưới đúng highlight nó thuộc về, theo 2 cách: (a) parent_hash trỏ
+    thẳng (ghi chú tự thêm trong app, quan hệ CHẮC CHẮN lưu DB), (b) SUY LUẬN qua "Vị trí" trùng
+    với 1 highlight trong CÙNG df (ghi chú gốc từ Kindle, parent_hash luôn NULL). Dùng chung cho
+    _render_kindle_quotes_tab() (df khoanh vùng theo CUỐN SÁCH) và _render_kindle_day_quotes() (df
+    khoanh vùng theo NGÀY) -- cùng 1 thuật toán, chỉ khác phạm vi df truyền vào.
+    Trả về (children: dict[dedupe_hash cha -> list các row ghi chú con], is_child: set dedupe_hash
+    của mọi ghi chú đã được lồng)."""
+    by_hash = {r['dedupe_hash']: r for _, r in df.iterrows()}
+    children = {}
+    is_child = set()
+    for _, r in df.iterrows():
+        if r['Loại'] != 'note':
+            continue
+        ph = r.get('parent_hash')
+        if pd.notna(ph) and ph in by_hash:
+            children.setdefault(ph, []).append(r)
+            is_child.add(r['dedupe_hash'])
+        else:
+            loc = r['Vị trí']
+            if pd.notna(loc):
+                _match = df[(df['Loại'] == 'highlight') & (df['Vị trí'] == loc)]
+                if not _match.empty:
+                    ph2 = _match.iloc[0]['dedupe_hash']
+                    children.setdefault(ph2, []).append(r)
+                    is_child.add(r['dedupe_hash'])
+    return children, is_child
+
+
 def _render_kindle_quotes_tab():
     """Sub-tab "Trích dẫn" (trang Sách, không có ở Gundam -- xem show_favorites ở
     render_reading_log()): duyệt lại MỌI trích dẫn/ghi chú Kindle đã lưu, gộp theo cuốn sách --
@@ -3183,24 +3215,7 @@ def _render_kindle_quotes_tab():
         # ghi chú không gắn với trích dẫn nào không có ý nghĩa đứng độc lập trong 1 danh sách
         # TRÍCH DẪN (khác "2. Nhật ký đọc" là nhật ký theo NGÀY nên vẫn cần hiện đủ, không
         # được phép "mất" dữ liệu).
-        by_hash = {r['dedupe_hash']: r for _, r in grp.iterrows()}
-        children = {}
-        is_child = set()
-        for _, r in grp.iterrows():
-            if r['Loại'] != 'note':
-                continue
-            ph = r.get('parent_hash')
-            if pd.notna(ph) and ph in by_hash:
-                children.setdefault(ph, []).append(r)
-                is_child.add(r['dedupe_hash'])
-            else:
-                loc = r['Vị trí']
-                if pd.notna(loc):
-                    _match = grp[(grp['Loại'] == 'highlight') & (grp['Vị trí'] == loc)]
-                    if not _match.empty:
-                        ph2 = _match.iloc[0]['dedupe_hash']
-                        children.setdefault(ph2, []).append(r)
-                        is_child.add(r['dedupe_hash'])
+        children, is_child = _kindle_note_children(grp)
         orphan_notes = set(
             grp[(grp['Loại'] == 'note') & (~grp['dedupe_hash'].isin(is_child))]['dedupe_hash'])
         visible_n = len(grp) - len(orphan_notes)
@@ -4002,15 +4017,7 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
     cal_data['Thời gian (phút)'] = cal_data['Ngày'].map(day_mins).fillna(0).astype(int)
     cal_data['day'] = cal_data['Ngày'].dt.day
 
-    def _lvl(r):
-        h = r['Thời gian (phút)'] / 60
-        if h <= 0: return 0
-        if h < 0.5: return 1
-        if h < 1: return 2
-        if h < 2: return 3
-        if h < 4: return 4
-        return 5
-    cal_data['lvl'] = cal_data.apply(_lvl, axis=1)
+    cal_data['lvl'] = cal_data['Thời gian (phút)'].map(_reading_cal_lvl)
     LVL_COLORS = [("#3a3a3c" if IS_DARK else "#e5e5ea")] + _teal_shades(5)
 
     enc_x = alt.X('yearmonthdate(Tuần_Bắt_Đầu):O', title='',
@@ -5262,7 +5269,6 @@ def _reading_rows_html(rl_df, label_book=True, sort_desc=False, sessions_df=None
         else:
             if day_g.empty:
                 _book = next(iter(_books_today), None)
-                _cls = 'jchip gundam' if _book_class_map.get(_book) == 'gundam' else 'jchip book'
                 chips_html = ''
             else:
                 _cls = 'jchip gundam' if _is_gundam_list(day_g['Sách (gốc)'].iloc[0]) else 'jchip book'
@@ -5406,24 +5412,7 @@ def _render_kindle_day_quotes(day_kh):
     này, xoá highlight KHÔNG kéo theo xoá note Kindle độc lập chỉ đang lồng hiển thị cạnh nó kiểu
     (b)). Ghi chú không khớp được highlight nào (dù theo cách nào) hiện đứng riêng như 1 dòng bình
     thường theo đúng thứ tự Vị trí, không bị mất."""
-    by_hash = {r['dedupe_hash']: r for _, r in day_kh.iterrows()}
-    children = {}
-    is_child = set()
-    for _, r in day_kh.iterrows():
-        if r['Loại'] != 'note':
-            continue
-        ph = r.get('parent_hash')
-        if pd.notna(ph) and ph in by_hash:
-            children.setdefault(ph, []).append(r)
-            is_child.add(r['dedupe_hash'])
-        else:
-            loc = r['Vị trí']
-            if pd.notna(loc):
-                _match = day_kh[(day_kh['Loại'] == 'highlight') & (day_kh['Vị trí'] == loc)]
-                if not _match.empty:
-                    ph2 = _match.iloc[0]['dedupe_hash']
-                    children.setdefault(ph2, []).append(r)
-                    is_child.add(r['dedupe_hash'])
+    children, is_child = _kindle_note_children(day_kh)
     for _, r in day_kh.iterrows():
         if r['dedupe_hash'] in is_child:
             continue
@@ -6055,7 +6044,12 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
 DTBL_CSS = """
 <style>
 .dtbl-wrap { overflow:auto; max-height:560px; border-radius:var(--card-radius); border:var(--card-border-w) solid var(--border); background:var(--card); box-shadow:var(--card-shadow); }
-.dtbl { border-collapse:collapse; width:100%; font-size:13.5px; font-family:'Manrope',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+/* font-family PHẢI có !important -- CÙNG bug đã ghi ở rule sidebar/.kq-daily-src (xem _MAIN_CSS,
+   khối ".stApp.stApp *:not(...)" gần đầu): rule đó áp BODY_FONT lên toàn app với độ đặc hiệu 2
+   class, cao hơn 1 class ".dtbl" đơn thuần nên sẽ thắng dù đứng trước trong nguồn, nếu không có
+   !important ở đây IBM Plex Mono sẽ không bao giờ hiển thị thật (bug đã xác nhận: trước bản vá
+   này .dtbl vẫn hiện font thân chữ đang chọn dù đã host riêng IBM Plex Mono cho nó). */
+.dtbl { border-collapse:collapse; width:100%; font-size:13.5px; font-family:'IBM Plex Mono',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif !important; }
 .dtbl th, .dtbl td { padding:4px 9px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dtbl thead th { position:sticky; top:0; z-index:2; background:var(--chip); color:var(--text-2); font-weight:600; font-size:11px; padding:5px 9px; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--divider); }
 .dtbl td.lbl, .dtbl th.lbl { text-align:left; position:sticky; left:0; background:var(--card); z-index:1; }
@@ -6410,6 +6404,39 @@ def sec_block(html):
     """Bọc 1 khối HTML vào thẻ .sec-card (thay cho st.container(border=True) -- không cần key
     container nên không đụng rule CSS glass-card chung)."""
     st.markdown(f"<div class='sec-card'>{html}</div>", unsafe_allow_html=True)
+
+
+def _pbill_narrative(curr_hrs, prev, active_days, elapsed_days, streak_cur, prev_noun, busiest_txt,
+                      title_noun, default_title):
+    """Câu nhận định (tiêu đề + dòng phụ) cho billboard Tuần/Tháng/Năm (bc_sub == "Tuần"/"Tháng"/
+    "Năm") -- 3 nhánh trước đây cài lại y hệt công thức này, chỉ khác hậu tố biến/nhãn kỳ, nay gộp
+    chung 1 nơi. prev/curr_hrs/active_days/elapsed_days/streak_cur: số liệu kỳ đang xem (xem
+    _period_comparison/_streak_stats ở nơi gọi). prev_noun: "tuần trước"/"tháng trước"/"năm
+    trước". busiest_txt: câu "X là ngày/tháng nhiều giờ nhất..." đã dựng sẵn ở nơi gọi (khác nhau
+    theo đơn vị thời gian mỗi kỳ). title_noun: "tuần"/"tháng"/"năm" (cho "Một {title_noun} tăng
+    tốc/chững lại/nhịp đều"). default_title: tiêu đề khi không đủ dữ liệu so sánh và chưa đủ nhịp
+    đều (khác nhau: "Một tuần vừa qua"/"Một tháng vừa qua"/"Một năm nhìn lại").
+    Trả về (title, sub_html_text)."""
+    has_prev = bool(prev and prev.get('hrs') is not None)
+    delta_txt = ""
+    if has_prev:
+        dh = curr_hrs - prev['hrs']
+        if abs(dh) >= (1 / 60):
+            delta_txt = f"{'Hơn' if dh > 0 else 'Kém'} {prev_noun} {_fmt_hours_short(abs(dh))}. "
+    gap_txt = ("không ngày nào trống" if active_days >= elapsed_days
+               else f"{elapsed_days - active_days} ngày trống")
+    streak_txt = f" — chuỗi giữ mạch {streak_cur} ngày" if streak_cur > 0 else ""
+    sub = f"{delta_txt}{busiest_txt}; {gap_txt}{streak_txt}."
+
+    if has_prev and curr_hrs > prev['hrs']:
+        title = f"Một {title_noun} tăng tốc"
+    elif has_prev and curr_hrs < prev['hrs']:
+        title = f"Một {title_noun} chững lại"
+    elif active_days >= elapsed_days:
+        title = f"Một {title_noun} nhịp đều"
+    else:
+        title = default_title
+    return title, sub
 
 
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
@@ -10434,26 +10461,11 @@ elif nav == "Báo cáo":
                 _busiest_dow_w = VN_DAYS.get(pd.Timestamp(_busiest_date_w).day_name(), "")
                 _streak_cur_w = _streak_stats(df)['current']
 
-                _delta_txt_w = ""
-                if prev_w and prev_w.get('hrs') is not None:
-                    _dh_w = _curr_hrs_w - prev_w['hrs']
-                    if abs(_dh_w) >= (1 / 60):
-                        _delta_txt_w = f"{'Hơn' if _dh_w > 0 else 'Kém'} tuần trước {_fmt_hours_short(abs(_dh_w))}. "
                 _expected_days_w = (_today_vn().isoweekday()
                                      if selected_week == _today_vn().strftime('%G-W%V') else 7)
-                _gap_txt_w = ("không ngày nào trống" if _active_days_w >= _expected_days_w
-                              else f"{_expected_days_w - _active_days_w} ngày trống")
-                _streak_txt_w = f" — chuỗi giữ mạch {_streak_cur_w} ngày" if _streak_cur_w > 0 else ""
-                _pbill_sub_w = f"{_delta_txt_w}{_busiest_dow_w} là ngày nhiều giờ nhất; {_gap_txt_w}{_streak_txt_w}."
-
-                if prev_w and prev_w.get('hrs') is not None and _curr_hrs_w > prev_w['hrs']:
-                    _pbill_title_w = "Một tuần tăng tốc"
-                elif prev_w and prev_w.get('hrs') is not None and _curr_hrs_w < prev_w['hrs']:
-                    _pbill_title_w = "Một tuần chững lại"
-                elif _active_days_w >= _expected_days_w:
-                    _pbill_title_w = "Một tuần nhịp đều"
-                else:
-                    _pbill_title_w = "Một tuần vừa qua"
+                _pbill_title_w, _pbill_sub_w = _pbill_narrative(
+                    _curr_hrs_w, prev_w, _active_days_w, _expected_days_w, _streak_cur_w,
+                    "tuần trước", f"{_busiest_dow_w} là ngày nhiều giờ nhất", "tuần", "Một tuần vừa qua")
 
                 render_period_billboard(
                     f"Tuần {int(_wk)} · {_wy}", _fmt_hours_short(_curr_hrs_w), "tổng thời gian tuần này",
@@ -10519,25 +10531,11 @@ elif nav == "Báo cáo":
                 _days_in_month_m = pd.Period(f"{y:04d}-{m:02d}").days_in_month
                 _elapsed_days_m = _today_vn().day if _is_current_month_m else _days_in_month_m
 
-                _delta_txt_m = ""
-                if prev_m and prev_m.get('hrs') is not None:
-                    _dh_m = _curr_hrs_m - prev_m['hrs']
-                    if abs(_dh_m) >= (1 / 60):
-                        _delta_txt_m = f"{'Hơn' if _dh_m > 0 else 'Kém'} tháng trước {_fmt_hours_short(abs(_dh_m))}. "
-                _gap_txt_m = ("không ngày nào trống" if _active_days_m >= _elapsed_days_m
-                              else f"{_elapsed_days_m - _active_days_m} ngày trống")
-                _streak_txt_m = f" — chuỗi giữ mạch {_streak_cur_m} ngày" if _streak_cur_m > 0 else ""
-                _pbill_sub_m = (f"{_delta_txt_m}Ngày {_busiest_date_m:%d/%m} là ngày nhiều giờ nhất "
-                                 f"({_fmt_hours_short(_busiest_hrs_m)}); {_gap_txt_m}{_streak_txt_m}.")
-
-                if prev_m and prev_m.get('hrs') is not None and _curr_hrs_m > prev_m['hrs']:
-                    _pbill_title_m = "Một tháng tăng tốc"
-                elif prev_m and prev_m.get('hrs') is not None and _curr_hrs_m < prev_m['hrs']:
-                    _pbill_title_m = "Một tháng chững lại"
-                elif _active_days_m >= _elapsed_days_m:
-                    _pbill_title_m = "Một tháng nhịp đều"
-                else:
-                    _pbill_title_m = "Một tháng vừa qua"
+                _pbill_title_m, _pbill_sub_m = _pbill_narrative(
+                    _curr_hrs_m, prev_m, _active_days_m, _elapsed_days_m, _streak_cur_m,
+                    "tháng trước",
+                    f"Ngày {_busiest_date_m:%d/%m} là ngày nhiều giờ nhất ({_fmt_hours_short(_busiest_hrs_m)})",
+                    "tháng", "Một tháng vừa qua")
 
                 render_period_billboard(
                     f"{VN_MONTHS_WORD[m - 1]} {y}", _fmt_hours_short(_curr_hrs_m),
@@ -10612,25 +10610,11 @@ elif nav == "Báo cáo":
                 _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).dayofyear
                 _elapsed_days_y = _today_vn().timetuple().tm_yday if _is_current_year_y else _days_in_year_y
 
-                _delta_txt_y = ""
-                if prev_y and prev_y.get('hrs') is not None:
-                    _dh_y = _curr_hrs_y - prev_y['hrs']
-                    if abs(_dh_y) >= (1 / 60):
-                        _delta_txt_y = f"{'Hơn' if _dh_y > 0 else 'Kém'} năm trước {_fmt_hours_short(abs(_dh_y))}. "
-                _gap_txt_y = ("không ngày nào trống" if _active_days_y >= _elapsed_days_y
-                              else f"{_elapsed_days_y - _active_days_y} ngày trống")
-                _streak_txt_y = f" — chuỗi giữ mạch {_streak_cur_y} ngày" if _streak_cur_y > 0 else ""
-                _pbill_sub_y = (f"{_delta_txt_y}Tháng {_busiest_month_y} là tháng cao nhất "
-                                 f"({_fmt_hours_short(_busiest_month_hrs_y)}); {_gap_txt_y}{_streak_txt_y}.")
-
-                if prev_y and prev_y.get('hrs') is not None and _curr_hrs_y > prev_y['hrs']:
-                    _pbill_title_y = "Một năm tăng tốc"
-                elif prev_y and prev_y.get('hrs') is not None and _curr_hrs_y < prev_y['hrs']:
-                    _pbill_title_y = "Một năm chững lại"
-                elif _active_days_y >= _elapsed_days_y:
-                    _pbill_title_y = "Một năm nhịp đều"
-                else:
-                    _pbill_title_y = "Một năm nhìn lại"
+                _pbill_title_y, _pbill_sub_y = _pbill_narrative(
+                    _curr_hrs_y, prev_y, _active_days_y, _elapsed_days_y, _streak_cur_y,
+                    "năm trước",
+                    f"Tháng {_busiest_month_y} là tháng cao nhất ({_fmt_hours_short(_busiest_month_hrs_y)})",
+                    "năm", "Một năm nhìn lại")
 
                 render_period_billboard(
                     f"Năm {selected_year}", _fmt_hours_short(_curr_hrs_y),
