@@ -9179,8 +9179,15 @@ if "nav" not in st.session_state:
     _q = st.query_params.get("nav")
     st.session_state["nav"] = _q if _q in NAV else "Hôm nay"
 nav = st.session_state["nav"]
-# Đồng bộ trang hiện tại lên URL (idempotent -> không gây rerun lặp)
-st.query_params["nav"] = nav
+# Đồng bộ trang hiện tại lên URL -- CHỈ ghi khi giá trị thực sự đổi (so trước bằng .get()), không
+# gán vô điều kiện mỗi rerun: st.query_params[...] = ... luôn gửi 1 message khiến frontend gọi
+# history.pushState(), kể cả khi giá trị giữ nguyên -- gán mỗi lượt rerun (bất kể lượt đó do
+# tương tác gì gây ra, không chỉ đổi trang) làm việc giữ phím mũi tên ←/→ chuyển ngày liên tục
+# hoặc bấm nhanh nhiều lần rất dễ vượt giới hạn cứng của trình duyệt (~100 pushState()/10 giây),
+# hiện lỗi "Bad message format" (bug thật, xác nhận qua báo cáo người dùng). So sánh trước khi
+# gán giảm hẳn số lần gọi này về đúng những lượt nav THỰC SỰ đổi.
+if st.query_params.get("nav") != nav:
+    st.query_params["nav"] = nav
 
 # Sub-page của "Báo cáo" (Tổng quan/Tuần/Tháng/Năm/Dự án) -- đọc ?sub= 1 lần y hệt cách "nav" ở
 # trên, cho phép link "nhảy tới ngày" từ Nhật ký dùng chung 1 cơ chế. Widget picker render NGAY
@@ -9208,7 +9215,10 @@ elif "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
     st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tuần"
 if nav == "Báo cáo":
-    st.query_params["sub"] = st.session_state["bc_sub"]
+    # Chỉ ghi khi đổi giá trị -- cùng lý do đã nêu ở st.query_params["nav"] phía trên (giảm số lần
+    # history.pushState() không cần thiết).
+    if st.query_params.get("sub") != st.session_state["bc_sub"]:
+        st.query_params["sub"] = st.session_state["bc_sub"]
 elif "sub" in st.query_params:
     del st.query_params["sub"]
 
@@ -9223,7 +9233,9 @@ if "tb_sub" not in st.session_state:
     _qs_tb = st.query_params.get("tsub")
     st.session_state["tb_sub"] = _qs_tb if _qs_tb in TUYBIEN_SUBS else "Tổng quan"
 if nav == "Tuỳ biến":
-    st.query_params["tsub"] = st.session_state["tb_sub"]
+    # Chỉ ghi khi đổi giá trị -- cùng lý do đã nêu ở st.query_params["nav"] phía trên.
+    if st.query_params.get("tsub") != st.session_state["tb_sub"]:
+        st.query_params["tsub"] = st.session_state["tb_sub"]
 elif "tsub" in st.query_params:
     del st.query_params["tsub"]
 
