@@ -10218,7 +10218,7 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(ACCENT_PRESETS.items()), 4, lambda n, h: h == ACCENT,
+        _tb_axis_grid(list(ACCENT_PRESETS.items()), 5, lambda n, h: h == ACCENT,
                       "accent_hex", "accent_sw", _accent_css, value_for=lambda n, h: h)
 
     sec_chapter("tbgd-ch2", 2, "Bảng màu nền",

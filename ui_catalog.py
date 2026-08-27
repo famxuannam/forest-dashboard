@@ -51,26 +51,38 @@ MAC_COLORS = [
 CHART_COLORS = ["#c1440e", "#2f8f5e", "#3a5a9e", "#c9932a", "#8a3b8f", "#1f9caf", "#c94f70", "#6fa02e"]
 
 
-# 8 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn. Bộ thứ 3 (thay hẳn bộ
-# "trầm/mộc mạc" trước đó theo phản hồi trực tiếp của người dùng -- đã nhìn quen 2 bộ cũ, muốn 1 bộ
-# "hoàn toàn khác") -- vẫn 8 hue trải đều quanh vòng màu (đỏ -> cam -> vàng -> lục -> lam ngọc ->
-# chàm -> tím -> hồng) nhưng NÂNG saturation/độ sáng hẳn 1 bậc so với 2 bộ trước (tông "jewel-tone"
-# rực rỡ hơn, không còn xỉn/trầm) để cảm giác khác biệt rõ ràng ngay cái nhìn đầu, không chỉ đổi vài
-# mã hex gần giống cũ. Contrast chữ trắng trên nút/pill đã kiểm qua công thức WCAG (relative
-# luminance) -- "Vàng hổ phách" thấp nhất (~2.45:1) nhưng CÙNG MỨC với "Vàng nghệ" bộ cũ (~2.65:1,
-# đã được chấp nhận trước đó) -- vàng/hổ phách bão hoà cao luôn khó đạt AA 4.5:1 với chữ trắng nếu
-# muốn giữ đúng cảm giác "vàng" (kéo tối thêm sẽ ngả nâu, mất tông). Ai đã lưu 1 màu ở 2 bộ cũ sẽ
-# tự rơi về mặc định mới ở lần tải kế tiếp (xem nhánh fallback _accent_hex trong app.py). Bảng này
-# TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Nhóm/Dự án, hệ "Vintage bản đồ", không đổi).
+# 20 lựa chọn màu accent (tab Tuỳ biến → "4. Giao diện"), người dùng tự chọn, render 4 hàng x 5
+# cột (xem per_row=5 ở lời gọi _tb_axis_grid() trong app.py). Mở rộng từ bộ 8 màu "jewel-tone" cũ
+# (giữ NGUYÊN 8 mã hex cũ để không phá lựa chọn người dùng đã lưu) bằng cách chèn thêm 12 hue mới
+# vào đúng khoảng trống lớn nhất quanh vòng màu của 8 hue cũ (đặc biệt dải vàng-lục gần như trống
+# hẳn, từ ~42° đến ~161°) -- 12 hue mới tính bằng colorsys theo cùng công thức HSL nhất quán (S/L
+# hiệu chỉnh riêng theo dải hue để giữ độ rực + tương phản chữ trắng tương đương bộ cũ), KHÔNG
+# random/hand-pick tự do. Cả 20 màu xếp theo ĐÚNG thứ tự hue tăng dần (0°→360°) trong dict này để
+# lưới 4x5 đọc như 1 dải cầu vồng liền mạch, không nhảy cóc. Contrast chữ trắng thấp nhất trong bộ
+# mới là "Vàng chanh" (~2.98:1) -- vẫn cao hơn mức đã chấp nhận của "Vàng hổ phách" bộ cũ (~2.45:1)
+# vì vàng bão hoà cao luôn khó đạt AA 4.5:1 với chữ trắng (xem lý do gốc ở lần đổi bộ màu trước).
+# Bảng này TÁCH RIÊNG khỏi CHART_COLORS (bảng màu biểu đồ Nhóm/Dự án, hệ "Vintage bản đồ", không đổi).
 ACCENT_PRESETS = {
-    "Đỏ ruby": "#c81452",
+    "Đỏ cam": "#d51710",
     "Cam rực": "#e0630a",
     "Vàng hổ phách": "#d99a06",
+    "Vàng chanh": "#9c9a11",
+    "Lục chanh": "#73931a",
+    "Lục cỏ": "#4f8b1d",
+    "Lục rêu": "#318321",
+    "Lục thông": "#1b7e26",
+    "Lục ngọc": "#158441",
     "Lục bích": "#12946b",
+    "Ngọc lam": "#119793",
     "Lam ngọc bích": "#0f7ea3",
+    "Xanh dương": "#285fbd",
     "Chàm điện": "#4f4dc4",       # mặc định
+    "Chàm tím": "#6c49c5",
     "Tím thạch anh": "#8a3fc9",
+    "Tím hoa cà": "#bb36c9",
+    "Hồng cánh sen": "#c62fa3",
     "Hồng mẫu đơn": "#d13a7a",
+    "Đỏ ruby": "#c81452",
 }
 
 # Kiểu nền trang (áp cho .stApp, xem rule CSS dùng var(--bg-image)/var(--bg-size)/var(--bg-position))
