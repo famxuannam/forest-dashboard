@@ -23,7 +23,6 @@ Không có build step, linter hay test suite tự động. Xem `docs/testing.md`
 - Mọi logic về “hôm nay” dùng `_today_vn()`, không dùng `date.today()` trần.
 - Không dùng `st.metric()` vì CSS toàn cục ẩn nó. Khối CSS lớn là string thường, không đổi thành f-string.
 - `prep_analysis_data()` là điểm chuẩn bị dữ liệu báo cáo trung tâm. Giữ `Dự án gốc`; chỉ dùng dữ liệu đã chuẩn bị để báo cáo/gom nhóm, trừ khi có lý do rõ ràng.
-- `_health_is_abnormal()` chỉ có hai trạng thái trong/ngoài khoảng tham chiếu. Không tự thêm mức “sát ngưỡng”.
 
 ## Cách làm việc
 
