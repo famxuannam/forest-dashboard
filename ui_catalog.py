@@ -770,29 +770,22 @@ CARD_STYLES = {
     },
 }
 
-# Mật độ bố cục thẻ (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --card-pad/--card-gap
-# CHỈ cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (xem các vị trí đã đổi sang
-# var() cạnh --card-radius) -- KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
-# (.quotes-card, .dtl-track...). "Vừa" PHẢI giữ đúng giá trị gốc hiện tại. "Rất thoáng" thêm vào
-# sau để 4 mức (đồng bộ với trục "Độ rộng nội dung" cũng 4 mức), tiếp tục đúng cấp số cộng đã có
-# giữa 3 mức gốc (+4px/+6px pad, +4px gap mỗi bước).
-CARD_DENSITY = {
-    "Gọn": {"pad": "12px 14px", "gap": "6px 0"},
-    "Vừa": {"pad": "16px 18px", "gap": "10px 0"},
-    "Thoáng": {"pad": "20px 24px", "gap": "14px 0"},
-    "Rất thoáng": {"pad": "24px 30px", "gap": "18px 0"},
-}
+# Trục "Mật độ bố cục" (CARD_DENSITY) đã BỎ theo yêu cầu người dùng -- --card-pad/--card-gap giờ
+# là 2 hằng số CSS cố định (khớp đúng giá trị "Vừa" cũ) khai báo thẳng trong _card_style_vars ở
+# app.py, không còn setting/UI chọn lựa. Xem lịch sử ở git nếu cần khôi phục.
 
 # Độ rộng cột nội dung (tab Tuỳ biến -> "4. Giao diện") -- trục độc lập, áp qua --content-max-w cho
-# .block-container (xem _MAIN_CSS). "Rộng" là mặc định. 4 mức cách đều 200px (xác nhận với người
-# dùng: 1100/1300/1500/1700). Từ khi NAV chuyển sang sidebar trái (Phase 4 hướng B), 2 nút nổi "về
-# đầu trang"/"Đồng bộ nhanh" không còn định vị theo mép cột nội dung nữa (bám thẳng mép phải
+# .block-container (xem _MAIN_CSS). "Rộng" là mặc định. 5 mức cách đều 200px (xác nhận với người
+# dùng: 1100/1300/1500/1700/1900 -- thêm "Cực rộng" 1900 nối tiếp đúng cấp số cộng 200px đã có,
+# phục vụ thêm màn hình 5K/ultrawide). Từ khi NAV chuyển sang sidebar trái (Phase 4 hướng B), 2 nút
+# nổi "về đầu trang"/"Đồng bộ nhanh" không còn định vị theo mép cột nội dung nữa (bám thẳng mép phải
 # viewport, xem CSS #app-scroll-top-btn/#app-sync-fab-btn) -- --content-half-w đã bỏ.
 CONTENT_WIDTHS = {
     "Hẹp": 1100,
     "Vừa": 1300,
     "Rộng": 1500,
     "Rất rộng": 1700,
+    "Cực rộng": 1900,
 }
 
 # Font thân chữ (tab Tuỳ biến -> sub-page "Giao diện") -- trục độc lập, CHỈ áp cho vai trò "thân/
@@ -812,6 +805,25 @@ CONTENT_WIDTHS = {
 # đọc dài, từng có trong bộ font đầu tiên của app -- không ngại trùng lựa chọn cũ). Đã xác minh cả 5
 # đều có bản variable phủ đủ wght 200-800 trong 1 file và đủ 3 subset latin/latin-ext/vietnamese.
 #
+# Đợt mở rộng thứ 4 (5 -> 20 font, xếp lưới 4x5, xác nhận với người dùng: CHỈ chọn font readability
+# cao -- tiếp tục đúng tiêu chí đã chốt ở đợt 3, không quay lại font cách điệu/display). Thêm 15 font
+# mới, TOÀN BỘ đều là sans-serif nhân văn/trung tính hoặc serif thiết kế riêng cho đọc dài (không
+# font display/trang trí), đã xác minh TỪNG font có bản variable 1 file phủ đủ dải wght rộng VÀ đủ
+# 3 subset latin/latin-ext/vietnamese trước khi tải (một số ứng viên phổ biến bị loại vì THIẾU hẳn
+# subset vietnamese dù variable tốt -- Lato, Karla, PT Serif, Rubik, DM Sans, Figtree, Sora, Albert
+# Sans, Zilla Slab, Libre Baskerville -- không đưa vào danh sách):
+# - 10 sans-serif: Roboto (wght 200-800, hệ thống Android/Material, đọc rất tốt), Open Sans
+#   (300-800, 1 trong các sans phổ biến/dễ đọc nhất Google Fonts), Noto Sans (200-800, thiết kế cho
+#   khả năng đọc đa ngôn ngữ), Work Sans (200-800, nhân văn hiện đại), IBM Plex Sans (200-700, hệ
+#   thống IBM, tối ưu đọc màn hình), Public Sans (200-800, font chuẩn USWDS thiết kế riêng cho
+#   readability), Mulish (200-800, sans trung tính gọn), Nunito Sans (200-900, bo mềm dễ đọc), Plus
+#   Jakarta Sans (200-800, nhân văn hiện đại), Hanken Grotesk (300-900, grotesk trung tính rõ ràng).
+# - 5 serif: Merriweather (300-900, thiết kế RIÊNG cho đọc trên màn hình, rất phổ biến cho nội
+#   dung dài), Source Serif 4 (200-800, cùng họ Source Sans 3 đã có, đối trọng serif của Adobe),
+#   Lora (400-700, serif cân bằng cổ điển/hiện đại được dùng rộng rãi cho đọc dài), Crimson Pro
+#   (200-800, lấy cảm hứng từ font in sách cổ điển, tối ưu đọc), Noto Serif (200-800, cùng họ Noto
+#   Sans, đọc đa ngôn ngữ tốt).
+#
 # QUAN TRỌNG: "Manrope" (font khung vỏ CỐ ĐỊNH cho sidebar/date-picker, xem _UI_FONT trong app.py)
 # KHÔNG còn là 1 key trong dict này -- đã tách riêng khỏi trục "Font thân chữ" (đọc thẳng
 # "Manrope-Variable" qua _body_font_b64(), không tra cứu qua BODY_FONTS[_UI_FONT] nữa) để các lựa
@@ -820,9 +832,24 @@ CONTENT_WIDTHS = {
 # chọn này.
 BODY_FONTS = {
     "Inter": {"family": "Inter", "file_prefix": "Inter-Variable"},          # mặc định
+    "Roboto": {"family": "Roboto", "file_prefix": "Roboto-Variable"},
+    "Open Sans": {"family": "Open Sans", "file_prefix": "OpenSans-Variable"},
+    "Noto Sans": {"family": "Noto Sans", "file_prefix": "NotoSans-Variable"},
+    "Work Sans": {"family": "Work Sans", "file_prefix": "WorkSans-Variable"},
     "Source Sans 3": {"family": "Source Sans 3", "file_prefix": "SourceSans3-Variable"},
+    "IBM Plex Sans": {"family": "IBM Plex Sans", "file_prefix": "IBMPlexSans-Variable"},
+    "Public Sans": {"family": "Public Sans", "file_prefix": "PublicSans-Variable"},
+    "Mulish": {"family": "Mulish", "file_prefix": "Mulish-Variable"},
+    "Nunito Sans": {"family": "Nunito Sans", "file_prefix": "NunitoSans-Variable"},
+    "Plus Jakarta Sans": {"family": "Plus Jakarta Sans", "file_prefix": "PlusJakartaSans-Variable"},
+    "Hanken Grotesk": {"family": "Hanken Grotesk", "file_prefix": "HankenGrotesk-Variable"},
     "Newsreader": {"family": "Newsreader", "file_prefix": "Newsreader-Variable"},
     "Literata": {"family": "Literata", "file_prefix": "Literata-Variable"},
     "Bitter": {"family": "Bitter", "file_prefix": "Bitter-Variable"},
+    "Merriweather": {"family": "Merriweather", "file_prefix": "Merriweather-Variable"},
+    "Source Serif 4": {"family": "Source Serif 4", "file_prefix": "SourceSerif4-Variable"},
+    "Lora": {"family": "Lora", "file_prefix": "Lora-Variable"},
+    "Crimson Pro": {"family": "Crimson Pro", "file_prefix": "CrimsonPro-Variable"},
+    "Noto Serif": {"family": "Noto Serif", "file_prefix": "NotoSerif-Variable"},
 }
 
