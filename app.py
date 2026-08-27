@@ -5518,7 +5518,8 @@ def _render_kindle_quote_row(r, is_reply=False, key_suffix="", show_added_date=F
 
 def render_same_day_last_week(sel, df_all):
     """"Ngày này tuần trước": đúng ngày (sel - 7 ngày), CÙNG bộ nguồn/chip với render_on_this_day
-    (kỷ lục → lịch → đọc sách → số liệu phiên → ghi chú nhanh → ghi chú chính) nhưng chỉ 1 dòng
+    (kỷ lục → tổng quan số liệu phiên (Giờ/Số phiên/TB/Theo dõi) → lịch → đọc sách → ghi chú
+    nhanh → ghi chú chính) nhưng chỉ 1 dòng
     duy nhất (không lặp qua nhiều năm) -- dùng khuôn `.jdate` kiểu Thứ to + dd/mm của
     render_notes_journal() thay vì khuôn năm to của render_on_this_day (không có khái niệm "năm"
     ở đây, chỉ có đúng 1 ngày cụ thể)."""
@@ -5528,7 +5529,8 @@ def render_same_day_last_week(sel, df_all):
     day_df = df_all[df_all['Ngày'] == target]
     stats = None
     if not day_df.empty:
-        stats = (day_df['Thời lượng (Phút)'].sum() / 60, len(day_df))
+        stats = (day_df['Thời lượng (Phút)'].sum() / 60, len(day_df),
+                  day_df['Thời gian bắt đầu'].min(), day_df['Thời gian kết thúc'].max())
 
     note_text = None
     nd = load_notes()
@@ -5589,10 +5591,11 @@ def render_same_day_last_week(sel, df_all):
     read_html = _book_chips_html(reading) if reading is not None else ''
     chips_html = ''
     if stats is not None:
-        hrs, ss = stats
+        hrs, ss, t_start, t_end = stats
         avg = (hrs * 60 / ss) if ss else 0
-        _chips = _chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
-        chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
+        _chips = (_chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}")
+                  + _chip("TB", f"{avg:.0f}′") + _chip("Theo dõi", f"{t_start:%H:%M}–{t_end:%H:%M}"))
+        chips_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Tổng quan</span>{_chips}</div>"
     qnote_html = _quick_note_chips_html(quick) if quick is not None else ''
     note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{note_text}</div>"
                   if note_text else '')
@@ -5603,7 +5606,7 @@ def render_same_day_last_week(sel, df_all):
         "<div class='jrow'>"
         f"<a class='jdate-link' href='{_href}' target='_self'>"
         f"<div class='jdate'><div class='jdowbig'>{wd}</div><div class='jdm'>{target:%d/%m}</div></div></a>"
-        f"<div>{rec_html}{cal_html}{read_html}{chips_html}{qnote_html}{note_block}</div>"
+        f"<div>{rec_html}{chips_html}{cal_html}{read_html}{qnote_html}{note_block}</div>"
         "</div>"
     )
     with st.container(border=True, key="jcard_lastweek"):
@@ -5614,8 +5617,9 @@ def render_on_this_day(sel, df_all):
     """“Ngày này năm trước”: khớp cùng ngày/tháng ở các năm trước (từ phiên + ghi chú),
     mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc. Mỗi dòng năm cũng
     theo đúng thứ tự cố định chip Kỷ lục (nếu năm đó rơi đúng ngày giữ kỷ lục, xem
-    _compute_alltime_records()) → chip Lịch → chip đọc sách → số liệu phiên → ghi chú nhanh đang
-    chờ → nhãn "Ghi chú chính" + ghi chú, nhất quán với render_note_editor()/render_notes_journal()."""
+    _compute_alltime_records()) → chip Tổng quan (Giờ/Số phiên/TB/khoảng giờ theo dõi) → chip
+    Lịch → chip đọc sách → ghi chú nhanh đang chờ → nhãn "Ghi chú chính" + ghi chú, nhất quán với
+    render_note_editor()/render_notes_journal()."""
     day_badges = _compute_alltime_records(df_all)["day_badges"]
     m, d = sel.month, sel.day
     # Số liệu phiên theo từng năm trước (cùng ngày/tháng) -- 'Ngày' là cột date thô (không phải
@@ -5628,7 +5632,8 @@ def render_on_this_day(sel, df_all):
     stats = {}  # year -> (hours, sessions)
     if not sess.empty:
         for y, g in sess.groupby(_ngay_dt[_mask].dt.year):
-            stats[int(y)] = (g['Thời lượng (Phút)'].sum() / 60, len(g))
+            stats[int(y)] = (g['Thời lượng (Phút)'].sum() / 60, len(g),
+                              g['Thời gian bắt đầu'].min(), g['Thời gian kết thúc'].max())
     # Ghi chú cùng ngày/tháng ở các năm trước
     notes = {}  # year -> text
     nd = load_notes()
@@ -5696,10 +5701,11 @@ def render_on_this_day(sel, df_all):
         read_html = _book_chips_html(reading[y]) if y in reading else ''
         chips_html = ''
         if y in stats:
-            hrs, ss = stats[y]
+            hrs, ss, t_start, t_end = stats[y]
             avg = (hrs * 60 / ss) if ss else 0
-            _chips = _chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}") + _chip("TB", f"{avg:.0f}′")
-            chips_html = f"<div style='margin-bottom:6px;'>{_chips}</div>"
+            _chips = (_chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}")
+                      + _chip("TB", f"{avg:.0f}′") + _chip("Theo dõi", f"{t_start:%H:%M}–{t_end:%H:%M}"))
+            chips_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Tổng quan</span>{_chips}</div>"
         qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
         note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
                       if notes.get(y) else '')
@@ -5712,7 +5718,7 @@ def render_on_this_day(sel, df_all):
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div></a>"
-            f"<div>{rec_html}{cal_html}{read_html}{chips_html}{qnote_html}{note_block}</div>"
+            f"<div>{rec_html}{chips_html}{cal_html}{read_html}{qnote_html}{note_block}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_otd"):
