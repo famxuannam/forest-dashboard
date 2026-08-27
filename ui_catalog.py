@@ -162,16 +162,20 @@ BG_PRESETS = {
 #
 # Đợt đổi mới thứ 2 (xác nhận với người dùng: đã nhìn quen 8 bảng "Giấy ấm/Rượu vang/Đêm tía/Lá
 # non/Hoàng hôn/Sương tím/Bầu trời sao/Rừng đêm" + "Xám hệ thống" thêm sau -- muốn 1 bộ "hoàn toàn
-# khác", kể cả bảng mặc định). 9 bảng mới dựng theo 1 CÔNG THỨC HSL nhất quán (khác cách hand-pick
-# tự do trước đây) để đảm bảo tương phản/hài hoà mà không cần tinh chỉnh từng mã hex riêng lẻ -- 5
+# khác", kể cả bảng mặc định). 9 bảng dựng theo 1 CÔNG THỨC HSL nhất quán (khác cách hand-pick tự
+# do trước đây) để đảm bảo tương phản/hài hoà mà không cần tinh chỉnh từng mã hex riêng lẻ -- 5
 # bảng "nền nhạt" giữ nguyên hue xuyên suốt bg/card/border/chip (bg: S34% L87.5%/8.4%, card: S40%
-# L96.5%/13.5%, border: S28% L72%/22%, chip: S30% L79%/17.5%, cùng khuôn "Lá non"/"Hoàng hôn" cũ đã
-# đo lại), 4 bảng "nền đậm cố định" dùng khuôn "Rừng đêm"/"Rượu vang" cũ đã đo lại (bg S~24-36%
-# L16-20% CỐ ĐỊNH cả 2 cột, card/border/chip theo công thức riêng sáng hơn, text-on-bg S24% L93%/
-# text-on-bg-2 S17% L71% CỐ ĐỊNH cả 2 cột). 5 hue mới (lam ngọc/lam nhạt/hồng/vàng bơ/tím oải hương)
-# và 4 hue mới (lam thẳm/nâu hạt dẻ/xám than/đất nung) đều KHÔNG trùng hue nào ở bộ cũ.
+# L96.5%/13.5%, border: S28% L72%/22%, chip: S30% L79%/17.5%), 4 bảng "nền đậm cố định" dùng công
+# thức riêng (bg S~24-36% L16-20% CỐ ĐỊNH cả 2 cột, card/border/chip theo công thức riêng sáng hơn,
+# text-on-bg S24% L93%/text-on-bg-2 S17% L71% CỐ ĐỊNH cả 2 cột).
 #
-# text/text-2/3/4: LUÔN là màu chữ dùng BÊN TRONG thẻ/card (nền var(--card)) -- cả 9 bảng đều dùng
+# Đợt mở rộng thứ 3 (9 -> 20 bảng, xếp lưới 4x5, xác nhận với người dùng -- cùng đợt với
+# ACCENT_PRESETS 8->20): thêm 5 hue cho "nền nhạt" (Hồng đào/Xanh cốm/Lá mạ/Ngọc bích/Tím chàm) và
+# 6 hue cho "nền đậm cố định" (Ô liu/Lục rừng/Lục bảo/Chàm than/Tím than/Rượu vang) vào ĐÚNG khoảng
+# trống lớn nhất quanh vòng màu của mỗi nhóm 9 hue cũ, dùng LẠI Y HỆT 2 công thức HSL trên (chỉ đổi
+# hue) -- KHÔNG đổi hue/công thức của 9 bảng gốc để không phá lựa chọn người dùng đã lưu.
+#
+# text/text-2/3/4: LUÔN là màu chữ dùng BÊN TRONG thẻ/card (nền var(--card)) -- cả 20 bảng đều dùng
 # thẻ SÁNG + chữ TỐI (yêu cầu trực tiếp của người dùng, giữ nguyên từ đợt trước: "các card vẫn có
 # màu sáng và chữ màu tối" kể cả ở bảng nền đậm), nên dùng chung đúng 1 cặp chữ tối/sáng
 # (#211c13/#f1ece0 v.v., KHÔNG đổi -- vẫn là hằng số gốc của app, độc lập với bảng màu nền đang
@@ -179,8 +183,8 @@ BG_PRESETS = {
 #
 # text-on-bg/text-on-bg-2: token MỚI, chỉ dùng cho phần chữ nằm TRỰC TIẾP trên nền trang
 # (var(--bg), NGOÀI mọi card) -- ví dụ wordmark "Forest/Dashboard" ở header (_wordmark_html()), text
-# phụ ở màn đăng nhập (_login_txt2). 5 bảng "nền nhạt" dùng LUÔN cặp text/text-2 (không có gì khác
-# biệt). 4 bảng "nền đậm cố định" có var(--bg) đậm CỐ ĐỊNH bất kể IS_DARK nên cần cặp text-on-bg/
+# phụ ở màn đăng nhập (_login_txt2). 10 bảng "nền nhạt" dùng LUÔN cặp text/text-2 (không có gì khác
+# biệt). 10 bảng "nền đậm cố định" có var(--bg) đậm CỐ ĐỊNH bất kể IS_DARK nên cần cặp text-on-bg/
 # text-on-bg-2 SÁNG cố định riêng (không đổi theo IS_DARK) để chữ trên nền đậm luôn đọc được, tách
 # biệt hẳn khỏi cặp text/text-2 tối dùng cho bên trong card.
 BG_PALETTES = {
@@ -259,7 +263,89 @@ BG_PALETTES = {
         "text-on-bg":   ("#211c13", "#f1ece0"),
         "text-on-bg-2": ("#6f6650", "#b3a688"),
     },
-    # 4 bảng dưới đây: "nền đậm cố định" -- bg ĐẬM ở CẢ 2 cột (khác 5 bảng "nền nhạt" trên -- bg chỉ
+    # 5 bảng "nền nhạt" MỚI (đợt mở rộng 9 -> 20 màu, xếp lưới 4x5) -- CÙNG ĐÚNG công thức HSL của
+    # 5 bảng nền nhạt trên (bg: S34.4%/L87.5% sáng, S34.9%/L8.4% tối; card: S41.2%/L96.7% sáng,
+    # S24.6%/L13.5% tối; border: S28.2%/L72.2% sáng, S28.6%/L22% tối; chip: S30.8%/L79% sáng,
+    # S25.8%/L17.5% tối; divider/divider-2 = nền tối HSL(hue, 49%, 10%) ở cột sáng, trắng cố định ở
+    # cột tối), CHỈ đổi hue -- 5 hue mới chọn để lấp đúng khoảng trống lớn nhất giữa 5 hue cũ (166°
+    # Bạc hà/204° Xanh da trời/276° Tím oải hương/344° Hồng phấn/48° Vàng bơ) quanh vòng màu, đưa
+    # tổng 10 bảng nhạt về gần đều 36°/hue (giống cách ACCENT_PRESETS đã mở rộng 8→20).
+    "Hồng đào": {
+        "bg":        ("#ead4d4", "#1d0e0e"),
+        "card":      ("#faf3f3", "#2b1a1a"),
+        "card-tl":   ("rgba(250,243,243,0.85)", "rgba(43,26,26,0.85)"),
+        "border":    ("#cca4a4", "#482828"),
+        "divider":   ("rgba(38,13,13,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(38,13,13,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#dab9b9", "#382121"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    "Xanh cốm": {
+        "bg":        ("#e6ead4", "#1a1d0e"),
+        "card":      ("#f9faf3", "#282b1a"),
+        "card-tl":   ("rgba(249,250,243,0.85)", "rgba(40,43,26,0.85)"),
+        "border":    ("#c4cca4", "#424828"),
+        "divider":   ("rgba(33,38,13,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(33,38,13,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#d3dab9", "#343821"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    "Lá mạ": {
+        "bg":        ("#d9ead4", "#111d0e"),
+        "card":      ("#f5faf3", "#1d2b1a"),
+        "card-tl":   ("rgba(245,250,243,0.85)", "rgba(29,43,26,0.85)"),
+        "border":    ("#accca4", "#2e4828"),
+        "divider":   ("rgba(18,38,13,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(18,38,13,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#c0dab9", "#263821"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    "Ngọc bích": {
+        "bg":        ("#d4eadd", "#0e1d14"),
+        "card":      ("#f3faf6", "#1a2b21"),
+        "card-tl":   ("rgba(243,250,246,0.85)", "rgba(26,43,33,0.85)"),
+        "border":    ("#a4ccb4", "#284835"),
+        "divider":   ("rgba(13,38,23,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(13,38,23,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#b9dac6", "#21382a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    "Tím chàm": {
+        "bg":        ("#d9d4ea", "#110e1d"),
+        "card":      ("#f5f3fa", "#1d1a2b"),
+        "card-tl":   ("rgba(245,243,250,0.85)", "rgba(29,26,43,0.85)"),
+        "border":    ("#aca4cc", "#2e2848"),
+        "divider":   ("rgba(18,13,38,0.14)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(18,13,38,0.2)", "rgba(255,255,255,0.17)"),
+        "chip":      ("#c0b9da", "#262138"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#211c13", "#f1ece0"),
+        "text-on-bg-2": ("#6f6650", "#b3a688"),
+    },
+    # 4 bảng dưới đây: "nền đậm cố định" -- bg ĐẬM ở CẢ 2 cột (khác 10 bảng "nền nhạt" trên -- bg chỉ
     # đậm khi IS_DARK), card/border/chip/divider theo công thức riêng (thẻ sáng/tối theo IS_DARK
     # như mọi bảng khác), text-on-bg/text-on-bg-2 SÁNG CỐ ĐỊNH cả 2 cột (bg luôn đậm nên chữ trên
     # nền luôn cần sáng) -- xem BG_PALETTES_DARK_BG ngay dưới.
@@ -323,22 +409,121 @@ BG_PALETTES = {
         "text-on-bg":   ("#f1ebe9", "#f1ebe9"),
         "text-on-bg-2": ("#c2afa8", "#c2afa8"),
     },
+    # 6 bảng "nền đậm cố định" MỚI (đợt mở rộng 9 -> 20 màu) -- CÙNG ĐÚNG công thức HSL của 4 bảng
+    # trên (bg: S35.8%/L15.9% cố định cả 2 cột; card: S25%/L96.9% sáng, S21.4%/L11% tối; border:
+    # S16.9%/L84.9% sáng, S19.6%/L18% tối; chip: S22%/L92% sáng, S22.4%/L13.1% tối; divider/
+    # divider-2 = HSL(hue, 51.2%, 8%) ở cột sáng, trắng cố định ở cột tối; text-on-bg: HSL(hue,
+    # 22.2%, 92.9%) cố định cả 2 cột; text-on-bg-2: HSL(hue, 17.6%, 71%) cố định cả 2 cột), CHỈ đổi
+    # hue -- 6 hue mới lấp khoảng trống giữa 4 hue cũ (195° Lam thẳm/25° Nâu hạt dẻ/220° Xám than -
+    # gam xám trung tính/15° Đất nung) để 10 bảng đậm cũng phủ gần đều quanh vòng màu như 10 bảng
+    # nhạt ở trên.
+    "Ô liu": {
+        "bg":        ("#31371a", "#31371a"),
+        "card":      ("#f8f9f5", "#202216"),
+        "card-tl":   ("rgba(248,249,245,0.85)", "rgba(32,34,22,0.85)"),
+        "border":    ("#dcdfd2", "#333725"),
+        "divider":   ("rgba(27,31,10,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(27,31,10,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#edefe6", "#26291a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#eff1e9", "#eff1e9"),
+        "text-on-bg-2": ("#bdc2a8", "#bdc2a8"),
+    },
+    "Lục rừng": {
+        "bg":        ("#20371a", "#20371a"),
+        "card":      ("#f6f9f5", "#182216"),
+        "card-tl":   ("rgba(246,249,245,0.85)", "rgba(24,34,22,0.85)"),
+        "border":    ("#d5dfd2", "#293725"),
+        "divider":   ("rgba(14,31,10,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(14,31,10,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e8efe6", "#1d291a"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#eaf1e9", "#eaf1e9"),
+        "text-on-bg-2": ("#adc2a8", "#adc2a8"),
+    },
+    "Lục bảo": {
+        "bg":        ("#1a3726", "#1a3726"),
+        "card":      ("#f5f9f7", "#16221b"),
+        "card-tl":   ("rgba(245,249,247,0.85)", "rgba(22,34,27,0.85)"),
+        "border":    ("#d2dfd7", "#25372c"),
+        "divider":   ("rgba(10,31,18,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(10,31,18,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e6efea", "#1a2920"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#e9f1ec", "#e9f1ec"),
+        "text-on-bg-2": ("#a8c2b2", "#a8c2b2"),
+    },
+    "Chàm than": {
+        "bg":        ("#201a37", "#201a37"),
+        "card":      ("#f6f5f9", "#181622"),
+        "card-tl":   ("rgba(246,245,249,0.85)", "rgba(24,22,34,0.85)"),
+        "border":    ("#d5d2df", "#292537"),
+        "divider":   ("rgba(14,10,31,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(14,10,31,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#e8e6ef", "#1d1a29"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#eae9f1", "#eae9f1"),
+        "text-on-bg-2": ("#ada8c2", "#ada8c2"),
+    },
+    "Tím than": {
+        "bg":        ("#311a37", "#311a37"),
+        "card":      ("#f8f5f9", "#201622"),
+        "card-tl":   ("rgba(248,245,249,0.85)", "rgba(32,22,34,0.85)"),
+        "border":    ("#dcd2df", "#332537"),
+        "divider":   ("rgba(27,10,31,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(27,10,31,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#ede6ef", "#261a29"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#efe9f1", "#efe9f1"),
+        "text-on-bg-2": ("#bda8c2", "#bda8c2"),
+    },
+    "Rượu vang": {
+        "bg":        ("#371a2b", "#371a2b"),
+        "card":      ("#f9f5f7", "#22161d"),
+        "card-tl":   ("rgba(249,245,247,0.85)", "rgba(34,22,29,0.85)"),
+        "border":    ("#dfd2da", "#372530"),
+        "divider":   ("rgba(31,10,22,0.13)", "rgba(255,255,255,0.12)"),
+        "divider-2": ("rgba(31,10,22,0.19)", "rgba(255,255,255,0.2)"),
+        "chip":      ("#efe6eb", "#291a23"),
+        "text":      ("#211c13", "#f1ece0"),
+        "text-2":    ("#6f6650", "#b3a688"),
+        "text-3":    ("#a39877", "#857a5f"),
+        "text-4":    ("#cabf9d", "#4f483a"),
+        "text-on-bg":   ("#f1e9ee", "#f1e9ee"),
+        "text-on-bg-2": ("#c2a8b8", "#c2a8b8"),
+    },
 }
 
-# 4 bảng "nền đậm cố định" (bg đậm ở CẢ 2 cột, xem chú thích trong BG_PALETTES) -- billboard
+# 10 bảng "nền đậm cố định" (bg đậm ở CẢ 2 cột, xem chú thích trong BG_PALETTES) -- billboard
 # (render_period_billboard()/_render_today_billboard()) PHẢI đọc nền SÁNG + chữ TỐI như 1 thẻ
 # thật, KHÔNG hoà theo màu nền trang đậm phía sau (xác nhận với người dùng: billboard vẫn là
 # "light theme" y hệt các bảng nền nhạt, chỉ có nền NGOÀI thẻ/billboard mới được phép đậm) -- xem
 # _billboard_bg/_billboard_backdrop ngay dưới _root_vars.
-BG_PALETTES_DARK_BG = {"Lam thẳm", "Nâu hạt dẻ", "Xám than", "Đất nung"}
+BG_PALETTES_DARK_BG = {"Lam thẳm", "Nâu hạt dẻ", "Xám than", "Đất nung",
+                        "Ô liu", "Lục rừng", "Lục bảo", "Chàm than", "Tím than", "Rượu vang"}
 
 # divider-on-bg: token riêng cho hoạ tiết nền (BG_PRESETS, vẽ trực tiếp lên var(--bg) qua
 # --bg-image) -- KHÔNG dùng chung "divider" được nữa vì "divider" thiết kế cho viền/kẻ BÊN TRONG
-# card (thẻ luôn sáng, xem chú thích trên BG_PALETTES), cột "light" của nó là mực TỐI. Với 4 bảng
+# card (thẻ luôn sáng, xem chú thích trên BG_PALETTES), cột "light" của nó là mực TỐI. Với 10 bảng
 # BG_PALETTES_DARK_BG, var(--bg) luôn ĐẬM bất kể IS_DARK -- dùng nguyên "divider" ở light theme sẽ
 # ra mực tối vẽ trên nền đậm, hoạ tiết gần như vô hình (bug thật, ảnh chụp người dùng gửi ở bảng
 # nền đậm cố định thời bộ cũ). Lấy nguyên cột "dark" của divider (đã là màu sáng, tương phản tốt
-# trên nền đậm) cho CẢ 2 cột. 5 bảng "nền nhạt" còn lại giữ y hệt divider gốc -- không đổi hành vi cũ.
+# trên nền đậm) cho CẢ 2 cột. 10 bảng "nền nhạt" còn lại giữ y hệt divider gốc -- không đổi hành vi cũ.
 for _pal_name, _pal in BG_PALETTES.items():
     _pal["divider-on-bg"] = ((_pal["divider"][1], _pal["divider"][1]) if _pal_name in BG_PALETTES_DARK_BG
                               else _pal["divider"])
