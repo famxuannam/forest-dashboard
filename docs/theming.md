@@ -57,8 +57,10 @@ nhau và với accent:
    như accent. 10/20 bảng là "nền đậm cố định" (`BG_PALETTES_DARK_BG`, `bg` đậm ở CẢ 2 cột thay vì
    chỉ đậm khi dark mode) — xem chú thích chi tiết 2 công thức HSL (nền nhạt/nền đậm) ngay trên
    `BG_PALETTES` trong `ui_catalog.py`.
-2. **Kiểu thẻ** (`CARD_STYLES`, setting `card_style`) — 3 token CSS `--card-radius`/
-   `--card-border-w`/`--card-shadow`, áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
+2. **Kiểu thẻ** (`CARD_STYLES`, 20 lựa chọn xếp lưới 4x5, setting `card_style`) — 3 token CSS
+   `--card-radius`/`--card-border-w`/`--card-shadow` (6/20 kiểu dùng thêm 1 trong 3 token phụ
+   `bg_override`/`backdrop`/`border_image`, xem chú thích trên `CARD_STYLES` trong
+   `ui_catalog.py`), áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
    "thẻ nội dung" (nền `var(--card)` + viền `var(--border)` + bo góc + đổ bóng nhẹ) PHẢI dùng 3
    token này thay vì hard-code `border-radius:10px`/`border:1px solid var(--border)`/
    `box-shadow:0 1px 1px rgba(0,0,0,0.02)` — nếu không, thẻ đó sẽ "quên" đổi khi người dùng chọn

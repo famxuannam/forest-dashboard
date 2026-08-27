@@ -7202,9 +7202,11 @@ _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.item
 # trục độc lập với bảng màu nền, xem CARD_STYLES/CARD_DENSITY. Áp cho nhóm "thẻ nội dung chung"
 # (.sec-card, .dtl-card, container chuẩn...) -- KHÔNG áp --card-pad/--card-gap cho
 # thẻ có padding tinh chỉnh riêng theo nội dung đặc thù (.quotes-card, .dtl-track...).
-# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho "Kính mờ"/"Viền
-# gradient" (xem CARD_STYLES) -- mặc định var(--card)/none/none, vô hại với 6 kiểu còn lại. Áp qua
-# 1 rule gộp riêng ngay dưới đây (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
+# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho 6/20 kiểu cần hơn 3
+# token gốc ("Viền nhấn"/"Viền chuyển sắc" dùng border_image, "Nền mờ nhẹ"/"Kính mờ"/"Nền chip"/
+# "Nền chuyển sắc" dùng bg_override, "Kính mờ" dùng thêm cả backdrop -- xem CARD_STYLES) -- mặc
+# định var(--card)/none/none, vô hại với 14 kiểu còn lại. Áp qua 1 rule gộp riêng ngay dưới đây
+# (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
 _card_style_vars = (
     f"--card-radius:{CARD_STYLES[CARD_STYLE]['radius']};"
     f"--card-border-w:{CARD_STYLES[CARD_STYLE]['border_w']};"
@@ -9080,16 +9082,17 @@ _MAIN_CSS = """
         #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
     }
 
-    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- "Kính mờ"/"Viền gradient" (xem CARD_STYLES, _card_style_vars)
-       cần thêm background/backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc,
-       nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
+    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- 6/20 kiểu ("Viền nhấn"/"Viền chuyển sắc"/"Nền mờ nhẹ"/"Kính
+       mờ"/"Nền chip"/"Nền chuyển sắc", xem CARD_STYLES, _card_style_vars) cần thêm background/
+       backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc, nhưng hàng chục khối
+       thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
        sec-card/quotes-card/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
        khối tự viết riêng "background: var(--card); border: var(--card-border-w) solid
        var(--border);" theo TỪNG rule, không có 1 điểm nối chung để đổi background-image/backdrop.
        Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
        soát ở đây, đặt SAU CÙNG trong cascade (cuối _MAIN_CSS) nên tự thắng theo thứ tự nguồn dù
        cùng độ đặc hiệu -- 3 token --card-bg-override/--card-backdrop/--card-border-image mặc định
-       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 6 kiểu thẻ còn lại,
+       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 14 kiểu thẻ còn lại,
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
     .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card, .sb-widget,
@@ -10259,7 +10262,7 @@ def _render_tuybien_giao_dien():
                     f"border-radius:10px !important; width:100% !important; height:auto !important; "
                     f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
                     f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BG_PRESETS.items()), 4, lambda n, c: n == BG_STYLE,
+        _tb_axis_grid(list(BG_PRESETS.items()), 5, lambda n, c: n == BG_STYLE,
                       "bg_style", "bg_sw", _bgpat_css)
 
     sec_chapter("tbgd-ch4", 4, "Kiểu thẻ", lead="Mỗi kiểu là một chất liệu bề mặt khác nhau.")
@@ -10272,7 +10275,7 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(CARD_STYLES.items()), 4, lambda n, c: n == CARD_STYLE,
+        _tb_axis_grid(list(CARD_STYLES.items()), 5, lambda n, c: n == CARD_STYLE,
                       "card_style", "cardstyle_sw", _cs_css)
 
     sec_chapter("tbgd-ch5", 5, "Độ rộng nội dung",

@@ -99,10 +99,23 @@ ACCENT_PRESETS = {
 # KHÔNG còn radial-gradient rải rác kiểu hữu cơ như bộ trước) -- 2 nhóm kỹ thuật hoàn toàn khác bộ
 # cũ (bộ cũ chủ yếu radial-gradient rải rác + vài lớp lệch góc nhẹ mô phỏng vân tự nhiên). "Lưới
 # điểm" là mặc định mới, thay "Sương mai" -- xem fallback BG_STYLE bên dưới.
+#
+# Đợt mở rộng thứ 3 (8 -> 20 kiểu, xếp lưới 4x5, cùng đợt với ACCENT_PRESETS/BG_PALETTES 8/9->20):
+# giữ NGUYÊN 8 kiểu gốc, thêm 12 kiểu mới CÙNG 4 kỹ thuật CSS đã có (radial-gradient chấm/
+# (repeating-)linear-gradient kẻ 1 lớp/lưới 2 lớp/lưới tam giác 3 lớp), chỉ đổi mật độ/góc/chu kỳ
+# để lấp đủ biến thể còn thiếu của mỗi kỹ thuật (KHÔNG thêm kỹ thuật CSS mới) -- xếp theo nhóm
+# trong dict để lưới 4x5 đọc mượt theo hàng: hàng 1 = họ chấm (Trơn + 4 mật độ), hàng 2 = họ kẻ
+# ngang/dọc, hàng 3 = họ kẻ chéo + Ô vuông, hàng 4 = họ lưới 2-3 lớp còn lại.
 BG_PRESETS = {
     "Trơn": {
         "image": "none",
         "size": "auto",
+    },
+    "Chấm li ti": {
+        # Cùng công thức radial-gradient của "Lưới điểm" nhưng chấm nhỏ hơn + ô dày hơn -- mật độ
+        # dày nhất trong họ chấm.
+        "image": "radial-gradient(0.9px 0.9px at 1px 1px, var(--divider-on-bg), transparent)",
+        "size": "14px 14px",
     },
     "Lưới điểm": {
         # 1 lớp radial-gradient duy nhất, chấm nhỏ đều tăm tắp theo lưới vuông -- khác hẳn "Sương
@@ -116,12 +129,10 @@ BG_PRESETS = {
         "image": "radial-gradient(2.6px 2.6px at 1px 1px, var(--divider-on-bg), transparent)",
         "size": "46px 46px",
     },
-    "Ô vuông": {
-        # 2 lớp linear-gradient kẻ dọc + ngang mảnh -> lưới ô vuông kiểu giấy kẻ ly, công thức CSS
-        # "graph paper" kinh điển, KHÔNG có trong bộ cũ (bộ cũ toàn hoạ tiết chấm/kẻ chéo/vòng tròn).
-        "image": ("linear-gradient(var(--divider-on-bg) 1px, transparent 1px), "
-                   "linear-gradient(90deg, var(--divider-on-bg) 1px, transparent 1px)"),
-        "size": "42px 42px",
+    "Chấm thưa": {
+        # Cùng công thức, chấm to nhất + ô thưa nhất trong họ chấm -- mật độ đối lập "Chấm li ti".
+        "image": "radial-gradient(3.4px 3.4px at 1px 1px, var(--divider-on-bg), transparent)",
+        "size": "64px 64px",
     },
     "Kẻ ngang": {
         # 1 lớp repeating-linear-gradient ngang (0deg mặc định) -> vạch kẻ ngang mảnh đều, kiểu
@@ -129,11 +140,63 @@ BG_PRESETS = {
         "image": "repeating-linear-gradient(var(--divider-on-bg) 0 1px, transparent 1px 17px)",
         "size": "auto",
     },
+    "Kẻ ngang thưa": {
+        # Cùng "Kẻ ngang" (0deg), chu kỳ gấp đôi -- mật độ thưa hơn.
+        "image": "repeating-linear-gradient(var(--divider-on-bg) 0 1px, transparent 1px 34px)",
+        "size": "auto",
+    },
+    "Kẻ dọc": {
+        # Cùng công thức "Kẻ ngang" nhưng xoay 90deg -- cặp hướng ngang/dọc như "Ô vuông" đã ghép 2
+        # lớp, ở đây tách riêng từng hướng làm 2 lựa chọn độc lập.
+        "image": "repeating-linear-gradient(90deg, var(--divider-on-bg) 0 1px, transparent 1px 17px)",
+        "size": "auto",
+    },
+    "Kẻ dọc thưa": {
+        # Cùng "Kẻ dọc", chu kỳ gấp đôi -- mật độ thưa hơn.
+        "image": "repeating-linear-gradient(90deg, var(--divider-on-bg) 0 1px, transparent 1px 34px)",
+        "size": "auto",
+    },
     "Kẻ chéo": {
         # 1 lớp vạch chéo 60deg mảnh, chu kỳ thưa (26px) -- góc/chu kỳ khác hẳn "Đường mòn" cũ
         # (45deg, đoạn đứt 8px) để không lặp lại cảm giác cũ dù cùng kỹ thuật repeating-linear.
         "image": "repeating-linear-gradient(60deg, var(--divider-on-bg) 0 1px, transparent 1px 26px)",
         "size": "auto",
+    },
+    "Kẻ chéo trái": {
+        # Cùng "Kẻ chéo" nhưng lật hướng (-60deg) -- cặp chéo phải/trái như Kẻ ngang/dọc ở trên.
+        "image": "repeating-linear-gradient(-60deg, var(--divider-on-bg) 0 1px, transparent 1px 26px)",
+        "size": "auto",
+    },
+    "Kẻ chéo 45": {
+        # Cùng kỹ thuật, góc 45deg (dốc hơn 60deg) -- 1 góc chéo khác trong họ kẻ chéo.
+        "image": "repeating-linear-gradient(45deg, var(--divider-on-bg) 0 1px, transparent 1px 24px)",
+        "size": "auto",
+    },
+    "Kẻ chéo 30": {
+        # Cùng kỹ thuật, góc 30deg (thoải hơn 60deg) -- góc chéo còn lại của họ, hoàn thiện đủ 3
+        # mức góc (30/45/60deg) cho hoạ tiết kẻ chéo.
+        "image": "repeating-linear-gradient(30deg, var(--divider-on-bg) 0 1px, transparent 1px 20px)",
+        "size": "auto",
+    },
+    "Ô vuông": {
+        # 2 lớp linear-gradient kẻ dọc + ngang mảnh -> lưới ô vuông kiểu giấy kẻ ly, công thức CSS
+        # "graph paper" kinh điển, KHÔNG có trong bộ cũ (bộ cũ toàn hoạ tiết chấm/kẻ chéo/vòng tròn).
+        "image": ("linear-gradient(var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(90deg, var(--divider-on-bg) 1px, transparent 1px)"),
+        "size": "42px 42px",
+    },
+    "Ô vuông nhỏ": {
+        # Cùng công thức "Ô vuông", ô dày hơn hẳn -- mật độ lưới vuông khác.
+        "image": ("linear-gradient(var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(90deg, var(--divider-on-bg) 1px, transparent 1px)"),
+        "size": "24px 24px",
+    },
+    "Ô chữ nhật": {
+        # Cùng công thức "Ô vuông" nhưng kích thước ô KHÔNG đều 2 trục (24x48) -- lưới chữ nhật
+        # thay vì vuông, biến thể duy nhất đổi tỉ lệ ô thay vì chỉ đổi mật độ đều.
+        "image": ("linear-gradient(var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(90deg, var(--divider-on-bg) 1px, transparent 1px)"),
+        "size": "24px 48px",
     },
     "Kim cương": {
         # 2 lớp linear-gradient chéo 45/-45deg giao nhau -> lưới hình thoi (kim cương/argyle mảnh),
@@ -143,6 +206,12 @@ BG_PRESETS = {
                    "linear-gradient(-45deg, var(--divider-on-bg) 1px, transparent 1px)"),
         "size": "34px 34px",
     },
+    "Kim cương nhỏ": {
+        # Cùng công thức "Kim cương", ô dày hơn -- mật độ lưới thoi khác.
+        "image": ("linear-gradient(45deg, var(--divider-on-bg) 1px, transparent 1px), "
+                   "linear-gradient(-45deg, var(--divider-on-bg) 1px, transparent 1px)"),
+        "size": "20px 20px",
+    },
     "Vân lưới": {
         # 3 lớp repeating-linear-gradient mảnh ở 0/60/120deg giao nhau -> lưới tam giác/lục giác
         # mặt phẳng (công thức "triangular grid" kinh điển), phức tạp/dày đặc hơn hẳn "Kim cương"
@@ -151,6 +220,13 @@ BG_PRESETS = {
         "image": ("repeating-linear-gradient(0deg, var(--divider-on-bg) 0 1px, transparent 1px 30px), "
                    "repeating-linear-gradient(60deg, var(--divider-on-bg) 0 1px, transparent 1px 30px), "
                    "repeating-linear-gradient(120deg, var(--divider-on-bg) 0 1px, transparent 1px 30px)"),
+        "size": "auto",
+    },
+    "Vân lưới thưa": {
+        # Cùng công thức "Vân lưới", chu kỳ gấp rưỡi -- mật độ thưa hơn cho lưới tam giác.
+        "image": ("repeating-linear-gradient(0deg, var(--divider-on-bg) 0 1px, transparent 1px 50px), "
+                   "repeating-linear-gradient(60deg, var(--divider-on-bg) 0 1px, transparent 1px 50px), "
+                   "repeating-linear-gradient(120deg, var(--divider-on-bg) 0 1px, transparent 1px 50px)"),
         "size": "auto",
     },
 }
@@ -546,21 +622,64 @@ for _pal_name, _pal in BG_PALETTES.items():
 # thật), "Đổ tầng" (3 lớp box-shadow chồng xa dần, khác mọi shadow đơn lớp trước đó), "Khắc chìm"
 # (2 lớp inset tạo cảm giác khắc/chạm nổi ngược, khác "Đóng dấu" cũ chỉ 1 lớp inset), "Hào quang
 # nhấn" (viền mảnh + quầng sáng màu Accent lan toả quanh thẻ, hiệu ứng CHƯA từng có ở 2 bộ trước).
+#
+# Đợt mở rộng thứ 3 (8 -> 20 kiểu, xếp lưới 4x5, cùng đợt với ACCENT_PRESETS/BG_PALETTES/BG_PRESETS
+# 8/9->20): giữ NGUYÊN 8 kiểu gốc (kể cả "Hào quang nhấn" mặc định), thêm 12 kiểu mới VẪN dùng
+# ĐÚNG 6 khoá cơ chế cũ (radius/border_w/shadow + bg_override/backdrop/border_image tuỳ chọn),
+# KHÔNG thêm khoá/CSS mới -- mỗi kiểu mới lấp 1 khoảng trống rõ ràng trong không gian phối hợp
+# radius/viền/bóng/nền mà 8 kiểu gốc chưa chạm tới (góc vuông tuyệt đối, viền dày, bóng nhẹ/rất
+# sâu, viền đôi qua box-shadow ring, viền gradient hướng khác, nền chip/nền gradient thay nền
+# trắng, kính mờ THẬT có backdrop-filter -- token này có sẵn từ đầu nhưng CHƯA kiểu nào dùng tới,
+# bóng khối phẳng kiểu neubrutalism, viền nổi/bevel).
 CARD_STYLES = {
     "Phẳng lì": {
         "radius": "4px",
         "border_w": "0px",
         "shadow": "none",
     },
+    "Vuông nhọn": {
+        # Góc vuông TUYỆT ĐỐI (radius 0, khác "Phẳng lì" vẫn còn bo 4px), có viền mảnh -- 1 đầu
+        # thái cực khác trong trục "độ bo góc" mà bộ gốc chưa chạm tới.
+        "radius": "0px",
+        "border_w": "1px",
+        "shadow": "none",
+    },
+    "Bo vừa": {
+        # Mức bo góc TRUNG GIAN (8px) giữa "Phẳng lì" (4px) và "Viên thuốc" (24px), kèm bóng rất
+        # nhẹ -- lấp khoảng trống giữa 2 thái cực bo góc của bộ gốc.
+        "radius": "8px",
+        "border_w": "1px",
+        "shadow": "0 1px 3px rgba(0,0,0,0.05)",
+    },
     "Viên thuốc": {
         "radius": "24px",
         "border_w": "1px",
         "shadow": "0 1px 2px rgba(0,0,0,0.04)",
     },
+    "Viền dày": {
+        # border_w 3px (dày gấp 3 mọi kiểu có viền khác trong bộ gốc, tối đa trước đó là 2px ở
+        # "Viền nhấn") -- nhấn viền bằng ĐỘ DÀY thay vì màu/gradient.
+        "radius": "6px",
+        "border_w": "3px",
+        "shadow": "none",
+    },
     "Bóng sâu": {
         "radius": "14px",
         "border_w": "0px",
         "shadow": "0 12px 32px rgba(0,0,0,0.16)",
+    },
+    "Bóng nhẹ": {
+        # 1 lớp shadow đơn NHẸ hơn hẳn "Bóng sâu" -- lấp mức "hơi nổi" còn thiếu giữa "Phẳng lì"
+        # (không bóng) và "Bóng sâu" (bóng đậm).
+        "radius": "12px",
+        "border_w": "0px",
+        "shadow": "0 2px 8px rgba(0,0,0,0.07)",
+    },
+    "Lơ lửng": {
+        # Bóng đơn lớn/đậm hơn CẢ "Bóng sâu" -- thái cực "nổi cao nhất" trong trục độ sâu bóng.
+        "radius": "18px",
+        "border_w": "0px",
+        "shadow": "0 24px 48px rgba(0,0,0,0.22)",
     },
     "Viền nhấn": {
         "radius": "10px",
@@ -568,21 +687,81 @@ CARD_STYLES = {
         "shadow": "none",
         "border_image": "linear-gradient(var(--accent), var(--accent)) 1",
     },
+    "Viền chuyển sắc": {
+        # border_image dùng dải gradient Accent -> trong suốt (khác "Viền nhấn" ĐẶC 1 màu, và khác
+        # hẳn "Viền gradient" đã retired ở bộ 2 -- hướng 135deg + điểm dừng transparent riêng, chưa
+        # dùng ở đợt nào trước).
+        "radius": "12px",
+        "border_w": "2px",
+        "shadow": "none",
+        "border_image": "linear-gradient(135deg, var(--accent), transparent) 1",
+    },
+    "Viền đôi": {
+        # Ring viền kép dựng thuần bằng box-shadow (2 lớp 0-blur offset khác bán kính) -- viền
+        # NGOÀI border_w gốc còn có 1 vòng viền phụ tách rời bằng khe hở var(--card), hiệu ứng
+        # CHƯA kiểu nào trong bộ gốc dùng box-shadow để vẽ viền thay vì đổ bóng.
+        "radius": "10px",
+        "border_w": "1px",
+        "shadow": "0 0 0 4px var(--card), 0 0 0 5px var(--border)",
+    },
     "Nền mờ nhẹ": {
         "radius": "14px",
         "border_w": "1px",
         "shadow": "0 4px 16px rgba(0,0,0,0.06)",
         "bg_override": "var(--card-tl)",
     },
+    "Kính mờ": {
+        # bg_override var(--card-tl) GIỐNG "Nền mờ nhẹ" nhưng BẬT THÊM backdrop-filter blur+saturate
+        # -- token "backdrop" tồn tại sẵn trong cơ chế 3+3 từ đầu nhưng CHƯA kiểu nào trong 8 kiểu
+        # gốc thực sự dùng tới, đây là hiệu ứng kính mờ THẬT (frosted glass) đầu tiên của bộ 3.
+        "radius": "14px",
+        "border_w": "1px",
+        "shadow": "0 4px 16px rgba(0,0,0,0.08)",
+        "bg_override": "var(--card-tl)",
+        "backdrop": "blur(12px) saturate(1.4)",
+    },
+    "Nền chip": {
+        # bg_override var(--chip) -- thay nền thẻ bằng đúng tông "chip" (đậm hơn card 1 bậc) thay
+        # vì lớp bán trong suốt (--card-tl) như 2 kiểu trên -- 1 bề mặt ĐẶC khác màu, không phải
+        # hiệu ứng trong suốt/kính.
+        "radius": "10px",
+        "border_w": "1px",
+        "shadow": "none",
+        "bg_override": "var(--chip)",
+    },
+    "Nền chuyển sắc": {
+        # bg_override nhận thẳng 1 gradient (background là shorthand, chấp nhận gradient) thay vì
+        # 1 màu/token đơn -- card -> card-tl chéo 160deg, hiệu ứng bề mặt 2 tông CHƯA kiểu nào
+        # trong 2 bộ trước dùng.
+        "radius": "12px",
+        "border_w": "1px",
+        "shadow": "none",
+        "bg_override": "linear-gradient(160deg, var(--card) 0%, var(--card-tl) 100%)",
+    },
     "Đổ tầng": {
         "radius": "10px",
         "border_w": "1px",
         "shadow": "0 1px 1px rgba(0,0,0,0.05), 0 4px 8px rgba(0,0,0,0.05), 0 12px 24px rgba(0,0,0,0.05)",
     },
+    "Bóng khối": {
+        # Shadow offset PHẲNG không blur (kiểu "neubrutalism"/sticker) thay vì mọi shadow mờ dần
+        # trong bộ gốc -- cạnh sắc, cảm giác thẻ "dán chồng" lên 1 khối đặc phía sau.
+        "radius": "8px",
+        "border_w": "1px",
+        "shadow": "3px 3px 0 var(--border)",
+    },
     "Khắc chìm": {
         "radius": "10px",
         "border_w": "0px",
         "shadow": "inset 0 1px 4px rgba(0,0,0,0.18), inset 0 -1px 1px rgba(255,255,255,0.35)",
+    },
+    "Viền nổi": {
+        # 1 lớp inset sáng mảnh (bevel/highlight cạnh trên) + 1 lớp shadow đổ ngoài nhẹ -- kết hợp
+        # NGƯỢC "Khắc chìm" (khắc chìm dùng 2 lớp inset, không lớp nào đổ RA ngoài) -- cảm giác nổi
+        # nhẹ có viền sáng thay vì lõm.
+        "radius": "10px",
+        "border_w": "1px",
+        "shadow": "inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.08)",
     },
     "Hào quang nhấn": {          # mặc định
         "radius": "12px",
