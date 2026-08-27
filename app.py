@@ -24,7 +24,7 @@ from streamlit_quill import st_quill
 from supabase import create_client
 from caldav import DAVClient
 from local_dev_data import LocalDevSupabase
-from ui_catalog import VN_DAYS, VN_MONTHS, VN_DAYS_ABBR, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CARD_DENSITY, CONTENT_WIDTHS, BODY_FONTS
+from ui_catalog import VN_DAYS, VN_MONTHS, VN_DAYS_ABBR, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
 from import_parsers import parse_dayone_json, parse_forest_csv, parse_kindle_clippings, parse_reading_log_shortcut_csv
 
 _LOCAL_DEV_REQUESTED = os.getenv("FOREST_LOCAL_DEV", "").strip().lower() in {"1", "true", "yes"}
@@ -364,11 +364,6 @@ _card_style_name = _cached_settings().get("card_style", "Hào quang nhấn")
 if _card_style_name not in CARD_STYLES:
     _card_style_name = "Hào quang nhấn"
 CARD_STYLE = _card_style_name
-
-_card_density_name = _cached_settings().get("card_density", "Vừa")
-if _card_density_name not in CARD_DENSITY:
-    _card_density_name = "Vừa"
-CARD_DENSITY_NAME = _card_density_name
 
 # "Inter" là mặc định mới (đợt đổi bộ Font thân chữ thứ 2, xác nhận với người dùng) -- thay
 # "Manrope" cũ. Manrope KHÔNG còn là lựa chọn trong BODY_FONTS (đã tách riêng làm font khung vỏ cố
@@ -7198,13 +7193,19 @@ _QUOTE_FONT_FACE = "".join(
 # thích BG_PALETTES) để 3 bảng đậm mới (Bầu trời sao/Rừng đêm) tự mang màu chữ sáng phù hợp.
 _TOK = dict(BG_PALETTES[BG_PALETTE])
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
-# --card-radius/--card-border-w/--card-shadow (kiểu thẻ) và --card-pad/--card-gap (mật độ) -- 2
-# trục độc lập với bảng màu nền, xem CARD_STYLES/CARD_DENSITY. Áp cho nhóm "thẻ nội dung chung"
-# (.sec-card, .dtl-card, container chuẩn...) -- KHÔNG áp --card-pad/--card-gap cho
-# thẻ có padding tinh chỉnh riêng theo nội dung đặc thù (.quotes-card, .dtl-track...).
-# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho "Kính mờ"/"Viền
-# gradient" (xem CARD_STYLES) -- mặc định var(--card)/none/none, vô hại với 6 kiểu còn lại. Áp qua
-# 1 rule gộp riêng ngay dưới đây (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
+# --card-radius/--card-border-w/--card-shadow (kiểu thẻ, xem CARD_STYLES) -- trục độc lập với
+# bảng màu nền. Áp cho nhóm "thẻ nội dung chung" (.sec-card, .dtl-card, container chuẩn...).
+# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho 6/20 kiểu cần hơn 3
+# token gốc ("Viền nhấn"/"Viền chuyển sắc" dùng border_image, "Nền mờ nhẹ"/"Kính mờ"/"Nền chip"/
+# "Nền chuyển sắc" dùng bg_override, "Kính mờ" dùng thêm cả backdrop -- xem CARD_STYLES) -- mặc
+# định var(--card)/none/none, vô hại với 14 kiểu còn lại. Áp qua 1 rule gộp riêng ngay dưới đây
+# (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
+# --card-pad/--card-gap: KHÔNG còn là 1 trục cá nhân hoá (trục "Mật độ bố cục"/CARD_DENSITY đã bỏ
+# theo yêu cầu người dùng) -- 2 hằng số CỐ ĐỊNH khớp đúng giá trị "Vừa" cũ, giữ nguyên dạng token
+# CSS (thay vì viết literal rải khắp file) vì rất nhiều rule card gốc đã tham chiếu var(--card-pad)/
+# var(--card-gap) trực tiếp -- đổi ngược lại literal ở từng rule rủi ro sót hơn nhiều so với giữ 2
+# token với giá trị cố định. KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
+# (.quotes-card, .dtl-track...).
 _card_style_vars = (
     f"--card-radius:{CARD_STYLES[CARD_STYLE]['radius']};"
     f"--card-border-w:{CARD_STYLES[CARD_STYLE]['border_w']};"
@@ -7212,8 +7213,8 @@ _card_style_vars = (
     f"--card-bg-override:{CARD_STYLES[CARD_STYLE].get('bg_override', 'var(--card)')};"
     f"--card-backdrop:{CARD_STYLES[CARD_STYLE].get('backdrop', 'none')};"
     f"--card-border-image:{CARD_STYLES[CARD_STYLE].get('border_image', 'none')};"
-    f"--card-pad:{CARD_DENSITY[CARD_DENSITY_NAME]['pad']};"
-    f"--card-gap:{CARD_DENSITY[CARD_DENSITY_NAME]['gap']};"
+    f"--card-pad:16px 18px;"
+    f"--card-gap:10px 0;"
 )
 # Billboard (render_period_billboard()/_render_today_billboard()) mặc định là 1 lớp "kính mờ"
 # BÁN TRONG SUỐT (nền rgba(--accent-rgb,0.10) + backdrop-filter blur, xem rule .st-key-*_billboard)
@@ -9080,16 +9081,17 @@ _MAIN_CSS = """
         #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
     }
 
-    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- "Kính mờ"/"Viền gradient" (xem CARD_STYLES, _card_style_vars)
-       cần thêm background/backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc,
-       nhưng hàng chục khối thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
+    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- 6/20 kiểu ("Viền nhấn"/"Viền chuyển sắc"/"Nền mờ nhẹ"/"Kính
+       mờ"/"Nền chip"/"Nền chuyển sắc", xem CARD_STYLES, _card_style_vars) cần thêm background/
+       backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc, nhưng hàng chục khối
+       thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
        sec-card/quotes-card/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
        khối tự viết riêng "background: var(--card); border: var(--card-border-w) solid
        var(--border);" theo TỪNG rule, không có 1 điểm nối chung để đổi background-image/backdrop.
        Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
        soát ở đây, đặt SAU CÙNG trong cascade (cuối _MAIN_CSS) nên tự thắng theo thứ tự nguồn dù
        cùng độ đặc hiệu -- 3 token --card-bg-override/--card-backdrop/--card-border-image mặc định
-       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 6 kiểu thẻ còn lại,
+       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 14 kiểu thẻ còn lại,
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
     .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card, .sb-widget,
@@ -10156,19 +10158,18 @@ def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for
 def _render_tuybien_giao_dien():
     """Sub-page "Giao diện" của tab Tuỳ biến -- theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app
     (Báo cáo/Sách/Gundam): billboard mở đầu (KHÔNG phải panel 2 cột riêng như bản mockup .dc.html
-    gốc -- xác nhận với người dùng đổi lại cho nhất quán) + chip TOC nhảy neo + chuỗi 7 chương
-    sec_chapter() bên dưới, mỗi chương 1 trục cá nhân hoá độc lập. Billboard ĐÓNG LUÔN VAI TRÒ
-    "xem trước trực tiếp" -- không dựng panel/state giả lập riêng như bản .dc.html gốc (component
-    React, state độc lập với trang thật): ở đây toàn trang ĐÃ tự re-render đúng token đang chọn
-    mỗi lần bấm 1 lựa chọn (save_setting() + st.rerun()), nên billboard chỉ cần đọc thẳng
-    ACCENT/BG_PALETTE/... hiện hành -- SỐ THẬT (đếm 7 trục), không bịa số liệu phiên/giờ giả như
-    bản mockup gốc (app thuần hồi cứu, billboard mọi nơi khác trong app đều là số liệu thật).
-    "Độ rộng nội dung" (chương 5) đứng NGAY TRƯỚC "Mật độ bố cục" (chương 6, xác nhận với người
-    dùng) -- cả 2 đều là trục "không gian bố cục" (chiều ngang cột / khoảng đệm bên trong thẻ),
-    đứng cạnh nhau hợp lý hơn tách rời."""
+    gốc -- xác nhận với người dùng đổi lại cho nhất quán) + chip TOC nhảy neo + chuỗi 6 chương
+    sec_chapter() bên dưới, mỗi chương 1 trục cá nhân hoá độc lập (trục "Mật độ bố cục" đã BỎ theo
+    yêu cầu người dùng -- xem chú thích --card-pad/--card-gap gần _card_style_vars). Billboard
+    ĐÓNG LUÔN VAI TRÒ "xem trước trực tiếp" -- không dựng panel/state giả lập riêng như bản
+    .dc.html gốc (component React, state độc lập với trang thật): ở đây toàn trang ĐÃ tự re-render
+    đúng token đang chọn mỗi lần bấm 1 lựa chọn (save_setting() + st.rerun()), nên billboard chỉ
+    cần đọc thẳng ACCENT/BG_PALETTE/... hiện hành -- SỐ THẬT (đếm 6 trục), không bịa số liệu
+    phiên/giờ giả như bản mockup gốc (app thuần hồi cứu, billboard mọi nơi khác trong app đều là
+    số liệu thật)."""
     _accent_name = next((n for n, h in ACCENT_PRESETS.items() if h == ACCENT), "")
     _chip_defs = [("Accent", _accent_name), ("Nền", BG_PALETTE), ("Hoạ tiết", BG_STYLE),
-                  ("Thẻ", CARD_STYLE), ("Độ rộng", CONTENT_WIDTH_NAME), ("Mật độ", CARD_DENSITY_NAME),
+                  ("Thẻ", CARD_STYLE), ("Độ rộng", CONTENT_WIDTH_NAME),
                   ("Font", BODY_FONT_NAME)]
     _chips_html = "".join(
         f"<span class='chip'><span class='ck'>{_k}</span><span class='cv'>{html_escape(str(_v))}</span></span>"
@@ -10179,19 +10180,18 @@ def _render_tuybien_giao_dien():
         "bất kỳ bên dưới.</div>"
         f"<div class='pbill-chips'>{_chips_html}</div>")
     render_period_billboard(
-        "Giao diện", "7", "trục cá nhân hoá", "Kết hợp tự do, không giới hạn",
+        "Giao diện", "6", "trục cá nhân hoá", "Kết hợp tự do, không giới hạn",
         _right_html,
         [("tbgd-ch1", "1 · Màu accent"), ("tbgd-ch2", "2 · Bảng màu nền"),
          ("tbgd-ch3", "3 · Kiểu nền trang"), ("tbgd-ch4", "4 · Kiểu thẻ"),
-         ("tbgd-ch5", "5 · Độ rộng nội dung"), ("tbgd-ch6", "6 · Mật độ bố cục"),
-         ("tbgd-ch7", "7 · Font thân chữ")],
+         ("tbgd-ch5", "5 · Độ rộng nội dung"), ("tbgd-ch6", "6 · Font thân chữ")],
         key="tbgd_billboard")
 
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
         if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
             for _k, _v in [("accent_hex", "#4f4dc4"), ("bg_palette", "Bạc hà"), ("bg_style", "Lưới điểm"),
-                           ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"), ("card_density", "Vừa"),
+                           ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"),
                            ("body_font", "Inter")]:
                 save_setting(_k, _v)
             st.rerun()
@@ -10202,7 +10202,6 @@ def _render_tuybien_giao_dien():
                                   ("bg_style", list(BG_PRESETS.keys())),
                                   ("content_width", list(CONTENT_WIDTHS.keys())),
                                   ("card_style", list(CARD_STYLES.keys())),
-                                  ("card_density", list(CARD_DENSITY.keys())),
                                   ("body_font", list(BODY_FONTS.keys()))]:
                 save_setting(_k, random.choice(_choices))
             st.rerun()
@@ -10259,7 +10258,7 @@ def _render_tuybien_giao_dien():
                     f"border-radius:10px !important; width:100% !important; height:auto !important; "
                     f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
                     f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BG_PRESETS.items()), 4, lambda n, c: n == BG_STYLE,
+        _tb_axis_grid(list(BG_PRESETS.items()), 5, lambda n, c: n == BG_STYLE,
                       "bg_style", "bg_sw", _bgpat_css)
 
     sec_chapter("tbgd-ch4", 4, "Kiểu thẻ", lead="Mỗi kiểu là một chất liệu bề mặt khác nhau.")
@@ -10272,7 +10271,7 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(CARD_STYLES.items()), 4, lambda n, c: n == CARD_STYLE,
+        _tb_axis_grid(list(CARD_STYLES.items()), 5, lambda n, c: n == CARD_STYLE,
                       "card_style", "cardstyle_sw", _cs_css)
 
     sec_chapter("tbgd-ch5", 5, "Độ rộng nội dung",
@@ -10286,25 +10285,11 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:52px !important; "
                     f"padding:12px 10px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.3 !important;")
-        _tb_axis_grid(list(CONTENT_WIDTHS.items()), 4, lambda n, px: n == CONTENT_WIDTH_NAME,
+        _tb_axis_grid(list(CONTENT_WIDTHS.items()), 5, lambda n, px: n == CONTENT_WIDTH_NAME,
                       "content_width", "contentwidth_sw", _width_css,
                       label_for=lambda n: f"{n} · {CONTENT_WIDTHS[n]}px")
 
-    sec_chapter("tbgd-ch6", 6, "Mật độ bố cục",
-                lead="Khoảng đệm và khoảng cách giữa các thẻ nội dung.")
-    with st.container(border=True, key="tbgd_density_card"):
-        def _density_css(name, cfg, selected):
-            _bg = "color-mix(in srgb, var(--accent) 6%, var(--card))" if selected else "var(--card)"
-            _border = "var(--accent)" if selected else "var(--border)"
-            return (f"background:{_bg} !important; color: var(--text) !important; "
-                    f"border:1px solid {_border} !important; border-radius:var(--card-radius) !important; "
-                    f"width:100% !important; height:auto !important; min-height:52px !important; "
-                    f"padding:12px 10px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.3 !important;")
-        _tb_axis_grid(list(CARD_DENSITY.items()), 4, lambda n, c: n == CARD_DENSITY_NAME,
-                      "card_density", "carddensity_sw", _density_css)
-
-    sec_chapter("tbgd-ch7", 7, "Font thân chữ",
+    sec_chapter("tbgd-ch6", 6, "Font thân chữ",
                 lead="Chỉ áp cho thân/nhãn/nút — bảng số liệu và trích dẫn giữ font riêng.")
     with st.container(border=True, key="tbgd_font_card"):
         def _bf_css(name, cfg, selected):
@@ -10317,7 +10302,7 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BODY_FONTS.items()), 4, lambda n, c: n == BODY_FONT_NAME,
+        _tb_axis_grid(list(BODY_FONTS.items()), 5, lambda n, c: n == BODY_FONT_NAME,
                       "body_font", "bodyfont_sw", _bf_css)
 
 

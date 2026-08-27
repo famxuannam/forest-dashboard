@@ -33,21 +33,24 @@ lan ra 3 nơi bằng 3 cơ chế khác nhau, phải nhớ cả 3 khi thêm 1 UI 
    trang chính (kể cả `:root` var) KHÔNG lan vào được. App tự tiêm 1 đoạn `<style>` riêng vào BÊN
    TRONG iframe đó (lặp lại theo interval để chống Streamlit dựng lại iframe làm mất style).
 
-## 7 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
+## 6 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
 
 "Giao diện" là 1 sub-page riêng của tab Tuỳ biến (`TUYBIEN_SUBS`, query param `?tsub=`, xem
 `architecture-navigation.md`) -- KHÔNG còn là 1 chương trong chuỗi cuộn dọc "Tổng quan" như trước.
 Khác bố cục 2 cột của mockup gốc "Tuỳ Chỉnh Giao Diện.dc.html" -- xác nhận với người dùng đổi lại
 theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app (Báo cáo/Sách/Gundam): billboard mở đầu (đóng
-LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 7 trục, số to bên trái là
-"7" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
+LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 6 trục, số to bên trái là
+"6" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
 thuần hồi cứu) + chip TOC nhảy neo xuống từng chương, rồi tới hàng 2 nút "Đặt lại mặc định"/"Ngẫu
-nhiên" (random hoá cả 7 setting cùng lúc), rồi 7 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
+nhiên" (random hoá cả 6 setting cùng lúc), rồi 6 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
 `st.container(border=True)` dựng qua helper dùng chung `_tb_axis_grid()`). Billboard KHÔNG mô
 phỏng token bằng state/JS riêng như bản `.dc.html` gốc, chỉ đọc thẳng `var(--token)`/`ACCENT`/
 `BG_PALETTE`... hiện hành vì toàn trang đã tự re-render đúng lựa chọn mới sau mỗi `st.rerun()`.
+Trục "Mật độ bố cục" (`CARD_DENSITY`) đã BỎ theo yêu cầu người dùng -- `--card-pad`/`--card-gap`
+giờ là 2 hằng số CSS cố định (`16px 18px`/`10px 0`, khớp đúng giá trị "Vừa" cũ) khai báo thẳng
+trong `_card_style_vars`, không còn setting/UI chọn lựa.
 
-Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 4 trục CSS-variable độc lập, kết hợp tự do với
+Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 3 trục CSS-variable độc lập, kết hợp tự do với
 nhau và với accent:
 
 1. **Bảng màu nền** (`BG_PALETTES`, 20 lựa chọn xếp lưới 4x5, setting `bg_palette`) — bundle ĐỦ 7
@@ -57,25 +60,23 @@ nhau và với accent:
    như accent. 10/20 bảng là "nền đậm cố định" (`BG_PALETTES_DARK_BG`, `bg` đậm ở CẢ 2 cột thay vì
    chỉ đậm khi dark mode) — xem chú thích chi tiết 2 công thức HSL (nền nhạt/nền đậm) ngay trên
    `BG_PALETTES` trong `ui_catalog.py`.
-2. **Kiểu thẻ** (`CARD_STYLES`, setting `card_style`) — 3 token CSS `--card-radius`/
-   `--card-border-w`/`--card-shadow`, áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
+2. **Kiểu thẻ** (`CARD_STYLES`, 20 lựa chọn xếp lưới 4x5, setting `card_style`) — 3 token CSS
+   `--card-radius`/`--card-border-w`/`--card-shadow` (6/20 kiểu dùng thêm 1 trong 3 token phụ
+   `bg_override`/`backdrop`/`border_image`, xem chú thích trên `CARD_STYLES` trong
+   `ui_catalog.py`), áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
    "thẻ nội dung" (nền `var(--card)` + viền `var(--border)` + bo góc + đổ bóng nhẹ) PHẢI dùng 3
    token này thay vì hard-code `border-radius:10px`/`border:1px solid var(--border)`/
    `box-shadow:0 1px 1px rgba(0,0,0,0.02)` — nếu không, thẻ đó sẽ "quên" đổi khi người dùng chọn
    kiểu thẻ khác. KHÔNG áp cho radius/border có ngôn ngữ hình khác cố ý (badge `999px`/`6-9px`,
    avatar tròn `50%`, input/button `7px`).
-3. **Độ rộng nội dung** (`CONTENT_WIDTHS`, setting `content_width`) — 4 mức 1100/1300/1500/1700px
-   (mặc định "Rộng" = 1500px), áp trực tiếp vào 2 token `--content-max-w`/`--content-half-w`. 2 token
-   này quyết định CẢ `max-width` của `.block-container` LẪN vị trí 2 nút nổi "về đầu trang"/"Đồng bộ
-   nhanh" (`right: max(22px, calc(50vw - var(--content-half-w) + 22px))`) — đổi mức mới hoặc thêm 1
-   phần tử định vị theo mép cột nội dung PHẢI đọc lại 2 token này, không hardcode `600px`/`850px`.
-4. **Mật độ bố cục** (`CARD_DENSITY`, setting `card_density`) — 2 token `--card-pad`/`--card-gap`,
-   CHỈ áp cho nhóm "thẻ nội dung chung" dùng padding/margin đồng nhất (`16px 18px`/`margin 10px
-   0`, ví dụ `.sec-card`). KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
-   (`.quotes-card`, `.dtl-card`, `.dtl-track`...) — những nơi đó giữ nguyên giá
-   trị padding literal.
+3. **Độ rộng nội dung** (`CONTENT_WIDTHS`, 5 mức xếp 1 hàng, setting `content_width`) —
+   1100/1300/1500/1700/1900px (mặc định "Rộng" = 1500px), áp trực tiếp vào token `--content-max-w`
+   cho `max-width` của `.block-container` — đổi mức mới PHẢI đọc lại token này, không hardcode
+   `600px`/`850px`. Token `--content-half-w` đã bỏ từ khi NAV chuyển sang sidebar trái (2 nút nổi
+   "về đầu trang"/"Đồng bộ nhanh" giờ bám thẳng mép phải viewport, không còn định vị theo mép cột
+   nội dung).
 
-Cả 4 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
+Cả 3 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
 bỏ → rơi về mặc định đầu tiên, không crash) và đúng pattern UI nút-preview + `save_setting()` +
 `st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới. Mọi `st.container(key=...,
 border=True)` mới thêm vào sub-page này (kể cả trục mới) PHẢI được liệt kê vào rule CSS nền/viền
