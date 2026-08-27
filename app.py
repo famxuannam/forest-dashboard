@@ -7218,7 +7218,7 @@ _card_style_vars = (
 # Billboard (render_period_billboard()/_render_today_billboard()) mặc định là 1 lớp "kính mờ"
 # BÁN TRONG SUỐT (nền rgba(--accent-rgb,0.10) + backdrop-filter blur, xem rule .st-key-*_billboard)
 # -- với 6 bảng màu nền "nhạt" thường, lớp kính đó hoà với var(--bg) SÁNG phía sau nên tự trông
-# sáng, đúng ý muốn. Với 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), var(--bg) phía sau ĐẬM
+# sáng, đúng ý muốn. Với 10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), var(--bg) phía sau ĐẬM
 # nên lớp kính bán trong suốt đó cũng tự trông đậm theo -- xác nhận với người dùng billboard vẫn
 # phải là 1 "thẻ" nền sáng/chữ tối như light theme bình thường, chỉ nền NGOÀI thẻ mới được đậm.
 # Nên 4 bảng này đổi hẳn sang nền ĐẶC (color-mix phớt accent lên var(--card), không xuyên thấu nền
@@ -7687,7 +7687,7 @@ _MAIN_CSS = """
        [data-testid="stHeader"] (position:absolute cao 60px, xem chú thích .block-container ở
        trên) -- header phủ ngang CẢ sidebar lẫn main, không riêng main. */
     /* Nền var(--card) (KHÔNG phải var(--bg)) khớp mockup sidebar -- sidebar là 1 "tấm panel" sáng
-       tách khỏi nền trang bằng viền phải, không hoà vào nền. Với 4 bảng "nền đậm cố định"
+       tách khỏi nền trang bằng viền phải, không hoà vào nền. Với 10 bảng "nền đậm cố định"
        (BG_PALETTES_DARK_BG) đây còn là lựa chọn ĐÚNG DUY NHẤT: var(--bg) đậm sẽ khiến chữ nav
        (var(--text-2), màu chữ TRONG thẻ nên luôn tối) gần như biến mất. */
     [data-testid="stSidebar"] {
@@ -8356,7 +8356,7 @@ _MAIN_CSS = """
        XÁC theo key, không dùng prefix chung.
        background/backdrop-filter đọc qua var(--billboard-bg)/var(--billboard-backdrop) (tính ở
        khối :root, xem _billboard_bg/_billboard_backdrop) thay vì hardcode rgba/blur cố định --
-       4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) cần nền ĐẶC (không xuyên thấu nền trang đậm
+       10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) cần nền ĐẶC (không xuyên thấu nền trang đậm
        phía sau) để billboard vẫn là 1 "thẻ" sáng/chữ tối như light theme bình thường, xác nhận
        với người dùng. */
     .st-key-today_billboard, .st-key-bc_billboard, .st-key-bc_billboard_detail, .st-key-tb_billboard,
@@ -8371,7 +8371,7 @@ _MAIN_CSS = """
        tiêu đề/mô tả cột giữa dùng riêng .pbill-title/.pbill-sub. Màu chữ ở đây dùng var(--text)/
        var(--text-2) BÌNH THƯỜNG (không phải var(--text-on-bg)) -- billboard LUÔN có nền hiệu ứng
        SÁNG (var(--billboard-bg), xem khối :root) dù bảng màu nền nào đang chọn: 6 bảng "nhạt" là
-       kính mờ hoà với var(--bg) sáng phía sau, 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) đổi
+       kính mờ hoà với var(--bg) sáng phía sau, 10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG) đổi
        hẳn sang nền đặc phớt accent lên var(--card) -- billboard PHẢI là 1 "thẻ" sáng/chữ tối như
        light theme bình thường (xác nhận với người dùng, chỉ nền NGOÀI billboard/thẻ mới được
        phép đậm), nên var(--text) luôn đúng ở đây. */
@@ -10218,7 +10218,7 @@ def _render_tuybien_giao_dien():
                     f"width:100% !important; height:auto !important; min-height:48px !important; "
                     f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
                     f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(ACCENT_PRESETS.items()), 4, lambda n, h: h == ACCENT,
+        _tb_axis_grid(list(ACCENT_PRESETS.items()), 5, lambda n, h: h == ACCENT,
                       "accent_hex", "accent_sw", _accent_css, value_for=lambda n, h: h)
 
     sec_chapter("tbgd-ch2", 2, "Bảng màu nền",
@@ -10230,12 +10230,12 @@ def _render_tuybien_giao_dien():
             _border_c = tok["border"][1] if IS_DARK else tok["border"][0]
             _text_c = tok["text-on-bg"][1] if IS_DARK else tok["text-on-bg"][0]
             _ring = "var(--accent)" if selected else _border_c
-            # 4 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG): swatch chỉ tô ĐẶC màu "bg" (bỏ nửa
+            # 10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG): swatch chỉ tô ĐẶC màu "bg" (bỏ nửa
             # "card" của gradient chéo) -- bug thật đã phát hiện (không phải do đợt đổi màu này, có
             # từ bộ preset trước): "bg" của 4 bảng này luôn ĐẬM còn "card" luôn SÁNG (ở light theme),
             # trong khi "text-on-bg" là 1 màu SÁNG CỐ ĐỊNH duy nhất -- đọc được trên nửa "bg" đậm
             # nhưng gần như vô hình trên nửa "card" sáng của gradient chéo, khiến nhãn tên bảng bị
-            # "cắt cụt" nhìn như chữ thiếu. 5 bảng "nền nhạt" còn lại giữ nguyên gradient chéo (cả 2
+            # "cắt cụt" nhìn như chữ thiếu. 10 bảng "nền nhạt" còn lại giữ nguyên gradient chéo (cả 2
             # nửa đều sáng, chữ tối luôn đọc được trên cả 2).
             _bgimg = _bg if name in BG_PALETTES_DARK_BG else f"linear-gradient(135deg, {_bg} 50%, {_card} 50%)"
             return (f"background: {_bgimg} !important; "
@@ -10243,7 +10243,7 @@ def _render_tuybien_giao_dien():
                     f"border-radius:10px !important; width:100% !important; height:auto !important; "
                     f"min-height:56px !important; padding:8px 6px !important; font-weight:600 !important; "
                     f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BG_PALETTES.items()), 4, lambda n, t: n == BG_PALETTE,
+        _tb_axis_grid(list(BG_PALETTES.items()), 5, lambda n, t: n == BG_PALETTE,
                       "bg_palette", "bgpal_sw", _pal_css)
 
     sec_chapter("tbgd-ch3", 3, "Kiểu nền trang",
