@@ -9198,7 +9198,7 @@ if "_bc_sub_jump" in st.session_state:
     st.session_state["bc_sub"] = _bc_jump
 elif "bc_sub" not in st.session_state:
     _qs = st.query_params.get("sub")
-    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tổng quan"
+    st.session_state["bc_sub"] = _qs if _qs in BAOCAO_SUBS else "Tuần"
 if nav == "Báo cáo":
     st.query_params["sub"] = st.session_state["bc_sub"]
 elif "sub" in st.query_params:
