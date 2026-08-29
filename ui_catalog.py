@@ -631,6 +631,12 @@ for _pal_name, _pal in BG_PALETTES.items():
 # sâu, viền đôi qua box-shadow ring, viền gradient hướng khác, nền chip/nền gradient thay nền
 # trắng, kính mờ THẬT có backdrop-filter -- token này có sẵn từ đầu nhưng CHƯA kiểu nào dùng tới,
 # bóng khối phẳng kiểu neubrutalism, viền nổi/bevel).
+#
+# Đợt bổ sung thứ 4 (20 -> 21 kiểu, KHÔNG còn khớp lưới 4x5 đều -- hàng cuối chỉ 1 ô, chấp nhận
+# vì đây là bổ sung 1 kiểu đơn lẻ theo yêu cầu người dùng, không phải đợt mở rộng tròn số như 3
+# đợt trước): "Vạch đỉnh" lấy cảm hứng từ 1 mockup người dùng duyệt qua `/design` (thẻ có vạch màu
+# mảnh phía trên) -- dựng bằng ĐÚNG token "shadow" sẵn có (inset box-shadow lệch xuống, kỹ thuật
+# "border qua box-shadow" kinh điển), không thêm khoá/cơ chế mới.
 CARD_STYLES = {
     "Phẳng lì": {
         "radius": "4px",
@@ -767,6 +773,16 @@ CARD_STYLES = {
         "radius": "12px",
         "border_w": "1px",
         "shadow": "0 0 0 1px var(--border), 0 10px 28px rgba(var(--accent-rgb),0.18)",
+    },
+    # Đợt bổ sung thứ 4 (20 -> 21 kiểu, lấy cảm hứng từ 1 mockup người dùng gửi -- trang tham khảo
+    # có mỗi thẻ 1 vạch màu mảnh phía trên). "Vạch đỉnh" dựng vạch đó bằng inset box-shadow lệch
+    # xuống 4px, blur=0 (kỹ thuật CSS kinh điển "border qua box-shadow") -- CHỈ dùng ĐÚNG token
+    # "shadow" đã có, KHÔNG thêm khoá/cơ chế mới. Dùng var(--accent) (không phải màu cố định) để
+    # vạch đổi màu theo đúng accent đang chọn, nhất quán với "Hào quang nhấn" cũng tô theo accent.
+    "Vạch đỉnh": {
+        "radius": "10px",
+        "border_w": "1px",
+        "shadow": "inset 0 4px 0 0 var(--accent), 0 1px 2px rgba(0,0,0,0.05)",
     },
 }
 
