@@ -7195,10 +7195,10 @@ _TOK = dict(BG_PALETTES[BG_PALETTE])
 _root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
 # --card-radius/--card-border-w/--card-shadow (kiểu thẻ, xem CARD_STYLES) -- trục độc lập với
 # bảng màu nền. Áp cho nhóm "thẻ nội dung chung" (.sec-card, .dtl-card, container chuẩn...).
-# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho 6/20 kiểu cần hơn 3
+# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho 6/21 kiểu cần hơn 3
 # token gốc ("Viền nhấn"/"Viền chuyển sắc" dùng border_image, "Nền mờ nhẹ"/"Kính mờ"/"Nền chip"/
 # "Nền chuyển sắc" dùng bg_override, "Kính mờ" dùng thêm cả backdrop -- xem CARD_STYLES) -- mặc
-# định var(--card)/none/none, vô hại với 14 kiểu còn lại. Áp qua 1 rule gộp riêng ngay dưới đây
+# định var(--card)/none/none, vô hại với 15 kiểu còn lại. Áp qua 1 rule gộp riêng ngay dưới đây
 # (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
 # --card-pad/--card-gap: KHÔNG còn là 1 trục cá nhân hoá (trục "Mật độ bố cục"/CARD_DENSITY đã bỏ
 # theo yêu cầu người dùng) -- 2 hằng số CỐ ĐỊNH khớp đúng giá trị "Vừa" cũ, giữ nguyên dạng token
@@ -9081,7 +9081,7 @@ _MAIN_CSS = """
         #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
     }
 
-    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- 6/20 kiểu ("Viền nhấn"/"Viền chuyển sắc"/"Nền mờ nhẹ"/"Kính
+    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- 6/21 kiểu ("Viền nhấn"/"Viền chuyển sắc"/"Nền mờ nhẹ"/"Kính
        mờ"/"Nền chip"/"Nền chuyển sắc", xem CARD_STYLES, _card_style_vars) cần thêm background/
        backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc, nhưng hàng chục khối
        thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
@@ -9091,7 +9091,7 @@ _MAIN_CSS = """
        Thay vì sửa từng rule (rủi ro sót/rối), liệt kê lại đúng chọn lọc TOÀN BỘ selector card đã rà
        soát ở đây, đặt SAU CÙNG trong cascade (cuối _MAIN_CSS) nên tự thắng theo thứ tự nguồn dù
        cùng độ đặc hiệu -- 3 token --card-bg-override/--card-backdrop/--card-border-image mặc định
-       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 14 kiểu thẻ còn lại,
+       var(--card)/none/none (xem _card_style_vars) nên rule này VÔ HẠI với 15 kiểu thẻ còn lại,
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
     .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card, .sb-widget,
