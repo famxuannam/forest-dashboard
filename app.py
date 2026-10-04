@@ -2877,6 +2877,18 @@ def _chip_row_html(heading, chips_html):
     return f"<div style='margin-bottom:6px;'><span class='rl-book'>{heading}</span>{chips_html}</div>"
 
 
+def _session_summary_chips_html(sub_df, top_n=3):
+    """Chip tóm tắt 1 đoạn phiên (tổng giờ, số phiên, tối đa `top_n` Dự án nhiều giờ nhất kèm link)
+    -- dùng chung cho thẻ "Chào mừng trở lại" và ngăn kéo "Một ngày ngẫu nhiên"."""
+    hrs = sub_df['Thời lượng (Phút)'].sum() / 60
+    top_projs = sub_df.groupby('Dự án')['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(top_n).index
+    proj_nhom = sub_df.drop_duplicates('Dự án').set_index('Dự án')['Nhóm']
+    return (f"<span class='jchip'><span class='ck'>Tổng giờ</span><span class='cv'>{_fmt_hours_short(hrs)}</span></span>"
+            f"<span class='jchip'><span class='ck'>Số phiên</span><span class='cv'>{len(sub_df)}</span></span>"
+            + "".join(f"<span class='jchip'>{_entity_link_html(n, _proj_link_kind(proj_nhom.get(n), n))}</span>"
+                      for n in top_projs))
+
+
 def _day_link_href(d):
     """URL nhảy tới Báo cáo ngày (trang "Hôm nay") của ngày d (date/Timestamp) -- dùng chung
     cho MỌI nơi có link nhảy ngày kiểu .jdate-link/ô lịch tháng trong app, thay vì mỗi nơi tự
@@ -5102,7 +5114,7 @@ def render_search():
     (chờ gộp vào ghi chú chính, xem render_note_editor()) -- tránh lọt mất nếu vài hôm chưa kịp
     gộp. Từ khớp được tô sáng bằng <mark> (xem _highlight()) trong mọi đoạn trích tự do (ghi chú,
     trích dẫn) -- các chip nguồn khác (lịch/sách) vốn đã ngắn gọn nên không cần tô thêm."""
-    q = st.text_input("Từ khoá", key="search_q", label_visibility="collapsed")
+    q = st.text_input("Từ khoá", key="search_q", label_visibility="collapsed", live="300ms")
     if not q or len(q.strip()) < 2:
         return
     qq = q.strip()
@@ -7292,8 +7304,11 @@ _MAIN_CSS = """
        phía trên) -- fallback hệ thống giữ nguyên phòng trường hợp @font-face lỗi/chưa kịp tải.
        Literal 'Manrope' dưới đây bị .replace() thay đúng font đang chọn ngay trước khi inject
        (khối CSS chính là string thường, không phải f-string -- xem theming.md -- nên chỉ
-       .replace() đúng chỗ cần thay, không đổi cả khối sang f-string). */
-    html, body, .stApp, .stApp.stApp *:not([data-testid="stIconMaterial"]) {
+       .replace() đúng chỗ cần thay, không đổi cả khối sang f-string). st.dialog render ở portal
+       NGOÀI .stApp nên cần selector [data-testid="stDialog"] riêng, không thì chữ trong hộp thoại/
+       ngăn kéo rơi về font mặc định Source Sans của Streamlit. */
+    html, body, .stApp, .stApp.stApp *:not([data-testid="stIconMaterial"]),
+    [data-testid="stDialog"] *:not([data-testid="stIconMaterial"]) {
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     /* Nền trang hệ "Sổ Tay": kiểu hoạ tiết (chấm bi/trơn/kẻ ngang/kẻ ô vuông/chấm bi to) do người
@@ -7917,6 +7932,14 @@ _MAIN_CSS = """
         display: flex; align-items: center; gap: 5px; margin-bottom: 7px;
     }
     .sb-widget-title-txt { text-transform: uppercase; letter-spacing: .02em; }
+    /* Nút "Một ngày ngẫu nhiên" (sidebar, key=sb_peek_btn) -- trông như 1 khối .sb-widget nữa. */
+    .st-key-sb_peek_btn button {
+        background: var(--card); border: var(--card-border-w) solid var(--border);
+        border-radius: var(--card-radius); box-shadow: var(--card-shadow);
+        margin-top: 10px; padding: 8px 12px; min-height: 0;
+    }
+    .st-key-sb_peek_btn button:hover { border-color: var(--accent); }
+    .st-key-sb_peek_btn button p { font-size: 12.5px; font-weight: 600; }
     .sb-stat-row {
         display: flex; justify-content: space-between; align-items: baseline;
         font-size: 12.5px; color: var(--text-2); padding: 2px 0;
@@ -9133,6 +9156,7 @@ _MAIN_CSS = """
        không cần nhánh điều kiện Python riêng. !important để thắng cả những rule gốc đã có sẵn
        !important (vd rule stExpander details). */
     .dtl-card, .dtbl-wrap, .catbars-card, .glass-card, .sec-card, .quotes-card, .sb-widget,
+    .st-key-sb_peek_btn button,
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
@@ -9487,6 +9511,111 @@ def _sidebar_recent_activity_html(df, group_val, rl_filter, icon, title, part_la
     )
 
 
+# --- Ngăn kéo "Một ngày ngẫu nhiên" (nút ở sidebar, xem khối with st.sidebar bên dưới) ---------
+PEEK_RECENT_EXCLUDE_DAYS = 7  # không bốc trúng 7 ngày gần nhất (vừa mới xem rồi, mất ý nghĩa "gặp lại")
+PEEK_MIN_NOTE_CHARS = 40  # ghi chú chính ngắn hơn mức này không đủ để làm lý do "ngày đáng nhớ"
+
+
+def _peek_pool(df):
+    """{ngày: trọng số} các ngày có thể bốc cho "Một ngày ngẫu nhiên": ngày có phiên Forest, ghi
+    chú chính >= PEEK_MIN_NOTE_CHARS ký tự văn bản thuần, hoặc trích dẫn Kindle (highlight, theo
+    `Ngày thêm`); bỏ PEEK_RECENT_EXCLUDE_DAYS ngày gần nhất. Ngày có ghi chú nhân đôi trọng số."""
+    cutoff = _today_vn() - timedelta(days=PEEK_RECENT_EXCLUDE_DAYS)
+    pool = {}
+    for d in df['Ngày'].dropna().unique():
+        pool[d] = 1
+    kh = load_kindle_highlights()
+    if not kh.empty:
+        for d in kh[kh['Loại'] == 'highlight']['Ngày thêm'].dropna().dt.date.unique():
+            pool[d] = 1
+    nd = load_notes()
+    if not nd.empty:
+        for d_str, txt in zip(nd['Ngày'], nd['Ghi chú']):
+            d = pd.to_datetime(d_str, errors='coerce')
+            if pd.notna(d) and len(_note_plain_text(txt)) >= PEEK_MIN_NOTE_CHARS:
+                pool[d.date()] = 2
+    return {d: w for d, w in pool.items() if d <= cutoff}
+
+
+def _pick_peek_day(df, exclude=None):
+    """Bốc 1 ngày từ _peek_pool() theo trọng số (random không seed), không lặp lại `exclude` trừ khi
+    pool chỉ còn đúng ngày đó. None nếu pool rỗng."""
+    pool = _peek_pool(df)
+    cands = {d: w for d, w in pool.items() if d != exclude} or pool
+    if not cands:
+        return None
+    return random.Random().choices(list(cands), weights=list(cands.values()), k=1)[0]
+
+
+def _fmt_ago_ymd(d, today):
+    """Khoảng cách tương đối kiểu "2 năm 7 tháng trước" / "3 tháng trước" / "12 ngày trước"."""
+    months = (today.year - d.year) * 12 + today.month - d.month - (1 if today.day < d.day else 0)
+    if months >= 12:
+        y, m = divmod(months, 12)
+        return f"{y} năm" + (f" {m} tháng" if m else "") + " trước"
+    if months >= 1:
+        return f"{months} tháng trước"
+    return f"{(today - d).days} ngày trước"
+
+
+def _day_peek_html(d, df):
+    """HTML (chỉ đọc) của 1 ngày cho ngăn kéo "Một ngày ngẫu nhiên", cùng thứ tự khối với
+    render_note_editor()/render_notes_journal(): ngày + khoảng cách + link → chip Kỷ lục & huy hiệu
+    → số liệu phiên → chip sách/Gundam → ghi chú nhanh → ghi chú chính → tối đa 3 trích dẫn
+    Kindle. Ghi chú chính < 1200 ký tự văn bản thuần thì hiện nguyên HTML như .note-html ở Nhật ký;
+    dài hơn thì chỉ hiện đoạn văn bản thuần (an toàn hơn cắt HTML giữa thẻ), phần còn lại ở link
+    "Mở trang ngày này"."""
+    link = _day_link_html(d, "Mở trang ngày này")
+    out = (f"<div style='font-size:17px;font-weight:700;color:var(--text);'>"
+           f"{VN_DAYS.get(pd.Timestamp(d).day_name(), '')}, {d:%d/%m/%Y}</div>"
+           f"<div style='font-size:13px;color:var(--text-2);margin:2px 0 12px;'>"
+           f"{_fmt_ago_ymd(d, _today_vn())} · {link}</div>")
+    out += _record_chips_html(_compute_alltime_records(df)["day_badges"].get(d))
+    day_df = df[df['Ngày'] == d]
+    if not day_df.empty:
+        out += _chip_row_html("Phiên tập trung", _session_summary_chips_html(day_df))
+    rl = load_reading_log()
+    if not rl.empty:
+        day_rl = rl[rl['Ngày hoàn thành'].dt.date == d]
+        if not day_rl.empty:
+            out += _book_chips_html(day_rl)
+    qn_html = _quick_note_chips_html(_quick_notes_on(load_quick_notes(), d))
+    out += qn_html
+    note = get_note(d)
+    if note and not _note_is_empty(note):
+        plain = _note_plain_text(note)
+        body = (f"<div class='note-html'>{note}</div>" if len(plain) < 1200
+                else f"<div class='note-html'>{html_escape(plain[:1200].rstrip())}…</div>")
+        out += (f"<span class='rl-book'>Ghi chú chính</span>{body}" if qn_html else body)
+    kh = load_kindle_highlights()
+    if not kh.empty:
+        qs = kh[(kh['Loại'] == 'highlight') & (kh['Ngày thêm'].dt.date == d)].head(3)
+        if not qs.empty:
+            out += "<span class='rl-book' style='margin-top:10px;'>Trích dẫn</span>"
+            for _, r in qs.iterrows():
+                _author = f"{html_escape(str(r['Tác giả']))} · " if pd.notna(r['Tác giả']) and str(r['Tác giả']).strip() else ""
+                out += (f"<div style='margin:6px 0 10px;'><div class='note-html'><span class='kq-mark'>“</span>"
+                        f"{html_escape(str(r['Nội dung']))}</div>"
+                        f"<div class='kq-loc'>— {_author}{_entity_link_html(r['Cuốn sách'], 'book')}</div></div>")
+    return out
+
+
+@st.dialog("Một ngày trong quá khứ", position="right", width="medium")
+def _peek_dialog():
+    """Ngăn kéo bên phải xem lại 1 ngày cũ mà không rời trang đang xem. Dialog là fragment: ngày
+    đang xem nằm ở st.session_state["peek_day"]; "Ngày khác" bốc ngày mới rồi rerun riêng fragment.
+    Link "Mở trang ngày này" là target=_self nên mở session mới và đóng dialog -- đúng ý."""
+    d = st.session_state.get("peek_day")
+    if d is None:
+        st.caption("Chưa có ngày nào đủ điều kiện để xem lại.")
+        return
+    st.markdown(_day_peek_html(d, df), unsafe_allow_html=True)
+    if st.button("Ngày khác", icon=":material/shuffle:", key="peek_next_btn"):
+        st.session_state["peek_day"] = _pick_peek_day(df, exclude=d) or d
+        st.rerun(scope="fragment")
+
+
+_peek_clicked = False
 with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
@@ -9512,6 +9641,12 @@ with st.sidebar:
         st.markdown(_bottom_html, unsafe_allow_html=True)
         if _badge_has_upd:
             _inject_relative_time_ticker()
+        _peek_clicked = bool(_peek_pool(df)) and st.button(
+            "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", use_container_width=True)
+if _peek_clicked:
+    # Mở dialog NGOÀI khối st.sidebar (dialog không nên dựng trong ngữ cảnh sidebar).
+    st.session_state["peek_day"] = _pick_peek_day(df, exclude=st.session_state.get("peek_day"))
+    _peek_dialog()
 
 
 def _inject_keyboard_shortcuts():
@@ -10061,14 +10196,7 @@ def _render_welcome_back(df, sel, day_df):
 
     # Tuần cuối trước khi nghỉ: 7 ngày kết thúc ở ngày có phiên gần nhất.
     wk = df[(df['Ngày'] >= last_day - timedelta(days=6)) & (df['Ngày'] <= last_day)]
-    wk_hrs = wk['Thời lượng (Phút)'].sum() / 60
-    top_projs = (wk.groupby('Dự án')['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(3).index)
-    proj_nhom = wk.drop_duplicates('Dự án').set_index('Dự án')['Nhóm']
-    wk_chips = (f"<span class='jchip'><span class='ck'>Tổng giờ</span><span class='cv'>{_fmt_hours_short(wk_hrs)}</span></span>"
-                f"<span class='jchip'><span class='ck'>Số phiên</span><span class='cv'>{len(wk)}</span></span>"
-                + "".join(f"<span class='jchip'>{_entity_link_html(n, _proj_link_kind(proj_nhom.get(n), n))}</span>"
-                          for n in top_projs))
-    body = _chip_row_html("Tuần cuối trước khi nghỉ", wk_chips)
+    body = _chip_row_html("Tuần cuối trước khi nghỉ", _session_summary_chips_html(wk))
 
     # Đang đọc/xem dở: cuốn sách + series Gundam có hoạt động gần nhất (cùng logic với sidebar).
     _rd_chips = ""

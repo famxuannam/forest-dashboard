@@ -131,6 +131,38 @@ dấu `@st.dialog("Tiêu đề")`; nút bên ngoài chỉ có nhiệm vụ GỌI
 _xxx_dialog()`), không tự vẽ nội dung — tránh nội dung phụ (ít dùng, hoặc cần xác nhận trước khi
 phá huỷ) chiếm không gian cố định trên trang.
 
+## Ngăn kéo xem nhanh ngày: "Một ngày ngẫu nhiên" (`_peek_dialog`)
+
+Nút `st.button(..., key="sb_peek_btn")` trong sidebar (ngay sau khối `.sb-widget`, chỉ khi df không
+rỗng và `_peek_pool(df)` có ngày) mở `@st.dialog("Một ngày trong quá khứ", position="right",
+width="medium")` -- ngăn kéo bên phải (mobile: gần toàn màn hình) để gặp lại 1 ngày cũ mà không
+rời trang đang xem. Cần Streamlit >= 1.65 (`position=`, và `live=` ở ô Tìm kiếm).
+
+- **Dialog định nghĩa ở cấp module** (dialog là fragment) và được GỌI ngoài khối `with st.sidebar:`
+  qua cờ `_peek_clicked`, không dựng dialog trong ngữ cảnh sidebar. Ngày đang xem nằm ở
+  `st.session_state["peek_day"]`; nút "Ngày khác" (`peek_next_btn`) bốc ngày mới rồi
+  `st.rerun(scope="fragment")` để không rerun cả trang.
+- **Chọn ngày** (`_peek_pool` / `_pick_peek_day`): ngày có phiên Forest, ghi chú chính >=
+  `PEEK_MIN_NOTE_CHARS` (40) ký tự văn bản thuần, hoặc trích dẫn Kindle (`Ngày thêm`, chỉ
+  `highlight`); loại `PEEK_RECENT_EXCLUDE_DAYS` (7) ngày gần nhất; ngày có ghi chú trọng số x2;
+  `random.Random()` không seed; không lặp lại đúng ngày đang hiện (trừ khi pool chỉ còn 1 ngày).
+- **Nội dung** do `_day_peek_html(d, df)` dựng (thuần HTML, theo thứ tự khối của
+  `render_note_editor()`): ngày + khoảng cách (`_fmt_ago_ymd`) + link `_day_link_html` → chip Kỷ lục
+  → tóm tắt phiên (`_session_summary_chips_html`, dùng chung với thẻ "Chào mừng trở lại") → chip
+  sách/Gundam → ghi chú nhanh → ghi chú chính (`.note-html`; >= 1200 ký tự thì chỉ hiện đoạn văn
+  bản thuần đã escape, không cắt HTML giữa thẻ) → tối đa 3 trích dẫn Kindle. Link
+  `target=_self` mở session mới nên đóng dialog -- đúng ý.
+- **CSS**: nền modal đã ép `var(--card)` (rule `[data-testid="stDialog"] > div`); chữ trong dialog
+  dùng chung font thân chữ qua selector `[data-testid="stDialog"] *` (dialog render ở portal ngoài
+  `.stApp`, không thì rơi về Source Sans mặc định).
+
+## Thẻ "Chào mừng trở lại" (trang Hôm nay)
+
+`_render_welcome_back(df, sel, day_df)` ngay dưới billboard: chỉ khi `sel` là hôm nay và đã nghỉ >=
+`COMEBACK_MIN_GAP` ngày (`_comeback_info`). Hôm nay chưa có phiên -> card `jcard_welcome` (không phải
+chương, không đánh số, không thêm chip mục lục); đã có phiên -> không card, footer của
+`render_stat_panel` ở "Tổng quan ngày". Toast một lần mỗi session (`_welcome_toasted`).
+
 ## Chuyển sub-tab bằng code (không phải người dùng click): cờ chờ xử lý, KHÔNG set trực tiếp session_state của widget
 
 `st.segmented_control(..., key="X_picker")` dùng pattern chung: đọc/ghi qua 1 key riêng
