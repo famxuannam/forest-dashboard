@@ -6009,6 +6009,283 @@ def render_month_week_bars(df_m):
                 unsafe_allow_html=True)
 
 
+# Cây lá kim đơn giản (viewBox ~24x26, có thân) cho biểu đồ "Khu rừng tháng này" -- st.echarts_chart
+# chỉ nhận JSON nên không có renderItem/series custom, "path://" là cách duy nhất để có biểu tượng
+# tự vẽ. Toàn bộ series dùng chung 1 path, kích thước theo từng data item (symbolSize).
+_FOREST_TREE_PATH = "path://M12 0L19 9H15L21 18H13V26H11V18H3L9 9H5Z"
+
+
+def _forest_symbol_size(minutes):
+    """Kích thước cây (px) theo thời lượng phiên: căn bậc hai của số phút, kẹp 10-24px (10 phút ->
+    10px, >= 180 phút -> 24px)."""
+    lo, hi = 10 ** 0.5, 180 ** 0.5
+    return round(min(max(10 + (max(minutes, 0) ** 0.5 - lo) / (hi - lo) * 14, 10), 24), 1)
+
+
+def _forest_spec(df_m, y, m):
+    """Spec ECharts (dict JSON thuần) của "Khu rừng tháng này": mỗi phiên 1 cây; trục x là ngày
+    trong tháng (đủ 1..N dù là tháng hiện tại, ngày tương lai để trống), trục y là thứ tự phiên
+    trong ngày theo giờ bắt đầu; mỗi Nhóm 1 series scatter màu COLOR_MAP[nhóm] để legend theo
+    Nhóm. Trả (spec, chiều cao px). Tách khỏi render để kiểm tra bằng script thuần."""
+    n_days = pd.Period(f"{y:04d}-{m:02d}").days_in_month
+    d = df_m.sort_values('Thời gian bắt đầu').copy()
+    d['_order'] = d.groupby('Ngày').cumcount()
+    max_n = int(d['_order'].max()) + 1 if not d.empty else 1
+    series = []
+    for nhom, g in d.groupby('Nhóm', sort=True):
+        data = []
+        for _, r in g.iterrows():
+            t = pd.Timestamp(r['Thời gian bắt đầu']); mins = int(round(r['Thời lượng (Phút)']))
+            data.append({
+                "value": [pd.Timestamp(r['Ngày']).day - 1, int(r['_order'])],
+                "name": f"{t:%d/%m} · {r['Dự án']} · {mins}′ · {t:%H:%M}",
+                "symbolSize": _forest_symbol_size(mins)})
+        series.append({
+            "name": str(nhom), "type": "scatter", "symbol": _FOREST_TREE_PATH, "data": data,
+            # opacity=1: scatter mặc định 0.8 làm cây nhạt hơn màu Nhóm ở chương "Phân bổ nhóm".
+            "itemStyle": {"color": COLOR_MAP.get(nhom, PLOT_TEXT), "opacity": 1}})
+    # Nhãn trục x chỉ ở ngày 1 và mỗi bội số của 5 (interval=0 + nhãn rỗng cho ngày còn lại) --
+    # axisLabel.interval số nguyên của ECharts sẽ ra 1, 6, 11... thay vì 1, 5, 10...
+    x_labels = [str(i) if (i == 1 or i % 5 == 0) else "" for i in range(1, n_days + 1)]
+    spec = {
+        "backgroundColor": "transparent",
+        "textStyle": {"color": PLOT_TEXT},
+        "tooltip": {"trigger": "item", "formatter": "{b}"},
+        "legend": {"bottom": 0, "icon": "circle", "textStyle": {"color": PLOT_TEXT}},
+        "grid": {"left": 8, "right": 8, "top": 12, "bottom": 52, "containLabel": False},
+        "xAxis": {"type": "category", "data": x_labels, "boundaryGap": True,
+                  "axisLabel": {"interval": 0, "color": PLOT_TEXT},
+                  "axisLine": {"lineStyle": {"color": PLOT_TEXT}}, "axisTick": {"show": False},
+                  "splitLine": {"show": False}},
+        "yAxis": {"type": "value", "show": False, "min": -0.6, "max": max_n - 0.4,
+                  "splitLine": {"show": False}},
+        "series": series,
+    }
+    return spec, int(min(max(180 + 22 * max_n, 220), 440))
+
+
+def render_month_forest(df_m, y, m):
+    """"Khu rừng tháng này" (Báo cáo -> Tháng, chương 1 Tổng quan, ngay sau render_month_highlights):
+    mỗi phiên là 1 cây, cây càng to phiên càng dài -- ECharts scatter (st.echarts_chart, Streamlit
+    >= 1.64). Chỉ JSON: tooltip dùng formatter chuỗi "{b}" với chuỗi hiển thị gắn sẵn vào `name`
+    của từng data item; không có click/selection nên không điều hướng được từ biểu đồ."""
+    if df_m.empty:
+        return
+    spec, height = _forest_spec(df_m, y, m)
+    with st.container(border=True, key="jcard_bcthang_forest"):
+        st.markdown("<span class='rl-book'>Khu rừng tháng này</span>", unsafe_allow_html=True)
+        st.echarts_chart(spec, height=height, theme=None,
+                         alt="Khu rừng tháng: mỗi cây là một phiên tập trung")
+        st.markdown("<div style='font-size:12px;color:var(--text-3);padding-bottom:12px;'>"
+                    "Mỗi cây là một phiên; cây càng to, phiên càng dài.</div>", unsafe_allow_html=True)
+
+
+# 5 bậc có giờ của _reading_cal_lvl() (bậc 0 = ngày trống, không có data item): (gt/gte, lt, nhãn)
+_YEAR_HEAT_PIECES = [
+    {"gt": 0, "lt": 0.5, "label": "< 30′"}, {"gte": 0.5, "lt": 1, "label": "< 1h"},
+    {"gte": 1, "lt": 2, "label": "< 2h"}, {"gte": 2, "lt": 4, "label": "< 4h"},
+    {"gte": 4, "label": "≥ 4h"},
+]
+
+
+def _year_heatmap_spec(df_y, year):
+    """Spec ECharts của lịch nhiệt cả năm (calendar + heatmap): thang màu piecewise dùng ĐÚNG 5 bậc
+    có giờ của _reading_cal_lvl() và _teal_shades(6)[1:] để khớp mọi lịch khác trong app; ngày 0
+    giờ không có data item (ô nền trống). Trả (spec, chiều cao px).
+    Hướng DỌC (orient="vertical", 7 cột thứ x ~54 hàng tuần) cho MỌI khổ: thử hướng ngang 53 cột
+    thì ở 390px mỗi ô chỉ ~4.6px (< ngưỡng 5px) và nhãn tháng chồng lên nhau; không phát hiện
+    được độ rộng màn hình từ Python nên không chọn theo khổ. Đổi lại thẻ cao ~800px."""
+    by_day = df_y.groupby('Ngày').agg(mins=('Thời lượng (Phút)', 'sum'), n=('Thời lượng (Phút)', 'size'))
+    data = [{"value": [f"{pd.Timestamp(d):%Y-%m-%d}", round(float(r['mins']) / 60, 4)],
+             "name": f"{pd.Timestamp(d):%d/%m} · {_fmt_hours_short(r['mins'] / 60)} · {int(r['n'])} phiên"}
+            for d, r in by_day.iterrows() if r['mins'] > 0]
+    shades = _teal_shades(6)[1:]
+    pieces = [dict(pc, color=c) for pc, c in zip(_YEAR_HEAT_PIECES, shades)]
+    empty_cell = f"rgba({_hex_rgb_str(PLOT_TEXT)},0.07)"
+    spec = {
+        "backgroundColor": "transparent",
+        "textStyle": {"color": PLOT_TEXT},
+        "tooltip": {"trigger": "item", "formatter": "{b}"},
+        "visualMap": {"type": "piecewise", "pieces": pieces, "orient": "horizontal", "left": "center",
+                      "bottom": 0, "itemWidth": 14, "itemHeight": 14, "textStyle": {"color": PLOT_TEXT}},
+        "calendar": {
+            "orient": "vertical", "range": str(year), "cellSize": [40, 13], "left": "center", "top": 34,
+            "dayLabel": {"firstDay": 1, "nameMap": ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
+                         "color": PLOT_TEXT},
+            "monthLabel": {"nameMap": [f"Th{i}" for i in range(1, 13)], "color": PLOT_TEXT},
+            "yearLabel": {"show": False}, "splitLine": {"show": False},
+            "itemStyle": {"color": empty_cell, "borderWidth": 1, "borderColor": "rgba(0,0,0,0)"}},
+        "series": [{"type": "heatmap", "coordinateSystem": "calendar", "data": data}],
+    }
+    return spec, 800
+
+
+def render_year_heatmap(df_y, year):
+    """Lịch nhiệt cả năm (Báo cáo -> Năm, chương 2 "Lịch", góc nhìn "Cả năm") -- mỗi ô 1 ngày, màu
+    theo giờ tập trung. ECharts calendar+heatmap (st.echarts_chart, JSON thuần, tooltip chuỗi
+    "{b}"). Ngày tương lai của năm hiện tại tự để trống."""
+    spec, height = _year_heatmap_spec(df_y, year)
+    with st.container(border=True, key="jcard_bcnam_heat"):
+        st.echarts_chart(spec, height=height, theme=None,
+                         alt=f"Lịch nhiệt năm {year}: mỗi ô là một ngày, màu theo giờ tập trung")
+
+
+ERA_BREAK_DAYS = 21  # 2 ngày có phiên liên tiếp cách nhau >= chừng này ngày -> ở giữa là "khoảng nghỉ"
+ERA_NOISE_SHARE = 0.4  # era chỉ 1 tháng mà Nhóm dẫn đầu < tỉ lệ này giờ tháng đó -> coi là nhiễu, nhập vào era trước
+
+
+@st.cache_data
+def _compute_eras(df, today=None):
+    """"Các giai đoạn": chia lịch sử thành "mùa" (era, theo Nhóm nhiều giờ nhất từng tháng) và "khoảng
+    nghỉ" (break). Trả list dict {start, end (date), kind: "era"|"break", label, nhom, hours,
+    top_projects: [(Dự án, Nhóm)]} xếp theo thời gian. Nhận df (kết quả prep_analysis_data()) làm
+    tham số như _compute_alltime_records() nên cache tự đổi theo nội dung; `today` truyền tường minh
+    (mặc định _today_vn()) để khoá cache đổi qua ngày và để kiểm tra bằng script thuần.
+    1. Khoảng nghỉ: 2 ngày có phiên liên tiếp cách nhau >= ERA_BREAK_DAYS -> break từ ngày sau ngày
+       trước đến ngày trước ngày sau; ngày có phiên cuối cách hôm nay >= ERA_BREAK_DAYS -> thêm 1
+       break kéo tới hôm nay.
+    2. Mỗi "đoạn hoạt động" giữa các khoảng nghỉ chia theo tháng (cắt theo biên đoạn); mỗi tháng lấy
+       Nhóm (không dùng Dự án, cho ổn định) nhiều giờ nhất.
+    3. Gộp các tháng liền nhau cùng Nhóm dẫn đầu thành 1 era.
+    4. Làm mượt: era chỉ dài 1 tháng mà Nhóm dẫn đầu < ERA_NOISE_SHARE giờ tháng đó -> nhập vào era
+       liền trước (cùng đoạn hoạt động); sau đó gộp lại các era liền nhau vừa trở thành cùng Nhóm."""
+    if df is None or df.empty:
+        return []
+    today = today or _today_vn()
+    d = df[['Ngày', 'Nhóm', 'Dự án', 'Thời lượng (Phút)']].dropna(subset=['Ngày']).copy()
+    d['Nhóm'] = d['Nhóm'].fillna("Khác")
+    d['Ngày'] = d['Ngày'].map(lambda x: x if isinstance(x, date) and not isinstance(x, datetime) else pd.Timestamp(x).date())
+    days = sorted(d['Ngày'].unique())
+    one = timedelta(days=1)
+
+    segs, breaks, s0, prev = [], [], days[0], days[0]
+    for x in days[1:]:
+        if (x - prev).days >= ERA_BREAK_DAYS:
+            segs.append((s0, prev))
+            breaks.append((prev + one, x - one))
+            s0 = x
+        prev = x
+    segs.append((s0, prev))
+    if (today - days[-1]).days >= ERA_BREAK_DAYS:
+        breaks.append((days[-1] + one, today))
+
+    eras = []
+    for k, (a, b) in enumerate(segs):
+        m = date(a.year, a.month, 1)
+        while m <= b:
+            nxt = date(m.year + (m.month == 12), m.month % 12 + 1, 1)
+            lo, hi = max(a, m), min(b, nxt - one)
+            chunk = d[(d['Ngày'] >= lo) & (d['Ngày'] <= hi)]
+            if not chunk.empty:
+                by = chunk.groupby('Nhóm')['Thời lượng (Phút)'].sum()
+                lead = by.idxmax()
+                eras.append({"seg": k, "start": lo, "end": hi, "nhom": lead, "months": 1,
+                             "share": float(by.max() / by.sum()) if by.sum() else 1.0})
+            m = nxt
+
+    def _merge_same(items):
+        out = []
+        for e in items:
+            if out and out[-1]["seg"] == e["seg"] and out[-1]["nhom"] == e["nhom"]:
+                out[-1]["end"] = e["end"]; out[-1]["months"] += e["months"]
+            else:
+                out.append(dict(e))
+        return out
+
+    eras = _merge_same(eras)
+    smoothed = []
+    for e in eras:
+        if smoothed and e["months"] == 1 and e["share"] < ERA_NOISE_SHARE and smoothed[-1]["seg"] == e["seg"]:
+            smoothed[-1]["end"] = e["end"]; smoothed[-1]["months"] += 1
+        else:
+            smoothed.append(dict(e))
+    eras = _merge_same(smoothed)
+
+    out = []
+    for e in eras:
+        sub = d[(d['Ngày'] >= e["start"]) & (d['Ngày'] <= e["end"])]
+        top = sub.groupby('Dự án')['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(2).index
+        nhom_of = sub.drop_duplicates('Dự án').set_index('Dự án')['Nhóm']
+        out.append({"start": e["start"], "end": e["end"], "kind": "era", "label": f"Mùa {e['nhom']}",
+                    "nhom": e["nhom"], "hours": float(sub['Thời lượng (Phút)'].sum() / 60),
+                    "top_projects": [(t, nhom_of.get(t)) for t in top]})
+    for a, b in breaks:
+        out.append({"start": a, "end": b, "kind": "break", "label": f"Khoảng nghỉ · {(b - a).days + 1} ngày",
+                    "nhom": None, "hours": 0.0, "top_projects": []})
+    return sorted(out, key=lambda e: e["start"])
+
+
+def _eras_fig(eras):
+    """Biểu đồ dải ngang 1 hàng: mỗi era/break 1 thanh (go.Bar ngang với base = ngày bắt đầu, độ dài
+    tính bằng ms trên trục ngày). Dùng Plotly thay vì ECharts vì ECharts không có series `custom`
+    (renderItem là hàm JS, spec chỉ nhận JSON); stacked bar ECharts không dựng được khoảng trống
+    ở đầu/giữa trục thời gian. Màu era theo COLOR_MAP[nhóm], break là xám nhạt từ PLOT_TEXT; nhãn
+    chữ trong thanh chỉ khi thanh >= 14% tổng chiều dài."""
+    t0, t1 = pd.Timestamp(eras[0]["start"]), pd.Timestamp(eras[-1]["end"]) + pd.Timedelta(days=1)
+    total_ms = max((t1 - t0).total_seconds() * 1000, 1)
+    fig = go.Figure()
+    tips = []
+    for e in eras:
+        a, b = pd.Timestamp(e["start"]), pd.Timestamp(e["end"]) + pd.Timedelta(days=1)
+        ms = (b - a).total_seconds() * 1000
+        col = f"rgba({_hex_rgb_str(PLOT_TEXT)},0.16)" if e["kind"] == "break" else COLOR_MAP.get(e["nhom"], PLOT_TEXT)
+        txt_col = PLOT_TEXT if e["kind"] == "break" else _readable_text(col)
+        tips.append(f"<b>{e['label']}</b><br>{e['start']:%d/%m/%Y} – {e['end']:%d/%m/%Y}"
+                    + (f"<br>{_fmt_hours_short(e['hours'])}" if e["kind"] == "era" else ""))
+        fig.add_trace(go.Bar(
+            x=[ms], y=[0], base=[a], orientation='h', name=e["label"], showlegend=False,
+            marker=dict(color=col), text=[e["label"] if ms / total_ms >= 0.14 else ""],
+            textposition='inside', insidetextanchor='middle', textfont=dict(color=txt_col, size=12)))
+    fig = format_plotly_fig(fig)
+    # format_plotly_fig() gắn customdata/hovertemplate theo "giờ" của trục y -- không áp dụng ở đây.
+    for tr, tip in zip(fig.data, tips):
+        tr.customdata = [[tip]]
+        tr.hovertemplate = '%{customdata[0]}<extra></extra>'
+    # b=56: CSS [data-testid="stPlotlyChart"] có padding 14px + overflow hidden nên vùng thấy được nhỏ
+    # hơn svg ~30px ở đáy -- chừa đáy lớn để nhãn trục x không bị cắt (xem ảnh chụp mobile/dark).
+    fig.update_layout(barmode='overlay', height=190, margin=dict(t=8, b=56, l=8, r=12),
+                      yaxis=dict(visible=False, range=[-0.5, 0.5]),
+                      xaxis=dict(type='date', range=[t0, t1], showgrid=False, automargin=True,
+                                 showticklabels=True, tickformat="%m/%Y", tickfont=dict(color=PLOT_TEXT)))
+    fig.update_traces(marker_cornerradius=4, selector=dict(type='bar'))
+    return fig
+
+
+def render_eras(df):
+    """"Theo giai đoạn" (Báo cáo -> Tổng quan, chương 2 Xu hướng): dải ngang các mùa/khoảng nghỉ
+    (_compute_eras) + bảng .dtbl bên dưới, mới nhất lên đầu -- Giai đoạn, Từ–Đến (link sang Báo cáo
+    Tháng), Độ dài, Tổng giờ, Dự án chính (link)."""
+    eras = _compute_eras(df, _today_vn())
+    if not eras:
+        st.caption("Chưa có dữ liệu.")
+        return
+    st.plotly_chart(_eras_fig(eras), width='stretch', config=PLOTLY_CONFIG)
+    rows_html = ''
+    for e in reversed(eras):
+        n = (e["end"] - e["start"]).days + 1
+        length = f"{round(n / 30.44)} tháng" if n >= 60 else f"{n} ngày"
+        rng = (_period_link_html(f"{e['start']:%Y-%m}", 'Tháng', label=f"{e['start']:%m/%Y}") + " – "
+               + _period_link_html(f"{e['end']:%Y-%m}", 'Tháng', label=f"{e['end']:%m/%Y}"))
+        if e["kind"] == "era":
+            col = COLOR_MAP.get(e["nhom"], PLOT_TEXT)
+            lbl = (f"<span style='display:inline-block;width:9px;height:9px;border-radius:50%;background:{col};"
+                   f"margin-right:7px;'></span>{html_escape(e['label'])}")
+            hrs = _fmt_hours_short(e["hours"])
+            projs = ", ".join(_entity_link_html(t, _proj_link_kind(nh, t)) for t, nh in e["top_projects"]) or "—"
+        else:
+            lbl = f"<span style='color:var(--text-3);'>{html_escape(e['label'])}</span>"
+            hrs, projs = "—", "—"
+        rows_html += ('<tr class="prow">'
+                      f'<td class="txt">{lbl}</td><td class="txt">{rng}</td><td>{length}</td>'
+                      f'<td>{hrs}</td><td class="txt">{projs}</td></tr>')
+    st.markdown(DTBL_CSS + f"""
+<div class="dtbl-wrap"><table class="dtbl">
+<thead><tr><th class="txt">Giai đoạn</th><th class="txt">Từ – Đến</th><th>Độ dài</th><th>Tổng giờ</th><th class="txt">Dự án chính</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+
 def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
     """"Điểm nhấn" (Báo cáo -> Tháng): 2 thẻ ngang tóm tắt nhanh -- "Kỷ lục trong tháng" (ngày dài
     nhất/phiên dài nhất kèm tên dự án/chuỗi liên tiếp dài nhất, tất cả tính RIÊNG trong tháng đang
@@ -10682,12 +10959,14 @@ elif nav == "Báo cáo":
 
             sec_chapter("bc-tq-ch2", 2, "Xu hướng")
             _tq_trend_view = st.segmented_control(
-                "Xem theo", ["Theo thời gian", "Theo khung giờ"], default="Theo thời gian",
+                "Xem theo", ["Theo thời gian", "Theo khung giờ", "Theo giai đoạn"], default="Theo thời gian",
                 key="bc_tq_trend_view", label_visibility="collapsed") or "Theo thời gian"
             if _tq_trend_view == "Theo thời gian":
                 frag_trend(df, "trend_main", "Nhóm")
-            else:
+            elif _tq_trend_view == "Theo khung giờ":
                 frag_hourly(df, "hour_main", "Nhóm")
+            else:
+                render_eras(df)
             sec_chapter("bc-tq-ch3", 3, "Bảng số liệu")
             frag_data_table(df, "tbl_main")
         else:
@@ -10832,6 +11111,7 @@ elif nav == "Báo cáo":
                 # "Điểm nhấn" gộp vào chương Tổng quan (không còn là chương riêng) -- 2 thẻ
                 # Kỷ lục trong tháng/So với tháng trước bổ sung ngay dưới hero+Top3 cũ.
                 render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m)
+                render_month_forest(df_m, y, m)
 
                 sec_chapter("bc-thang-ch2", 2, "Lịch tháng")
                 # Không cần stepper riêng (khác Tổng quan/Năm) -- tháng hiển thị LUÔN khớp tháng
@@ -10899,7 +11179,7 @@ elif nav == "Báo cáo":
                     (f"tính đến {_today_vn():%d/%m}" if _is_current_year_y else "tổng thời gian năm này"),
                     f"{_active_days_y} ngày hoạt động / {_elapsed_days_y} · {len(df_y)} phiên",
                     f"<div class='pbill-title'>{_pbill_title_y}</div><div class='pbill-sub'>{_pbill_sub_y}</div>",
-                    [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Lịch tháng"),
+                    [("bc-nam-ch1", "1 · Tổng quan"), ("bc-nam-ch2", "2 · Lịch"),
                      ("bc-nam-ch3", "3 · Nhóm cả năm"), ("bc-nam-ch4", "4 · Theo tháng"),
                      ("bc-nam-ch5", "5 · Bảng số liệu")])
                 _render_period_overview_hero(df_y, df, 'Năm', selected_year, prev_y, avg_y,
@@ -10914,16 +11194,24 @@ elif nav == "Báo cáo":
                 # Nhánh Năm có bộ mục 2-5 khác Tuần/Tháng (Biểu đồ lịch/Nhóm cả năm/Theo
                 # tháng thay vì Nhật ký/Phân bổ/Xu hướng/Khung giờ/Độ dài phiên) -- không đủ giống
                 # để viết chung 1 hàm với Tháng, giữ riêng ở đây.
-                sec_chapter("bc-nam-ch2", 2, "Lịch tháng")
-                # Bó gọn điều hướng trong ĐÚNG năm đang xem (lo=tháng 1, hi=tháng 12 -- hoặc
-                # tháng hiện tại nếu đang xem năm nay, tránh hiện các tháng tương lai trống trơn),
-                # mặc định mở ngay ở hi (tháng cuối có nghĩa của năm đó).
-                _rc_y = int(selected_year)
-                _rc_hi_m = _today_vn().month if _rc_y == _today_vn().year else 12
-                with st.container(border=True, key="jcard_bcnam_cal"):
-                    frag_report_calendar_month(
-                        f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
-                        lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
+                sec_chapter("bc-nam-ch2", 2, "Lịch")
+                # Góc nhìn "Cả năm" (lịch nhiệt ECharts) hoặc "Từng tháng" (lịch lưới có stepper,
+                # đúng code cũ) -- cùng pattern segmented_control với bc_tq_trend_view.
+                _nam_cal_view = st.segmented_control(
+                    "Xem theo", ["Cả năm", "Từng tháng"], default="Cả năm",
+                    key="bc_nam_cal_view", label_visibility="collapsed") or "Cả năm"
+                if _nam_cal_view == "Cả năm":
+                    render_year_heatmap(df_y, int(selected_year))
+                else:
+                    # Bó gọn điều hướng trong ĐÚNG năm đang xem (lo=tháng 1, hi=tháng 12 -- hoặc
+                    # tháng hiện tại nếu đang xem năm nay, tránh hiện các tháng tương lai trống
+                    # trơn), mặc định mở ngay ở hi (tháng cuối có nghĩa của năm đó).
+                    _rc_y = int(selected_year)
+                    _rc_hi_m = _today_vn().month if _rc_y == _today_vn().year else 12
+                    with st.container(border=True, key="jcard_bcnam_cal"):
+                        frag_report_calendar_month(
+                            f"bcnam_{selected_year}", df, _rc_wc, _rc_rl, _rc_notes,
+                            lo_ym=(_rc_y, 1), hi_ym=(_rc_y, _rc_hi_m), default_ym=(_rc_y, _rc_hi_m))
 
                 sec_chapter("bc-nam-ch3", 3, "Nhóm cả năm")
                 render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y)

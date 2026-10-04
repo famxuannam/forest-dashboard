@@ -169,6 +169,21 @@ không đội payload trang — thêm 1 font mới vào `BODY_FONTS` cần: tả
 Fonts dùng chung range này cho mọi font sans phổ biến) vào `assets/fonts/` theo đúng quy ước tên
 `<file_prefix>-<subset>.woff2`.
 
+## Biểu đồ ECharts (`st.echarts_chart`, Streamlit >= 1.64)
+
+Dùng cho biểu đồ cần hình dạng riêng (cây trong "Khu rừng tháng này", calendar heatmap năm). Giống
+Plotly, CSS variable KHÔNG chạm vào canvas, nên:
+
+- `theme=None`, tự đặt `backgroundColor: "transparent"`, `textStyle.color` và màu chữ trục/legend/
+  visualMap = `PLOT_TEXT`; màu series từ `COLOR_MAP` / `_teal_shades()`; ô trống/nền nhạt dựng từ
+  `PLOT_TEXT` qua `_hex_rgb_str()` (`rgba(...,0.07)`). Truyền `alt="..."` mô tả tiếng Việt.
+- `spec` chỉ nhận JSON: **không** callback JS (`formatter` dạng hàm, `renderItem`), nên không có series
+  `custom`, map/geo hay 3D. Tooltip dùng formatter chuỗi `"{b}"` và gắn sẵn chuỗi hiển thị vào `name` của
+  từng data item. Không có sự kiện click/selection nên không điều hướng được từ biểu đồ.
+- Scatter mặc định `opacity` 0.8 -- đặt `itemStyle.opacity: 1` nếu màu phải khớp đúng màu ở chỗ khác.
+- Dựng spec trong hàm riêng trả dict (`_forest_spec`, `_year_heatmap_spec`) để kiểm tra bằng script
+  thuần mà không cần Streamlit. Danh sách biểu đồ: xem "Biểu đồ mới ở Báo cáo" ở `ui-components.md`.
+
 ## Bẫy: `st.metric` bị ẩn toàn cục bằng CSS
 
 Có 1 rule CSS `[data-testid="stMetric"] { display: none; }` trong khối CSS chính — **mọi lời gọi
