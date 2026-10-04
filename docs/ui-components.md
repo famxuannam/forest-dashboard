@@ -118,6 +118,43 @@ hàng ngày cuối tháng gần sát viền đáy card.
   `[data-testid="stPlotlyChart"]` có padding 14px + `overflow:hidden`, cắt ~30px đáy svg -- nên fig này
   chừa `margin b=56` để nhãn trục x không bị cắt.
 
+## Huy hiệu ghi nhận sau, "Phát hiện" và "Ôn hôm nay" (Giai đoạn 4)
+
+Cả ba chỉ **ghi nhận/hồi cứu** điều đã xảy ra, không đặt mục tiêu hay nhắc nhở.
+
+- **Huy hiệu** — `_compute_milestones(df)` (`@st.cache_data`, chỉ phụ thuộc `df`, không lấy nguồn sách/
+  Kindle) trả list `{date, kind, icon, title, detail}` theo ngày: tổng giờ, số cây, giờ theo Dự án, phiên
+  dài (phiên ĐẦU TIÊN đạt ngưỡng), chuỗi ngày (ngày đầu tiên một chuỗi đạt N) và "Quay lại" (mỗi khoảng
+  nghỉ >= `COMEBACK_MIN_GAP`). Ngưỡng là các tuple `MILESTONE_*` cạnh `RECORD_MIN_DAYS`. Phiên sắp theo
+  `Thời gian bắt đầu` trước khi cộng dồn; 1 phiên vượt nhiều ngưỡng thì ghi nhận đủ từng ngưỡng.
+  - **Gắn vào hệ chip "Kỷ lục"**: `_compute_alltime_records()` thêm mỗi mốc vào `day_badges` dạng
+    `{"kind": "milestone", "title", "icon"}` và trả thêm key `"milestones"`. `_record_chips_html()` render
+    `<span class='jchip rec ms'>` (class `ms` tắt icon cúp mặc định của `.jchip.rec::before` vì huy hiệu
+    có icon `_mi()` riêng) và đổi nhãn hàng thành "Kỷ lục & huy hiệu" CHỈ khi có ít nhất 1 huy hiệu --
+    nên ghi chú ngày, Nhật ký, "Ngày này năm trước/tuần trước" và ngăn kéo "Một ngày ngẫu nhiên" tự hiện
+    huy hiệu. Hệ quả: ngày có huy hiệu cũng thành 1 dòng ở Nhật ký Tuần/Tháng (như ngày giữ kỷ lục).
+    Thêm 1 `kind` mới vào `day_badges` thì `_record_chips_html()` là nơi DUY NHẤT đọc `b["kind"]`.
+  - **Thẻ "Huy hiệu"** (`_render_badges_card`, card `jcard_badges`) ở Báo cáo → Tổng quan, chương 1 sau
+    `render_top_3`: 8 huy hiệu mới nhất + nút "Xem tất cả (N)" mở `_badges_dialog()`
+    (`@st.dialog("Huy hiệu", position="right")`, nhóm theo năm, mới nhất trước). Ẩn khi chưa có huy hiệu.
+  - **Toast** `_toast_today_milestones(df)` (gọi ngay sau `prep_analysis_data()`): có huy hiệu ghi nhận
+    đúng `_today_vn()` thì toast 1 lần mỗi session (`_milestone_toasted`, đặt ngay lần kiểm tra đầu),
+    thường ngay sau khi `_auto_sync_on_open()` nạp dữ liệu mới.
+- **"Phát hiện"** — `_compute_insights(df, wc, rl, notes, today)` (`@st.cache_data`) trả list
+  `(icon, html_sentence)`, hiển thị ở card `jcard_insights` ngay sau thẻ Huy hiệu (`_render_insights_card`).
+  4 nhận xét (lịch hẹn ↔ giờ tập trung T2–T6, đọc sách ↔ giờ tập trung ngoài đọc sách, ghi chú ↔ tổng giờ,
+  buổi có phiên dài nhất), mỗi cái có ngưỡng mẫu tối thiểu (8–15 ngày/phiên) và chênh lệch tương đối
+  >= 15% (20% với buổi); không đạt thì BỎ HẲN (không có câu "chưa đủ dữ liệu"); nguồn phụ rỗng/None không
+  crash; cả card ẩn nếu không có nhận xét nào. Cuối card luôn có câu "tương quan, không phải quan hệ
+  nhân quả". Câu chữ trung tính + có số liệu, không khuyên bảo.
+- **"Ôn hôm nay"** — `_render_kindle_review(kh)` (card `jcard_kqreview`) đầu sub-tab Sách → "Trích dẫn":
+  5 highlight chọn bằng `random.Random(f"{hôm nay}|{kq_review_salt}")` (cố định trong ngày, "Bộ khác" tăng
+  salt qua `on_click`), trọng số Yêu thích x3, không trùng, loại trích dẫn đang hiện ở billboard Hôm nay.
+  Chỉ số trích dẫn billboard được TÍNH LẠI theo seed (hoặc đọc `kq_daily_idx` nếu đã có cho đúng hôm nay)
+  mà KHÔNG gọi `_kindle_quote_of_day()` -- hàm đó ghi `kq_daily_*` vào session_state và sẽ lệch trạng thái
+  billboard. Mỗi câu là `_render_kindle_quote_row(..., key_suffix="kqreview_")` (khoá riêng, không đụng
+  `fav_` của danh sách bên dưới). Dưới 6 highlight thì ẩn khối.
+
 ## Bẫy: `st.metric` bị CSS ẩn đi — xem `theming.md`
 
 Đừng dùng `st.metric()` cho số liệu đơn giản; xem phần "Bẫy: `st.metric` bị ẩn toàn cục" trong

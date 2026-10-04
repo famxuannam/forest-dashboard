@@ -203,6 +203,13 @@ RECORD_MIN_DAYS = 5
 # hiệu "Quay lại" sau này. Một hằng số để dễ chỉnh.
 COMEBACK_MIN_GAP = 14
 
+# Huy hiệu ghi nhận SAU (xem _compute_milestones()) -- chỉ ghi lại điều đã xảy ra, không phải chỉ tiêu.
+MILESTONE_TOTAL_HOURS = (10, 50, 100, 250, 500, 1000, 2000, 5000)  # tổng giờ tập trung tích luỹ
+MILESTONE_TREES = (100, 250, 500, 1000, 2500, 5000)  # số cây (phiên) tích luỹ
+MILESTONE_PROJECT_HOURS = (10, 50, 100, 250, 500)  # giờ tích luỹ riêng từng Dự án
+MILESTONE_LONG_SESSION_MIN = (90, 120, 180)  # phút -- phiên đầu tiên đạt mỗi ngưỡng
+MILESTONE_STREAK_DAYS = (7, 14, 30, 60, 100)  # số ngày liên tiếp
+
 # render_reading_log() dùng chung cho tab "Nhật ký đọc sách" (mặc định) và tab "Gundam" (truyền
 # labels=GUNDAM_LABELS) -- chỉ khác nhau ở CHỮ hiển thị, không khác logic tính toán. Tên cột nội
 # bộ trong DataFrame (vd 'Cuốn sách', 'Trạng thái') giữ nguyên bất kể labels nào đang dùng.
@@ -2814,6 +2821,70 @@ def _render_period_overview_hero(df_period, full_df, period_col, selected_key, p
 
 
 @st.cache_data
+def _compute_milestones(df):
+    """Huy hiệu ghi nhận SAU: list dict {date, kind, icon, title, detail} sắp theo ngày, chỉ phụ
+    thuộc df đã chuẩn bị (không lấy nguồn sách/Kindle) nên cache theo df như
+    _compute_alltime_records(). Phiên sắp theo `Thời gian bắt đầu` trước khi cộng dồn; ngày ghi nhận
+    lấy cột `Ngày`. 1 phiên vượt NHIỀU ngưỡng cùng lúc thì ghi nhận đủ từng ngưỡng. Các loại:
+    tổng giờ (MILESTONE_TOTAL_HOURS), số cây (MILESTONE_TREES), giờ theo Dự án
+    (MILESTONE_PROJECT_HOURS), phiên dài (MILESTONE_LONG_SESSION_MIN, phiên ĐẦU TIÊN đạt ngưỡng),
+    chuỗi ngày (MILESTONE_STREAK_DAYS, ngày đầu tiên một chuỗi đạt N) và "Quay lại" (mỗi khoảng
+    nghỉ >= COMEBACK_MIN_GAP ngày, ghi nhận vào ngày có phiên đầu tiên sau đó)."""
+    if df is None or df.empty:
+        return []
+    s = (df[['Ngày', 'Dự án', 'Thời lượng (Phút)', 'Thời gian bắt đầu']]
+         .sort_values('Thời gian bắt đầu', kind='stable').reset_index(drop=True))
+    mins = s['Thời lượng (Phút)'].astype(float)
+    out = []
+
+    def _n(v):
+        return f"{v:,}".replace(",", ".")
+
+    cum = mins.cumsum()
+    for h in MILESTONE_TOTAL_HOURS:
+        i = int(cum.searchsorted(h * 60, side='left'))
+        if i < len(s):
+            out.append({"date": s.at[i, 'Ngày'], "kind": "total_hours", "icon": "hourglass_bottom",
+                        "title": f"{_n(h)} giờ tập trung", "detail": "Tổng giờ tích luỹ"})
+    for n in MILESTONE_TREES:
+        if len(s) >= n:
+            out.append({"date": s.at[n - 1, 'Ngày'], "kind": "trees", "icon": "park",
+                        "title": f"Cây thứ {_n(n)}", "detail": "Số phiên tích luỹ"})
+    for proj, g in s.groupby('Dự án', sort=True):
+        pc = g['Thời lượng (Phút)'].astype(float).cumsum().reset_index(drop=True)
+        for h in MILESTONE_PROJECT_HOURS:
+            i = int(pc.searchsorted(h * 60, side='left'))
+            if i < len(pc):
+                out.append({"date": g['Ngày'].iloc[i], "kind": "project_hours", "icon": "workspace_premium",
+                            "title": f"{_n(h)} giờ cho {proj}", "detail": f"Dự án {proj}"})
+    for m in MILESTONE_LONG_SESSION_MIN:
+        hit = s[mins >= m]
+        if not hit.empty:
+            r = hit.iloc[0]
+            out.append({"date": r['Ngày'], "kind": "long_session", "icon": "timelapse",
+                        "title": f"Phiên đầu tiên dài {m} phút", "detail": f"{r['Dự án']} · {int(r['Thời lượng (Phút)'])}′"})
+
+    days = sorted(s['Ngày'].unique())
+    runs, start, prev = [], days[0], days[0]
+    for d in days[1:]:
+        if (d - prev).days != 1:
+            runs.append((start, prev)); start = d
+        prev = d
+    runs.append((start, prev))
+    for n in MILESTONE_STREAK_DAYS:
+        dates = [a + timedelta(days=n - 1) for a, b in runs if (b - a).days + 1 >= n]
+        if dates:
+            out.append({"date": min(dates), "kind": "streak", "icon": "local_fire_department",
+                        "title": f"Chuỗi {n} ngày", "detail": "Lần đầu một chuỗi liên tiếp đạt mốc này"})
+    for a, b in zip(days, days[1:]):
+        gap = (b - a).days
+        if gap >= COMEBACK_MIN_GAP:
+            out.append({"date": b, "kind": "comeback", "icon": "waving_hand",
+                        "title": f"Quay lại sau {gap} ngày", "detail": f"Lần trước: {a:%d/%m/%Y}"})
+    return sorted(out, key=lambda m: m["date"])
+
+
+@st.cache_data
 def _compute_alltime_records(df):
     """"Bảng vàng": kỷ lục TOÀN THỜI GIAN -- top 3 ngày nhiều giờ nhất chung (overall_top3, tái
     dùng bởi Bảng số liệu Tổng quan) + kỷ lục #1 riêng theo từng Dự án/Nhóm đủ ngưỡng
@@ -2852,12 +2923,159 @@ def _compute_alltime_records(df):
     project_records = _group_records(df, 'Dự án')
     category_records = _group_records(df[df['Có nhóm']], 'Nhóm')
 
+    # Huy hiệu ghi nhận sau (xem _compute_milestones()) gắn vào CÙNG day_badges để mọi nơi đang hiện
+    # chip Kỷ lục tự hiện huy hiệu, không phải sửa từng nơi.
+    milestones = _compute_milestones(df)
+    for m in milestones:
+        _add_badge(m["date"], {"kind": "milestone", "title": m["title"], "icon": m["icon"]})
+
     return {
         "overall_top3": overall_top3,
         "project_records": project_records,
         "category_records": category_records,
         "day_badges": day_badges,
+        "milestones": milestones,
     }
+
+
+@st.cache_data
+def _compute_insights(df, wc, rl, notes, today=None):
+    """Phát hiện từ nhiều nguồn dữ liệu -> list (icon, html_sentence). Mỗi nhận xét có ngưỡng mẫu tối
+    thiểu và chênh lệch tương đối tối thiểu (|a-b| / max(a,b) >= 15%); không đạt thì BỎ HẲN (không có
+    câu "chưa đủ dữ liệu"). wc/rl/notes là nguồn phụ tuỳ chọn -- rỗng/None thì nhận xét dùng nó bị bỏ,
+    không crash. `today` truyền tường minh (mặc định _today_vn()) để khoá cache đổi qua ngày. Chỉ là
+    tương quan trong dữ liệu, câu chữ trung tính và có số liệu, không khuyên bảo.
+    1. Lịch hẹn: ngày T2-T6 trong khoảng có dữ liệu lịch (<= hôm nay), nhóm >= 3 lịch hẹn vs 0-1;
+       chỉ số giờ tập trung TB/ngày (ngày 0 giờ tính 0); >= 8 ngày mỗi nhóm.
+    2. Đọc sách: trong các ngày có phiên, ngày có reading_log (không Gundam) vs không; chỉ số giờ tập
+       trung KHÔNG tính Nhóm BOOKS_GROUP/GUNDAM_TAG (tránh tự cộng giờ đọc); >= 10 ngày mỗi nhóm.
+    3. Ghi chú: trong các ngày có phiên, ngày có ghi chú chính vs không; chỉ số tổng giờ; >= 10 ngày mỗi nhóm.
+    4. Buổi: buổi có >= 15 phiên và độ dài TB dài hơn TB chung >= 20% (chọn buổi cao nhất)."""
+    out = []
+    if df is None or df.empty:
+        return out
+    today = today or _today_vn()
+    focus = df.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
+
+    def _rel(a, b):
+        hi = max(a, b)
+        return abs(a - b) / hi if hi > 0 else 0.0
+
+    def _mean(xs):
+        return sum(xs) / len(xs)
+
+    if wc is not None and not wc.empty:
+        wd = wc['Thời gian bắt đầu'].dt.date
+        lo, hi = wd.min(), min(wd.max(), today)
+        cnt = wd.value_counts()
+        days = [lo + timedelta(days=i) for i in range((hi - lo).days + 1)]
+        days = [d for d in days if d.weekday() < 5]
+        many = [float(focus.get(d, 0.0)) for d in days if cnt.get(d, 0) >= 3]
+        few = [float(focus.get(d, 0.0)) for d in days if cnt.get(d, 0) <= 1]
+        if len(many) >= 8 and len(few) >= 8 and _rel(_mean(many), _mean(few)) >= 0.15:
+            out.append(("event", f"Ngày có từ 3 lịch hẹn trở lên, bạn tập trung trung bình "
+                                 f"<b>{_fmt_hours_short(_mean(many))}</b>, so với <b>{_fmt_hours_short(_mean(few))}</b> ở ngày ít lịch."))
+
+    if rl is not None and not rl.empty:
+        rd = rl[~rl['Sách (gốc)'].map(_is_gundam_list)]
+        read_days = set(pd.to_datetime(rd['Ngày hoàn thành']).dt.date)
+        other = (df[~df['Nhóm'].isin([BOOKS_GROUP, GUNDAM_TAG])].groupby('Ngày')['Thời lượng (Phút)'].sum() / 60)
+        yes = [float(other.get(d, 0.0)) for d in focus.index if d in read_days]
+        no = [float(other.get(d, 0.0)) for d in focus.index if d not in read_days]
+        if len(yes) >= 10 and len(no) >= 10 and _rel(_mean(yes), _mean(no)) >= 0.15:
+            out.append(("menu_book", f"Ngày có đọc sách, giờ tập trung ngoài đọc sách trung bình "
+                                     f"<b>{_fmt_hours_short(_mean(yes))}</b>, so với <b>{_fmt_hours_short(_mean(no))}</b> ở ngày không đọc."))
+
+    if notes is not None and not notes.empty:
+        nn = notes[~notes['Ghi chú'].map(_note_is_empty)]
+        note_days = set(pd.to_datetime(nn['Ngày'], errors='coerce').dt.date.dropna())
+        yes = [float(focus[d]) for d in focus.index if d in note_days]
+        no = [float(focus[d]) for d in focus.index if d not in note_days]
+        if len(yes) >= 10 and len(no) >= 10 and _rel(_mean(yes), _mean(no)) >= 0.15:
+            out.append(("edit_note", f"Ngày có ghi chú chính, bạn tập trung trung bình "
+                                     f"<b>{_fmt_hours_short(_mean(yes))}</b>, so với <b>{_fmt_hours_short(_mean(no))}</b> ở ngày không có ghi chú."))
+
+    buoi = df['Thời gian bắt đầu'].map(lambda t: _buoi_of(pd.Timestamp(t).hour))
+    overall = float(df['Thời lượng (Phút)'].mean())
+    best = None
+    for name, g in df.groupby(buoi):
+        m = float(g['Thời lượng (Phút)'].mean())
+        if len(g) >= 15 and overall > 0 and m >= overall * 1.2 and (best is None or m > best[1]):
+            best = (name, m)
+    if best:
+        out.append(("schedule", f"Phiên buổi <b>{best[0].lower()}</b> dài nhất: trung bình <b>{best[1]:.0f}′</b>, "
+                                f"so với <b>{overall:.0f}′</b> trung bình chung."))
+    return out
+
+
+def _milestone_rows_html(items):
+    """Các hàng huy hiệu (icon + tiêu đề + chi tiết + ngày có link), dùng cho thẻ và dialog."""
+    return "".join(
+        "<div style='display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--divider);'>"
+        f"<span style='color:var(--accent-dark);flex-shrink:0;'>{_mi(m['icon'], 20)}</span>"
+        f"<span style='flex:1;min-width:0;'><b style='color:var(--text);'>{html_escape(m['title'])}</b>"
+        f"<br><span style='font-size:12px;color:var(--text-3);'>{html_escape(m['detail'])}</span></span>"
+        f"<span style='font-size:12.5px;white-space:nowrap;'>{_day_link_html(m['date'])}</span></div>"
+        for m in items)
+
+
+@st.dialog("Huy hiệu", position="right")
+def _badges_dialog():
+    """Toàn bộ huy hiệu ghi nhận sau, nhóm theo năm, mới nhất trước (dialog là fragment, định nghĩa
+    ở cấp module -- xem _peek_dialog())."""
+    ms = _compute_alltime_records(df)["milestones"]
+    if not ms:
+        st.caption("Chưa có huy hiệu nào.")
+        return
+    for y in sorted({m["date"].year for m in ms}, reverse=True):
+        st.markdown(f"<span class='rl-book' style='margin-top:10px;'>{y}</span>"
+                    + _milestone_rows_html([m for m in reversed(ms) if m["date"].year == y]),
+                    unsafe_allow_html=True)
+
+
+def _render_badges_card(df):
+    """Thẻ "Huy hiệu" (Báo cáo -> Tổng quan, chương 1, sau Top 3): 8 huy hiệu mới nhất + nút "Xem tất
+    cả (N)" mở _badges_dialog(). Ẩn cả thẻ nếu chưa có huy hiệu nào."""
+    ms = _compute_alltime_records(df)["milestones"]
+    if not ms:
+        return
+    with st.container(border=True, key="jcard_badges"):
+        st.markdown("<span class='rl-book'>Huy hiệu</span>" + _milestone_rows_html(list(reversed(ms))[:8]),
+                    unsafe_allow_html=True)
+        if st.button(f"Xem tất cả ({len(ms)})", icon=":material/military_tech:", key="badges_all_btn"):
+            _badges_dialog()
+
+
+def _render_insights_card(df, wc, rl, notes):
+    """Thẻ "Phát hiện" (ngay sau thẻ Huy hiệu): các nhận xét của _compute_insights(); ẩn cả thẻ khi
+    không có nhận xét nào đạt ngưỡng."""
+    items = _compute_insights(df, wc, rl, notes, _today_vn())
+    if not items:
+        return
+    rows = "".join(
+        "<div style='display:flex;align-items:flex-start;gap:10px;padding:6px 0;'>"
+        f"<span style='color:var(--accent-dark);flex-shrink:0;'>{_mi(ic, 18)}</span>"
+        f"<span style='font-size:14px;line-height:1.55;color:var(--text);'>{txt}</span></div>"
+        for ic, txt in items)
+    with st.container(border=True, key="jcard_insights"):
+        st.markdown("<span class='rl-book'>Phát hiện</span>" + rows
+                    + "<div style='font-size:12px;color:var(--text-3);padding:6px 0 4px;'>"
+                      "Đây là tương quan trong dữ liệu của bạn, không phải quan hệ nhân quả.</div>",
+                    unsafe_allow_html=True)
+
+
+def _toast_today_milestones(df):
+    """Toast 1 lần mỗi session nếu có huy hiệu ghi nhận ĐÚNG hôm nay (thường ngay sau khi tự đồng bộ,
+    xem _auto_sync_on_open()). Cờ đặt ngay lần kiểm tra đầu để không tính lại mỗi lần rerun."""
+    if st.session_state.get("_milestone_toasted"):
+        return
+    st.session_state["_milestone_toasted"] = True
+    if df.empty:
+        return
+    today = _today_vn()
+    titles = [m["title"] for m in _compute_alltime_records(df)["milestones"] if m["date"] == today]
+    if titles:
+        st.toast("Huy hiệu mới: " + " · ".join(titles), icon=":material/military_tech:")
 
 
 def _mi(name, size=13):
@@ -3028,7 +3246,12 @@ def _record_chips_html(badges):
     _proj_to_cat = df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first() if not df.empty else {}
     _ORD = {1: "Hạng nhất", 2: "Hạng nhì", 3: "Hạng ba"}
     parts = []
+    has_milestone = False
     for b in badges:
+        if b["kind"] == "milestone":
+            has_milestone = True
+            parts.append(f"<span class='jchip rec ms'>{_mi(b['icon'])} {html_escape(b['title'])}</span>")
+            continue
         if b["kind"] == "overall":
             label_html = html_escape(_ORD.get(b["rank"], f"Hạng {b['rank']}") + " mọi thời đại")
         elif b["kind"] == "Nhóm":
@@ -3037,7 +3260,7 @@ def _record_chips_html(badges):
             _kind = _proj_link_kind(_proj_to_cat.get(b['name']), b['name'])
             label_html = f"Kỷ lục {_entity_link_html(b['name'], _kind)}"
         parts.append(f"<span class='jchip rec'>{label_html}</span>")
-    return _chip_row_html("Kỷ lục", ''.join(parts))
+    return _chip_row_html("Kỷ lục & huy hiệu" if has_milestone else "Kỷ lục", ''.join(parts))
 
 
 def _assign_reading_sessions(tag_sessions, rl_subset, overrides=None):
@@ -3163,6 +3386,45 @@ def _kindle_note_children(df):
     return children, is_child
 
 
+def _kq_review_next():
+    st.session_state["kq_review_salt"] = st.session_state.get("kq_review_salt", 0) + 1
+
+
+def _render_kindle_review(kh):
+    """Khối "Ôn hôm nay" đầu sub-tab Trích dẫn: 5 highlight chọn bằng random.Random(f"{hôm nay}|{salt}")
+    (cố định trong ngày, nút "Bộ khác" tăng salt), trọng số Yêu thích x3 / còn lại x1, không trùng
+    nhau, loại trích dẫn đang hiện ở billboard Hôm nay. Chỉ số của trích dẫn billboard tính LẠI theo
+    seed (hoặc đọc kq_daily_idx nếu đã có cho đúng hôm nay) mà KHÔNG gọi _kindle_quote_of_day() --
+    hàm đó ghi kq_daily_* vào session_state và sẽ lệch trạng thái billboard. Dưới 6 highlight thì ẩn
+    khối (còn lại ít hơn 5 sau khi loại). Mỗi câu dùng _render_kindle_quote_row() để có sẵn ⭐/Sửa/
+    Xoá; key_suffix riêng ("kqreview_") để không đụng khoá với danh sách bên dưới ("fav_")."""
+    hl = kh[kh['Loại'] == 'highlight']
+    if len(hl) < 6:
+        return
+    iso = _today_vn().isoformat()
+    idx = (st.session_state["kq_daily_idx"] if st.session_state.get("kq_daily_date") == iso
+           else random.Random(iso).randrange(len(hl)))
+    pool = hl[hl['dedupe_hash'] != hl.iloc[idx % len(hl)]['dedupe_hash']]
+    rng = random.Random(f"{iso}|{st.session_state.get('kq_review_salt', 0)}")
+    rows = list(pool.to_dict("records"))
+    picked = []
+    for _ in range(min(5, len(rows))):
+        w = [3 if r.get('Yêu thích') else 1 for r in rows]
+        picked.append(rows.pop(rng.choices(range(len(rows)), weights=w, k=1)[0]))
+    with st.container(border=True, key="jcard_kqreview"):
+        h1, h2 = st.columns([4, 1], vertical_alignment="center")
+        with h1:
+            st.markdown("<span class='rl-book'>Ôn hôm nay</span>", unsafe_allow_html=True)
+        with h2:
+            st.button("Bộ khác", icon=":material/shuffle:", key="kq_review_next_btn", on_click=_kq_review_next)
+        for r in picked:
+            # Tên sách đứng TRÊN câu (không phải dưới): trên mobile cụm nút Sửa/Xoá xuống hàng riêng
+            # dưới câu, dòng nguồn đặt dưới sẽ trông như thuộc về câu kế tiếp.
+            st.markdown(f"<div class='kq-loc' style='margin:12px 0 0 2px;'>{_entity_link_html(r['Cuốn sách'], 'book')}</div>",
+                        unsafe_allow_html=True)
+            _render_kindle_quote_row(pd.Series(r), key_suffix="kqreview_")
+
+
 def _render_kindle_quotes_tab():
     """Sub-tab "Trích dẫn" (trang Sách, không có ở Gundam -- xem show_favorites ở
     render_reading_log()): duyệt lại MỌI trích dẫn/ghi chú Kindle đã lưu, gộp theo cuốn sách --
@@ -3201,6 +3463,8 @@ def _render_kindle_quotes_tab():
         st.info("Chưa có trích dẫn/ghi chú Kindle nào. Tải file My Clippings.txt ở mục \"Tải "
                 "trích dẫn Kindle\" (tab Tuỳ biến) để bắt đầu.")
         return
+
+    _render_kindle_review(kh)
 
     fcol1, fcol2 = st.columns([2, 1])
     with fcol1:
@@ -8913,6 +9177,8 @@ _MAIN_CSS = """
     .jchip.rec, .jchip.book, .jchip.gundam { font-weight: 600; color: var(--text); }
     .jchip.rec { background: rgba(var(--accent-rgb),0.10); }
     .jchip.rec::before { content: "emoji_events"; }
+    /* Huy hiệu ghi nhận sau mang icon riêng (_mi) -- bỏ cúp mặc định để không có 2 icon liền nhau. */
+    .jchip.rec.ms::before { content: none; }
     .jchip.book::before { content: "menu_book"; }
     .jchip.gundam::before { content: "tv"; }
     /* Nhãn tên sách phía trên chip các phần đã đọc (box Đọc sách, Nhật ký đọc sách) -- nhại
@@ -9451,6 +9717,7 @@ st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=
 
 _auto_sync_on_open()
 df = prep_analysis_data()
+_toast_today_milestones(df)
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
 # người dùng, đổi kiến trúc điều hướng thật -- xem docs/architecture-navigation.md). Wordmark +
@@ -10956,6 +11223,8 @@ elif nav == "Báo cáo":
             _wk_now = _today_vn().strftime('%G-W%V')
             with c_top1: render_top_3(df, 'Nhóm', 'Top 3 Nhóm', week_key=_wk_now)
             with c_top2: render_top_3(df, 'Dự án', 'Top 3 Dự án', week_key=_wk_now)
+            _render_badges_card(df)
+            _render_insights_card(df, _rc_wc, _rc_rl, _rc_notes)
 
             sec_chapter("bc-tq-ch2", 2, "Xu hướng")
             _tq_trend_view = st.segmented_control(
