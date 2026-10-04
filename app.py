@@ -158,7 +158,6 @@ DB_FILE = "database.csv"
 MAPPING_FILE = "mapping.csv"
 DELETED_FILE = "deleted.csv"  # khoá thời gian của các phiên đã xoá -> không nạp lại
 NOTES_FILE = "notes.csv"  # ghi chú/nhật ký theo ngày
-QUICK_NOTES_FILE = "quick_notes.csv"  # ghi chú nhanh từ Shortcut iOS, đứng độc lập với notes
 WORK_CALENDAR_FILE = "work_calendar.csv"  # appointment đồng bộ từ lịch Work
 READING_LOG_FILE = "reading_log.csv"  # phần sách/Gundam đã đọc/xem, nạp từ Apple Reminders
 SETTINGS_FILE = "settings.csv"  # cấu hình tuỳ chỉnh (hiện dùng cho màu accent)
@@ -658,55 +657,6 @@ def save_notes_bulk(df):
     load_notes.clear()
 
 
-@st.cache_data(ttl=30)
-def load_quick_notes():
-    """Ghi chú nhanh -- "hộp thư nháp" trong ngày, ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG
-    qua app). Không tự động gộp vào Ghi chú chính, nhưng có nút
-    "Gộp" ở render_note_editor() để người dùng chủ động chọn lúc nào tổng hợp (xem docstring hàm
-    đó) -- 2 bảng vẫn tách biệt, chỉ có 1 thao tác 1 chiều nối nội dung + xoá quick note gốc.
-    ttl=30 (khác load_notes() cache vô hạn) vì bảng này có thể bị thay đổi từ NGOÀI vòng save_*/
-    xoá của app -- vòng đó tự gọi load_quick_notes.clear(), nhưng 1 INSERT từ Shortcut thì không,
-    nên phải tự hết hạn theo thời gian để quick note mới hiện ra mà không cần chờ 1 thao tác lưu
-    khác trong app."""
-    sb = _get_supabase()
-    data = _sb_select_all(lambda: sb.table("quick_notes").select("id,ts,note_text").order("ts").order("id"))
-    cols = ["id", "Thời gian", "Nội dung"]
-    if not data:
-        return pd.DataFrame(columns=cols)
-    df = pd.DataFrame(data).rename(columns={"ts": "Thời gian", "note_text": "Nội dung"})[cols]
-    df["Thời gian"] = pd.to_datetime(df["Thời gian"])
-    return df
-
-
-def delete_quick_note(note_id):
-    """Xoá 1 quick note lẻ (vd gõ nhầm trên Shortcut) -- nút xoá trên từng chip ở render_note_editor()."""
-    _get_supabase().table("quick_notes").delete().eq("id", int(note_id)).execute()
-    load_quick_notes.clear()
-
-
-def update_quick_note(note_id, text):
-    """Sửa nội dung 1 quick note lẻ tại chỗ (không đụng tới giờ "ts" -- giờ là lúc note được tạo,
-    không phải lúc sửa). Rỗng (sau khi strip) = xoá luôn dòng đó, nhất quán với hành vi save_note()
-    của Ghi chú chính (rỗng = xoá)."""
-    text = str(text).strip()
-    if not text:
-        delete_quick_note(note_id)
-        return
-    _get_supabase().table("quick_notes").update({"note_text": text}).eq("id", int(note_id)).execute()
-    load_quick_notes.clear()
-
-
-def save_quick_notes_bulk(df):
-    """Ghi đè toàn bộ quick note (dùng khi Khôi phục từ bản sao lưu)."""
-    sb = _get_supabase()
-    _sb_delete_all("quick_notes", "id")
-    if not df.empty:
-        recs = [{"ts": _fmt_ts(r["Thời gian"]), "note_text": str(r["Nội dung"])} for r in df.to_dict("records")]
-        if recs:
-            sb.table("quick_notes").insert(recs).execute()
-    load_quick_notes.clear()
-
-
 def save_settings_bulk(df):
     """Ghi đè toàn bộ settings (dùng khi Khôi phục từ bản sao lưu)."""
     sb = _get_supabase()
@@ -1124,8 +1074,8 @@ def save_kindle_highlights_raw_bulk(df):
 def update_kindle_highlight_content(dedupe_hash, content):
     """Sửa nội dung 1 trích dẫn/ghi chú Kindle tại chỗ -- KHÔNG đổi dedupe_hash (khoá chính giữ
     nguyên, tính từ nội dung GỐC lúc tạo/import, không tính lại sau khi sửa). Bỏ qua nếu nội dung
-    sau khi strip() rỗng -- không cho sửa thành trống (khác quy ước "sửa thành trống = xoá" của
-    Ghi chú nhanh, vì ở đây đã có nút Xoá riêng, rõ ràng hơn là suy luận từ ô trống)."""
+    sau khi strip() rỗng -- không cho sửa thành trống (đã có nút Xoá riêng, rõ ràng hơn là suy
+    luận từ ô trống)."""
     content = content.strip()
     if not content:
         return
@@ -3206,31 +3156,6 @@ def _period_link_html(p, time_col, label=None):
     return f"<a class='entity-link' href='{_href}' target='_self'>{_label}</a>"
 
 
-def _quick_notes_on(qn_df, day):
-    """Lọc load_quick_notes() về đúng 1 ngày -- qn_df đã sắp cũ→mới sẵn từ query (.order("ts")),
-    lọc bằng boolean mask giữ nguyên thứ tự đó, không cần sort lại."""
-    if qn_df.empty:
-        return qn_df
-    return qn_df[qn_df['Thời gian'].dt.date == day]
-
-
-def _quick_note_chips_html(qn_day):
-    """"Ghi chú nhanh" cho 1 ngày (qn_day = _quick_notes_on() của đúng ngày, đã cũ→mới), CHỈ ĐỌC
-    -- mỗi note 1 dòng riêng (không phải chip inline như chip Lịch/Sách): badge giờ nhỏ (class
-    .qn-time, chỉ bọc đúng giờ) + chữ ghi chú thường ngoài badge (class .qn-text, cùng cỡ chữ/màu
-    với .note-html) để đọc như 1 câu ghi chú thật, không phải nhãn nhỏ. Nút sửa/xoá (tương tác
-    thật, cần widget Streamlit) nằm riêng trong render_note_editor(), không lẫn vào chuỗi HTML
-    tĩnh này."""
-    if qn_day is None or qn_day.empty:
-        return ''
-    rows = ''.join(
-        f"<div class='qn-line'><span class='qn-time'>{r['Thời gian']:%H:%M}</span>"
-        f"<span class='qn-text'>{html_escape(str(r['Nội dung']))}</span></div>"
-        for _, r in qn_day.iterrows()
-    )
-    return f"<div style='margin-bottom:6px;'><span class='rl-book'>Ghi chú nhanh</span>{rows}</div>"
-
-
 def _record_chips_html(badges):
     """Chip "Kỷ lục" cho 1 ngày (badges = day_badges.get(ngày), có thể None/rỗng) -- dùng chung
     _chip_row_html() với _book_chips_html(), 1 chip riêng mỗi badge (không gộp) vì 1 ngày có
@@ -4982,17 +4907,9 @@ def render_note_editor(day, day_badges=None):
     dù ở đây chỉ có đúng 1 "dòng"), cột phải theo thứ tự cố định: chip Kỷ lục (nếu ngày này giữ
     kỷ lục -- day_badges do caller truyền vào, xem _compute_alltime_records()) → chip lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách/Gundam (tự nhóm+gắn nhãn theo cuốn/series qua
-    _book_chips_html()) → ghi chú nhanh đang chờ (mỗi note 1 hàng badge giờ + chữ + nút Gộp/Sửa/
-    Xoá riêng, xem update_quick_note()/delete_quick_note()) → nhãn "Ghi chú chính" → ghi chú
-    chính. Mặc định chỉ hiện ghi chú đã lưu (hoặc trạng thái trống) kèm một nút; bấm nút mới mở
-    trình soạn (Quill) inline với Cập nhật/Huỷ/Xoá.
-
-    Nút "Gộp" trên mỗi ghi chú nhanh: đúng quy trình thực tế (ghi chú nhanh suốt ngày qua Siri/
-    Shortcut, tối tổng hợp thành ghi chú chính) -- bấm sẽ mở ô soạn (nếu chưa mở) với nội dung
-    ghi chú nhanh đó được nối vào CUỐI nội dung đang có (kèm giờ để giữ ngữ cảnh), rồi đánh dấu
-    ghi chú nhanh đó "chờ xoá". Chỉ thực sự XOÁ khỏi bảng quick_notes khi người dùng bấm "Cập
-    nhật" lưu ghi chú chính (Huỷ/Xoá ghi chú thì bỏ đánh dấu, không xoá) -- tránh mất dữ liệu nếu
-    người dùng đổi ý giữa chừng.
+    _book_chips_html()) → nhãn "Ghi chú chính" → ghi chú chính. Mặc định chỉ hiện ghi chú đã lưu
+    (hoặc trạng thái trống) kèm một nút; bấm nút mới mở trình soạn (Quill) inline với
+    Cập nhật/Huỷ/Xoá.
 
     Bọc trong @st.fragment: ô soạn Quill gửi nội dung về server mỗi lần gõ phím, nếu
     không cô lập thì cả trang Báo cáo ngày chạy lại mỗi ký tự -> giao diện giật. Là
@@ -5013,30 +4930,16 @@ def render_note_editor(day, day_badges=None):
     cur = get_note(day)
     edit_key = f"note_edit_{day}"
     quill_key = f"note_quill_{day}"
-    quill_gen_key = f"note_quill_gen_{day}"
     content_key = f"note_content_{day}"
 
-    def _enter_edit(base_content=None):
-        """base_content=None -> mở soạn từ nội dung ĐÃ LƯU (nút Sửa/Thêm ghi chú); truyền nội
-        dung đã nối thêm ghi chú nhanh khi mở qua nút Gộp. Ghi vào content_key (KHÔNG phải đọc
-        lại session_state của chính widget Quill, xem _active_quill_key()) -- bug thật đã gặp:
-        streamlit-quill là custom component chạy trong iframe, giá trị echo về session_state của
-        WIDGET đó chỉ tới sau 1 round-trip bất đồng bộ với trình duyệt, nên bấm Gộp 2 lần liên
-        tiếp (trước khi round-trip lần 1 kịp hoàn tất) đọc lại giá trị widget cũ sẽ ra rỗng/cũ,
-        làm MẤT nội dung ghi chú nhanh vừa gộp trước đó. content_key do CHÍNH code này ghi/đọc
-        đồng bộ (không qua widget) nên luôn đúng, không phụ thuộc round-trip."""
+    def _enter_edit():
+        """Mở soạn từ nội dung ĐÃ LƯU (nút Sửa/Thêm ghi chú). Nội dung khởi tạo ghi vào content_key
+        (KHÔNG đọc lại session_state của chính widget Quill): streamlit-quill là custom component
+        chạy trong iframe, giá trị echo về session_state của WIDGET đó chỉ tới sau 1 round-trip
+        bất đồng bộ với trình duyệt."""
         st.session_state.pop(quill_key, None)
-        st.session_state[content_key] = base_content if base_content is not None else cur
+        st.session_state[content_key] = cur
         st.session_state[edit_key] = True
-
-    def _active_quill_key():
-        """Key thật truyền cho st_quill -- đổi theo "generation" mỗi khi cần ép remount widget
-        (bấm Gộp lúc editor ĐÃ mở sẵn). streamlit-quill là component "uncontrolled": value chỉ
-        được áp dụng lúc mount đầu tiên, đổi value cho 1 instance đã mount không có tác dụng gì --
-        key cố định quill_key là đủ khi editor vừa mở lần đầu (component chưa tồn tại ở lần chạy
-        trước nên chắc chắn mount mới), nhưng khi Gộp trong lúc đang mở, component đã tồn tại sẵn
-        -> phải đổi key mới ép Streamlit unmount/mount lại instance mới với value merge đã nối."""
-        return f"{quill_key}_{st.session_state.get(quill_gen_key, 0)}"
 
     with st.container(border=True, key="note_card"):
         with st.container(key="note_row"):
@@ -5067,105 +4970,6 @@ def render_note_editor(day, day_badges=None):
                     if not day_rl.empty:
                         st.markdown(_book_chips_html(day_rl), unsafe_allow_html=True)
 
-                qn_day = _quick_notes_on(load_quick_notes(), day)
-                merge_pending_key = f"note_merge_pending_{day}"
-                # del_pending_key: "chờ xoá" -- xem docstring hàm này (đoạn nút Xoá bên dưới) để
-                # biết vì sao KHÔNG xoá quick_notes ngay khi ô soạn đang mở.
-                del_pending_key = f"note_del_pending_{day}"
-                if not qn_day.empty:
-                    st.markdown("<span class='rl-book' style='margin-top:8px;'>Ghi chú nhanh</span>",
-                                unsafe_allow_html=True)
-                    for _, r in qn_day.iterrows():
-                        _qid = int(r['id'])
-                        qedit_key = f"qnote_edit_{_qid}"
-                        _pending = _qid in st.session_state.get(merge_pending_key, [])
-                        _del_pending = _qid in st.session_state.get(del_pending_key, [])
-                        with st.container(key=f"qnote_row_{_qid}"):
-                            qc1, qc2, qc3 = st.columns([2, 14, 4])
-                            with qc1:
-                                st.markdown(f"<span class='qn-time'>{r['Thời gian']:%H:%M}</span>",
-                                            unsafe_allow_html=True)
-                            if _del_pending:
-                                # Chờ xoá (xem docstring nút Xoá) -- vẫn giữ NGUYÊN hàng
-                                # qnote_row_<id> (không bỏ khỏi vòng lặp) để không đổi số lượng
-                                # phần tử đứng trước ô soạn Quill; chỉ đổi NỘI DUNG bên trong
-                                # (gạch ngang + 1 nút Hoàn tác) -- an toàn, không kích hoạt lại
-                                # bug remount đã gặp.
-                                with qc2:
-                                    st.markdown(f"<span class='qn-text qn-delpending'>{html_escape(str(r['Nội dung']))}</span>",
-                                                unsafe_allow_html=True)
-                                with qc3:
-                                    if st.button("", icon=":material/undo:", key=f"qnote_undodel_{_qid}",
-                                                 help="Hoàn tác xoá"):
-                                        st.session_state[del_pending_key].remove(_qid)
-                                        st.rerun()
-                            elif st.session_state.get(qedit_key, False):
-                                qinput_key = f"qnote_input_{_qid}"
-                                with qc2:
-                                    st.text_area("Sửa ghi chú nhanh", value=str(r['Nội dung']),
-                                                 key=qinput_key, label_visibility="collapsed", height=68)
-                                with qc3:
-                                    with st.container(horizontal=True, gap="small"):
-                                        if st.button("", icon=":material/check:", key=f"qnote_save_{_qid}",
-                                                     help="Cập nhật"):
-                                            update_quick_note(_qid, st.session_state.get(qinput_key, ""))
-                                            st.session_state[qedit_key] = False
-                                            st.rerun()
-                                        if st.button("", icon=":material/close:",
-                                                     key=f"qnote_canceledit_{_qid}", help="Huỷ"):
-                                            st.session_state[qedit_key] = False
-                                            st.rerun()
-                            else:
-                                with qc2:
-                                    _txt_cls = "qn-text qn-merged" if _pending else "qn-text"
-                                    st.markdown(f"<span class='{_txt_cls}'>{html_escape(str(r['Nội dung']))}</span>",
-                                                unsafe_allow_html=True)
-                                with qc3:
-                                    with st.container(horizontal=True, gap="small"):
-                                        if st.button("", icon=":material/done_all:" if _pending else ":material/merge:",
-                                                     key=f"qnote_merge_{_qid}", help="Đã gộp — chờ Lưu" if _pending
-                                                     else "Gộp vào ghi chú chính", disabled=_pending):
-                                            _was_open = st.session_state.get(edit_key, False)
-                                            _base = (st.session_state.get(content_key, cur)
-                                                     if _was_open else cur) or ""
-                                            _piece = f"<p><strong>{r['Thời gian']:%H:%M}</strong> — {html_escape(str(r['Nội dung']))}</p>"
-                                            _new_content = _base + _piece
-                                            st.session_state.setdefault(merge_pending_key, [])
-                                            st.session_state[merge_pending_key].append(_qid)
-                                            if _was_open:
-                                                # Editor đã mở sẵn -- component Quill đã mount, đổi
-                                                # value không đủ (xem docstring _active_quill_key),
-                                                # phải đổi generation để ép remount widget mới.
-                                                st.session_state[quill_gen_key] = st.session_state.get(quill_gen_key, 0) + 1
-                                            _enter_edit(_new_content)
-                                            st.rerun()
-                                        if st.button("", icon=":material/edit:", key=f"qnote_editbtn_{_qid}",
-                                                     help="Sửa"):
-                                            st.session_state[qedit_key] = True
-                                            st.rerun()
-                                        if st.button("", icon=":material/delete:", key=f"qnote_del_{_qid}",
-                                                     help="Xoá"):
-                                            if st.session_state.get(edit_key, False):
-                                                # Ô soạn Quill đang mở -- KHÔNG xoá quick_notes
-                                                # ngay: bớt 1 hàng qnote_row_<id> ở đây khiến
-                                                # Streamlit dựng lại widget Quill bên dưới (bug
-                                                # thật đã gặp + xác nhận qua Playwright: nội dung
-                                                # đang gõ dở bị xoá trắng/component chớp tắt), vì
-                                                # Quill là component "uncontrolled" chạy trong
-                                                # iframe riêng, remount ngoài ý muốn luôn mất trắng
-                                                # phần chưa kịp đồng bộ. Chỉ đánh dấu "chờ xoá",
-                                                # xoá thật khi bấm Cập nhật/Huỷ (cùng cơ chế "chờ
-                                                # gộp" merge_pending_key đã có) -- hàng vẫn đứng
-                                                # nguyên vị trí, chỉ đổi nội dung con bên trong nên
-                                                # không đụng tới bug remount này.
-                                                st.session_state.setdefault(del_pending_key, [])
-                                                st.session_state[del_pending_key].append(_qid)
-                                            else:
-                                                delete_quick_note(_qid)
-                                            if _qid in st.session_state.get(merge_pending_key, []):
-                                                st.session_state[merge_pending_key].remove(_qid)
-                                            st.rerun()
-
                 with st.container(key="note_main", gap="small"):
                     with st.container(key="note_label_content", gap="xsmall"):
                         st.markdown("<span class='rl-book'>Ghi chú chính</span>", unsafe_allow_html=True)
@@ -5178,15 +4982,13 @@ def render_note_editor(day, day_badges=None):
                                             unsafe_allow_html=True)
                         else:
                             # Chế độ soạn: trình soạn Quill inline -- value khởi tạo lấy từ
-                            # content_key (do _enter_edit() ghi sẵn: nội dung đã lưu, hoặc đã nối
-                            # thêm ghi chú nhanh nếu mở qua nút Gộp). Đồng bộ NGƯỢC lại content_key
+                            # content_key (do _enter_edit() ghi sẵn). Đồng bộ NGƯỢC lại content_key
                             # mỗi khi widget trả về giá trị khác None (đang gõ/đã echo xong round-
-                            # trip) -- content_key luôn là bản MỚI NHẤT đã biết, dùng làm _base cho
-                            # lần Gộp kế tiếp thay vì đọc trực tiếp session_state của widget (xem
-                            # docstring _enter_edit về race bất đồng bộ của streamlit-quill).
+                            # trip) -- content_key luôn là bản MỚI NHẤT đã biết (xem docstring
+                            # _enter_edit về race bất đồng bộ của streamlit-quill).
                             content = st_quill(value=st.session_state.get(content_key, cur),
                                                html=True, toolbar=NOTE_TOOLBAR,
-                                               placeholder="Viết vài dòng về ngày này…", key=_active_quill_key())
+                                               placeholder="Viết vài dòng về ngày này…", key=quill_key)
                             if content is not None:
                                 st.session_state[content_key] = content
                             style_quill()
@@ -5210,29 +5012,12 @@ def render_note_editor(day, day_badges=None):
                             if st.button("Cập nhật", icon=":material/check:", type="primary",
                                          key=f"note_save_{day}"):
                                 save_note(day, content if content is not None else st.session_state.get(content_key, ""))
-                                # Ghi chú nhanh đã "Gộp" (xem nút ở trên) chỉ thực sự bị xoá TẠI ĐÂY,
-                                # sau khi ghi chú chính đã lưu thành công -- Huỷ/Xoá ghi chú bên dưới
-                                # chỉ bỏ đánh dấu, không đụng tới bảng quick_notes.
-                                for _pid in st.session_state.pop(merge_pending_key, []):
-                                    delete_quick_note(_pid)
-                                # Ghi chú nhanh đã bấm "Xoá" trong lúc ô soạn mở (xem nút Xoá ở
-                                # trên) cũng chỉ thực sự xoá TẠI ĐÂY -- ý xoá đã chắc chắn (không
-                                # như merge, không cần chờ ghi chú chính lưu thành công) nên vẫn xoá
-                                # dù người dùng bấm Huỷ/Xoá ghi chú thay vì Cập nhật (2 nhánh dưới).
-                                for _pid in st.session_state.pop(del_pending_key, []):
-                                    delete_quick_note(_pid)
                                 st.session_state[edit_key] = False
                                 st.rerun()
                             if st.button("Huỷ", icon=":material/close:", key=f"note_cancel_{day}"):
-                                st.session_state.pop(merge_pending_key, None)
-                                for _pid in st.session_state.pop(del_pending_key, []):
-                                    delete_quick_note(_pid)
                                 st.session_state[edit_key] = False
                                 st.rerun()
                             if cur and st.button("Xoá ghi chú", icon=":material/delete:", key=f"note_del_{day}"):
-                                st.session_state.pop(merge_pending_key, None)
-                                for _pid in st.session_state.pop(del_pending_key, []):
-                                    delete_quick_note(_pid)
                                 save_note(day, "")
                                 st.session_state[edit_key] = False
                                 st.rerun()
@@ -5246,7 +5031,7 @@ def render_notes_journal(period_key, kind, df_all):
     để chip 🏆 có chỗ hiện ra, đúng lời hứa "chip Kỷ lục luôn thấy được ở Nhật ký Tuần/Tháng".
     Mỗi dòng theo thứ tự cố định: chip Kỷ lục (nếu có) → chip Lịch (kèm
     heading nhỏ "Lịch") → chip đọc sách (tự nhóm+gắn nhãn theo từng cuốn/series qua
-    _book_chips_html()) → ghi chú nhanh đang chờ (chỉ đọc, xem _quick_note_chips_html()) → nhãn
+    _book_chips_html()) → nhãn
     "Ghi chú chính" + ghi chú (nhãn chỉ hiện nếu ngày đó có ghi chú). Không lọc Gundam khỏi nguồn
     đọc sách ở đây -- đây là nhật ký chung của cả app, không riêng tab Sách. Ô Thứ/ngày mỗi dòng
     là link nhảy sang đúng Báo cáo ngày hôm đó.
@@ -5278,17 +5063,11 @@ def render_notes_journal(period_key, kind, df_all):
         rl = rl.assign(_d=rl['Ngày hoàn thành'].dt.normalize())
         rl = rl[_in_period(rl['_d'])]
 
-    qn = load_quick_notes()
-    if not qn.empty:
-        qn = qn.assign(_d=qn['Thời gian'].dt.normalize())
-        qn = qn[_in_period(qn['_d'])]
-
     note_days = set(nd['_d']) if not nd.empty else set()
     event_days = set(wc['_d']) if not wc.empty else set()
     reading_days = set(rl['_d']) if not rl.empty else set()
-    quick_note_days = set(qn['_d']) if not qn.empty else set()
     record_days = {pd.Timestamp(d) for d in day_badges if _date_in_period(d)}
-    days = sorted(note_days | event_days | reading_days | quick_note_days | record_days)
+    days = sorted(note_days | event_days | reading_days | record_days)
     if not days:
         st.caption("Chưa có ghi chú, lịch hoặc phần đọc sách nào trong kỳ này.")
         return
@@ -5340,16 +5119,10 @@ def render_notes_journal(period_key, kind, df_all):
             )
             cal_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Lịch</span>{chips}</div>"
         read_html = _book_chips_html(rl[rl['_d'] == d]) if d in reading_days else ''
-        qnote_html = _quick_note_chips_html(qn[qn['_d'] == d]) if d in quick_note_days else ''
         note_html = ''
         if d in note_days:
             _note_body = f"<div class='note-html'>{str(nd[nd['_d'] == d].iloc[0]['Ghi chú'])}</div>"
-            # Nhãn "Ghi chú chính" chỉ cần khi CÒN ghi chú nhanh hiện cùng dòng (phân biệt 2 khối) --
-            # không còn ghi chú nhanh nào (đã gộp/xoá hết) thì chỉ 1 khối ghi chú duy nhất, nhãn dư
-            # thừa. Khớp đúng cách renderer Tìm kiếm đã làm (không có nhãn, xem _book_chips_html
-            # neighbor ở render_search()).
-            note_html = (f"<span class='rl-book'>Ghi chú chính</span>{_note_body}" if qnote_html
-                         else _note_body)
+            note_html = _note_body
         # Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó (đọc bởi initializer "day" mới
         # trong day_picker() -- xem chú thích ở đó).
         _href = _day_link_href(d)
@@ -5358,7 +5131,7 @@ def render_notes_journal(period_key, kind, df_all):
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m}</div></div></a>"
-            f"<div>{rec_html}{cal_html}{read_html}{qnote_html}{note_html}</div>"
+            f"<div>{rec_html}{cal_html}{read_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key=f"jcard_journal_{kind}"):
@@ -5366,17 +5139,15 @@ def render_notes_journal(period_key, kind, df_all):
 
 
 def render_search():
-    """Tìm kiếm theo từ khoá trên CẢ 6 nguồn: ghi chú chính, ghi chú nhanh, lịch (tiêu đề
+    """Tìm kiếm theo từ khoá trên CẢ 5 nguồn: ghi chú chính, lịch (tiêu đề
     appointment), sách/Gundam (tên cuốn/series + tiêu đề phần), phiên Forest (tên Dự án), trích
     dẫn/ghi chú Kindle (nội dung) -- lọc trực tiếp trong Python trên text thuần, khối lượng dữ
     liệu nhỏ (vài trăm-nghìn dòng mỗi nguồn cho vài năm dùng app) nên không cần full-text search
     phía Supabase. Kết quả gộp theo NGÀY (đúng 1 dòng cho mỗi ngày có ít nhất 1 nguồn khớp), hiện
-    ĐỦ 4 nguồn đầu của ngày đó (không chỉ riêng phần khớp) để giữ nguyên ngữ cảnh cả ngày -- đúng
-    khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú nhanh -> Ghi chú chính đã dùng ở Nhật
+    ĐỦ 3 nguồn đầu của ngày đó (không chỉ riêng phần khớp) để giữ nguyên ngữ cảnh cả ngày -- đúng
+    khuôn .jrows/.jrow + thứ tự Lịch -> Đọc sách -> Ghi chú chính đã dùng ở Nhật
     ký; riêng Phiên/Trích dẫn (2 nguồn có thể rất nhiều dòng/ngày) chỉ hiện ĐÚNG các dòng khớp,
-    không hiện cả ngày, tránh rối mắt. Ghi chú nhanh cũng tìm được ở đây dù chỉ tồn tại tạm thời
-    (chờ gộp vào ghi chú chính, xem render_note_editor()) -- tránh lọt mất nếu vài hôm chưa kịp
-    gộp. Từ khớp được tô sáng bằng <mark> (xem _highlight()) trong mọi đoạn trích tự do (ghi chú,
+    không hiện cả ngày, tránh rối mắt. Từ khớp được tô sáng bằng <mark> (xem _highlight()) trong mọi đoạn trích tự do (ghi chú,
     trích dẫn) -- các chip nguồn khác (lịch/sách) vốn đã ngắn gọn nên không cần tô thêm."""
     q = st.text_input("Từ khoá", key="search_q", label_visibility="collapsed", live="300ms")
     if not q or len(q.strip()) < 2:
@@ -5388,9 +5159,6 @@ def render_search():
     if not nd.empty:
         nd = nd.assign(_d=pd.to_datetime(nd['Ngày'], errors='coerce'),
                         _plain=nd['Ghi chú'].map(_note_plain_text)).dropna(subset=['_d'])
-    qn = load_quick_notes()
-    if not qn.empty:
-        qn = qn.assign(_d=qn['Thời gian'].dt.normalize())
     wc = load_work_calendar()
     if not wc.empty:
         wc = wc.assign(_d=wc['Thời gian bắt đầu'].dt.normalize())
@@ -5409,14 +5177,13 @@ def render_search():
         kh = kh.assign(_d=kh['Ngày thêm'].dt.normalize())
 
     note_hits = set(nd[nd['_plain'].str.contains(pat, case=False, na=False)]['_d']) if not nd.empty else set()
-    qn_hits = set(qn[qn['Nội dung'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not qn.empty else set()
     cal_hits = set(wc[wc['Tiêu đề'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not wc.empty else set()
     rl_hits = set(rl[rl['Tiêu đề phần'].astype(str).str.contains(pat, case=False, na=False)
                      | rl['Cuốn sách'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not rl.empty else set()
     sess_hits = set(db[db['Dự án'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not db.empty else set()
     kh_hits = set(kh[kh['Nội dung'].astype(str).str.contains(pat, case=False, na=False)]['_d']) if not kh.empty else set()
 
-    hit_days = sorted(note_hits | qn_hits | cal_hits | rl_hits | sess_hits | kh_hits, reverse=True)
+    hit_days = sorted(note_hits | cal_hits | rl_hits | sess_hits | kh_hits, reverse=True)
     if not hit_days:
         st.info(f"Không tìm thấy kết quả nào chứa \"{q}\".")
         return
@@ -5462,7 +5229,6 @@ def render_search():
                 f" <span style='color:var(--text-2);font-size:12px;'>— {html_escape(str(r['Cuốn sách']))}</span></div>"
                 for _, r in day_kh.iterrows())
             quote_html = _chip_row_html('Trích dẫn', items)
-        qn_html = _quick_note_chips_html(qn[qn['_d'] == d]) if not qn.empty and d in set(qn['_d']) else ''
         note_html = ''
         if not nd.empty and d in set(nd['_d']):
             note_html = f"<div class='note-html'>{_highlight(_note_snippet(nd[nd['_d'] == d].iloc[0]['Ghi chú'], qq), qq)}</div>"
@@ -5472,7 +5238,7 @@ def render_search():
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jdowbig'>{VN_DAYS.get(d.day_name(), '')}</div>"
             f"<div class='jdm'>{d:%d/%m/%Y}</div></div></a>"
-            f"<div>{cal_html}{sess_html}{read_html}{quote_html}{qn_html}{note_html}</div>"
+            f"<div>{cal_html}{sess_html}{read_html}{quote_html}{note_html}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_search"):
@@ -5625,7 +5391,7 @@ def _render_reading_kindle_days(rl_df, kh_df, df_books=None, book_name=None):
     hoàn thành phần nào/chưa có quote) -- những ngày CHỈ có phiên Forest (không có phần hoàn
     thành, không có quote) vẫn phải ra 1 hàng riêng chỉ có chip "Thời gian" (xác nhận với người
     dùng, khác hành vi cũ chỉ duyệt ngày có mặt trong rl_df/kh_df). CỐ Ý KHÔNG hiện "Ghi chú
-    ngày"/"Ghi chú nhanh" ở đây (khác Nhật ký Báo cáo Tuần/Tháng, render_notes_journal()) -- xác
+    ngày" ở đây (khác Nhật ký Báo cáo Tuần/Tháng, render_notes_journal()) -- xác
     nhận với người dùng mục này chỉ cần đúng Phần/Chương đọc + Thời gian, không cần kéo thêm ghi
     chú chung của ngày vào (từng thử thêm rồi bỏ lại theo phản hồi thực tế).
 
@@ -5732,10 +5498,9 @@ def _render_kindle_day_quotes(day_kh):
 
 def _render_kindle_quote_row(r, is_reply=False, key_suffix="", show_added_date=False):
     """1 dòng quote/note Kindle + cụm nút Yêu thích/Sửa/Xoá/+ Ghi chú -- cùng bố cục hàng thật
-    (st.columns) và cùng phong cách nút (icon nhỏ, nền trong suốt) với hàng "Ghi chú nhanh"
-    (qnote_row) trong render_note_editor(): đọc = chữ + icon mờ bám phải; bấm Sửa = textarea +
+    (st.columns) và cùng phong cách nút (icon nhỏ, nền trong suốt): đọc = chữ + icon mờ bám phải; bấm Sửa = textarea +
     ✓ Cập nhật/✕ Huỷ; bấm + = ô nhập ghi chú mới bên dưới + ✓ Lưu/✕ Huỷ. Xoá KHÔNG hỏi xác nhận
-    (giống hệt Ghi chú nhanh) -- quyết định đã chốt với người dùng. is_reply=True (ghi chú đang
+    -- quyết định đã chốt với người dùng. is_reply=True (ghi chú đang
     lồng dưới 1 highlight) -> thụt lề riêng qua CSS ([class*="st-key-kqreply_"]) + KHÔNG có nút
     "+" (ghi chú không trả lời được ghi chú).
 
@@ -5863,16 +5628,9 @@ def render_same_day_last_week(sel, df_all):
         if not _rr.empty:
             reading = _rr
 
-    quick = None
-    qn = load_quick_notes()
-    if not qn.empty:
-        _q = qn[qn['Thời gian'].dt.date == target]
-        if not _q.empty:
-            quick = _q
-
     rec = day_badges.get(target)
 
-    if stats is None and note_text is None and events is None and reading is None and quick is None and not rec:
+    if stats is None and note_text is None and events is None and reading is None and not rec:
         _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
                 "fill='var(--text-4)'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
                 "2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/></svg>")
@@ -5905,7 +5663,6 @@ def render_same_day_last_week(sel, df_all):
         _chips = (_chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}")
                   + _chip("TB", f"{avg:.0f}′") + _chip("Theo dõi", f"{t_start:%H:%M}–{t_end:%H:%M}"))
         chips_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Tổng quan</span>{_chips}</div>"
-    qnote_html = _quick_note_chips_html(quick) if quick is not None else ''
     note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{note_text}</div>"
                   if note_text else '')
 
@@ -5915,7 +5672,7 @@ def render_same_day_last_week(sel, df_all):
         "<div class='jrow'>"
         f"<a class='jdate-link' href='{_href}' target='_self'>"
         f"<div class='jdate'><div class='jdowbig'>{wd}</div><div class='jdm'>{target:%d/%m}</div></div></a>"
-        f"<div>{rec_html}{chips_html}{cal_html}{read_html}{qnote_html}{note_block}</div>"
+        f"<div>{rec_html}{chips_html}{cal_html}{read_html}{note_block}</div>"
         "</div>"
     )
     with st.container(border=True, key="jcard_lastweek"):
@@ -5927,7 +5684,7 @@ def render_on_this_day(sel, df_all):
     mỗi năm hiện vài số liệu trong khung chip + ghi chú (nếu có). Chỉ đọc. Mỗi dòng năm cũng
     theo đúng thứ tự cố định chip Kỷ lục (nếu năm đó rơi đúng ngày giữ kỷ lục, xem
     _compute_alltime_records()) → chip Tổng quan (Giờ/Số phiên/TB/khoảng giờ theo dõi) → chip
-    Lịch → chip đọc sách → ghi chú nhanh đang chờ → nhãn "Ghi chú chính" + ghi chú, nhất quán với
+    Lịch → chip đọc sách → nhãn "Ghi chú chính" + ghi chú, nhất quán với
     render_note_editor()/render_notes_journal()."""
     day_badges = _compute_alltime_records(df_all)["day_badges"]
     m, d = sel.month, sel.day
@@ -5967,16 +5724,7 @@ def render_on_this_day(sel, df_all):
                   & (rl['Ngày hoàn thành'].dt.year < sel.year)]
         for y, g in rl_m.groupby(rl_m['Ngày hoàn thành'].dt.year):
             reading[int(y)] = g
-    # Ghi chú nhanh, cùng ngày/tháng ở các năm trước
-    quick_notes = {}  # year -> DataFrame
-    qn = load_quick_notes()
-    if not qn.empty:
-        qn_m = qn[(qn['Thời gian'].dt.month == m) & (qn['Thời gian'].dt.day == d)
-                  & (qn['Thời gian'].dt.year < sel.year)]
-        for y, g in qn_m.groupby(qn_m['Thời gian'].dt.year):
-            quick_notes[int(y)] = g
-
-    years = sorted(set(stats) | set(notes) | set(events) | set(reading) | set(quick_notes), reverse=True)
+    years = sorted(set(stats) | set(notes) | set(events) | set(reading), reverse=True)
     if not years:
         _cal = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='34' height='34' "
                 "fill='var(--text-4)'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 "
@@ -6015,7 +5763,6 @@ def render_on_this_day(sel, df_all):
             _chips = (_chip("Giờ", f"{_fmt_hours_short(hrs)}") + _chip("Số phiên", f"{ss}")
                       + _chip("TB", f"{avg:.0f}′") + _chip("Theo dõi", f"{t_start:%H:%M}–{t_end:%H:%M}"))
             chips_html = f"<div style='margin-bottom:6px;'><span class='rl-book'>Tổng quan</span>{_chips}</div>"
-        qnote_html = _quick_note_chips_html(quick_notes[y]) if y in quick_notes else ''
         note_block = (f"<span class='rl-book'>Ghi chú chính</span><div class='note-html'>{notes[y]}</div>"
                       if notes.get(y) else '')
         # Năm/Thứ/ngày là link nhảy sang đúng Báo cáo ngày hôm đó -- cùng pattern .jdate-link đã
@@ -6027,7 +5774,7 @@ def render_on_this_day(sel, df_all):
             f"<a class='jdate-link' href='{_href}' target='_self'>"
             f"<div class='jdate'><div class='jyear'>{y}</div>"
             f"<div class='jdow'>{wd}</div><div class='jdm'>{d:02d}/{m:02d}</div></div></a>"
-            f"<div>{rec_html}{chips_html}{cal_html}{read_html}{qnote_html}{note_block}</div>"
+            f"<div>{rec_html}{chips_html}{cal_html}{read_html}{note_block}</div>"
             "</div>"
         )
     with st.container(border=True, key="jcard_otd"):
@@ -8876,11 +8623,7 @@ _MAIN_CSS = """
         .dcx-lbltxt, .dcx-upd { display: none !important; }
     }
 
-    /* Khối "Ghi chú chính" (note_main) đứng ngay sau danh sách ghi chú nhanh (qnote_row_) trong
-       CÙNG 1 khối cha -- rule gap:5px thu gọn khoảng cách GIỮA CÁC DÒNG ghi chú nhanh (xem CSS
-       :has() qnote_row_ ở trên) vô tình áp luôn cho khoảng cách trước "Ghi chú chính", khiến nó
-       dính sát ghi chú nhanh cuối cùng (lỗi thật đã gặp, xem ảnh chụp). Bù riêng margin-top ở
-       đây -- không đụng gap chung, chỉ tách khối "Ghi chú chính" ra xa hơn đúng 1 chỗ này. */
+    /* Khối "Ghi chú chính" (note_main): tách khỏi các chip lịch/đọc sách phía trên một chút. */
     .st-key-note_main { margin-top: 12px; }
     /* ===== Ghi chú ngày: ghi chú đã lưu hiện PHẲNG (không khung riêng bao quanh), giống hệt
        cách ghi chú hiện trong .jrows của Nhật ký -- chỉ .note-empty (trạng thái trống) mới có
@@ -9192,8 +8935,7 @@ _MAIN_CSS = """
     .kq-mark { color: var(--accent); font-weight: 700; margin-right: 2px; }
     .kq-loc { font-size: 11.5px; color: var(--text-3); }
     /* Mỗi quote/note là 1 hàng thật (st.columns, key="kqrow_<hash>"/"kqreply_<hash>") để có nút
-       Sửa/Xoá/+ Ghi chú -- cùng phong cách icon nhỏ/nền trong suốt với hàng Ghi chú nhanh
-       (qnote_row) phía trên, xem chú thích ở đó để biết vì sao cần ép min-width/flex-wrap. */
+       Sửa/Xoá/+ Ghi chú -- cùng phong cách icon nhỏ/nền trong suốt. */
     [class*="st-key-kqrow_"], [class*="st-key-kqreply_"] { margin-bottom: 2px; }
     [class*="st-key-kqrow_"] [data-testid="stHorizontalBlock"],
     [class*="st-key-kqreply_"] [data-testid="stHorizontalBlock"],
@@ -9506,7 +9248,7 @@ _MAIN_CSS = """
        thật (không phải 1 khối HTML tĩnh) vì bên trong có widget Streamlit thật (Quill, nút) --
        không thể gói trong unsafe_allow_html. Selector dùng ĐÚNG chuỗi con trực tiếp (">"), không
        phải descendant thường ("khoảng trắng") -- cột phải (c_body) còn chứa nhiều st.columns()
-       khác lồng sâu hơn (mỗi dòng Ghi chú nhanh, hàng nút Cập nhật/Huỷ/Xoá); nếu dùng descendant
+       khác lồng sâu hơn (hàng nút Cập nhật/Huỷ/Xoá); nếu dùng descendant
        selector, rule này khớp NHẦM luôn "cột đầu tiên" của các st.columns() lồng bên trong đó,
        kẻ vạch thừa không mong muốn (bug đã gặp thật). ">" giới hạn CHỈ đúng 1 cặp cột ngoài cùng
        (Thứ/ngày | nội dung) của container key="note_row". */
@@ -9515,80 +9257,6 @@ _MAIN_CSS = """
     @media (max-width: 640px) {
         .st-key-note_row > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] >
             [data-testid="stColumn"]:first-child { border-right: none; }
-    }
-    /* Ghi chú nhanh: badge giờ nhỏ (.qn-time) + chữ ghi chú thường NGOÀI badge (.qn-text, cùng
-       cỡ/màu .note-html) -- khác .jchip (cả giờ lẫn chữ đều tô nền), vì quick note nay là 1 câu
-       đọc như ghi chú thật, không phải 1 nhãn nhỏ. .qn-line dùng ở bản CHỈ ĐỌC (Nhật ký
-       Tuần/Tháng, Ngày này năm trước) -- bản có nút sửa/xoá ở Ghi chú ngày dựng bằng
-       st.columns() thật nên không cần .qn-line (đã có [class*="st-key-qnote_row_"] lo margin). */
-    .qn-time { display: inline-block; font-size: 12px; font-weight: 600; color: var(--text-2);
-        background: var(--chip); border-radius: 7px; padding: 4px 9px; font-variant-numeric: tabular-nums;
-        margin-right: 10px; vertical-align: middle; white-space: nowrap; }
-    .qn-text { font-size: 14.5px; color: var(--text); line-height: 1.5; }
-    /* .qn-merged: ghi chú nhanh đã bấm "Gộp", đang chờ Cập nhật ghi chú chính mới thực sự xoá --
-       gạch ngang + nhạt màu để phân biệt với các dòng chưa xử lý, không cần xoá khỏi UI ngay. */
-    .qn-merged { text-decoration: line-through; color: var(--text-3); }
-    /* .qn-delpending: đã bấm "Xoá" trong lúc ô soạn Quill đang mở -- xem docstring nút Xoá
-       (render_note_editor()) về lý do KHÔNG bỏ hẳn hàng này khỏi UI ngay (tránh Streamlit dựng
-       lại widget Quill làm mất nội dung đang gõ dở). Tông đỏ nhạt (khác teal của .qn-merged) để
-       phân biệt rõ "sẽ xoá" với "sẽ gộp". */
-    .qn-delpending { text-decoration: line-through; color: #ff3b30; opacity: 0.6; }
-    .qn-line { padding: 4px 0; }
-    .qn-line + .qn-line { border-top: 1px solid var(--divider); }
-    /* Ghi chú nhanh (Ghi chú ngày, có sửa/xoá): mỗi quick note 1 hàng st.columns() thật (badge
-       giờ + text/ô sửa + cụm 2 nút) -- cụm nút dùng st.container(horizontal=True) (không phải
-       st.columns() lồng bên trong nữa, tránh lặp lại đúng bug đã gặp: st.columns() lồng sâu bị
-       CSS "cột ngoài cùng" ở trên khớp nhầm). [class*=...] khớp mọi container qnote_row_<id>
-       cùng lúc (id đổi theo từng note). Ghi đè lại rule chung button[kind="secondary"] (nền/viền)
-       giống cách làm ở nút chọn màu accent (Tuỳ biến) -- cần đủ đặc hiệu (kèm !important) mới
-       thắng được rule đó. */
-    [class*="st-key-qnote_row_"] { margin-bottom: 0 !important; }
-    /* Khoảng cách dọc thật giữa các dòng ghi chú nhanh không tới từ margin-bottom trên (chỉ 2px)
-       mà chủ yếu từ gap flex mặc định (0.9rem = 14.4px) giữa các item của khối cha (mỗi dòng là 1
-       flex item riêng, margin không cộng dồn/thu hẹp được gap đó) -- tổng ~16px, người dùng thấy
-       quá rộng so với 1 danh sách ghi chú ngắn. Ép thẳng gap của khối cha (nhận diện qua :has()
-       tìm đúng khối chứa các dòng qnote_row_) xuống 5px (phương án B trong 5 mock up đã chọn),
-       gọn hẳn so với cỡ mặc định của Streamlit. */
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stLayoutWrapper"] > [class*="st-key-qnote_row_"]) {
-        gap: 5px !important;
-    }
-    [class*="st-key-qnote_row_"] [data-testid="stHorizontalBlock"] { align-items: center; }
-    /* 3 cột (giờ / nội dung / nút) LUÔN giữ 1 hàng ngang, kể cả màn hẹp -- Streamlit tự đặt
-       min-width: calc(100% - 24px) cho MỌI cột dưới 1 ngưỡng rộng màn hình (ép mỗi cột chiếm
-       trọn hàng riêng, dùng cho layout cố ý xếp dọc trên mobile), nhưng hàng ghi chú nhanh này
-       cố ý muốn giữ ngang ở mọi kích thước màn hình -- không có 3 rule dưới đây, xem trên điện
-       thoại dọc sẽ vỡ thành 3 dòng (giờ/chữ/nút mỗi thứ 1 dòng); xem ngang thì cột giờ quá hẹp
-       (theo % cố định) khiến "02:53" bị bẻ dòng giữa số dù đã có white-space:nowrap ở .qn-time
-       (bẻ dòng vì chính CỘT chứa nó quá hẹp, không phải vì chữ tự xuống dòng).
-       Cột 1 (giờ) và cột 3 (nút) đặt CHIỀU RỘNG CỐ ĐỊNH (đủ cho "23:59" và 2 icon) thay vì
-       "flex-basis: auto" co theo nội dung -- đã thử co theo nội dung nhưng Streamlit tự đo và
-       gán width bằng px (inline style, qua ResizeObserver) cho các div bọc bên TRONG mỗi cột
-       (stVerticalBlock/stElementContainer...) lúc mount theo tỉ lệ % CŨ rồi giữ nguyên, khiến
-       phép tính "auto" của trình duyệt vẫn chốt theo con số cũ rất hẹp (~14px) dù đã xoá mọi
-       ràng buộc auto khác -- ép width cứng (không phải auto) ở mọi tầng mới thắng được số đo cũ
-       đó. Không có các rule này, cột co nhỏ hơn hẳn nội dung (badge giờ/cụm nút) trong khi chữ
-       vẫn hiện to hơn khung chứa (overflow:visible) -> nhìn như đè chồng lên cột giữa. */
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"] { min-width: 0 !important; }
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child { flex: 0 0 52px !important; }
-    /* 108px (không phải 64px cũ) -- đủ chỗ cho CẢ 3 nút (Gộp/Sửa/Xoá) cùng 1 hàng ở chế độ xem;
-       64px chỉ đủ ~2 nút nên nút thứ 3 bị đẩy xuống dòng, đội chiều cao mỗi hàng ghi chú nhanh
-       lên trông như cách nhau xa dù margin-bottom (dòng dưới) đã rất sát. */
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child { flex: 0 0 108px !important; }
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child *,
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:last-child * {
-        width: 100% !important; min-width: 0 !important;
-    }
-    /* Badge giờ (.qn-time) là inline-block nên mặc định bám lề TRÁI trong khối 52px cha (đã ép
-       width:100% ở trên) -- text-align:center để chữ số nằm giữa khung, không lệch trái. */
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:first-child p { text-align: center; }
-    [class*="st-key-qnote_row_"] [data-testid="stColumn"]:nth-child(2) { flex: 1 1 0 !important; }
-    [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"] {
-        background: transparent !important; border: none !important; box-shadow: none !important;
-        color: var(--text-3) !important; width: auto !important; min-height: 0 !important;
-        height: 26px !important; padding: 0 !important;
-    }
-    [class*="st-key-qnote_row_"] div[data-testid="stButton"] button[kind="secondary"]:hover {
-        color: var(--text) !important;
     }
     /* "Sửa ghi chú"/"Thêm ghi chú"/"Cập nhật"/"Huỷ"/"Xoá ghi chú" (Ghi chú ngày): mọi nút thao
        tác của Ghi chú chính đều nhỏ gọn tự co theo chữ, KHÔNG kéo giãn hết chiều rộng cột như
@@ -10105,7 +9773,7 @@ def _fmt_ago_ymd(d, today):
 def _day_peek_html(d, df):
     """HTML (chỉ đọc) của 1 ngày cho ngăn kéo "Một ngày ngẫu nhiên", cùng thứ tự khối với
     render_note_editor()/render_notes_journal(): ngày + khoảng cách + link → chip Kỷ lục & huy hiệu
-    → số liệu phiên → chip sách/Gundam → ghi chú nhanh → ghi chú chính → tối đa 3 trích dẫn
+    → số liệu phiên → chip sách/Gundam → ghi chú chính → tối đa 3 trích dẫn
     Kindle. Ghi chú chính < 1200 ký tự văn bản thuần thì hiện nguyên HTML như .note-html ở Nhật ký;
     dài hơn thì chỉ hiện đoạn văn bản thuần (an toàn hơn cắt HTML giữa thẻ), phần còn lại ở link
     "Mở trang ngày này"."""
@@ -10123,14 +9791,12 @@ def _day_peek_html(d, df):
         day_rl = rl[rl['Ngày hoàn thành'].dt.date == d]
         if not day_rl.empty:
             out += _book_chips_html(day_rl)
-    qn_html = _quick_note_chips_html(_quick_notes_on(load_quick_notes(), d))
-    out += qn_html
     note = get_note(d)
     if note and not _note_is_empty(note):
         plain = _note_plain_text(note)
         body = (f"<div class='note-html'>{note}</div>" if len(plain) < 1200
                 else f"<div class='note-html'>{html_escape(plain[:1200].rstrip())}…</div>")
-        out += (f"<span class='rl-book'>Ghi chú chính</span>{body}" if qn_html else body)
+        out += body
     kh = load_kindle_highlights()
     if not kh.empty:
         qs = kh[(kh['Loại'] == 'highlight') & (kh['Ngày thêm'].dt.date == d)].head(3)
@@ -12261,8 +11927,6 @@ elif nav == "Tuỳ biến":
                             parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
                         if NOTES_FILE in names:
                             parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
-                        if QUICK_NOTES_FILE in names:
-                            parts.append(f"Ghi chú nhanh **{len(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE))))}** dòng")
                         if WORK_CALENDAR_FILE in names:
                             parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
                         if READING_LOG_FILE in names:
@@ -12300,8 +11964,6 @@ elif nav == "Tuỳ biến":
                         save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
                     if NOTES_FILE in names:
                         save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
-                    if QUICK_NOTES_FILE in names:
-                        save_quick_notes_bulk(pd.read_csv(io.BytesIO(_z.read(QUICK_NOTES_FILE)), dtype=str))
                     if WORK_CALENDAR_FILE in names:
                         save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
                     if READING_LOG_FILE in names:
@@ -12341,7 +12003,6 @@ elif nav == "Tuỳ biến":
                 _sb_delete_all("mapping", "project")
                 _sb_delete_all("deleted_sessions", "start_time")
                 _sb_delete_all("notes", "note_date")
-                _sb_delete_all("quick_notes", "id")
                 _sb_delete_all("work_calendar", "uid")
                 _sb_delete_all("reading_log", "uid")
                 _sb_delete_all("settings", "key")
@@ -12408,7 +12069,6 @@ elif nav == "Tuỳ biến":
                         _settings_df = pd.DataFrame(list(load_settings().items()), columns=["key", "value"])
                         for _fn, _df in [(DB_FILE, db_now), (MAPPING_FILE, load_mapping()),
                                           (DELETED_FILE, load_deleted()), (NOTES_FILE, load_notes()),
-                                          (QUICK_NOTES_FILE, load_quick_notes()),
                                           (WORK_CALENDAR_FILE, load_work_calendar()),
                                           (READING_LOG_FILE, load_reading_log()),
                                           (SETTINGS_FILE, _settings_df),
