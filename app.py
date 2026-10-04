@@ -198,6 +198,11 @@ GUNDAM_TAG = "Gundam"
 # _compute_alltime_records()) -- ngưỡng để tránh dự án/nhóm mới thử vài ngày đã có "kỷ lục".
 RECORD_MIN_DAYS = 5
 
+# Ngưỡng "nghỉ dài" (ngày): từ chừng này ngày không có phiên trở đi, app đổi sang giọng "chào mừng
+# trở lại" thay vì chỉ nêu khoảng cách -- dùng ở _streak_nudge(), _render_welcome_back() và huy
+# hiệu "Quay lại" sau này. Một hằng số để dễ chỉnh.
+COMEBACK_MIN_GAP = 14
+
 # render_reading_log() dùng chung cho tab "Nhật ký đọc sách" (mặc định) và tab "Gundam" (truyền
 # labels=GUNDAM_LABELS) -- chỉ khác nhau ở CHỮ hiển thị, không khác logic tính toán. Tên cột nội
 # bộ trong DataFrame (vd 'Cuốn sách', 'Trạng thái') giữ nguyên bất kể labels nào đang dùng.
@@ -1436,6 +1441,36 @@ def _has_pending_forest_sync():
     return forest_meta["name"] != _cached_settings().get("last_synced_forest_file")
 
 
+def _auto_sync_on_open():
+    """Tự nạp file Forest mới trong bucket Storage khi mở app (1 lần mỗi session) -- gọi NGAY
+    TRƯỚC prep_analysis_data() nên df của lượt chạy này đã có dữ liệu mới, không cần rerun. Nút
+    tròn đồng bộ tay (_render_nav_sync_fab()) giữ nguyên.
+
+    Bỏ qua khi: không có file Forest nào, file mới nhất đã nạp (setting "last_synced_forest_file"),
+    hoặc đã tự thử và lỗi với ĐÚNG file đó (setting "auto_sync_failed_file") -- mọi link target=_self
+    trong app mở session MỚI nên nếu thiếu điều kiện cuối, file lỗi cột sẽ bị thử lại và toast lỗi
+    lặp đi lặp lại. Bấm tay thành công làm "last_synced_forest_file" đổi nên cờ lỗi tự hết tác
+    dụng. Local dev/bucket chưa cấu hình: _list_sync_files() trả [] nên tự bỏ qua."""
+    if st.session_state.get("_auto_sync_checked"):
+        return
+    st.session_state["_auto_sync_checked"] = True
+    forest_meta = _latest_sync_file(_list_sync_files(), "forest")
+    if not forest_meta:
+        return
+    _settings = _cached_settings()
+    if forest_meta["name"] in (_settings.get("last_synced_forest_file"), _settings.get("auto_sync_failed_file")):
+        return
+    with st.spinner("Đang nạp dữ liệu mới từ Forest…"):
+        _msg, _has_err = _do_quick_sync()
+    if _has_err:
+        save_setting("auto_sync_failed_file", forest_meta["name"])
+        st.toast(_msg, icon=":material/warning:")
+    else:
+        st.toast(_msg, icon=":material/cloud_done:")
+    # Nút tròn đọc bản cache TTL 60s của danh sách file -- xoá để ẩn đúng ngay lượt này.
+    _list_sync_files_cached.clear()
+
+
 def _render_nav_sync_fab():
     """Nút "Đồng bộ" dạng tròn nổi -- gọi 1 LẦN DUY NHẤT (xem nơi gọi, cạnh
     _inject_scroll_to_top_button()) nên hiện xuyên suốt MỌI trang mà không cần sửa từng nhánh nav.
@@ -2617,11 +2652,12 @@ def _streak_stats(streak_df):
 
 NUDGE_TONES = {
     "good": (f"rgba({ACCENT_RGB},0.12)", ACCENT_DARK),  # đồng bộ accent, tự đúng cả 2 chế độ
-    # "warn"/"neutral": nền tint tối hơn + chữ ĐẬM hơn (đọc được trên nền light) không còn đủ
-    # tương phản trên nền tối -> dark cần chữ SÁNG hơn thay vì tối hơn (cùng lý do ACCENT_DARK
-    # đổi ngữ nghĩa ở trên).
+    # "warn": nền tint tối hơn + chữ ĐẬM hơn (đọc được trên nền light) không còn đủ tương phản
+    # trên nền tối -> dark cần chữ SÁNG hơn thay vì tối hơn (cùng lý do ACCENT_DARK đổi ngữ nghĩa
+    # ở trên).
     "warn": (("rgba(255,159,10,0.18)", "#ffb340") if IS_DARK else ("rgba(255,149,0,0.15)", "#a85d00")),
-    "neutral": (("rgba(255,69,58,0.16)", "#ff8a80") if IS_DARK else ("rgba(255,59,48,0.12)", "#c50a00")),
+    # "calm": chuỗi đã đứt -- chỉ nêu sự việc, không dùng màu cảnh báo (app chỉ hồi cứu, không trách).
+    "calm": (f"rgba({ACCENT_RGB},0.07)", "var(--text-2)"),
 }
 
 
@@ -2636,7 +2672,9 @@ def _streak_nudge(s):
         return (f"Đang có chuỗi {cur} ngày. Còn {lon - cur + 1} ngày nữa là chạm tới kỷ lục {lon} ngày.", "good")
     if gap == 1:
         return (f"Chuỗi {cur} ngày đang có nguy cơ đứt, vì hôm nay chưa có phiên nào. Một phiên ngắn cũng đủ để giữ mạch.", "warn")
-    return (f"Chuỗi gần nhất đã dừng lại {gap} ngày trước. Hôm nay là một dịp tốt để bắt đầu lại.", "neutral")
+    if gap < COMEBACK_MIN_GAP:
+        return (f"Lần gần nhất có phiên là {gap} ngày trước.", "calm")
+    return (f"Bạn đã tạm nghỉ {gap} ngày. Mọi dữ liệu cũ vẫn ở đây.", "calm")
 
 
 def _weekday_avg(scope_df, min_count=3):
@@ -9110,6 +9148,7 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
+_auto_sync_on_open()
 df = prep_analysis_data()
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
@@ -9397,17 +9436,20 @@ def _sidebar_today_stats_html(df):
     )
 
 
-def _sidebar_recent_activity_html(df, group_val, rl_filter, icon, title, part_label, link_kind):
-    """Khung dùng chung cho "Sách đang đọc gần nhất"/"Gundam đang xem gần nhất": gộp 2 nguồn
-    (phiên Forest nhóm `group_val` + Reminders lọc qua `rl_filter`) để tìm ĐÚNG 1 cuốn/series có
-    hoạt động MỚI NHẤT -- rút gọn hơn hẳn "t" của render_reading_log() (không cần dựng lại Trạng
-    thái/Bắt đầu/Số ngày... cho 1 chip nhỏ ở sidebar). 'Dự án' của phiên Forest nhóm này đã được
-    prep_analysis_data() suy luận SẴN thành đúng tên cuốn/series (qua _assign_reading_sessions()),
-    không cần suy luận lại ở đây. Trả về '' nếu chưa có hoạt động nào (ẩn hẳn khối, giống
-    _sidebar_record_html cũ)."""
+def _latest_reading_activity(df, group_val, rl_filter, until=None):
+    """Tìm ĐÚNG 1 cuốn/series có hoạt động MỚI NHẤT, gộp 2 nguồn (phiên Forest nhóm `group_val` +
+    Reminders lọc qua `rl_filter`). 'Dự án' của phiên Forest nhóm này đã được prep_analysis_data()
+    suy luận SẴN thành đúng tên cuốn/series (qua _assign_reading_sessions()), không cần suy luận
+    lại ở đây. `until` (date, tuỳ chọn): chỉ xét hoạt động có ngày < until (vd "trước hôm nay").
+    Trả (tên, Timestamp hoạt động gần nhất, số phần đã đọc/xem của tên đó) hoặc None nếu chưa có.
+    Dùng chung cho khối sidebar và thẻ "Chào mừng trở lại"."""
     sessions = df[df['Nhóm'] == group_val]
     rl_all = load_reading_log()
     rl = rl_all[rl_all['Sách (gốc)'].map(rl_filter)] if not rl_all.empty else rl_all
+    if until is not None:
+        _cut = pd.Timestamp(until)
+        sessions = sessions[pd.to_datetime(sessions['Ngày']) < _cut]
+        rl = rl[pd.to_datetime(rl['Ngày hoàn thành']) < _cut] if not rl.empty else rl
 
     latest = {}
     if not sessions.empty:
@@ -9419,16 +9461,28 @@ def _sidebar_recent_activity_html(df, group_val, rl_filter, icon, title, part_la
             if name not in latest or d > latest[name]:
                 latest[name] = d
     if not latest:
-        return ""
+        return None
     name = max(latest, key=latest.get)
     n_parts = len(rl[rl['Cuốn sách'] == name]) if not rl.empty else 0
+    return name, latest[name], n_parts
+
+
+def _sidebar_recent_activity_html(df, group_val, rl_filter, icon, title, part_label, link_kind):
+    """Khung dùng chung cho "Sách đang đọc gần nhất"/"Gundam đang xem gần nhất" -- rút gọn hơn hẳn
+    "t" của render_reading_log() (không cần dựng lại Trạng thái/Bắt đầu/Số ngày... cho 1 chip nhỏ
+    ở sidebar). Việc tìm cuốn/series mới nhất nằm ở _latest_reading_activity(). Trả về '' nếu chưa
+    có hoạt động nào (ẩn hẳn khối, giống _sidebar_record_html cũ)."""
+    found = _latest_reading_activity(df, group_val, rl_filter)
+    if not found:
+        return ""
+    name, last_ts, n_parts = found
     _sub = f"{n_parts} {part_label} · " if n_parts else ""
     return (
         "<div class='sb-widget'>"
         f"<div class='sb-widget-title'>{_mi(icon, 12)}<span class='sb-widget-title-txt'>{title}</span></div>"
         f"<div class='sb-record'><span class='sb-record-ic'>{_mi(icon, 15)}</span>"
         f"<span class='sb-record-tx'><b>{_entity_link_html(name, link_kind)}</b>"
-        f"<small>{_sub}{format_relative(latest[name])}</small></span></div>"
+        f"<small>{_sub}{format_relative(last_ts)}</small></span></div>"
         "</div>"
     )
 
@@ -9970,6 +10024,85 @@ def _render_today_billboard(kq, hero_chips):
             st.markdown(_toc_html, unsafe_allow_html=True)
 
 
+def _comeback_info(df, sel):
+    """(ngày có phiên gần nhất TRƯỚC hôm nay, số ngày cách hôm nay) nếu `sel` là hôm nay và khoảng
+    nghỉ >= COMEBACK_MIN_GAP, ngược lại None. Dùng chung cho thẻ "Chào mừng trở lại" (hôm nay
+    chưa có phiên) và footer "Phiên đầu tiên sau X ngày nghỉ" (hôm nay đã có phiên) ở trang Hôm
+    nay -- cả 2 cùng định nghĩa "nghỉ dài" nên không được tính lệch nhau."""
+    today = _today_vn()
+    if sel != today:
+        return None
+    prev_days = [d for d in df['Ngày'].dropna().unique() if d < today]
+    if not prev_days:
+        return None
+    last_day = max(prev_days)
+    gap = (today - last_day).days
+    return (last_day, gap) if gap >= COMEBACK_MIN_GAP else None
+
+
+def _render_welcome_back(df, sel, day_df):
+    """Thẻ "Chào mừng trở lại" ngay dưới billboard trang Hôm nay, chỉ khi `sel` là hôm nay, hôm
+    nay CHƯA có phiên và đã nghỉ >= COMEBACK_MIN_GAP ngày (xem _comeback_info()). Không phải 1
+    chương (không đánh số, không có chip mục lục). Trường hợp hôm nay đã có phiên thì không vẽ thẻ
+    -- caller truyền footer "Phiên đầu tiên sau X ngày nghỉ" vào render_stat_panel(); hàm này vẫn
+    lo toast chào mừng (1 lần mỗi session) cho CẢ 2 trường hợp. Chỉ ghi nhận những gì đã có, không
+    nhắc nhở/đặt mục tiêu."""
+    info = _comeback_info(df, sel)
+    if info is None:
+        return
+    last_day, gap = info
+    if not st.session_state.get("_welcome_toasted"):
+        st.session_state["_welcome_toasted"] = True
+        st.toast(f"Chào mừng trở lại. Lần gần nhất có phiên là {gap} ngày trước."
+                 if day_df.empty else f"Phiên đầu tiên sau {gap} ngày nghỉ. Chào mừng trở lại.",
+                 icon=":material/waving_hand:")
+    if not day_df.empty:
+        return
+
+    # Tuần cuối trước khi nghỉ: 7 ngày kết thúc ở ngày có phiên gần nhất.
+    wk = df[(df['Ngày'] >= last_day - timedelta(days=6)) & (df['Ngày'] <= last_day)]
+    wk_hrs = wk['Thời lượng (Phút)'].sum() / 60
+    top_projs = (wk.groupby('Dự án')['Thời lượng (Phút)'].sum().sort_values(ascending=False).head(3).index)
+    proj_nhom = wk.drop_duplicates('Dự án').set_index('Dự án')['Nhóm']
+    wk_chips = (f"<span class='jchip'><span class='ck'>Tổng giờ</span><span class='cv'>{_fmt_hours_short(wk_hrs)}</span></span>"
+                f"<span class='jchip'><span class='ck'>Số phiên</span><span class='cv'>{len(wk)}</span></span>"
+                + "".join(f"<span class='jchip'>{_entity_link_html(n, _proj_link_kind(proj_nhom.get(n), n))}</span>"
+                          for n in top_projs))
+    body = _chip_row_html("Tuần cuối trước khi nghỉ", wk_chips)
+
+    # Đang đọc/xem dở: cuốn sách + series Gundam có hoạt động gần nhất (cùng logic với sidebar).
+    _rd_chips = ""
+    for _grp, _flt, _kind in ((BOOKS_GROUP, lambda v: not _is_gundam_list(v), "book"),
+                              (GUNDAM_TAG, _is_gundam_list, "gundam")):
+        _found = _latest_reading_activity(df, _grp, _flt, until=_today_vn())
+        if _found:
+            _rd_chips += f"<span class='jchip {_kind}'>{_entity_link_html(_found[0], _kind)}</span>"
+    if _rd_chips:
+        body += _chip_row_html("Đang đọc/xem dở", _rd_chips)
+
+    # Ghi chú chính gần nhất trước hôm nay (bỏ ghi chú rỗng), cắt ~240 ký tự văn bản thuần.
+    _notes = load_notes()
+    if not _notes.empty:
+        _nd = _notes.assign(_d=pd.to_datetime(_notes['Ngày'], errors='coerce')).dropna(subset=['_d'])
+        _nd = _nd[(_nd['_d'].dt.date < _today_vn()) & ~_nd['Ghi chú'].map(_note_is_empty)].sort_values('_d')
+        if not _nd.empty:
+            _r = _nd.iloc[-1]
+            _txt = _note_plain_text(_r['Ghi chú'])
+            _txt = _txt[:240].rstrip() + ("…" if len(_txt) > 240 else "")
+            body += (f"<div style='margin-bottom:6px;'><span class='rl-book'>Ghi chú gần nhất</span>"
+                     f"<div style='font-size:14px;line-height:1.55;color:var(--text);'>{html_escape(_txt)}</div>"
+                     f"<div style='font-size:12.5px;color:var(--text-3);margin-top:4px;'>"
+                     f"{_day_link_html(_r['_d'].date())}</div></div>")
+
+    with st.container(border=True, key="jcard_welcome"):
+        st.markdown(
+            f"<div style='font-size:17px;font-weight:700;color:var(--text);'>{_mi('waving_hand', 18)} Chào mừng trở lại</div>"
+            f"<div style='font-size:13px;color:var(--text-2);margin:2px 0 12px;'>"
+            f"Lần gần nhất: {_day_link_html(last_day)} · {gap} ngày trước</div>"
+            f"<div style='padding-bottom:10px;'>{body}</div>",
+            unsafe_allow_html=True)
+
+
 def render_day_report(df):
     """Nội dung trang "Hôm nay" -- mục đầu tiên trên nav bar, trang mặc định khi mở app. Tách
     thành hàm riêng (thay vì viết trực tiếp trong khối if nav=="Hôm nay":) vì day-jump link
@@ -10012,6 +10145,7 @@ def render_day_report(df):
                     ("today-ch3", "3 · Ghi chú ngày"), ("today-ch4", "4 · Danh sách phiên"),
                     ("today-ch5", "5 · Ngày này tuần trước"), ("today-ch6", "6 · Ngày này năm trước")])
     _render_today_billboard(_kindle_quote_of_day(sel), _hero_chips)
+    _render_welcome_back(df, sel, day_df)
 
     if day_df.empty:
         sec_chapter("today-ch1", 1, "Ghi chú ngày", tight_top=True)
@@ -10068,6 +10202,10 @@ def render_day_report(df):
         # nghĩa nếu tách khỏi tiêu đề (vd "Tổng số ngày"/"Dài nhất"/"Hiện tại").
         _secs = [{"label": "", "chips": cmp_chips},
                  {"label": "", "chips": _time_rows}]
+        # Hôm nay là phiên đầu tiên sau khoảng nghỉ dài: footer chào mừng (cùng tông _DIGEST_CELEBRATE).
+        _cb = _comeback_info(df, sel)
+        _welcome_footer = ((f"Phiên đầu tiên sau {_cb[1]} ngày nghỉ. Chào mừng trở lại.",
+                            "rgba(var(--accent-rgb),0.10)", "var(--accent-dark)") if _cb else None)
         if d_sess >= 2:
             _longest_block, _longest_gap = _session_flow_stats(day_df)
             _blk = f"{int(_longest_block // 60)}h{int(_longest_block % 60):02d}"
@@ -10082,7 +10220,7 @@ def render_day_report(df):
             {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
             {"label": "Số phiên", "value": f"{d_sess}"},
             {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
-        ], sections=_secs)
+        ], sections=_secs, footer=_welcome_footer)
 
         # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
         # phiên trong ngày trước khi đọc số liệu tổng hợp bên dưới. Bỏ lớp mờ "khung giờ điển
