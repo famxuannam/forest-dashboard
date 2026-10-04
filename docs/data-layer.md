@@ -14,7 +14,6 @@ cặp hàm:
 | `mapping`          | `load_mapping()`      | `save_mapping()`                   | Người dùng gán tay trong app      |
 | `deleted_sessions` | `load_deleted()`      | `add_deleted()` (cộng dồn khi xoá phiên trong app) · `save_deleted()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá phiên trong app)  |
 | `notes`            | `load_notes()`        | `save_note(day, text)` (lưu/sửa 1 ngày, gọi trong hàm render ghi chú; rỗng = xoá) · `save_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) · `save_dayone_notes_bulk(day_texts)` (upsert CHỈ đúng các ngày trong `day_texts`, nối vào cuối ghi chú Forest đã có thay vì ghi đè — dùng cho import Nhật ký Day One, xem mục riêng bên dưới) | Người dùng gõ trong app, hoặc import từ file JSON Day One |
-| `quick_notes`      | `load_quick_notes()`  | (Shortcut iOS tự INSERT qua REST API) · `update_quick_note()`/`delete_quick_note()` (sửa/xoá lẻ trong app) · `save_quick_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Shortcut iOS (không qua app) |
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
 | `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | `save_setting(key, value)` (upsert trực tiếp trong nơi dùng) · `save_settings_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (màu accent...)            |
@@ -105,22 +104,20 @@ Mục "2. Nhật ký đọc" (Sách/Gundam → Chi tiết) là nơi DUY NHẤT t
 `st.columns()` thật (không phải HTML tĩnh `.jrows` như mọi nơi khác dùng `_reading_rows_html()`) —
 vì cột nội dung cần nút Sửa/Xoá/+ Ghi chú thật (`st.button`), không nhét vào 1 chuỗi HTML được. Xem
 `_render_reading_kindle_days()`/`_render_kindle_day_quotes()`/`_render_kindle_quote_row()` trong
-app.py, cùng khuôn 2 cột + icon nút nhỏ với hàng "Ghi chú nhanh" (`qnote_row`) trong
-`render_note_editor()`. Quote/note trong 1 ngày xếp theo **"Vị trí" Kindle tăng dần**
+app.py, cùng khuôn 2 cột + icon nút nhỏ. Quote/note trong 1 ngày xếp theo **"Vị trí" Kindle tăng dần**
 (`_kindle_location_sort_key()`), KHÔNG theo giờ và KHÔNG có nút sắp xếp tay — quyết định đã chốt
 với người dùng: Reminders chỉ ghi NGÀY hoàn thành chương (không có giờ) nên không thể suy luận
 đáng tin quote thuộc chương nào trong 1 ngày đọc nhiều chương, còn "Vị trí" tăng dần theo trang
 sách lại tự nhiên đúng thứ tự đọc thật (đọc tuần tự).
 
-## `quick_notes`: "hộp thư nháp" trong ngày, gộp tay vào `notes`
+## Đã gỡ: "Ghi chú nhanh" (`quick_notes`)
 
-Ghi thẳng bởi Shortcut iOS qua REST API (KHÔNG qua app) — quy trình thực tế: ghi chú nhanh suốt
-ngày qua Siri/Shortcut, tối tổng hợp thành Ghi chú chính (`notes`) rồi xoá. `render_note_editor()`
-có nút "Gộp" trên mỗi dòng quick note: chèn nội dung vào cuối ô soạn Quill đang mở (hoặc mở ô soạn
-nếu chưa mở), đánh dấu dòng đó "chờ xoá" trong `session_state`; chỉ THỰC SỰ gọi `delete_quick_note()`
-sau khi người dùng bấm "Cập nhật" lưu ghi chú chính thành công (Huỷ/Xoá ghi chú thì chỉ bỏ đánh
-dấu, không đụng bảng) — tránh mất ghi chú nhanh nếu đổi ý giữa chừng trước khi lưu. 2 bảng vẫn tách
-biệt hoàn toàn, không có quan hệ khoá ngoại nào được lưu.
+Tính năng ghi chú nhanh (Shortcut iOS INSERT thẳng vào bảng `quick_notes`, app đọc/sửa/xoá/gộp vào
+`notes`) đã bị gỡ hoàn toàn khỏi app vì không còn dùng: không còn loader/saver, không còn trong
+Nhật ký, Tìm kiếm, "Ngày này tuần/năm trước", ngăn kéo "Một ngày ngẫu nhiên", và không còn nằm trong
+Sao lưu/Khôi phục/Xoá toàn bộ (file `quick_notes.csv` trong bản sao lưu cũ bị bỏ qua khi Khôi phục).
+`supabase_schema.sql` không còn tạo bảng này; trên Supabase đã triển khai bảng cũ (nếu còn) không bị app
+đụng tới -- xoá tay bằng `drop table if exists quick_notes;` khi muốn bỏ hẳn dữ liệu cũ.
 
 ## `gundam_overrides`/`book_overrides`: gán tay ngày → series/sách, ghi đè suy luận tự động
 

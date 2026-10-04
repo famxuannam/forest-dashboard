@@ -95,8 +95,6 @@ class _FakeTable:
                 if conflict is not None:
                     conflict.update(record)
                 else:
-                    if self.name == "quick_notes" and "id" not in record:
-                        record["id"] = max((r.get("id", 0) for r in rows), default=0) + 1
                     rows.append(record)
             return _FakeResponse(records)
         for key in reversed(self._orders):
@@ -131,7 +129,7 @@ class LocalDevSupabase:
                 {"project": "Học tập", "category": "Phát triển"},
             ],
             "notes": [{"note_date": today.isoformat(), "note": "<p>Dữ liệu minh hoạ khi chạy local.</p>"}],
-            "settings": [], "deleted_sessions": [], "quick_notes": [], "work_calendar": [],
+            "settings": [], "deleted_sessions": [], "work_calendar": [],
             "reading_log": [
                 {"uid": "demo-read-1", "completed_date": (today - timedelta(days=9)).isoformat(), "book": "Ursula K. Le Guin - The Dispossessed", "title": "Chương 1 · Anarres"},
                 {"uid": "demo-read-2", "completed_date": (today - timedelta(days=6)).isoformat(), "book": "Ursula K. Le Guin - The Dispossessed", "title": "Chương 2 · Urras"},

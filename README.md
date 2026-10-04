@@ -24,7 +24,7 @@ dụng đầy đủ.
 - `ui_catalog.py` — catalogue màu, nền, font và nhãn UI thuần dữ liệu.
 - `import_parsers.py` — parser cho các file import Forest, Reminders, Day One và Kindle.
 - `supabase_schema.sql` — schema đầy đủ: `sessions`, `mapping`, `deleted_sessions`, `notes`,
-  `quick_notes`, `work_calendar`, `reading_log`, `kindle_highlights`, `kindle_book_map`,
+  `work_calendar`, `reading_log`, `kindle_highlights`, `kindle_book_map`,
   `deleted_kindle_highlights`, `settings`, `gundam_overrides`, và
   `book_overrides`; đồng thời khai báo bucket Storage `sync-uploads`.
 - `.streamlit/config.toml` — theme sáng/tối; `.streamlit/secrets.toml.example` — mẫu các biến

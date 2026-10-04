@@ -216,7 +216,7 @@ rời trang đang xem. Cần Streamlit >= 1.65 (`position=`, và `live=` ở ô 
 - **Nội dung** do `_day_peek_html(d, df)` dựng (thuần HTML, theo thứ tự khối của
   `render_note_editor()`): ngày + khoảng cách (`_fmt_ago_ymd`) + link `_day_link_html` → chip Kỷ lục
   → tóm tắt phiên (`_session_summary_chips_html`, dùng chung với thẻ "Chào mừng trở lại") → chip
-  sách/Gundam → ghi chú nhanh → ghi chú chính (`.note-html`; >= 1200 ký tự thì chỉ hiện đoạn văn
+  sách/Gundam → ghi chú chính (`.note-html`; >= 1200 ký tự thì chỉ hiện đoạn văn
   bản thuần đã escape, không cắt HTML giữa thẻ) → tối đa 3 trích dẫn Kindle. Link
   `target=_self` mở session mới nên đóng dialog -- đúng ý.
 - **CSS**: nền modal đã ép `var(--card)` (rule `[data-testid="stDialog"] > div`); chữ trong dialog
