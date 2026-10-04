@@ -207,6 +207,20 @@ request; app chỉ cần quét bucket đó.
   lại. Không raise exception ra UI — mọi lỗi (kể cả lỗi dọn file cũ trong bucket, trả về qua khoá
   riêng `cleanup_error` thay vì bị `except: pass` nuốt im lặng) trả về trong dict kết quả để hiển
   thị.
+- `_auto_sync_on_open()` — **tự đồng bộ khi mở app**: gọi ngay trước `prep_analysis_data()` (sau cổng
+  đăng nhập) nên `df` của lượt chạy đó đã có dữ liệu mới, không cần rerun. Chỉ chạy 1 lần mỗi session
+  (cờ `st.session_state["_auto_sync_checked"]`, đặt đầu hàm), gọi bản `_list_sync_files()` không cache.
+  Bỏ qua nếu bucket không có file Forest, hoặc tên file mới nhất trùng setting `last_synced_forest_file`
+  (đã nạp) hoặc `auto_sync_failed_file` (đã tự thử và lỗi — mọi link `target=_self` mở session mới,
+  thiếu điều kiện này file lỗi cột sẽ bị thử lại và toast lỗi lặp mỗi session). Thành công: toast
+  `:material/cloud_done:`; lỗi: `save_setting("auto_sync_failed_file", <tên file>)` + toast
+  `:material/warning:`. Sau đó xoá `_list_sync_files_cached` để nút tròn ẩn đúng ngay lượt này. Nút
+  tròn bấm tay giữ nguyên; bấm tay thành công làm `last_synced_forest_file` đổi nên
+  `auto_sync_failed_file` tự hết tác dụng, không cần xoá. Local dev: `LocalDevSupabase` không có
+  `.storage`, `_list_sync_files()` trả `[]` nên hàm tự bỏ qua.
+- Các key trong bảng `settings` của luồng này: `last_synced_forest_file` (tên file Forest đã nạp
+  thành công gần nhất), `auto_sync_failed_file` (tên file Forest đã tự đồng bộ và lỗi), và
+  `last_quick_sync_at`/`last_quick_sync_summary` (hiển thị ở Tuỳ biến).
 - Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file), cùng khuôn "anon
   full access" như các bảng khác — app không có lớp đăng nhập theo lựa chọn đã chốt.
 
