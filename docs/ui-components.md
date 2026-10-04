@@ -19,7 +19,7 @@ hay không.
 ## Thứ tự chương chuẩn cho trang báo cáo (đã chốt qua đợt tái cấu trúc UX)
 
 Mọi trang họ Báo cáo/Sách/Gundam/Dự án theo cùng 1 thứ tự luồng, xem thêm ở `CLAUDE.md`:
-**Tổng quan → Lịch tháng (nếu trang có, luôn vị trí 2) → Phân bổ Danh mục/Dự án → Xu hướng theo
+**Tổng quan → Lịch tháng (nếu trang có, luôn vị trí 2; ở Năm chương này tên "Lịch") → Phân bổ Danh mục/Dự án → Xu hướng theo
 thời gian → Nhật ký/ghi chú → Bảng số liệu (luôn cuối cùng)**. Chương "Lịch tháng" (trước gọi "Biểu
 đồ lịch") hiện chỉ còn ở Báo cáo Tháng/Năm — đã bỏ khỏi Tổng quan (xác nhận với người dùng: trang
 tổng hợp toàn thời gian không cần 1 lịch tháng đơn lẻ). 2 hệ quả cụ thể khi thêm/sửa 1 trang kiểu
@@ -80,6 +80,12 @@ ngày đó (qua `_day_link_href()`, xem `architecture-navigation.md`):
   gọi THẲNG `_render_report_calendar_month()` (không qua bản có stepper) vì đã có `period_stepper()`
   riêng chọn tháng ở đầu trang — thêm 1 bộ điều hướng tháng thứ 2 là dư thừa.
 
+- **Báo cáo → Năm có thêm góc nhìn "Cả năm"**: chương 2 của Năm tên "Lịch" (không còn "Lịch tháng"; số
+  chương và chip mục lục `"2 · Lịch"` giữ nguyên) mở đầu bằng
+  `st.segmented_control("Xem theo", ["Cả năm", "Từng tháng"], key="bc_nam_cal_view")`. "Từng tháng" là
+  đúng code lịch lưới ở trên (`frag_report_calendar_month`, card `jcard_bcnam_cal`); "Cả năm" là
+  `render_year_heatmap(df_y, year)` (card `jcard_bcnam_heat`) -- xem mục "Biểu đồ ECharts" bên dưới.
+
 Cả 2 chỗ gọi PHẢI bọc trong `st.container(border=True, key="jcard_...")` (key chứa tiền tố
 `jcard_` để ăn theo rule CSS card nền/viền gộp chung, xem bẫy `st.container(border=True)` ở
 `theming.md`) — thiếu bước này lịch sẽ trong suốt, không có nền/viền như mọi chương khác trên
@@ -87,6 +93,30 @@ trang (bug thật đã gặp). Key mới thêm dạng `jcard_..._cal` phải đ�
 `padding-bottom: 32px` cạnh `jcard_sach_journal`/`jcard_gundam_journal` trong khối CSS chính (bù hụt
 chiều cao Streamlit tự đo với `.rlcal-grid`, xem comment tại chỗ rule đó) — không thêm sẽ bị cắt
 hàng ngày cuối tháng gần sát viền đáy card.
+
+## Biểu đồ mới ở Báo cáo (Giai đoạn 3): rừng tháng, lịch nhiệt năm, các giai đoạn
+
+- **"Khu rừng tháng này"** — `render_month_forest(df_m, y, m)` (card `jcard_bcthang_forest`), Báo cáo →
+  Tháng, chương 1 "Tổng quan" ngay sau `render_month_highlights()` (không đổi số chương). ECharts scatter:
+  mỗi phiên 1 cây (`_FOREST_TREE_PATH`, `path://`), x = ngày trong tháng (đủ 1..N, nhãn ở 1 và mỗi bội số
+  của 5), y = thứ tự phiên trong ngày theo giờ bắt đầu, 1 series/Nhóm màu `COLOR_MAP` (đặt
+  `itemStyle.opacity=1` vì scatter mặc định 0.8 làm cây nhạt hơn màu Nhóm ở chương "Phân bổ nhóm"),
+  cỡ cây theo căn bậc hai số phút (10–24px, `_forest_symbol_size`), cao `clamp(180+22*phiên/ngày tối đa,
+  220, 440)`. Dựng spec ở `_forest_spec()` (thuần dict JSON, kiểm tra được bằng script).
+- **Lịch nhiệt cả năm** — `render_year_heatmap(df_y, year)` (card `jcard_bcnam_heat`), `_year_heatmap_spec()`:
+  ECharts `calendar` + `heatmap`, thang `piecewise` dùng ĐÚNG 5 bậc có giờ của `_reading_cal_lvl()`
+  (`_YEAR_HEAT_PIECES`) và `_teal_shades(6)[1:]` để khớp mọi lịch khác; ngày 0 giờ không có data item.
+  **Hướng DỌC** (7 cột thứ × ~54 hàng tuần, cao 800px) cho mọi khổ: hướng ngang 53 cột ở 390px chỉ ~4.6px/ô
+  và nhãn tháng chồng nhau; Python không phát hiện được độ rộng màn hình nên không chọn theo khổ.
+- **"Theo giai đoạn"** — lựa chọn thứ 3 của `bc_tq_trend_view` (Báo cáo → Tổng quan, chương 2 "Xu hướng"),
+  `render_eras(df)`: `_compute_eras(df, today)` (`@st.cache_data`) chia lịch sử thành "mùa" (Nhóm nhiều
+  giờ nhất từng tháng, gộp tháng liền cùng Nhóm) và "khoảng nghỉ" (`ERA_BREAK_DAYS` = 21 ngày, kể cả
+  khoảng nghỉ kéo tới hôm nay); tháng đơn lẻ mà Nhóm dẫn đầu < `ERA_NOISE_SHARE` (40%) giờ tháng đó bị
+  nhập vào mùa trước (cùng đoạn hoạt động, không nhập qua khoảng nghỉ). Hiển thị: dải ngang Plotly 1
+  hàng (`_eras_fig`; dùng Plotly vì ECharts không có series `custom`, và `format_plotly_fig` gắn
+  customdata theo trục y nên được ghi đè lại sau đó) + bảng `.dtbl` mới nhất lên đầu. Plotly bọc trong
+  `[data-testid="stPlotlyChart"]` có padding 14px + `overflow:hidden`, cắt ~30px đáy svg -- nên fig này
+  chừa `margin b=56` để nhãn trục x không bị cắt.
 
 ## Bẫy: `st.metric` bị CSS ẩn đi — xem `theming.md`
 
