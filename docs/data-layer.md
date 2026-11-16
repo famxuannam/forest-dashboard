@@ -226,15 +226,8 @@ request; app chỉ cần quét bucket đó.
 - Các key trong bảng `settings` của luồng này: `last_synced_forest_file` (tên file Forest đã nạp
   thành công gần nhất), `auto_sync_failed_file` (tên file Forest đã tự đồng bộ và lỗi), và
   `last_quick_sync_at`/`last_quick_sync_summary` (hiển thị ở Tuỳ biến).
-- Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file). Khoá anon (trong
-  Shortcut) CHỈ có quyền INSERT vào bucket; app dùng khoá bí mật nên liệt kê/tải/xoá được.
-
-## Mô hình quyền Supabase
-
-App dùng khoá bí mật (`SUPABASE_KEY` = `sb_secret_…` hoặc `service_role`) → vai trò `service_role`
-bỏ qua RLS. Mọi bảng bật RLS và KHÔNG có policy cho `anon`/`authenticated`. Thêm bảng mới: chỉ cần
-`enable row level security`, không tạo policy cho anon như trước. Khoá anon chỉ dùng cho Shortcut
-(tải file lên bucket). Không đặt secret nào trên GitHub (repo công khai) -- mọi secret ở Streamlit Cloud.
+- Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file), cùng khuôn "anon
+  full access" như các bảng khác — app không có lớp đăng nhập theo lựa chọn đã chốt.
 
 ## Nhập Nhật ký Day One (Tuỳ biến → Dữ liệu đầu vào → Dự phòng)
 

@@ -34,10 +34,8 @@ dụng đầy đủ.
 
 ## Lưu ý
 
-Bảo vệ 2 lớp: (1) đăng nhập Google qua mục `[auth]` trong secrets (chỉ `ALLOWED_EMAIL` vào được
-app); (2) app dùng khoá bí mật Supabase phía server, còn khoá anon/publishable (nằm trong Shortcut iOS)
-chỉ được tải file lên bucket `sync-uploads`, không đọc được bảng nào (xem `supabase_schema.sql`). Mọi
-secret chỉ nằm trong Streamlit Cloud, không đặt secret nào trên GitHub (repo công khai). Dữ liệu bền vững trên Supabase qua các lần
+App không có lớp bảo vệ nào theo mặc định (ai có URL đều xem/sửa được dữ liệu) trừ khi bật
+đăng nhập Google qua mục `[auth]` trong secrets. Dữ liệu bền vững trên Supabase qua các lần
 khởi động lại/redeploy; mục Sao lưu trong app (Tuỳ biến → Quản lý hệ thống) vẫn nên dùng định
 kỳ như lớp an toàn thứ hai.
 

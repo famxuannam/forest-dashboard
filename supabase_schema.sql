@@ -1,6 +1,6 @@
 -- Chạy 1 lần trong Supabase Dashboard -> SQL Editor -> New query -> Run.
--- Tạo toàn bộ bảng dữ liệu, RLS và bucket Storage của Forest Dashboard. App dùng
--- khoá bí mật phía server; khoá anon chỉ được tải file lên bucket sync-uploads (xem đoạn RLS).
+-- Tạo toàn bộ bảng dữ liệu, RLS policy và bucket Storage của Forest Dashboard. App không có đăng
+-- nhập mặc định; các policy anon full CRUD bên dưới là quyết định dành riêng cho dashboard cá nhân.
 
 -- Lưu ý: dùng "timestamp" (KHÔNG timezone), không phải "timestamptz". Dữ liệu xuất từ Forest
 -- là giờ theo đồng hồ treo tường (wall-clock), không mang thông tin múi giờ -- app coi chuỗi
@@ -134,11 +134,9 @@ create table if not exists book_overrides (
   book text not null
 );
 
--- RLS: bật cho MỌI bảng và KHÔNG tạo policy nào cho anon/authenticated -> khoá anon/publishable
--- (nằm trong Shortcut iOS, workflow GitHub) không đọc/ghi được bảng nào. App chạy phía server trên
--- Streamlit Cloud và dùng KHOÁ BÍ MẬT (sb_secret_... hoặc service_role cũ) trong st.secrets
--- SUPABASE_KEY -- vai trò service_role có BYPASSRLS nên không cần policy. Trước đây mọi bảng có
--- policy cho anon toàn quyền: lộ khoá anon (vd từ Shortcut) là lộ toàn bộ nhật ký.
+-- RLS: bật + cho phép full CRUD qua anon key. Khoá anon chỉ sống ở server-side trong
+-- st.secrets (Streamlit không expose ra trình duyệt của người xem), nên mở toàn quyền ở
+-- đây là chấp nhận được cho app không có lớp đăng nhập theo lựa chọn đã chốt.
 alter table sessions enable row level security;
 alter table mapping enable row level security;
 alter table deleted_sessions enable row level security;
@@ -152,19 +150,31 @@ alter table deleted_kindle_highlights enable row level security;
 alter table gundam_overrides enable row level security;
 alter table book_overrides enable row level security;
 
+create policy "anon full access" on sessions for all using (true) with check (true);
+create policy "anon full access" on mapping for all using (true) with check (true);
+create policy "anon full access" on deleted_sessions for all using (true) with check (true);
+create policy "anon full access" on notes for all using (true) with check (true);
+create policy "anon full access" on work_calendar for all using (true) with check (true);
+create policy "anon full access" on reading_log for all using (true) with check (true);
+create policy "anon full access" on settings for all using (true) with check (true);
+create policy "anon full access" on kindle_highlights for all using (true) with check (true);
+create policy "anon full access" on kindle_book_map for all using (true) with check (true);
+create policy "anon full access" on deleted_kindle_highlights for all using (true) with check (true);
+create policy "anon full access" on gundam_overrides for all using (true) with check (true);
+create policy "anon full access" on book_overrides for all using (true) with check (true);
+
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
 -- này để nạp dữ liệu thay vì đọc trực tiếp iCloud Drive (server chạy từ xa, không có filesystem
--- chung với điện thoại). "public = false" vì file chỉ cần đi qua API (Shortcut tải lên bằng khoá anon, app đọc bằng khoá bí mật
+-- chung với điện thoại). "public = false" vì file chỉ cần đọc/ghi qua API bằng anon key (đã có
 -- trong secrets), không cần truy cập qua URL công khai không xác thực. Đổi tên 'sync-uploads' ở
 -- CẢ 2 chỗ dưới đây nếu bạn đặt SUPABASE_SYNC_BUCKET khác trong secrets.toml.
 insert into storage.buckets (id, name, public)
 values ('sync-uploads', 'sync-uploads', false)
 on conflict (id) do nothing;
 
--- storage.objects đã bật RLS sẵn từ phía Supabase. Khoá anon (Shortcut iOS) CHỈ được TẢI LÊN file
--- mới vào bucket này -- không liệt kê, không đọc, không xoá được. App liệt kê/tải về/xoá file bằng
--- khoá bí mật (bỏ qua RLS). Nếu Shortcut dùng chế độ ghi đè (header x-upsert: true) thì cần thêm
--- policy select + update; tên file có timestamp nên thường không cần.
-create policy "anon upload sync-uploads" on storage.objects for insert to anon
-  with check (bucket_id = 'sync-uploads');
+-- storage.objects đã bật RLS sẵn từ phía Supabase -- chỉ cần thêm policy, không cần "alter
+-- table ... enable row level security" (khác các bảng tự tạo ở trên). Cùng lý do "mở toàn
+-- quyền qua anon key" như các bảng khác: app không có lớp đăng nhập theo lựa chọn đã chốt.
+create policy "anon full access sync-uploads" on storage.objects for all
+  using (bucket_id = 'sync-uploads') with check (bucket_id = 'sync-uploads');
