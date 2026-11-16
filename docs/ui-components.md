@@ -57,6 +57,11 @@ cần) thay vì tự viết 1 layout card mới từ đầu — tự viết riê
 app. Dùng tham số `card_style` cho các chỉnh sửa margin/width chỉ áp dụng ở 1 nơi gọi — không sửa
 giá trị mặc định của hàm vì điều đó ảnh hưởng TẤT CẢ nơi đang gọi nó.
 
+Ô hero có thể kèm sparkline 7 ngày: truyền `"spark": _sparkline_svg(vals, fmt, labels)` trong item
+(`vals` cũ -> mới, `None` = ngày không có dữ liệu; đường màu `--accent`, chấm cuối màu `--trim`,
+`<title>` liệt kê giá trị từng ngày). Đang dùng ở chương "Tổng quan ngày" của Hôm nay (tổng giờ, số
+phiên, độ dài TB/phiên của 7 ngày kết thúc ở ngày đang xem).
+
 ## Lịch tháng dạng lưới: `_render_reading_calendar_month()` / `_render_report_calendar_month()`
 
 2 hàm SONG SONG, cùng dùng chung khung `.rlcal-cell`/`.rlcal-grid`/`.rlcal-tip` (CSS `RLCAL_CSS`) —

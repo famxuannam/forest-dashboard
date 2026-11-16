@@ -2342,6 +2342,31 @@ def _clip_card(note):
     )
 
 
+def _sparkline_svg(vals, fmt, labels):
+    """Sparkline nhỏ (100x28px) cho ô số liệu hero của render_stat_panel(): vals là list số theo thứ
+    tự cũ -> mới (None = ngày không có dữ liệu, bỏ qua điểm đó nhưng giữ đúng vị trí trục x), đường
+    màu accent, chấm màu trim ở điểm cuối (= ngày đang xem). fmt(v) -> chuỗi hiển thị 1 giá trị,
+    labels: nhãn ngày song song với vals -- dùng cho <title> (tooltip trình duyệt + trình đọc màn
+    hình). Trả "" nếu không đủ 2 điểm có dữ liệu."""
+    pts = [(i, v) for i, v in enumerate(vals) if v is not None]
+    if len(pts) < 2:
+        return ""
+    w, h, pad = 100, 28, 3
+    lo, hi = min(v for _, v in pts), max(v for _, v in pts)
+    n = len(vals)
+    xy = [(pad + i / (n - 1) * (w - 2 * pad), h - pad - ((v - lo) / ((hi - lo) or 1)) * (h - 2 * pad))
+          for i, v in pts]
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+    title = html_escape(" · ".join(f"{lb} {fmt(v) if v is not None else '–'}" for lb, v in zip(labels, vals)))
+    last = ""
+    if vals[-1] is not None:
+        last = f"<circle cx='{xy[-1][0]:.1f}' cy='{xy[-1][1]:.1f}' r='2.6' style='fill:var(--trim)'></circle>"
+    return (f"<svg class='sp-spark' width='{w}' height='{h}' viewBox='0 0 {w} {h}' role='img' "
+            f"aria-label='7 ngày gần nhất: {title}'><title>{title}</title>"
+            f"<polyline points='{poly}' fill='none' style='stroke:var(--accent)' stroke-width='1.8' "
+            f"stroke-linejoin='round' stroke-linecap='round'></polyline>{last}</svg>")
+
+
 def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_style=""):
     """Bảng tổng quan gọn: hero (nếu có) là 1 LƯỚI thẻ riêng biệt (mỗi số to 1 thẻ), các nhóm
     "section" xếp thành DÒNG có gạch ngăn (label trái/giá trị phải, khác chip-pill trước đây) gộp
@@ -2349,7 +2374,8 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
     áp dụng chung cho MỌI trang gọi hàm này, xác nhận với người dùng: ưu tiên khớp mockup hơn giữ
     nguyên bản chip cũ).
 
-    hero_items: list dict {label, value, deltas?: [(text, color)]}; rỗng -> bỏ lưới hero.
+    hero_items: list dict {label, value, deltas?: [(text, color)], spark?: html}; rỗng -> bỏ lưới
+                hero. spark: SVG dựng sẵn bằng _sparkline_svg(), hiện dưới số to kèm nhãn "7 ngày".
     sections:   list dict {label, chips: [{k, v, delta?: (text, color), hl?: bool}]} -- "chips" là
                 tên tham số cũ (giữ nguyên để không phải sửa mọi nơi gọi), giờ render thành DÒNG
                 chứ không phải chip pill nữa. hl=True -> tô đậm màu accent cho cả k/v của dòng đó
@@ -2455,6 +2481,8 @@ def render_stat_panel(hero_items, sections=None, footer=None, groups=None, card_
             h += f"<div class='sp-tile'><div class='sp-l'>{it['label']}</div><div class='sp-v'>{it['value']}</div>"
             for txt, col in it.get('deltas', []) or []:
                 h += f"<div class='sp-d' style='color:{col};'>{txt}</div>"
+            if it.get('spark'):
+                h += f"<div class='sp-sparkrow'>{it['spark']}<span>7 ngày</span></div>"
             h += "</div>"
         h += "</div>"
     if groups is not None:
@@ -7889,6 +7917,9 @@ _MAIN_CSS = """
         text-transform: uppercase; letter-spacing: 0.08em; }
     .sp-v { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
     .sp-v span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .sp-sparkrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .sp-sparkrow span { font-size: 11px; color: var(--text-3); }
+    .sp-spark { display: block; flex: none; overflow: visible; }
     .sp-d { font-size: 12px; font-weight: 500; margin-top: 3px; }
     /* Thẻ list: mỗi "section" = 1 tiêu đề nhỏ in hoa (border-top ĐẬM ngăn với section trước) +
        các dòng label/giá trị (border-top MỜ ngăn giữa các dòng) -- không còn chip-pill. Padding
@@ -10678,10 +10709,21 @@ def render_day_report(df):
             else:
                 _flow_chips = [{"k": "Khối liền mạch dài nhất", "v": _blk}]
             _secs.append({"label": "", "chips": _flow_chips})
+        # Sparkline 7 ngày (sel-6 .. sel) cho 3 ô hero: tổng giờ/số phiên tính 0 cho ngày trống,
+        # độ dài TB/phiên để trống (None) ở ngày không có phiên thay vì 0 phút gây hiểu nhầm.
+        _days7 = [sel - timedelta(days=k) for k in range(6, -1, -1)]
+        _by_day = df[df['Ngày'].isin(_days7)].groupby('Ngày')['Thời lượng (Phút)'].agg(['sum', 'count'])
+        _min7 = [float(_by_day['sum'].get(d, 0)) for d in _days7]
+        _cnt7 = [int(_by_day['count'].get(d, 0)) for d in _days7]
+        _avg7 = [(m / c if c else None) for m, c in zip(_min7, _cnt7)]
+        _lbl7 = [f"{d:%d/%m}" for d in _days7]
         render_stat_panel(hero_items=[
-            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}"},
-            {"label": "Số phiên", "value": f"{d_sess}"},
-            {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút"},
+            {"label": "Tổng thời gian", "value": f"{_fmt_hours_short(d_hrs)}",
+             "spark": _sparkline_svg(_min7, lambda v: _fmt_hours_short(v / 60), _lbl7)},
+            {"label": "Số phiên", "value": f"{d_sess}",
+             "spark": _sparkline_svg(_cnt7, lambda v: f"{v:.0f}", _lbl7)},
+            {"label": "Độ dài / phiên", "value": f"{d_avg:.0f} phút",
+             "spark": _sparkline_svg(_avg7, lambda v: f"{v:.0f}′", _lbl7)},
         ], sections=_secs, footer=_welcome_footer)
 
         # Dòng thời gian đứng NGAY SAU stat panel -- theo đúng bố cục "Sổ Tay": nhìn được nhịp
