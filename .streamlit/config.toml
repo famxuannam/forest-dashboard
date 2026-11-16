@@ -1,16 +1,13 @@
+# Chỉ 1 bộ [theme] sáng (tông RX-78-2 mặc định), KHÔNG có [theme.dark]: tông sáng/tối do theme
+# Gundam đang chọn quyết định (xem GUNDAM_THEMES trong ui_catalog.py), không theo trình duyệt.
+# Widget native nào đọc màu tĩnh ở đây đều được ép lại bằng var(--token) trong CSS của app.py.
 [theme]
-primaryColor = "#1f6f6a"
-backgroundColor = "#f3efe4"
-secondaryBackgroundColor = "#ece4d0"
-textColor = "#211c13"
+base = "light"
+primaryColor = "#1f4fa8"
+backgroundColor = "#eef0f4"
+secondaryBackgroundColor = "#e3e7ef"
+textColor = "#121722"
 font = "sans serif"
-
-[theme.dark]
-primaryColor = "#1f6f6a"
-backgroundColor = "#1a1712"
-secondaryBackgroundColor = "#322c20"
-textColor = "#f1ece0"
-borderColor = "#3c3628"
 
 [server]
 # Phục vụ static/fonts/*.woff2 dạng file tĩnh (app/static/...) để trình duyệt cache font, thay vì nhúng

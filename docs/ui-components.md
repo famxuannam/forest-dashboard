@@ -12,6 +12,9 @@ trong cùng trang** (cả tham số `num` truyền vào `sec_chapter` lẫn chu�
 `render_period_billboard(...)` ngay phía trên) — để số thứ tự luôn liên tục 1, 2, 3... không nhảy
 cóc, và chip mục lục luôn khớp đúng chương nó trỏ tới.
 
+Số chương hiển thị 2 chữ số kiểu mono ("01", "02"... -- `sec_chapter` tự định dạng `num` kiểu int),
+ô `.sec-ch-num` nền phớt accent. Chip mục lục vẫn ghi "1 · Tổng quan" như cũ.
+
 Ngoại lệ: mục có điều kiện hiển thị (ví dụ mục "Nhật ký đọc" chỉ hiện khi Dự án đang xem khớp 1
 cuốn sách) truyền `num=None`, để giữ nguyên số của các mục cố định khác dù mục điều kiện có hiện
 hay không.
@@ -53,6 +56,11 @@ nhỏ bên dưới". Khi cần 1 khối tổng quan số liệu mới, **mở r�
 cần) thay vì tự viết 1 layout card mới từ đầu — tự viết riêng sẽ lệch style so với phần còn lại của
 app. Dùng tham số `card_style` cho các chỉnh sửa margin/width chỉ áp dụng ở 1 nơi gọi — không sửa
 giá trị mặc định của hàm vì điều đó ảnh hưởng TẤT CẢ nơi đang gọi nó.
+
+Ô hero có thể kèm sparkline 7 ngày: truyền `"spark": _sparkline_svg(vals, fmt, labels)` trong item
+(`vals` cũ -> mới, `None` = ngày không có dữ liệu; đường màu `--accent`, chấm cuối màu `--trim`,
+`<title>` liệt kê giá trị từng ngày). Đang dùng ở chương "Tổng quan ngày" của Hôm nay (tổng giờ, số
+phiên, độ dài TB/phiên của 7 ngày kết thúc ở ngày đang xem).
 
 ## Lịch tháng dạng lưới: `_render_reading_calendar_month()` / `_render_report_calendar_month()`
 
@@ -178,6 +186,13 @@ tab, không chỉ tab active), nên phải đặt `key="bc_billboard_detail"` kh
 "Tổng quan". Đặt `key` mới nào cũng phải thêm vào ĐỦ mọi rule CSS liệt kê key (`.st-key-
 today_billboard, .st-key-bc_billboard, ...` -- khớp CHÍNH XÁC chuỗi, không dùng substring chung vì
 "..._detail" không còn chứa nguyên vẹn "billboard" gốc).
+
+Bố cục billboard (đợt làm mới theo theme Gundam): badge tròn | nội dung (2 cột), mục lục là 1 hàng
+chip NGANG (`.tbill-toccol`) ở đáy billboard, không còn cột mục lục dọc thứ 3. Billboard Hôm nay
+(`_render_today_billboard()`): nhãn mã máy theme (`_THEME_UNIT_TAG_HTML`) -> trích dẫn full width ->
+hàng mục lục. Sidebar: khối ngày hôm nay là 1 hàng gọn (`.sb-date*`, không còn vòng tròn 96px), cuối
+sidebar có nút theme (`.sb-theme-chip`) dẫn tới Tuỳ biến → Giao diện. Dòng thời gian trong ngày
+(`render_day_timeline()`) có vạch "bây giờ" (`.dtl-now`, màu `--trim`) khi đang xem đúng hôm nay.
 
 ## Style riêng 1 khu vực bằng tiền tố `key=` chung, không cần bọc container
 
