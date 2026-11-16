@@ -1,10 +1,28 @@
-# Kiểm thử: không có test suite, dùng harness giả lập
+# Kiểm thử: pytest + harness giả lập
+
+## Bước 0: chạy test tự động
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python3 -m pytest -q tests
+```
+
+- `tests/test_import_parsers.py` — 4 parser trong `import_parsers.py`.
+- `tests/test_data_layer.py` — các hàm ghi Supabase (dùng `LocalDevSupabase` có cài lỗi giả ở lần
+  ghi thứ N): lỗi giữa chừng không được làm mất dữ liệu cũ. Hàm được nạp riêng từ `app.py` qua
+  `tests/_extract.py` (parse AST, chỉ exec đúng các `def` cần), vì `app.py` không import được.
+- `tests/test_app_smoke.py` — chạy `app.py` thật với `FOREST_LOCAL_DEV=1` qua `streamlit.testing.v1.AppTest`,
+  từng trang/sub-trang, khẳng định không có exception. Thêm trang/sub mới vào `NAV` thì thêm vào `PAGES`.
+
+CI (`.github/workflows/ci.yml`) chạy đúng các bước này trên mỗi PR. Test tự động KHÔNG thay được kiểm
+tra JS/CSS trên trình duyệt (phím tắt, nút nổi, layout) — với thay đổi giao diện vẫn làm Bước 1–2.
 
 Đối tượng đọc: Claude Code cần xác minh 1 thay đổi có chạy đúng không, trong môi trường sandbox thường
 KHÔNG có mạng ra `*.supabase.co` hay `caldav.icloud.com`.
 
-Không có bước build/lint/test tự động nào trong repo. Quy trình xác minh thay đổi là chạy *chính*
-`app.py` thật với 1 Supabase giả lập, rồi lái bằng Playwright.
+Với thay đổi giao diện, ngoài pytest hãy chạy *chính* `app.py` thật với 1 Supabase giả lập, rồi lái
+bằng Playwright. Cách nhanh nhất: `FOREST_LOCAL_DEV=1 streamlit run app.py --server.address localhost`
+(dùng `LocalDevSupabase` trong `local_dev_data.py`, không cần tự viết client giả như Bước 1).
 
 ## Bước 1: tạo scratch app với `_get_supabase()` giả
 
@@ -26,7 +44,7 @@ session) bằng 1 client giả trong bộ nhớ, hỗ trợ đúng các method t
 Nếu tính năng đang sửa dùng CalDAV, monkeypatch thêm `_get_caldav_client()`.
 
 Chạy `streamlit run <scratch>.py` từ **thư mục gốc repo** (không phải từ thư mục scratch khác) —
-`app.py` load asset bằng đường dẫn tương đối (`assets/...`), chạy sai cwd sẽ crash ngay khi vẽ logo,
+`app.py` load asset bằng đường dẫn tương đối (`static/fonts/...`), chạy sai cwd sẽ crash ngay khi vẽ logo,
 che mất lỗi thật đang muốn tìm.
 
 ## Bước 2: chạy + lái bằng Playwright

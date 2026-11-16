@@ -11,3 +11,8 @@ backgroundColor = "#1a1712"
 secondaryBackgroundColor = "#322c20"
 textColor = "#f1ece0"
 borderColor = "#3c3628"
+
+[server]
+# Phục vụ static/fonts/*.woff2 dạng file tĩnh (app/static/...) để trình duyệt cache font, thay vì nhúng
+# base64 vào CSS ở mỗi session mới -- xem _font_src() trong app.py.
+enableStaticServing = true

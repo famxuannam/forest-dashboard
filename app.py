@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import os
 import io
@@ -24,7 +23,7 @@ from streamlit_quill import st_quill
 from supabase import create_client
 from caldav import DAVClient
 from local_dev_data import LocalDevSupabase
-from ui_catalog import VN_DAYS, VN_MONTHS, VN_DAYS_ABBR, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
+from ui_catalog import VN_DAYS, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
 from import_parsers import parse_dayone_json, parse_forest_csv, parse_kindle_clippings, parse_reading_log_shortcut_csv
 
 _LOCAL_DEV_REQUESTED = os.getenv("FOREST_LOCAL_DEV", "").strip().lower() in {"1", "true", "yes"}
@@ -35,6 +34,15 @@ except Exception:
 _IS_LOOPBACK_SERVER = _LOCAL_DEV_ADDRESS in {"localhost", "127.0.0.1", "::1"}
 # Local dev dùng dữ liệu mẫu trong bộ nhớ, tuyệt đối không cần/không đọc Supabase secrets.
 _USE_FAKE_DATA = _LOCAL_DEV_REQUESTED and _IS_LOOPBACK_SERVER
+
+def _inject_js(html):
+    """Tiêm 1 đoạn <script> thao tác trên window.parent.document (phím tắt, nút nổi, locale lịch...).
+    Thay cho components.html(..., height=0) -- API đó bị Streamlit gỡ sau 2026-06-01. st.iframe vẫn
+    cho script truy cập same-origin vào trang cha và chạy lại khi nội dung đổi (đã thử: hành vi rerun
+    giống hệt components.html). st.iframe không nhận height=0 nên dùng 1px; alt="js-injector" là dấu
+    để CSS trong _MAIN_CSS ẩn hẳn khung chứa khỏi layout (xem rule ẩn phần tử tiêm JS)."""
+    st.iframe(html, height=1, alt="js-injector")
+
 
 # Thanh công cụ cho ô soạn ghi chú (Quill): đậm/nghiêng/gạch chân, màu chữ & nền,
 # danh sách + thụt lề, liên kết, xoá định dạng. (Không bật chèn ảnh để tránh phình notes.csv.)
@@ -110,7 +118,7 @@ def style_quill():
         "setInterval(applyQuillCss, 400);\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _note_is_empty(html):
@@ -125,6 +133,47 @@ def _note_plain_text(html_content):
     """Text thuần từ ghi chú Quill: bỏ thẻ HTML + giải mã entity (&nbsp;, &amp;...) -- dùng để
     tìm kiếm/trích đoạn, khác _note_is_empty() chỉ cần biết rỗng hay không nên chưa unescape."""
     return re.sub(r"\s+", " ", html_unescape(re.sub(r"<[^>]+>", " ", str(html_content or "")))).strip()
+
+
+def _note_html_to_markdown(html_content):
+    """Ghi chú Quill (HTML) -> Markdown gọn để lưu trữ ngoài app: đoạn, xuống dòng, **đậm**,
+    *nghiêng*, ~~gạch~~, link, danh sách (thụt lề theo ql-indent-N), heading. Thẻ khác bị bỏ, giữ
+    chữ. Không cố đạt độ chính xác tuyệt đối -- mục tiêu là đọc được bằng mọi trình soạn thảo."""
+    h = str(html_content or "")
+    h = re.sub(r"(?is)<a [^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", r"[\2](\1)", h)
+    h = re.sub(r"(?is)<(strong|b)>(.*?)</\1>", r"**\2**", h)
+    h = re.sub(r"(?is)<(em|i)>(.*?)</\1>", r"*\2*", h)
+    h = re.sub(r"(?is)<s>(.*?)</s>", r"~~\1~~", h)
+    h = re.sub(r"(?is)<h([1-6])[^>]*>(.*?)</h\1>", lambda m: "\n" + "#" * (int(m.group(1)) + 2) + " " + m.group(2) + "\n", h)
+
+    def _list(m):
+        ordered = m.group(1).lower() == "ol"
+        out, counters = [], {}
+        for li in re.finditer(r"(?is)<li([^>]*)>(.*?)</li>", m.group(2)):
+            lvl = int((re.search(r"ql-indent-(\d+)", li.group(1)) or [0, 0])[1])
+            counters[lvl] = counters.get(lvl, 0) + 1
+            for k in [k for k in counters if k > lvl]:
+                del counters[k]
+            bullet = f"{counters[lvl]}." if ordered else "-"
+            out.append("  " * lvl + f"{bullet} {li.group(2).strip()}")
+        return "\n" + "\n".join(out) + "\n"
+    h = re.sub(r"(?is)<(ul|ol)[^>]*>(.*?)</\1>", _list, h)
+    h = re.sub(r"(?i)<br\s*/?>", "\n", h)
+    h = re.sub(r"(?i)</p>", "\n\n", h)
+    h = html_unescape(re.sub(r"<[^>]+>", "", h)).replace("\xa0", " ")
+    return re.sub(r"\n{3,}", "\n\n", h).strip()
+
+
+def _notes_to_markdown(notes_df):
+    """Toàn bộ ghi chú -> 1 file Markdown, mỗi ngày 1 mục "## Thứ, dd/mm/yyyy", cũ trước mới sau."""
+    parts = ["# Nhật ký Forest Dashboard", ""]
+    if notes_df is not None and not notes_df.empty:
+        nd = notes_df.assign(_d=pd.to_datetime(notes_df["Ngày"], errors="coerce")).dropna(subset=["_d"]).sort_values("_d")
+        for d, html in zip(nd["_d"], nd["Ghi chú"]):
+            body = _note_html_to_markdown(html)
+            if body:
+                parts += [f"## {VN_DAYS.get(d.day_name(), '')}, {d:%d/%m/%Y}", "", body, ""]
+    return "\n".join(parts).rstrip() + "\n"
 
 
 def _snippet_around(txt, query, radius=60):
@@ -286,6 +335,11 @@ def _readable_text(hexcode):
     return "#1d1d1f" if luminance > 0.6 else "#ffffff"
 
 
+def _load_settings_raw():
+    res = _get_supabase().table("settings").select("key,value").execute()
+    return {r["key"]: r["value"] for r in (res.data or [])}
+
+
 def load_settings():
     """Đọc bảng settings (key/value) -> dict. Trả {} nếu lỗi/chưa cấu hình Supabase/chưa tạo
     bảng -- tính năng optional, KHÔNG được làm crash app. Hàm này chạy Ở CẤP MODULE, rất sớm
@@ -293,15 +347,27 @@ def load_settings():
     giá trị trước khi _teal_shades() được gọi lần đầu (SESSION_BUCKETS) -- nên phải tự bọc lỗi
     ở đây, không được dựa vào cổng secrets đã chạy trước nó."""
     try:
-        res = _get_supabase().table("settings").select("key,value").execute()
-        return {r["key"]: r["value"] for r in (res.data or [])}
+        return _load_settings_raw()
     except Exception:
         return {}
 
 
 @st.cache_data
+def _cached_settings_strict():
+    # Ném lỗi ra ngoài (KHÔNG nuốt) để st.cache_data không ghi nhớ kết quả rỗng khi Supabase lỗi
+    # đúng lúc khởi động -- trước đây {} bị cache vô thời hạn, giao diện rơi về mặc định tới khi
+    # khởi động lại app.
+    return _load_settings_raw()
+
+
 def _cached_settings():
-    return load_settings()
+    try:
+        return _cached_settings_strict()
+    except Exception:
+        return {}
+
+
+_cached_settings.clear = _cached_settings_strict.clear
 
 
 def save_setting(key, value):
@@ -471,6 +537,19 @@ _SB_PAGE_SIZE = 1000  # PostgREST (nền tảng Supabase) mặc định chỉ tr
 # định; children theo đúng 1 parent_hash) không cần vì không bao giờ chạm ngưỡng.
 
 
+def _sb_retry(fn, attempts=3):
+    """Chạy fn() (1 lần .execute() Supabase), thử lại tối đa attempts lần, chờ 1s rồi 2s giữa các
+    lần -- chịu được lỗi mạng/5xx thoáng qua (vd Cloudflare 521 khi project vừa khởi động lại sau
+    tạm dừng). Hết lượt thử thì ném lại lỗi cuối cho nơi gọi xử lý."""
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(1 + i)
+
+
 def _sb_select_all(build_query):
     """Chạy 1 PostgREST query, tự phân trang qua .range() cho tới khi hết dữ liệu thay vì gọi
     thẳng .execute() (xem _SB_PAGE_SIZE). build_query là callable KHÔNG tham số, mỗi lần gọi trả
@@ -482,7 +561,7 @@ def _sb_select_all(build_query):
     all_data = []
     offset = 0
     while True:
-        page = build_query().range(offset, offset + _SB_PAGE_SIZE - 1).execute().data or []
+        page = _sb_retry(lambda: build_query().range(offset, offset + _SB_PAGE_SIZE - 1).execute()).data or []
         all_data.extend(page)
         if len(page) < _SB_PAGE_SIZE:
             break
@@ -541,6 +620,10 @@ def _load_simple_table(table, select, rename, cols):
     return pd.DataFrame(data).rename(columns=rename)[cols]
 
 def save_db(df):
+    """Ghi đè TOÀN BỘ bảng sessions (xoá sạch rồi chèn lại) -- CHỈ dùng khi Khôi phục từ bản sao
+    lưu. Luồng thường ngày không gọi hàm này: nạp CSV mới đi qua _merge_forest_into_db() (chỉ chèn
+    dòng mới), xoá phiên đi qua delete_sessions() (xoá đúng dòng) -- để lỗi mạng giữa chừng không
+    bao giờ làm mất dữ liệu đã có."""
     sb = _get_supabase()
     _sb_delete_all("sessions", "id")
     recs = [
@@ -554,21 +637,46 @@ def save_db(df):
     prep_analysis_data.clear()
 
 def _merge_forest_into_db(df_new):
-    """Cộng df_new (đã lọc phiên đã xoá) vào sessions hiện có, bỏ trùng theo khoá (Thời gian bắt
-    đầu, Thời gian kết thúc), ghi đè toàn bộ qua save_db(). Dùng chung cho cả luồng "Đồng bộ nhanh"
-    (sync_from_storage) và tải tay 1 file CSV Forest (tab "Tải lên từ Forest" ở Tuỳ biến) -- 2 nơi
-    khác nhau ở BƯỚC LỌC phiên đã xoá trước đó (mỗi nơi cần thời điểm/thông tin khác nhau cho UI
-    riêng), chỉ giống hệt nhau từ bước này trở đi. _fmt_ts ở CẢ 2 vế so sánh (không .astype(str)
-    thô) -- db cũ đã là chuỗi "YYYY-MM-DD HH:MM:SS" (không giây lẻ), df_new mới parse thường CÓ
-    giây lẻ, so thô sẽ luôn lệch nhau, làm trùng lặp không bị nhận ra. Trả về số phiên mới thêm."""
+    """Chèn các phiên trong df_new (đã lọc phiên đã xoá) CHƯA có trong sessions, theo khoá (Thời gian
+    bắt đầu, Thời gian kết thúc). CHỈ chèn thêm, không xoá/ghi đè dòng nào -- trước đây hàm này gọi
+    save_db() (xoá sạch bảng rồi chèn lại) ở MỌI lần đồng bộ, lỗi mạng giữa chừng có thể làm mất toàn
+    bộ phiên. Phiên đã có giữ nguyên bản cũ (như keep='first' trước đây). Dùng chung cho luồng "Đồng
+    bộ nhanh" (sync_from_storage) và tải tay 1 file CSV Forest ở Tuỳ biến. _fmt_ts ở CẢ 2 vế so sánh
+    (db cũ không có giây lẻ, df_new mới parse thường có). upsert(ignore_duplicates=True) là lớp an toàn
+    thứ 2 dựa trên ràng buộc unique (start_time, end_time) của bảng. Trả về số phiên mới thêm."""
     db = load_db()
-    before = len(db)
-    combined = pd.concat([db, df_new])
-    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
-    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
-    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-    save_db(combined)
-    return len(combined) - before
+    existing = set(zip(db['Thời gian bắt đầu'].map(_fmt_ts), db['Thời gian kết thúc'].map(_fmt_ts)))
+    recs, seen = [], set()
+    for r in df_new.to_dict("records"):
+        key = (_fmt_ts(r["Thời gian bắt đầu"]), _fmt_ts(r["Thời gian kết thúc"]))
+        if key in existing or key in seen:
+            continue
+        seen.add(key)
+        recs.append({"start_time": key[0], "end_time": key[1],
+                     "project": str(r["Dự án"]), "duration_min": int(r["Thời lượng (Phút)"])})
+    sb = _get_supabase()
+    try:
+        for i in range(0, len(recs), 500):
+            sb.table("sessions").upsert(recs[i:i + 500], on_conflict="start_time,end_time",
+                                        ignore_duplicates=True).execute()
+    finally:
+        if recs:
+            load_db.clear()
+            prep_analysis_data.clear()
+    return len(recs)
+
+
+def delete_sessions(keys_df):
+    """Xoá ĐÚNG các phiên theo khoá (Thời gian bắt đầu, Thời gian kết thúc) -- nút "Xoá N phiên đã
+    chọn" ở Tuỳ biến. Nơi gọi tự add_deleted() trước để file Forest cũ không nạp lại phiên đã xoá."""
+    sb = _get_supabase()
+    try:
+        for r in keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].to_dict("records"):
+            sb.table("sessions").delete().eq("start_time", _fmt_ts(r["Thời gian bắt đầu"])) \
+                .eq("end_time", _fmt_ts(r["Thời gian kết thúc"])).execute()
+    finally:
+        load_db.clear()
+        prep_analysis_data.clear()
 
 @st.cache_data
 def load_mapping():
@@ -576,13 +684,21 @@ def load_mapping():
                                {"project": "Dự án", "category": "Nhóm"}, ["Dự án", "Nhóm"])
 
 def save_mapping(df):
+    """Đặt bảng mapping đúng bằng df: upsert mọi dòng TRƯỚC, rồi mới xoá các Dự án không còn trong df
+    -- lỗi giữa chừng chỉ để lại vài dòng thừa, không bao giờ làm trống bảng phân loại."""
     sb = _get_supabase()
-    _sb_delete_all("mapping", "project")
-    if not df.empty:
-        recs = [{"project": str(r["Dự án"]), "category": str(r["Nhóm"])} for r in df.to_dict("records")]
-        sb.table("mapping").insert(recs).execute()
-    load_mapping.clear()
-    prep_analysis_data.clear()
+    recs = {str(r["Dự án"]): {"project": str(r["Dự án"]), "category": str(r["Nhóm"])}
+            for r in df.to_dict("records")} if not df.empty else {}
+    try:
+        if recs:
+            sb.table("mapping").upsert(list(recs.values()), on_conflict="project").execute()
+        current = [r["project"] for r in _sb_select_all(lambda: sb.table("mapping").select("project").order("project"))]
+        stale = [p for p in current if p not in recs]
+        for i in range(0, len(stale), 200):
+            sb.table("mapping").delete().in_("project", stale[i:i + 200]).execute()
+    finally:
+        load_mapping.clear()
+        prep_analysis_data.clear()
 
 @st.cache_data
 def load_deleted():
@@ -837,18 +953,35 @@ def load_reading_log():
     return df[cols + ["Cuốn sách"]].reset_index(drop=True)
 
 def save_reading_log_bulk(df):
-    """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu, hoặc khi tải file Shortcut ở mục "Tải
-    lên từ Reminder") -- y hệt save_work_calendar_bulk: sinh uid tạm theo thứ tự dòng."""
+    """Thay thế toàn bộ (dùng khi Khôi phục, hoặc khi nạp file Shortcut Reminder) -- sinh uid tạm
+    theo thứ tự dòng, dạng "r<epoch>-<i>" (load_reading_log() sắp thứ tự trong ngày theo số CUỐI uid).
+    Chèn bộ MỚI trước, chèn xong mới xoá bộ cũ: lỗi giữa chừng thì gỡ phần mới đã chèn (best-effort)
+    và giữ nguyên bộ cũ, không bao giờ để bảng trống."""
     sb = _get_supabase()
-    _sb_delete_all("reading_log", "uid")
-    if not df.empty:
-        recs = [{"uid": f"restored-{i}", "completed_date": _fmt_ts(r["Ngày hoàn thành"]),
-                 "book": str(r["Sách (gốc)"]), "title": str(r["Tiêu đề phần"])}
-                for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()]
+    prefix = f"r{int(time.time())}-"
+    recs = [{"uid": f"{prefix}{i}", "completed_date": _fmt_ts(r["Ngày hoàn thành"]),
+             "book": str(r["Sách (gốc)"]), "title": str(r["Tiêu đề phần"])}
+            for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()] if not df.empty else []
+    old_uids = [r["uid"] for r in _sb_select_all(lambda: sb.table("reading_log").select("uid").order("uid"))]
+    try:
         for i in range(0, len(recs), 500):
             sb.table("reading_log").insert(recs[i:i + 500]).execute()
-    load_reading_log.clear()
-    prep_analysis_data.clear()
+    except Exception:
+        new_uids = [r["uid"] for r in recs]
+        try:
+            for i in range(0, len(new_uids), 200):
+                sb.table("reading_log").delete().in_("uid", new_uids[i:i + 200]).execute()
+        except Exception:
+            pass
+        load_reading_log.clear()
+        prep_analysis_data.clear()
+        raise
+    try:
+        for i in range(0, len(old_uids), 200):
+            sb.table("reading_log").delete().in_("uid", old_uids[i:i + 200]).execute()
+    finally:
+        load_reading_log.clear()
+        prep_analysis_data.clear()
 
 
 # --- KINDLE: TRÍCH DẪN & GHI CHÚ (từ My Clippings.txt, xem parse_kindle_clippings) ---
@@ -1457,7 +1590,7 @@ def _render_nav_sync_fab():
     _has_pending_forest_sync() vẫn trả True, cờ session này đảm bảo không hiện lại ngay trong lúc
     người dùng còn đang xem thông báo lỗi để tự xử lý (đổi Shortcut/tải tay), rồi tự hết tác dụng
     khi qua session khác. Truyền lại điều kiện gộp này vào JS mỗi lần rerun để ẩn hẳn phần tử
-    (không chỉ ẩn 1 lần, vì components.html tạo iframe MỚI mỗi rerun nhưng nút vẫn sống trong
+    (không chỉ ẩn 1 lần, vì iframe _inject_js() có thể tạo iframe MỚI mỗi rerun nhưng nút vẫn sống trong
     document cha nên phải tự set lại display mỗi lần theo đúng state hiện tại)."""
     _fab_hidden = (st.session_state.get("_sync_fab_hidden", False)
                    or not _has_pending_forest_sync())
@@ -1474,7 +1607,7 @@ def _render_nav_sync_fab():
             st.rerun()
 
     _hide_js = "true" if _fab_hidden else "false"
-    components.html(
+    _inject_js(
         "<script>\n"
         "(function(){\n"
         "  const w = window.parent;\n"
@@ -1502,8 +1635,7 @@ def _render_nav_sync_fab():
         "  btn.style.display = HIDE ? 'none' : 'flex';\n"
         "  if (!HIDE) btn.classList.remove('syncing');\n"
         "})();\n"
-        "</script>",
-        height=0)
+        "</script>")
 
 
 @st.cache_data
@@ -1632,7 +1764,7 @@ def add_week_dividers(fig, dates):
     if s.empty:
         return fig
     dmin, dmax = s.min().normalize(), s.max().normalize()
-    first_mon = dmin + pd.Timedelta(days=(0 - dmin.dayofweek) % 7)  # Thứ Hai đầu tiên
+    first_mon = dmin + pd.Timedelta(days=(0 - dmin.day_of_week) % 7)  # Thứ Hai đầu tiên
     _line_col = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
     d = first_mon
     while d <= dmax + pd.Timedelta(days=1):
@@ -1728,16 +1860,16 @@ def period_stepper(periods, key, fmt, current=None):
         cprev, cmid, cnext, ctoday = st.columns([1, 7, 1, 1], vertical_alignment="center")
         with cprev:
             st.button("", icon=":material/chevron_left:", key=f"{key}_prev", on_click=_step, args=(-1,),
-                      disabled=cur_i == 0, use_container_width=True)
+                      disabled=cur_i == 0, width="stretch")
         with cmid:
             st.selectbox("Kỳ", periods, key=pk, label_visibility="collapsed", format_func=fmt)
         with cnext:
             st.button("", icon=":material/chevron_right:", key=f"{key}_next", on_click=_step, args=(1,),
-                      disabled=cur_i == len(periods) - 1, use_container_width=True)
+                      disabled=cur_i == len(periods) - 1, width="stretch")
         with ctoday:
             st.button("", icon=":material/today:", key=f"{key}_today", on_click=_today,
                       help="Về kỳ hiện tại", disabled=st.session_state[pk] == today_target,
-                      use_container_width=True)
+                      width="stretch")
     return st.session_state[pk]
 
 
@@ -1791,14 +1923,14 @@ def day_picker(active_days):
         c1, c2, c3 = st.columns([1, 8, 1], vertical_alignment="center")
         with c1:
             st.button("", icon=":material/chevron_left:", key="day_prev", on_click=_prev,
-                      disabled=not [d for d in active_days if d < sel], use_container_width=True)
+                      disabled=not [d for d in active_days if d < sel], width="stretch")
         with c2:
             picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
                                    format="DD/MM/YYYY", label_visibility="collapsed")
             _inject_date_picker_locale()
         with c3:
             st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
-                      disabled=not _next_candidates(sel), use_container_width=True)
+                      disabled=not _next_candidates(sel), width="stretch")
     if picked != st.session_state[pk]:
         st.session_state[pk] = picked
         st.rerun()
@@ -1865,124 +1997,38 @@ def _inject_relative_time_ticker():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_date_picker_locale():
-    """Dịch tháng/thứ trong popup lịch của MỌI st.date_input trên trang sang tiếng Việt bằng JS
-    phía trình duyệt -- component BaseWeb bên trong Streamlit không có prop locale lộ ra qua API
-    Python (`format=` của st.date_input chỉ đổi định dạng Ô NHẬP TAY, không đụng tới popup lịch),
-    nên phải dịch text SAU KHI mount. Popup mount dạng portal ở <body> của trang cha (ngoài mọi
-    iframe component, xem comment CSS `[data-baseweb="calendar"]`), không phải trong DOM con của
-    component này -- giống hệt cách _inject_relative_time_ticker() ở trên phải quẫy sang
-    window.parent.document để chạm được DOM thật.
+    """Lịch bật lên của MỌI st.date_input hiện tiếng Việt và bắt đầu tuần từ THỨ HAI.
 
-    Dùng MutationObserver theo dõi window.parent.document.body: mỗi khi popup lịch mở/đổi tháng
-    (React re-render lại text bên trong), duyệt lại toàn bộ text node trong `[data-baseweb=
-    "calendar"]` rồi thay theo 2 bảng tra VN_MONTHS/VN_DAYS_ABBR (khớp đúng chuỗi, không đoán mò
-    bằng regex tách từ -- an toàn hơn khi BaseWeb đổi định dạng header giữa các bản Streamlit).
-    Chỉ cần gọi 1 lần cho cả trang (không phải 1 lần mỗi date_input) vì observer theo dõi chung
-    toàn bộ <body>.
+    Từ Streamlit 1.67, st.date_input là React Aria DatePicker (lịch portal mang
+    data-testid="stDateInputCalendar"). Tên tháng/thứ và ngày đầu tuần lấy từ ngôn ngữ trình duyệt
+    (navigator.language, React Aria lắng nghe sự kiện "languagechange"); st.date_input không có tham
+    số locale nào. Bản cũ dịch từng text node và tự xếp lại lưới ngày của lịch BaseWeb
+    ([data-baseweb="calendar"]) -- markup đó không còn tồn tại nên bản cũ không còn tác dụng, lịch
+    hiện tiếng Anh, bắt đầu Chủ Nhật với trình duyệt tiếng Anh.
 
-    CÙNG observer đó còn xếp lại lưới ngày để THỨ HAI đứng đầu tuần (mặc định là Chủ Nhật). Đây
-    KHÔNG phải thứ chỉnh được từ Python: lưới do date-fns dựng bên trong bundle Streamlit, đầu tuần
-    lấy từ `locale.options.weekStartsOn` của locale suy ra từ ngôn ngữ TRÌNH DUYỆT (xem chunk
-    `useIntlLocale.*.js`) -- `st.date_input` không có tham số nào chạm tới, và bản thân date-fns
-    nằm trong module scope nên không gọi `setDefaultOptions()` từ ngoài được.
-
-    Cách xếp lại (an toàn vì chỉ DI CHUYỂN đúng các node ô ngày có sẵn, không tự vẽ lại ngày nên
-    không thể sai ngày/mất handler click):
-    - Lưới luôn là các `[role="row"]` × 7 `[role="gridcell"]`; ô ngày của tháng khác để TRỐNG
-      (div rỗng) nên tập ô "có chữ" chính là ngày 1..N của tháng đang xem, đúng thứ tự.
-    - Thứ THẬT của ngày 1 đọc từ `aria-label` (BaseWeb luôn ghi tiếng Anh "... Sat, August 1..." --
-      translateNode ở trên CHỈ đổi text node, không đụng thuộc tính, nên nguồn này luôn đáng tin
-      dù giao diện đã dịch sang tiếng Việt).
-    - Vị trí mong muốn của ngày 1 = (thứ + 6) % 7; nếu đã đúng thì thoát ngay -> hàm idempotent,
-      observer chạy lại bao nhiêu lần cũng không lặp vô hạn (lần 2 trở đi không sinh mutation).
-    - Số hàng tính lại theo offset mới (tháng bắt đầu Chủ Nhật cần thêm 1 hàng), tự thêm/bớt hàng.
-    Hàng tiêu đề thứ cũng xoay 1 nấc (đưa ô Chủ Nhật xuống cuối) cho khớp lưới."""
-    _months_js = json.dumps(VN_MONTHS, ensure_ascii=False)
-    _days_js = json.dumps(VN_DAYS_ABBR, ensure_ascii=False)
+    Cách mới: báo navigator.language = "vi-VN" cho trang cha rồi phát "languagechange" -- React Aria
+    tự dựng lại lịch với "Tháng 11", "T2…CN", Thứ Hai đầu tuần (dữ liệu tuần theo vùng VN). Đã đối
+    chiếu toàn bộ nội dung 10 trang giữa trình duyệt en-US và vi-VN: không khác gì ngoài lịch (biểu đồ
+    và số liệu do Python định dạng sẵn). Chỉ chạy 1 lần mỗi trang (cờ trên window cha)."""
     js = (
         "<script>\n"
         "(function(){\n"
-        f"  const MONTHS = {_months_js};\n"
-        f"  const DAYS = {_days_js};\n"
-        "  const MONTH_RE = new RegExp('\\\\b(' + Object.keys(MONTHS).join('|') + ')\\\\b', 'g');\n"
-        "  const WD = {Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6};\n"
-        "  const SUN_LBL = ['Su','Sun','CN'];\n"
-        "  function translateNode(node){\n"
-        "    for (const child of node.childNodes){\n"
-        "      if (child.nodeType === 3){\n"
-        "        const t = child.textContent;\n"
-        "        const trimmed = t.trim();\n"
-        "        if (DAYS[trimmed]){\n"
-        "          child.textContent = t.replace(trimmed, DAYS[trimmed]);\n"
-        "        } else if (MONTH_RE.test(trimmed)){\n"
-        "          MONTH_RE.lastIndex = 0;\n"
-        "          child.textContent = t.replace(MONTH_RE, m => MONTHS[m]);\n"
-        "        }\n"
-        "      } else if (child.nodeType === 1){\n"
-        "        translateNode(child);\n"
-        "      }\n"
-        "    }\n"
-        "  }\n"
-        "  function mondayFirst(cal){\n"
-        "    const rows = [...cal.querySelectorAll('[role=\"row\"]')];\n"
-        "    if (!rows.length) return;\n"
-        "    const cells = [];\n"
-        "    rows.forEach(r => { for (const c of r.children) cells.push(c); });\n"
-        "    const real = cells.filter(c => (c.textContent || '').trim() !== '');\n"
-        "    const blank = cells.find(c => (c.textContent || '').trim() === '');\n"
-        "    if (!real.length || !blank) return;\n"
-        "    const m = (real[0].getAttribute('aria-label') || '').match(/\\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\\b/);\n"
-        "    if (!m) return;\n"
-        "    const want = (WD[m[1]] + 6) % 7;\n"
-        "    if (cells.indexOf(real[0]) === want) return;\n"
-        "    const nRows = Math.ceil((want + real.length) / 7);\n"
-        "    const seq = [];\n"
-        "    for (let i = 0; i < want; i++) seq.push(blank.cloneNode(false));\n"
-        "    for (const c of real) seq.push(c);\n"
-        "    while (seq.length < nRows * 7) seq.push(blank.cloneNode(false));\n"
-        "    while (rows.length < nRows){\n"
-        "      const r = rows[0].cloneNode(false);\n"
-        "      rows[0].parentNode.appendChild(r);\n"
-        "      rows.push(r);\n"
-        "    }\n"
-        "    for (let i = 0; i < nRows; i++) rows[i].replaceChildren(...seq.slice(i * 7, i * 7 + 7));\n"
-        "    for (let i = nRows; i < rows.length; i++) rows[i].remove();\n"
-        "  }\n"
-        "  function mondayFirstHeader(cal){\n"
-        "    const hdrs = cal.querySelectorAll('[role=\"presentation\"]');\n"
-        "    for (const h of hdrs){\n"
-        "      const kids = [...h.children];\n"
-        "      if (kids.length !== 7) continue;\n"
-        "      if (kids.some(k => k.getAttribute('role') === 'gridcell')) continue;\n"
-        "      if (!kids.every(k => { const t = (k.textContent || '').trim(); return t.length > 0 && t.length <= 3; })) continue;\n"
-        "      if (SUN_LBL.includes((kids[0].textContent || '').trim())) h.appendChild(kids[0]);\n"
-        "      return;\n"
-        "    }\n"
-        "  }\n"
-        "  let busy = false;\n"
-        "  function run(){\n"
-        "    if (busy) return;\n"
-        "    busy = true;\n"
-        "    try {\n"
-        "      const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
-        "      cals.forEach(function(cal){\n"
-        "        translateNode(cal);\n"
-        "        mondayFirstHeader(cal);\n"
-        "        mondayFirst(cal);\n"
-        "      });\n"
-        "    } finally { busy = false; }\n"
-        "  }\n"
-        "  run();\n"
-        "  const obs = new MutationObserver(run);\n"
-        "  obs.observe(window.parent.document.body, {childList: true, subtree: true, characterData: true});\n"
+        "  const w = window.parent;\n"
+        "  if (w.__forestViLocale) return;\n"
+        "  try {\n"
+        "    Object.defineProperty(w.navigator, 'language', {get: () => 'vi-VN', configurable: true});\n"
+        "    Object.defineProperty(w.navigator, 'languages', {get: () => ['vi-VN', 'vi'], configurable: true});\n"
+        "  } catch (e) { return; }\n"
+        "  w.__forestViLocale = true;\n"
+        "  w.dispatchEvent(new Event('languagechange'));\n"
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
@@ -2223,14 +2269,14 @@ def _smart_digest(df, period_col, selected_key, df_p, prev_m, avg_m, is_current)
     by_proj = df_p.dropna(subset=['Dự án']).groupby('Dự án')['Thời lượng (Phút)'].sum()
     top_proj, top_share = (by_proj.idxmax(), by_proj.max() / by_proj.sum()) if not by_proj.empty else (None, 0)
     by_day = df_p.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
-    wk_hrs = df_p[df_p['Thời gian bắt đầu'].dt.dayofweek >= 5]['Thời lượng (Phút)'].sum() / 60
+    wk_hrs = df_p[df_p['Thời gian bắt đầu'].dt.day_of_week >= 5]['Thời lượng (Phút)'].sum() / 60
     if kind == "week":
         total_days = _today_vn().isoweekday() if is_current else 7
     elif kind == "month":
         total_days = _today_vn().day if is_current else pd.Period(selected_key).days_in_month
     else:
         total_days = (_today_vn().timetuple().tm_yday if is_current
-                      else pd.Timestamp(f"{selected_key}-12-31").dayofyear)
+                      else pd.Timestamp(f"{selected_key}-12-31").day_of_year)
 
     sit = None
     if prev_m is None and avg_m is None:
@@ -3015,8 +3061,11 @@ def _render_insights_card(df, wc, rl, notes):
 
 
 def _toast_today_milestones(df):
-    """Toast 1 lần mỗi session nếu có huy hiệu ghi nhận ĐÚNG hôm nay (thường ngay sau khi tự đồng bộ,
-    xem _auto_sync_on_open()). Cờ đặt ngay lần kiểm tra đầu để không tính lại mỗi lần rerun."""
+    """Toast huy hiệu ghi nhận ĐÚNG hôm nay (thường ngay sau khi tự đồng bộ, xem _auto_sync_on_open())
+    -- MỖI huy hiệu chỉ báo 1 LẦN. Trước đây chỉ chặn lặp theo session, mà mọi link target=_self mở
+    session mới nên toast hiện lại ở gần như mỗi lần chuyển trang trong ngày, che mục lục/ô chọn
+    ngày. Nay nhớ các huy hiệu đã báo trong setting "milestones_toasted" (JSON list "ngày|tên", chỉ
+    giữ của hôm nay nên không phình). Cờ session vẫn giữ để không tính lại mỗi lần rerun."""
     if st.session_state.get("_milestone_toasted"):
         return
     st.session_state["_milestone_toasted"] = True
@@ -3024,8 +3073,19 @@ def _toast_today_milestones(df):
         return
     today = _today_vn()
     titles = [m["title"] for m in _compute_alltime_records(df)["milestones"] if m["date"] == today]
-    if titles:
-        st.toast("Huy hiệu mới: " + " · ".join(titles), icon=":material/military_tech:")
+    if not titles:
+        return
+    try:
+        seen = set(json.loads(_cached_settings().get("milestones_toasted") or "[]"))
+    except (ValueError, TypeError):
+        seen = set()
+    keys = {f"{today}|{t}": t for t in titles}
+    new = [t for k, t in keys.items() if k not in seen]
+    if not new:
+        return
+    st.toast("Huy hiệu mới: " + " · ".join(new), icon=":material/military_tech:")
+    save_setting("milestones_toasted", json.dumps(
+        sorted(k for k in seen | set(keys) if k.startswith(str(today))), ensure_ascii=False))
 
 
 def _mi(name, size=13):
@@ -4242,10 +4302,10 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
     _cands_max = [d for d in (day_counts.index.max() if not day_counts.empty else None,
                                day_mins.index.max() if not day_mins.empty else None) if d is not None]
     min_date, max_date = min(_cands_min), max(_cands_max)
-    start = min_date - pd.Timedelta(days=min_date.dayofweek)
-    end = max_date + pd.Timedelta(days=6 - max_date.dayofweek)
+    start = min_date - pd.Timedelta(days=min_date.day_of_week)
+    end = max_date + pd.Timedelta(days=6 - max_date.day_of_week)
     cal_data = pd.DataFrame({'Ngày': pd.date_range(start=start, end=end)})
-    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
+    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.day_of_week, unit='D')
     cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(VN_DAYS)
     cal_data[labels['parts_label']] = cal_data['Ngày'].map(day_counts).fillna(0).astype(int)
     cal_data['Thời gian (phút)'] = cal_data['Ngày'].map(day_mins).fillna(0).astype(int)
@@ -4485,7 +4545,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
     st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
 
     first = pd.Timestamp(cur_y, cur_m, 1)
-    lead = first.dayofweek  # Thứ Hai = 0, khớp thứ tự weekdays bên dưới
+    lead = first.day_of_week  # Thứ Hai = 0, khớp thứ tự weekdays bên dưới
     days_in = (first + pd.offsets.MonthEnd(0)).day
     total_cells = -(-(lead + days_in) // 7) * 7
 
@@ -4650,7 +4710,7 @@ def _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df):
     st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
 
     first = pd.Timestamp(cur_y, cur_m, 1)
-    lead = first.dayofweek
+    lead = first.day_of_week
     days_in = (first + pd.offsets.MonthEnd(0)).day
     total_cells = -(-(lead + days_in) // 7) * 7
 
@@ -5787,12 +5847,12 @@ def render_calendar_grid(scope_df, full_df):
     max_date = pd.Timestamp(full_df['Ngày'].max())
     # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
     # tránh ô trắng lẻ ở tuần đầu/cuối -> nền đồng nhất như kiểu GitHub.
-    start = min_date - pd.Timedelta(days=min_date.dayofweek)
-    end = max_date + pd.Timedelta(days=6 - max_date.dayofweek)
+    start = min_date - pd.Timedelta(days=min_date.day_of_week)
+    end = max_date + pd.Timedelta(days=6 - max_date.day_of_week)
     all_dates = pd.date_range(start=start, end=end)
     cal_data = pd.DataFrame({'Ngày': all_dates})
 
-    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
+    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.day_of_week, unit='D')
     cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(VN_DAYS)
     cal_data['Ngày_str'] = cal_data['Ngày'].dt.date
 
@@ -7204,7 +7264,7 @@ def render_project_rhythm(df_g):
 # không phụ thuộc var(--text)/var(--accent).
 @st.cache_resource
 def _logo_font_b64():
-    with open(os.path.join("assets", "fonts", "SourceSerif4-Medium-latin.woff2"), "rb") as f:
+    with open(os.path.join("static", "fonts", "SourceSerif4-Medium-latin.woff2"), "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 _LOGO_FONT_FACE = (
@@ -7370,7 +7430,7 @@ if _auth_configured and not _skip_auth_for_local_dev:
         _login_col = st.columns([1, 1, 1])[1]
         with _login_col:
             st.button("Đăng nhập bằng Google", icon=":material/login:", type="primary",
-                       use_container_width=True, on_click=st.login)
+                       width="stretch", on_click=st.login)
         st.stop()
     if st.user.email != st.secrets["ALLOWED_EMAIL"]:
         st.error(f"Tài khoản **{st.user.email}** không có quyền truy cập ứng dụng này.")
@@ -7389,7 +7449,7 @@ if not _has_supabase_secrets and not _USE_FAKE_DATA:
 
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang font thật tự host
 # (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác lúc CHẠY THẬT;
-# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi nhúng thẳng vào assets/
+# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi lưu vào static/
 # fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 5 (BODY_FONTS, tab Tuỳ
 # biến -> sub-page "Giao diện", mặc định Inter -- xem chú thích ở khai báo BODY_FONTS). Biến trục
 # (variable font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ
@@ -7401,22 +7461,33 @@ if not _has_supabase_secrets and not _USE_FAKE_DATA:
 # tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app -- đã xác minh cả 5
 # font đều có subset "vietnamese" trước khi chọn. CHỈ tải/nhúng ĐÚNG 1 font đang chọn (không nhúng
 # sẵn cả 5) để không đội payload trang lên vô ích.
+def _font_src(fname):
+    """Giá trị `src:` của 1 @font-face cho file static/fonts/<fname>. Mặc định trỏ URL file tĩnh
+    (`server.enableStaticServing`, xem .streamlit/config.toml) -- trình duyệt tự cache theo ETag nên
+    chỉ tải font 1 lần, thay vì nhận lại ~0,5MB base64 nhúng trong CSS ở MỖI session mới (mọi link
+    nội bộ target=_self mở session mới). URL TƯƠNG ĐỐI "app/static/…" (không có "/" đầu): trên
+    Streamlit Cloud app chạy dưới đường dẫn con (/~/+/), đường dẫn tuyệt đối sẽ trỏ sai chỗ. Nếu
+    static serving bị tắt thì quay về nhúng base64 như trước."""
+    if st.get_option("server.enableStaticServing"):
+        return f"url('app/static/fonts/{fname}') format('woff2')"
+    return f"url(data:font/woff2;base64,{_font_b64_file(fname)}) format('woff2')"
+
+
 @st.cache_resource
+def _font_b64_file(fname):
+    with open(os.path.join("static", "fonts", fname), "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
 def _body_font_b64(file_prefix, weights=None):
-    """weights=None (font biến trục) -> đọc `<file_prefix>-<subset>.woff2`, trả {subset: b64}.
-    weights=(400,600,800,...) (font tĩnh nhiều mức đậm, xem "Be Vietnam Pro") -> đọc
-    `<file_prefix>-<weight>-<subset>.woff2`, trả {(weight,subset): b64}."""
-    out = {}
+    """Tên file font theo subset (giữ tên hàm cũ để ít đụng chỗ gọi): weights=None (font biến trục)
+    -> {subset: "<file_prefix>-<subset>.woff2"}; weights=(400,600,...) (font tĩnh nhiều mức đậm, xem
+    "Be Vietnam Pro") -> {(weight, subset): "<file_prefix>-<weight>-<subset>.woff2"}. Giá trị đưa vào
+    _font_src() để ra `src:` của @font-face."""
+    subsets = ("latin", "latin-ext", "vietnamese")
     if weights:
-        for w in weights:
-            for name in ("latin", "latin-ext", "vietnamese"):
-                with open(os.path.join("assets", "fonts", f"{file_prefix}-{w}-{name}.woff2"), "rb") as f:
-                    out[(w, name)] = base64.b64encode(f.read()).decode()
-    else:
-        for name in ("latin", "latin-ext", "vietnamese"):
-            with open(os.path.join("assets", "fonts", f"{file_prefix}-{name}.woff2"), "rb") as f:
-                out[name] = base64.b64encode(f.read()).decode()
-    return out
+        return {(w, n): f"{file_prefix}-{w}-{n}.woff2" for w in weights for n in subsets}
+    return {n: f"{file_prefix}-{n}.woff2" for n in subsets}
 
 _BODY_FONT_RANGES = {
     "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
@@ -7428,7 +7499,7 @@ _body_font_b64_cache = _body_font_b64(BODY_FONTS[BODY_FONT_NAME]["file_prefix"],
 if _body_font_weights:
     _BODY_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{BODY_FONT}'; font-style:normal; font-weight:{_w}; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_body_font_b64_cache[(_w, _name)]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_body_font_b64_cache[(_w, _name)])}; "
         f"unicode-range:{_ranges}; }}"
         for _w in _body_font_weights
         for _name, _ranges in _BODY_FONT_RANGES.items()
@@ -7436,7 +7507,7 @@ if _body_font_weights:
 else:
     _BODY_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{BODY_FONT}'; font-style:normal; font-weight:200 800; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_body_font_b64_cache[_name]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_body_font_b64_cache[_name])}; "
         f"unicode-range:{_ranges}; }}"
         for _name, _ranges in _BODY_FONT_RANGES.items()
     )
@@ -7446,7 +7517,7 @@ else:
 # NỘI DUNG). Dùng Manrope (font mặc định gốc của app, TỪ KHI đổi bộ BODY_FONTS lần 2 không còn là
 # lựa chọn trong đó -- xem chú thích BODY_FONTS ở ui_catalog.py) -- đọc thẳng file_prefix hằng
 # "Manrope-Variable" thay vì tra `BODY_FONTS[_UI_FONT]["file_prefix"]` như trước (sẽ KeyError vì
-# "Manrope" không còn là key trong dict đó nữa). File Manrope-Variable-*.woff2 trong assets/fonts/
+# "Manrope" không còn là key trong dict đó nữa). File Manrope-Variable-*.woff2 trong static/fonts/
 # vẫn giữ nguyên, chỉ không còn hiện trong danh sách 8 lựa chọn Font thân chữ. Phải tự nhúng RIÊNG
 # ở đây vì _BODY_FONT_FACE trên chỉ nhúng ĐÚNG font đang chọn -- nếu người dùng chọn font khác thì
 # Manrope không có @font-face nào, khung vỏ sẽ lặng lẽ rơi về font hệ thống thay vì Manrope (đúng
@@ -7461,7 +7532,7 @@ else:
     _ui_font_b64 = _body_font_b64(_UI_FONT_FILE_PREFIX)
     _UI_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{_UI_FONT}'; font-style:normal; font-weight:200 800; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_ui_font_b64[_name]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_ui_font_b64[_name])}; "
         f"unicode-range:{_ranges}; }}"
         for _name, _ranges in _BODY_FONT_RANGES.items()
     )
@@ -7478,14 +7549,10 @@ _UI_FONT_STACK = f"'{_UI_FONT}', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 # (latin + vietnamese, bỏ latin-ext/cyrillic/hy lạp -- DTBL chỉ có số + nhãn tiếng Việt ngắn,
 # không cần phủ ký tự mở rộng như Manrope). Payload nhỏ (~56KB/8 file) vì mono chỉ cần tập ký tự
 # hẹp (số + chữ cái, không kern/ligature phức tạp).
-@st.cache_resource
 def _table_font_b64():
-    out = {}
-    for weight_name in ("Regular", "Medium", "SemiBold", "Bold"):
-        for subset in ("latin", "vietnamese"):
-            with open(os.path.join("assets", "fonts", f"IBMPlexMono-{weight_name}-{subset}.woff2"), "rb") as f:
-                out[(weight_name, subset)] = base64.b64encode(f.read()).decode()
-    return out
+    """Tên file IBM Plex Mono theo (độ đậm, subset) -- đưa vào _font_src()."""
+    return {(w, n): f"IBMPlexMono-{w}-{n}.woff2"
+            for w in ("Regular", "Medium", "SemiBold", "Bold") for n in ("latin", "vietnamese")}
 
 _TABLE_FONT_WEIGHTS = {"Regular": 400, "Medium": 500, "SemiBold": 600, "Bold": 700}
 _TABLE_FONT_RANGES = {
@@ -7496,7 +7563,7 @@ _table_font_b64_cache = _table_font_b64()
 _TABLE_FONT_FACE = "".join(
     "@font-face { font-family:'IBM Plex Mono'; font-style:normal; "
     f"font-weight:{_w_num}; font-display:swap; "
-    f"src:url(data:font/woff2;base64,{_table_font_b64_cache[(_w_name, _subset)]}) format('woff2'); "
+    f"src:{_font_src(_table_font_b64_cache[(_w_name, _subset)])}; "
     f"unicode-range:{_ranges}; }}"
     for _w_name, _w_num in _TABLE_FONT_WEIGHTS.items()
     for _subset, _ranges in _TABLE_FONT_RANGES.items()
@@ -7516,7 +7583,7 @@ _TABLE_FONT_FACE = "".join(
 _quote_font_b64_cache = _body_font_b64("Newsreader-Variable")
 _QUOTE_FONT_FACE = "".join(
     "@font-face { font-family:'Newsreader Quote'; font-style:normal; font-weight:200 800; "
-    f"font-display:swap; src:url(data:font/woff2;base64,{_quote_font_b64_cache[_name]}) format('woff2'); "
+    f"font-display:swap; src:{_font_src(_quote_font_b64_cache[_name])}; "
     f"unicode-range:{_ranges}; }}"
     for _name, _ranges in _BODY_FONT_RANGES.items()
 )
@@ -7663,7 +7730,7 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .dtbl-wrap) {
         margin-bottom: 0 !important;
     }
-    /* Phần tử tiêm JS thuần (components.html(height=0): _inject_keyboard_shortcuts()/
+    /* Phần tử tiêm JS thuần (_inject_js() -> st.iframe 1px, alt="js-injector": _inject_keyboard_shortcuts()/
        _inject_scroll_to_top_button()/_render_nav_sync_fab(), chạy TRƯỚC dispatch if nav==... nên
        có mặt ở MỌI trang) không có nội dung hiển thị -- iframe cao 0px, khối <style> ẩn 1 nút, và
        wrapper của chính nút đã display:none đó -- nhưng vẫn là flex item bình thường nên vẫn ăn
@@ -7673,6 +7740,7 @@ _MAIN_CSS = """
        khỏi flex layout (không chỉ ẩn hiển thị như margin:0) -- script trong iframe/srcdoc vẫn tự
        chạy bình thường dù ẩn, không ảnh hưởng phím tắt/nút nổi/khoá lịch tiếng Việt. */
     [data-testid="stElementContainer"][height="0px"],
+    [data-testid="stElementContainer"]:has(iframe[title="js-injector"]),
     [data-testid="stElementContainer"]:has(> .stMarkdown style:only-child),
     [data-testid="stLayoutWrapper"]:has(> .st-key-nav_sync_fab) {
         display: none !important;
@@ -8463,10 +8531,8 @@ _MAIN_CSS = """
        [data-baseweb="calendar"]/"popover"), nên vẫn phải chọn TOÀN CỤC như trước, không scope
        theo .st-key-... được -- áp dụng cho MỌI date_input trong app. */
     /* Khuôn "viên thuốc" kiểu Apple theo mockup `Hôm nay.dc.html` (cao 34px, bo 9px, đệm ngang
-       14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt) -- kèm icon lịch nhỏ đứng
-       TRƯỚC ngày. Icon vẽ bằng ::before với ligature Material Symbols Rounded (font Streamlit đã
-       tự nạp sẵn cho icon `:material/x:` của chính nó, xem quy ước _mi() ở ui-components.md) --
-       không chèn được phần tử thật vào trong widget native nên đây là cách duy nhất. */
+       14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt). Icon lịch dùng nút native
+       của Streamlit ở cuối ô. */
     div[data-testid="stDateInputField"] {
         background: var(--card) !important;
         border: 1px solid var(--border) !important;
@@ -8481,16 +8547,8 @@ _MAIN_CSS = """
         justify-content: center !important;
         gap: 8px !important;
     }
-    div[data-testid="stDateInputField"]::before {
-        content: 'calendar_today';
-        font-family: 'Material Symbols Rounded';
-        font-size: 15px;
-        line-height: 1;
-        color: var(--text-3);
-        flex-shrink: 0;
-        -webkit-font-feature-settings: 'liga';
-        font-feature-settings: 'liga';
-    }
+    /* (Đã bỏ icon lịch vẽ bằng ::before: từ Streamlit 1.67 ô ngày tự có nút lịch "Choose date" ở
+       cuối, 2 icon cùng lúc làm chữ ngày bị chèn ép, cắt còn "16 / 11 / 2…" ở ô 170px.) */
     /* Chữ ngày (nhóm span day/"/"/month/"/"year trong [role="group"]): 13px/600 khớp mockup --
        mặc định Streamlit là 14px thường, trông nhạt hơn hẳn tông 13px/600 của nhãn/nút xung
        quanh. Cụm span này đã tự căn giữa trong pill qua justify-content:center của khung ngoài. */
@@ -8889,7 +8947,7 @@ _MAIN_CSS = """
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
     .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card {
         background: var(--card) !important;
         border-color: var(--border) !important;
@@ -9162,6 +9220,15 @@ _MAIN_CSS = """
        (phản hồi thực tế: mục lục chỉ là link neo, không cần to bằng nội dung chính). */
     .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left;
         padding: 4px 10px; font-size: 11.5px; }
+    /* Điện thoại: cột mục lục dọc (6 chip ở Hôm nay) đẩy nội dung chính xuống dưới màn hình đầu
+       tiên -- đổi thành 1 hàng chip cuộn ngang, chiều cao chỉ còn 1 dòng. */
+    @media (max-width: 640px) {
+        .tbill-toccol { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 6px;
+            scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .tbill-toccol::-webkit-scrollbar { display: none; }
+        .tbill-toccol .sec-toc-chip { width: auto; flex: 0 0 auto; white-space: nowrap; }
+        [data-testid="stColumn"]:has(.tbill-toccol) { border-left: none !important; padding-left: 0 !important; }
+    }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
@@ -9372,7 +9439,7 @@ _MAIN_CSS = """
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
     .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
     [class*="st-key-kqgroup_fav_"] {
         background: var(--card-bg-override) !important;
@@ -9383,8 +9450,30 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
-_auto_sync_on_open()
-df = prep_analysis_data()
+def _render_db_unavailable(err):
+    """Thẻ lỗi ngắn thay cho traceback khi không đọc được Supabase (project đang tạm dừng/khởi động
+    lại, lỗi mạng...). Lỗi Cloudflare trả về cả trang HTML -- chỉ giữ tiêu đề trang cho gọn. Nút
+    "Thử lại" chỉ cần st.rerun(): st.cache_data không ghi nhớ lời gọi bị lỗi nên loader tự đọc lại."""
+    msg = str(err)
+    m = re.search(r"<title>(.*?)</title>", msg, re.S)
+    if m:
+        msg = m.group(1).strip()
+    st.error("**Không kết nối được cơ sở dữ liệu.** Project Supabase có thể đang tạm dừng hoặc vừa "
+             "khởi động lại — thường chỉ cần đợi 1–2 phút rồi thử lại. Nếu lỗi kéo dài, mở Supabase "
+             "Dashboard kiểm tra trạng thái project (bấm Restore nếu đang Paused).",
+             icon=":material/cloud_off:")
+    with st.expander("Chi tiết lỗi"):
+        st.code(f"{type(err).__name__}: {msg[:600]}")
+    if st.button("Thử lại", icon=":material/refresh:", type="primary", key="db_retry_btn"):
+        st.rerun()
+
+
+try:
+    _auto_sync_on_open()
+    df = prep_analysis_data()
+except Exception as _db_err:
+    _render_db_unavailable(_db_err)
+    st.stop()
 _toast_today_milestones(df)
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
@@ -9852,7 +9941,7 @@ with st.sidebar:
         if _badge_has_upd:
             _inject_relative_time_ticker()
         _peek_clicked = bool(_peek_pool(df)) and st.button(
-            "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", use_container_width=True)
+            "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", width="stretch")
 if _peek_clicked:
     # Mở dialog NGOÀI khối st.sidebar (dialog không nên dựng trong ngữ cảnh sidebar).
     st.session_state["peek_day"] = _pick_peek_day(df, exclude=st.session_state.get("peek_day"))
@@ -9885,7 +9974,7 @@ def _inject_keyboard_shortcuts():
     (Đã bỏ Shift+1..5, f/r/l, [ / ] -- xác nhận qua rà soát thực tế là ít dùng, không đáng độ
     phức tạp JS phải duy trì để hỗ trợ chúng.)
 
-    QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
+    QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của _inject_js()
     chỉ có sandbox "allow-scripts allow-same-origin ..." (đã xác nhận trực tiếp qua source
     IFrameUtil.*.js của gói streamlit đang cài), KHÔNG có "allow-top-navigation" -- gán
     location.search từ trong iframe này bị trình duyệt chặn thẳng (SecurityError), bất kể có
@@ -9902,7 +9991,7 @@ def _inject_keyboard_shortcuts():
     thay vì giữ nguyên trang, sai hoàn toàn ý đồ của phím số khi người dùng gọi nó lúc đã đứng sẵn
     ở trang đích.
 
-    components.html() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
+    iframe _inject_js() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
     window.parent.document (document của trang chính, không phải của iframe) nên vẫn tồn tại
     xuyên suốt qua các iframe cũ bị Streamlit xoá đi -- phải tự canh cờ
     window.parent.__appShortcutsInstalled để không gắn trùng listener sau mỗi lần rerun."""
@@ -10092,7 +10181,7 @@ def _inject_keyboard_shortcuts():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_reading_calendar_tap_tip():
@@ -10108,7 +10197,7 @@ def _inject_reading_calendar_tap_tip():
     đã đúng ý từ trước) không đổi -- chỉ can thiệp trên thiết bị không có hover thật.
 
     Cùng khuôn `_inject_keyboard_shortcuts()`: gắn 1 listener duy nhất vào `window.parent.document`
-    (không phải document của iframe components.html, vốn bị Streamlit dựng lại mỗi rerun), tự canh
+    (không phải document của iframe _inject_js(), vốn bị Streamlit dựng lại mỗi rerun), tự canh
     cờ cài đặt để không gắn trùng qua nhiều lần rerun."""
     js = (
         "<script>\n"
@@ -10137,7 +10226,7 @@ def _inject_reading_calendar_tap_tip():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_note_editor_shortcuts():
@@ -10200,7 +10289,7 @@ def _inject_note_editor_shortcuts():
         "setInterval(bindNoteShortcuts, 400);\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 _inject_keyboard_shortcuts()
 _inject_reading_calendar_tap_tip()
@@ -10210,9 +10299,9 @@ def _inject_scroll_to_top_button():
     """Nút tròn nổi "về đầu trang" (góc dưới-phải trên desktop, bám mép cột nội dung 1700px thay
     vì mép trình duyệt; góc dưới-trái trên mobile để tránh huy hiệu Streamlit -- xem CSS
     `#app-scroll-top-btn`) -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện, bấm cuộn mượt về đầu.
-    Tạo bằng JS (components.html) y hệt bảng phím tắt ở
+    Tạo bằng JS (_inject_js()) y hệt bảng phím tắt ở
     _inject_keyboard_shortcuts(): gắn thẳng vào window.parent.document để nút không bị Streamlit
-    xoá/tạo lại mỗi lần rerun (iframe của components.html có bị dựng lại cũng không sao, nút đã
+    xoá/tạo lại mỗi lần rerun (iframe của _inject_js() có bị dựng lại cũng không sao, nút đã
     sống sẵn trong document cha) -- canh cờ w.__scrollTopBtnInstalled để không tạo trùng nút sau
     mỗi rerun.
 
@@ -10251,7 +10340,7 @@ def _inject_scroll_to_top_button():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 _inject_scroll_to_top_button()
@@ -10611,6 +10700,56 @@ def render_day_report(df):
         render_on_this_day(sel, df)
 
 
+def _render_data_health():
+    """Thẻ "Tình trạng dữ liệu" (Tuỳ biến -> Quản lý hệ thống): dữ liệu Forest mới tới đâu, lần đồng
+    bộ/sao lưu gần nhất, số dòng từng nguồn -- để sau 1 thời gian không mở app biết ngay có cần đồng
+    bộ hay sao lưu không. Chỉ đọc loader đã cache, không gọi thêm Supabase. Mốc cảnh báo: phiên mới
+    nhất cũ hơn 3 ngày, sao lưu cũ hơn 30 ngày hoặc chưa từng sao lưu."""
+    today = _today_vn()
+    settings = _cached_settings()
+
+    def _ago(d):
+        n = (today - d).days
+        return "hôm nay" if n <= 0 else "hôm qua" if n == 1 else f"{n} ngày trước"
+
+    rows = []  # (nhãn, giá trị, cảnh báo?)
+    db = load_db()
+    if db.empty:
+        rows.append(("Phiên Forest mới nhất", "chưa có dữ liệu", True))
+    else:
+        last = pd.to_datetime(db["Thời gian bắt đầu"]).max().date()
+        rows.append(("Phiên Forest mới nhất", f"{last:%d/%m/%Y} · {_ago(last)}", (today - last).days > 3))
+    _sync = settings.get("last_quick_sync_at")
+    rows.append(("Đồng bộ gần nhất",
+                 f"{pd.Timestamp(_sync):%d/%m/%Y %H:%M} · {_ago(pd.Timestamp(_sync).date())}" if _sync else "chưa đồng bộ lần nào",
+                 not _sync))
+    _bk = settings.get("last_backup_at")
+    _bk_old = (not _bk) or (today - pd.Timestamp(_bk).date()).days > 30
+    rows.append(("Sao lưu gần nhất",
+                 f"{pd.Timestamp(_bk):%d/%m/%Y} · {_ago(pd.Timestamp(_bk).date())}" if _bk else "chưa sao lưu lần nào",
+                 _bk_old))
+    counts = [("phiên", len(db)), ("ngày ghi chú", len(load_notes())), ("phần đọc/xem", len(load_reading_log())),
+              ("lịch hẹn", len(load_work_calendar())), ("trích dẫn Kindle", len(load_kindle_highlights())),
+              ("dự án đã phân loại", len(load_mapping()))]
+    rows.append(("Số dòng", " · ".join(f"<b>{n:,}</b> {lbl}".replace(",", ".") for lbl, n in counts), False))
+
+    def _row(lbl, val, warn):
+        dot = (f"<span style='display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;"
+               f"background:{'#e08a00' if warn else 'var(--accent)'};'></span>")
+        return (f"<div style='display:flex;gap:12px;justify-content:space-between;align-items:baseline;"
+                f"padding:7px 0;border-bottom:1px solid var(--divider);font-size:13.5px;flex-wrap:wrap;'>"
+                f"<span style='color:var(--text-2);'>{dot}{lbl}</span>"
+                f"<span style='color:var(--text);text-align:right;'>{val}</span></div>")
+
+    with st.container(border=True, key="tb_health_card"):
+        st.markdown(
+            "<div style='font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;'>Tình trạng dữ liệu</div>"
+            + "".join(_row(*r) for r in rows),
+            unsafe_allow_html=True)
+        if any(w for _, _, w in rows):
+            st.caption("Chấm cam: phiên mới nhất cũ hơn 3 ngày, chưa đồng bộ, hoặc sao lưu cũ hơn 30 ngày.")
+
+
 def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for,
                    label_for=None, value_for=None):
     """Lưới nút chọn 1 trục cá nhân hoá (sub-page "Giao diện") -- items: list [(name, cfg)].
@@ -10635,7 +10774,7 @@ def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for
             _css += (f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
                      f"{css_for(_name, _cfg, _selected)} }}")
             with _cols[_i]:
-                if st.button(_label, key=_key, use_container_width=True):
+                if st.button(_label, key=_key, width="stretch"):
                     if not _selected:
                         save_setting(setting_name, _value_for(_name, _cfg))
                         st.rerun()
@@ -10677,14 +10816,14 @@ def _render_tuybien_giao_dien():
 
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
-        if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
+        if st.button("Đặt lại mặc định", key="tbgd_reset_all", width="stretch"):
             for _k, _v in [("accent_hex", "#4f4dc4"), ("bg_palette", "Bạc hà"), ("bg_style", "Lưới điểm"),
                            ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"),
                            ("body_font", "Inter")]:
                 save_setting(_k, _v)
             st.rerun()
     with _random_col:
-        if st.button("Ngẫu nhiên", icon=":material/casino:", key="tbgd_randomize", use_container_width=True):
+        if st.button("Ngẫu nhiên", icon=":material/casino:", key="tbgd_randomize", width="stretch"):
             for _k, _choices in [("accent_hex", list(ACCENT_PRESETS.values())),
                                   ("bg_palette", list(BG_PALETTES.keys())),
                                   ("bg_style", list(BG_PRESETS.keys())),
@@ -10929,7 +11068,7 @@ elif nav == "Báo cáo":
             # (xem docstring _period_elapsed_context, hàm dùng chung cho cả 3 nhánh Tuần/Tháng/Năm).
             elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = _period_elapsed_context(
                 selected_week, _today_vn().strftime('%G-W%V'),
-                df['Thời gian bắt đầu'].dt.dayofweek + 1, _today_vn().isoweekday(), "Tuần")
+                df['Thời gian bắt đầu'].dt.day_of_week + 1, _today_vn().isoweekday(), "Tuần")
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
@@ -11085,7 +11224,7 @@ elif nav == "Báo cáo":
             # ứng ở nhánh Tháng).
             elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = _period_elapsed_context(
                 selected_year, str(_today_vn().year),
-                df['Thời gian bắt đầu'].dt.dayofyear, _today_vn().timetuple().tm_yday, "Năm")
+                df['Thời gian bắt đầu'].dt.day_of_year, _today_vn().timetuple().tm_yday, "Năm")
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
@@ -11100,7 +11239,7 @@ elif nav == "Báo cáo":
                 _busiest_month_hrs_y = _by_month_y.max() / 60
                 _streak_cur_y = _streak_stats(df)['current']
                 _is_current_year_y = (selected_year == str(_today_vn().year))
-                _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).dayofyear
+                _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).day_of_year
                 _elapsed_days_y = _today_vn().timetuple().tm_yday if _is_current_year_y else _days_in_year_y
 
                 _pbill_title_y, _pbill_sub_y = _pbill_narrative(
@@ -11537,7 +11676,7 @@ elif nav == "Tuỳ biến":
                         unsafe_allow_html=True)
                 with qc2:
                     _qclicked = st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync",
-                                          disabled=not (_qf or _qr), use_container_width=True)
+                                          disabled=not (_qf or _qr), width="stretch")
             if _qclicked:
                 with st.spinner("Đang đồng bộ..."):
                     _msg, _has_err = _do_quick_sync()
@@ -11892,7 +12031,7 @@ elif nav == "Tuỳ biến":
                                             placeholder="— Chọn nhóm —")
                 with fc3:
                     st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                    if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
+                    if st.button("Lưu", type="primary", key="tbtn_save_mapping", width="stretch"):
                         if edit_cat:
                             nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
                                   if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Nhóm"]))
@@ -11901,6 +12040,7 @@ elif nav == "Tuỳ biến":
                             save_mapping(nm[["Dự án", "Nhóm"]].reset_index(drop=True))
                             st.rerun()
         sec_chapter("tb-ch3", 3, "Quản lý hệ thống")
+        _render_data_health()
         # 3 thẻ rút gọn về ĐÚNG 1 nhãn + 1 nút (không còn help text/checkbox lộ ngay trên thẻ, theo
         # phản hồi thực tế) -- 2 thao tác phá huỷ dữ liệu (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch
         # toàn bộ) chuyển hết phần xác nhận (upload/preview/checkbox/nút xác nhận cuối) vào popup
@@ -11909,45 +12049,52 @@ elif nav == "Tuỳ biến":
         @st.dialog("Khôi phục dữ liệu")
         def _tb_restore_dialog():
             res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
-            ok_zip = False
+            # Đọc + kiểm tra TOÀN BỘ file trong .zip thành DataFrame TRƯỚC khi ghi bất cứ gì -- file
+            # thiếu cột/hỏng bị phát hiện ngay ở bước xem trước, không còn kiểu đang ghi dở mới lỗi.
+            # dtype giữ đúng như trước: sessions/mapping đọc thường, còn lại dtype=str.
+            _spec = [  # (file, nhãn xem trước, đơn vị, cột bắt buộc, đọc dạng chuỗi?)
+                (DB_FILE, "Dữ liệu", "phiên", ["Thời gian bắt đầu", "Thời gian kết thúc", "Dự án", "Thời lượng (Phút)"], False),
+                (MAPPING_FILE, "Phân loại", "dự án", ["Dự án", "Nhóm"], False),
+                (DELETED_FILE, "Đã xoá", "phiên", ["Thời gian bắt đầu", "Thời gian kết thúc"], True),
+                (NOTES_FILE, "Ghi chú", "ngày", ["Ngày", "Ghi chú"], True),
+                (WORK_CALENDAR_FILE, "Lịch", "appointment", ["Thời gian bắt đầu", "Tiêu đề"], True),
+                (READING_LOG_FILE, "Đọc sách", "phần", ["Ngày hoàn thành", "Sách (gốc)", "Tiêu đề phần"], True),
+                (SETTINGS_FILE, "Cài đặt", "mục", ["key", "value"], True),
+                (KINDLE_HIGHLIGHTS_FILE, "Kindle", "trích dẫn/ghi chú", ["dedupe_hash", "Tên Kindle", "Loại", "Nội dung"], True),
+                (KINDLE_BOOK_MAP_FILE, "Kindle gán sách", "tên sách", ["Tên Kindle", "Nhãn"], True),
+                (DELETED_KINDLE_FILE, "Kindle đã xoá", "mục", [], True),
+                (GUNDAM_OVERRIDES_FILE, "Gundam gán tay", "ngày", ["Ngày", "Series"], True),
+                (BOOK_OVERRIDES_FILE, "Sách gán tay", "ngày", ["Ngày", "Sách"], True),
+            ]
+            frames, parts, problems = {}, [], []
             if res is not None:
                 try:
                     res.seek(0)
                     with zipfile.ZipFile(res) as _z:
                         names = set(_z.namelist())
-                        parts = []
-                        if DB_FILE in names:
-                            _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
-                            _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
-                            _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
-                            parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
-                        if MAPPING_FILE in names:
-                            parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
-                        if DELETED_FILE in names:
-                            parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
-                        if NOTES_FILE in names:
-                            parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
-                        if WORK_CALENDAR_FILE in names:
-                            parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
-                        if READING_LOG_FILE in names:
-                            parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
-                        if SETTINGS_FILE in names:
-                            parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
-                        if KINDLE_HIGHLIGHTS_FILE in names:
-                            parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
-                        if DELETED_KINDLE_FILE in names:
-                            parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
-                        if GUNDAM_OVERRIDES_FILE in names:
-                            parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
-                        if BOOK_OVERRIDES_FILE in names:
-                            parts.append(f"Sách gán tay **{len(pd.read_csv(io.BytesIO(_z.read(BOOK_OVERRIDES_FILE))))}** ngày")
-                    if parts:
-                        ok_zip = True
-                        st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
-                    else:
-                        st.caption("File .zip không chứa dữ liệu hợp lệ.")
+                        for _fn, _lbl, _unit, _req, _as_str in _spec:
+                            if _fn not in names:
+                                continue
+                            _df = pd.read_csv(io.BytesIO(_z.read(_fn)), dtype=str if _as_str else None)
+                            _miss = [c for c in _req if c not in _df.columns]
+                            if _miss:
+                                problems.append(f"`{_fn}` thiếu cột {', '.join(_miss)}")
+                                continue
+                            frames[_fn] = _df
+                            _extra = ""
+                            if _fn == DB_FILE:
+                                _dt = pd.to_datetime(_df['Thời gian bắt đầu'], errors='coerce')
+                                _extra = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                            parts.append(f"{_lbl} **{len(_df)}** {_unit}{_extra}")
                 except Exception:
-                    st.caption("Không đọc được file — cần đúng bản .zip xuất từ ứng dụng.")
+                    problems.append("Không đọc được file — cần đúng bản .zip xuất từ ứng dụng.")
+                if problems:
+                    st.error("Bản sao lưu không hợp lệ: " + "; ".join(problems) + ". Chưa ghi gì vào dữ liệu.")
+                elif parts:
+                    st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
+                else:
+                    st.caption("File .zip không chứa dữ liệu hợp lệ.")
+            ok_zip = bool(frames) and not problems
             confirm_restore = False
             if ok_zip:
                 st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
@@ -11955,44 +12102,46 @@ elif nav == "Tuỳ biến":
                                                key="cb_restore_confirm")
             if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
                          key="tbtn_restore_confirm"):
-                res.seek(0)
-                with zipfile.ZipFile(res) as _z:
-                    names = set(_z.namelist())
-                    if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
-                    if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
-                    if DELETED_FILE in names:
-                        save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
-                    if NOTES_FILE in names:
-                        save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
-                    if WORK_CALENDAR_FILE in names:
-                        save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
-                    if READING_LOG_FILE in names:
-                        save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
-                    if SETTINGS_FILE in names:
-                        save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
-                    # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
-                    # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
-                    # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
-                    if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
-                        _sb_delete_all("kindle_highlights", "dedupe_hash")
-                        _sb_delete_all("kindle_book_map", "kindle_title")
-                    if KINDLE_BOOK_MAP_FILE in names:
-                        save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
-                    if KINDLE_HIGHLIGHTS_FILE in names:
-                        # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
-                        # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
-                        # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
-                        save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
-                    if DELETED_KINDLE_FILE in names:
-                        save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
-                    if GUNDAM_OVERRIDES_FILE in names:
-                        save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
-                    if BOOK_OVERRIDES_FILE in names:
-                        save_book_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(BOOK_OVERRIDES_FILE)), dtype=str))
+                f = frames
+                # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN) -- Khôi phục cần
+                # ngữ nghĩa "ghi đè toàn bộ" nên xoá sạch 2 bảng trước rồi mới ghi nội dung từ .zip.
+                # save_kindle_highlights_RAW_bulk giữ nguyên dedupe_hash/parent_hash đã lưu.
+                _steps = [
+                    (DB_FILE, "phiên", lambda: save_db(f[DB_FILE])),
+                    (MAPPING_FILE, "phân loại", lambda: save_mapping(f[MAPPING_FILE])),
+                    (DELETED_FILE, "phiên đã xoá", lambda: save_deleted(f[DELETED_FILE])),
+                    (NOTES_FILE, "ghi chú", lambda: save_notes_bulk(f[NOTES_FILE].fillna(""))),
+                    (WORK_CALENDAR_FILE, "lịch", lambda: save_work_calendar_bulk(f[WORK_CALENDAR_FILE])),
+                    (READING_LOG_FILE, "đọc sách", lambda: save_reading_log_bulk(f[READING_LOG_FILE])),
+                    (SETTINGS_FILE, "cài đặt", lambda: save_settings_bulk(f[SETTINGS_FILE])),
+                    ("__kindle_reset__", "xoá Kindle cũ", lambda: (_sb_delete_all("kindle_highlights", "dedupe_hash"),
+                                                                   _sb_delete_all("kindle_book_map", "kindle_title"))),
+                    (KINDLE_BOOK_MAP_FILE, "Kindle gán sách", lambda: save_kindle_book_map_upsert(f[KINDLE_BOOK_MAP_FILE])),
+                    (KINDLE_HIGHLIGHTS_FILE, "Kindle", lambda: save_kindle_highlights_raw_bulk(f[KINDLE_HIGHLIGHTS_FILE])),
+                    (DELETED_KINDLE_FILE, "Kindle đã xoá", lambda: save_deleted_kindle(f[DELETED_KINDLE_FILE])),
+                    (GUNDAM_OVERRIDES_FILE, "Gundam gán tay", lambda: save_gundam_overrides_bulk(f[GUNDAM_OVERRIDES_FILE])),
+                    (BOOK_OVERRIDES_FILE, "sách gán tay", lambda: save_book_overrides_bulk(f[BOOK_OVERRIDES_FILE])),
+                ]
+                _has_kindle = KINDLE_BOOK_MAP_FILE in f or KINDLE_HIGHLIGHTS_FILE in f
+                _done, _failed = [], None
+                for _key, _lbl, _fn in _steps:
+                    if (_key == "__kindle_reset__" and not _has_kindle) or (_key != "__kindle_reset__" and _key not in f):
+                        continue
+                    try:
+                        _fn()
+                        _done.append(_lbl)
+                    except Exception as _e:
+                        _failed = (_lbl, _e)
+                        break
                 st.cache_data.clear()
-                st.success("Đã khôi phục hệ thống thành công.")
-                time.sleep(1)
-                st.rerun()
+                if _failed:
+                    st.error(f"Khôi phục dừng ở bước **{_failed[0]}**: {str(_failed[1])[:300]}. "
+                             f"Đã xong: {', '.join(_done) or 'chưa có bước nào'}. Dữ liệu có thể đang dở dang — "
+                             "hãy chạy lại Khôi phục với CÙNG file này.")
+                else:
+                    st.success("Đã khôi phục hệ thống thành công.")
+                    time.sleep(1)
+                    st.rerun()
 
         @st.dialog("Xoá toàn bộ dữ liệu")
         def _tb_wipe_dialog():
@@ -12027,6 +12176,12 @@ elif nav == "Tuỳ biến":
             "{ align-items: stretch !important; }"
             ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, "
             ".st-key-tb_account_card { height: 100%; }"
+            # Thẻ Sao lưu có 2 nút (thêm "Xuất nhật ký (.md)") nên cao hơn -- kéo cả chuỗi khung cột ->
+            # khối dọc -> wrapper của thẻ cao 100% để height:100% ở trên thật sự có tác dụng.
+            "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) > [data-testid=\"stColumn\"] "
+            "> [data-testid=\"stVerticalBlock\"] { height: 100%; }"
+            "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) > [data-testid=\"stColumn\"] "
+            "> [data-testid=\"stVerticalBlock\"] > * { flex: 1 1 auto; }"
             # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ, giờ nằm trong popup st.dialog()) dùng màu
             # cảnh báo riêng (đỏ #ff3b30, cùng tông đỏ dùng cho delta âm/chỉ số bất thường trong app)
             # thay vì màu nút thường -- tín hiệu thị giác phân biệt mức độ nguy hiểm. key vẫn giữ
@@ -12085,6 +12240,11 @@ elif nav == "Tuỳ biến":
                                    f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
                                    disabled=db_now.empty,
                                    on_click=lambda: save_setting("last_backup_at", _today))
+                _notes_now = load_notes()
+                st.download_button("Xuất nhật ký (.md)", _notes_to_markdown(_notes_now).encode("utf-8"),
+                                   f"nhat_ky_{_today}.md", "text/markdown", key="tbtn_download_notes_md",
+                                   disabled=_notes_now.empty,
+                                   help="Toàn bộ ghi chú theo ngày dạng Markdown, đọc được bằng mọi trình soạn thảo.")
         with c2:
             with st.container(border=True, key="tb_restore_card"):
                 st.markdown(f"<div style='{_sysrow_label_css}'>Khôi phục</div>"
@@ -12147,7 +12307,7 @@ elif nav == "Tuỳ biến":
                 sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
                 if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary", key="tbtn_delete_selected"):
                     add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
-                    save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
+                    delete_sessions(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                     st.rerun()
 
                 # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.

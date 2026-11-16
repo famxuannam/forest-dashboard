@@ -5,17 +5,25 @@ nào đọc/ghi Supabase.
 
 ## Quy tắc bất biến: Supabase là nơi lưu trữ DUY NHẤT
 
+**Luồng ghi thường ngày không bao giờ "xoá sạch rồi chèn lại".** Lỗi mạng giữa 2 bước đó (vd Supabase
+trả 521 khi vừa khởi động lại sau tạm dừng) từng có thể làm mất toàn bộ bảng. Quy tắc: chỉ chèn dòng
+mới/xoá đúng dòng; nếu buộc phải thay thế cả bảng thì ghi bộ mới TRƯỚC, xoá bộ cũ SAU. Kiểu xoá sạch
+rồi chèn lại chỉ còn trong luồng Khôi phục (đọc + kiểm tra cột mọi file .zip trước khi ghi, lỗi giữa
+chừng thì báo đúng bước để chạy lại). Mọi lần đọc qua `_sb_select_all()` tự thử lại 3 lần
+(`_sb_retry()`); lỗi đọc ở lúc khởi động hiện thẻ "Không kết nối được cơ sở dữ liệu" + nút Thử lại
+(`_render_db_unavailable()`) thay vì traceback. Có test trong `tests/test_data_layer.py`.
+
 Không có chế độ CSV cục bộ, không cache dữ liệu người dùng xuống đĩa lâu dài. Mọi bảng có đúng 1
 cặp hàm:
 
 | Bảng               | load                  | save/sync                          | Nguồn dữ liệu                    |
 |--------------------|-----------------------|-------------------------------------|-----------------------------------|
-| `sessions`         | `load_db()`           | `save_db()`                        | CSV xuất từ Forest               |
-| `mapping`          | `load_mapping()`      | `save_mapping()`                   | Người dùng gán tay trong app      |
+| `sessions`         | `load_db()`           | `_merge_forest_into_db()` (CHỈ chèn phiên mới, upsert `ignore_duplicates`) · `delete_sessions()` (xoá đúng phiên chọn) · `save_db()` (xoá sạch rồi chèn lại, CHỈ dùng khi Khôi phục) | CSV xuất từ Forest               |
+| `mapping`          | `load_mapping()`      | `save_mapping()` (upsert trước, xoá dòng thừa sau) | Người dùng gán tay trong app      |
 | `deleted_sessions` | `load_deleted()`      | `add_deleted()` (cộng dồn khi xoá phiên trong app) · `save_deleted()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (khi xoá phiên trong app)  |
 | `notes`            | `load_notes()`        | `save_note(day, text)` (lưu/sửa 1 ngày, gọi trong hàm render ghi chú; rỗng = xoá) · `save_notes_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) · `save_dayone_notes_bulk(day_texts)` (upsert CHỈ đúng các ngày trong `day_texts`, nối vào cuối ghi chú Forest đã có thay vì ghi đè — dùng cho import Nhật ký Day One, xem mục riêng bên dưới) | Người dùng gõ trong app, hoặc import từ file JSON Day One |
 | `work_calendar`    | `load_work_calendar()`| `sync_work_calendar()`             | CalDAV (Apple Calendar "Work")    |
-| `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()`          | File Shortcut xuất Apple Reminders|
+| `reading_log`      | `load_reading_log()`  | `save_reading_log_bulk()` (thay thế toàn bộ: chèn bộ mới uid `r<epoch>-<i>` trước, xong mới xoá bộ cũ) | File Shortcut xuất Apple Reminders|
 | `settings`         | `load_settings()`     | `save_setting(key, value)` (upsert trực tiếp trong nơi dùng) · `save_settings_bulk()` (ghi đè toàn bộ, chỉ dùng khi Khôi phục) | Nội bộ (màu accent...)            |
 | `kindle_highlights` | `load_kindle_highlights()` | `save_kindle_highlights_bulk()` (insert-nếu-mới theo `dedupe_hash` tự tính lại từ file, ignore_duplicates -- dùng cho import) · `save_kindle_highlights_raw_bulk()` (ghi đè đúng `dedupe_hash`/`parent_hash` có sẵn, chỉ dùng khi Khôi phục) · `update_kindle_highlight_content()`/`delete_kindle_highlight()`/`add_kindle_note()` (sửa/xoá/thêm ghi chú trong app) | File `My Clippings.txt` xuất từ Kindle + người dùng sửa/thêm trong app |
 | `kindle_book_map`  | `load_kindle_book_map()` | `save_kindle_book_map_upsert()` (upsert theo `kindle_title`, cộng dồn) | Người dùng xác nhận trong UI import Kindle |
@@ -193,9 +201,9 @@ request; app chỉ cần quét bucket đó.
   thật trên mọi tương tác. Bấm nút "Đồng bộ nhanh" thật vẫn gọi thẳng `_list_sync_files()` bản
   không cache để luôn thấy đúng trạng thái bucket mới nhất.
 - `_merge_forest_into_db(df_new)` — helper DÙNG CHUNG cho cả luồng "Đồng bộ nhanh" lẫn nút tải CSV
-  tay ở Tuỳ biến (trước đây 2 nơi tự lặp y hệt logic `load_db()` → `concat` → chuẩn hoá giờ →
-  `drop_duplicates` → `save_db()`) — thêm 1 nguồn nạp CSV Forest mới thì gọi qua đây, không tự viết
-  lại chuỗi merge/dedupe.
+  tay ở Tuỳ biến: so khoá (giờ bắt đầu, giờ kết thúc) đã `_fmt_ts` với `load_db()`, CHỈ chèn phiên
+  chưa có (phiên đã có giữ nguyên bản cũ), không xoá gì — thêm 1 nguồn nạp CSV Forest mới thì gọi qua
+  đây, không tự viết lại logic dedupe.
 - `sync_from_storage(cal_start, cal_end)` — hàm điều phối: tải file Forest mới nhất → nạp qua
   `parse_forest_csv()` rồi `_merge_forest_into_db()`; tải file Reminder mới nhất → nạp qua
   `parse_reading_log_shortcut_csv()` (**thay thế toàn bộ**, không cộng dồn); gọi
@@ -218,8 +226,15 @@ request; app chỉ cần quét bucket đó.
 - Các key trong bảng `settings` của luồng này: `last_synced_forest_file` (tên file Forest đã nạp
   thành công gần nhất), `auto_sync_failed_file` (tên file Forest đã tự đồng bộ và lỗi), và
   `last_quick_sync_at`/`last_quick_sync_summary` (hiển thị ở Tuỳ biến).
-- Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file), cùng khuôn "anon
-  full access" như các bảng khác — app không có lớp đăng nhập theo lựa chọn đã chốt.
+- Bucket + RLS policy tạo bằng SQL trong `supabase_schema.sql` (đoạn cuối file). Khoá anon (trong
+  Shortcut) CHỈ có quyền INSERT vào bucket; app dùng khoá bí mật nên liệt kê/tải/xoá được.
+
+## Mô hình quyền Supabase
+
+App dùng khoá bí mật (`SUPABASE_KEY` = `sb_secret_…` hoặc `service_role`) → vai trò `service_role`
+bỏ qua RLS. Mọi bảng bật RLS và KHÔNG có policy cho `anon`/`authenticated`. Thêm bảng mới: chỉ cần
+`enable row level security`, không tạo policy cho anon như trước. Khoá anon chỉ dùng cho Shortcut
+(tải file lên bucket) và workflow keepalive (`rpc/keepalive`).
 
 ## Nhập Nhật ký Day One (Tuỳ biến → Dữ liệu đầu vào → Dự phòng)
 

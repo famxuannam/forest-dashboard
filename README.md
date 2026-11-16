@@ -34,10 +34,20 @@ dụng đầy đủ.
 
 ## Lưu ý
 
-App không có lớp bảo vệ nào theo mặc định (ai có URL đều xem/sửa được dữ liệu) trừ khi bật
-đăng nhập Google qua mục `[auth]` trong secrets. Dữ liệu bền vững trên Supabase qua các lần
+Bảo vệ 2 lớp: (1) đăng nhập Google qua mục `[auth]` trong secrets (chỉ `ALLOWED_EMAIL` vào được
+app); (2) app dùng khoá bí mật Supabase phía server, còn khoá anon/publishable (nằm trong Shortcut iOS
+và GitHub Actions) chỉ được tải file lên bucket `sync-uploads` và gọi `keepalive()`, không đọc được
+bảng nào (xem `supabase_schema.sql`). Dữ liệu bền vững trên Supabase qua các lần
 khởi động lại/redeploy; mục Sao lưu trong app (Tuỳ biến → Quản lý hệ thống) vẫn nên dùng định
 kỳ như lớp an toàn thứ hai.
+
+## Giữ Supabase không bị tạm dừng
+
+Gói Free của Supabase tự tạm dừng project sau khoảng 7 ngày ít hoạt động (chỉ khôi phục được trong
+90 ngày). Workflow `.github/workflows/keepalive.yml` gọi hàm `public.keepalive()` 2 lần/tuần. Cần
+thêm 2 secret ở GitHub (Settings → Secrets and variables → Actions): `SUPABASE_URL` và
+`SUPABASE_ANON_KEY` (khoá anon/publishable, không phải khoá bí mật). Workflow tự bật lại chính nó
+mỗi lần chạy vì GitHub tắt workflow theo lịch của repo công khai sau 60 ngày không có commit.
 
 ## Chạy local không đăng nhập
 

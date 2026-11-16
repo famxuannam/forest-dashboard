@@ -5,7 +5,7 @@ cụ thể (đặc biệt bên trong ô ghi chú).
 
 ## Toàn bộ phím tắt toàn cục sống trong `_inject_keyboard_shortcuts()`
 
-Hàm này gọi `components.html(js, height=0)` với 1 chuỗi JS lớn, xử lý:
+Hàm này gọi `_inject_js(js)` (bọc `st.iframe(..., height=1, alt="js-injector")`, thay `components.html` đã bị Streamlit gỡ) với 1 chuỗi JS lớn, xử lý:
 
 - Phím số `1`-`8` (tự khớp theo số lượng mục hiện có trong `NAV`, không phải hằng số cố định —
   thêm/bớt mục `NAV` thì số phím tối đa tự đổi theo, cần cập nhật lại con số này trong doc):

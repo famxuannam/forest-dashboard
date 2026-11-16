@@ -24,8 +24,9 @@ class _FakeTable:
         self._op, self._payload = "insert", rows
         return self
 
-    def upsert(self, rows, on_conflict=None, **_kwargs):
+    def upsert(self, rows, on_conflict=None, ignore_duplicates=False, **_kwargs):
         self._op, self._payload, self._conflict = "upsert", rows, (on_conflict or "").split(",")
+        self._ignore_dup = ignore_duplicates
         return self
 
     def update(self, values):
@@ -46,6 +47,10 @@ class _FakeTable:
 
     def lt(self, key, value):
         self._filters.append((key, "lt", value))
+        return self
+
+    def in_(self, key, values):
+        self._filters.append((key, "in", list(values)))
         return self
 
     @property
@@ -71,7 +76,7 @@ class _FakeTable:
     def _matches(self, row):
         for key, op, value in self._filters:
             actual = row.get(key)
-            if (op == "eq" and actual != value) or (op == "gte" and (actual is None or actual < value)) \
+            if (op == "in" and actual not in value) or (op == "eq" and actual != value) or (op == "gte" and (actual is None or actual < value)) \
                     or (op == "lt" and (actual is None or actual >= value)) or (op == "not_null" and actual is None) \
                     or (op == "null" and actual is not None):
                 return False
@@ -93,7 +98,8 @@ class _FakeTable:
                 record = dict(record)
                 conflict = next((r for r in rows if self._conflict and all(r.get(k) == record.get(k) for k in self._conflict)), None) if self._op == "upsert" else None
                 if conflict is not None:
-                    conflict.update(record)
+                    if not getattr(self, "_ignore_dup", False):
+                        conflict.update(record)
                 else:
                     rows.append(record)
             return _FakeResponse(records)
