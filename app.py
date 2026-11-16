@@ -1632,7 +1632,7 @@ def add_week_dividers(fig, dates):
     if s.empty:
         return fig
     dmin, dmax = s.min().normalize(), s.max().normalize()
-    first_mon = dmin + pd.Timedelta(days=(0 - dmin.dayofweek) % 7)  # Thứ Hai đầu tiên
+    first_mon = dmin + pd.Timedelta(days=(0 - dmin.day_of_week) % 7)  # Thứ Hai đầu tiên
     _line_col = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
     d = first_mon
     while d <= dmax + pd.Timedelta(days=1):
@@ -1728,16 +1728,16 @@ def period_stepper(periods, key, fmt, current=None):
         cprev, cmid, cnext, ctoday = st.columns([1, 7, 1, 1], vertical_alignment="center")
         with cprev:
             st.button("", icon=":material/chevron_left:", key=f"{key}_prev", on_click=_step, args=(-1,),
-                      disabled=cur_i == 0, use_container_width=True)
+                      disabled=cur_i == 0, width="stretch")
         with cmid:
             st.selectbox("Kỳ", periods, key=pk, label_visibility="collapsed", format_func=fmt)
         with cnext:
             st.button("", icon=":material/chevron_right:", key=f"{key}_next", on_click=_step, args=(1,),
-                      disabled=cur_i == len(periods) - 1, use_container_width=True)
+                      disabled=cur_i == len(periods) - 1, width="stretch")
         with ctoday:
             st.button("", icon=":material/today:", key=f"{key}_today", on_click=_today,
                       help="Về kỳ hiện tại", disabled=st.session_state[pk] == today_target,
-                      use_container_width=True)
+                      width="stretch")
     return st.session_state[pk]
 
 
@@ -1791,14 +1791,14 @@ def day_picker(active_days):
         c1, c2, c3 = st.columns([1, 8, 1], vertical_alignment="center")
         with c1:
             st.button("", icon=":material/chevron_left:", key="day_prev", on_click=_prev,
-                      disabled=not [d for d in active_days if d < sel], use_container_width=True)
+                      disabled=not [d for d in active_days if d < sel], width="stretch")
         with c2:
             picked = st.date_input("Ngày", value=sel, min_value=lo, max_value=hi,
                                    format="DD/MM/YYYY", label_visibility="collapsed")
             _inject_date_picker_locale()
         with c3:
             st.button("", icon=":material/chevron_right:", key="day_next", on_click=_next,
-                      disabled=not _next_candidates(sel), use_container_width=True)
+                      disabled=not _next_candidates(sel), width="stretch")
     if picked != st.session_state[pk]:
         st.session_state[pk] = picked
         st.rerun()
@@ -2223,14 +2223,14 @@ def _smart_digest(df, period_col, selected_key, df_p, prev_m, avg_m, is_current)
     by_proj = df_p.dropna(subset=['Dự án']).groupby('Dự án')['Thời lượng (Phút)'].sum()
     top_proj, top_share = (by_proj.idxmax(), by_proj.max() / by_proj.sum()) if not by_proj.empty else (None, 0)
     by_day = df_p.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
-    wk_hrs = df_p[df_p['Thời gian bắt đầu'].dt.dayofweek >= 5]['Thời lượng (Phút)'].sum() / 60
+    wk_hrs = df_p[df_p['Thời gian bắt đầu'].dt.day_of_week >= 5]['Thời lượng (Phút)'].sum() / 60
     if kind == "week":
         total_days = _today_vn().isoweekday() if is_current else 7
     elif kind == "month":
         total_days = _today_vn().day if is_current else pd.Period(selected_key).days_in_month
     else:
         total_days = (_today_vn().timetuple().tm_yday if is_current
-                      else pd.Timestamp(f"{selected_key}-12-31").dayofyear)
+                      else pd.Timestamp(f"{selected_key}-12-31").day_of_year)
 
     sit = None
     if prev_m is None and avg_m is None:
@@ -4242,10 +4242,10 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
     _cands_max = [d for d in (day_counts.index.max() if not day_counts.empty else None,
                                day_mins.index.max() if not day_mins.empty else None) if d is not None]
     min_date, max_date = min(_cands_min), max(_cands_max)
-    start = min_date - pd.Timedelta(days=min_date.dayofweek)
-    end = max_date + pd.Timedelta(days=6 - max_date.dayofweek)
+    start = min_date - pd.Timedelta(days=min_date.day_of_week)
+    end = max_date + pd.Timedelta(days=6 - max_date.day_of_week)
     cal_data = pd.DataFrame({'Ngày': pd.date_range(start=start, end=end)})
-    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
+    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.day_of_week, unit='D')
     cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(VN_DAYS)
     cal_data[labels['parts_label']] = cal_data['Ngày'].map(day_counts).fillna(0).astype(int)
     cal_data['Thời gian (phút)'] = cal_data['Ngày'].map(day_mins).fillna(0).astype(int)
@@ -4485,7 +4485,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
     st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
 
     first = pd.Timestamp(cur_y, cur_m, 1)
-    lead = first.dayofweek  # Thứ Hai = 0, khớp thứ tự weekdays bên dưới
+    lead = first.day_of_week  # Thứ Hai = 0, khớp thứ tự weekdays bên dưới
     days_in = (first + pd.offsets.MonthEnd(0)).day
     total_cells = -(-(lead + days_in) // 7) * 7
 
@@ -4650,7 +4650,7 @@ def _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df):
     st.markdown(f"<div class='rlcal-summary'>{_summary}</div>", unsafe_allow_html=True)
 
     first = pd.Timestamp(cur_y, cur_m, 1)
-    lead = first.dayofweek
+    lead = first.day_of_week
     days_in = (first + pd.offsets.MonthEnd(0)).day
     total_cells = -(-(lead + days_in) // 7) * 7
 
@@ -5787,12 +5787,12 @@ def render_calendar_grid(scope_df, full_df):
     max_date = pd.Timestamp(full_df['Ngày'].max())
     # Mở rộng ra trọn tuần (Chủ Nhật -> Thứ Bảy) để lưới luôn đầy đủ ô,
     # tránh ô trắng lẻ ở tuần đầu/cuối -> nền đồng nhất như kiểu GitHub.
-    start = min_date - pd.Timedelta(days=min_date.dayofweek)
-    end = max_date + pd.Timedelta(days=6 - max_date.dayofweek)
+    start = min_date - pd.Timedelta(days=min_date.day_of_week)
+    end = max_date + pd.Timedelta(days=6 - max_date.day_of_week)
     all_dates = pd.date_range(start=start, end=end)
     cal_data = pd.DataFrame({'Ngày': all_dates})
 
-    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.dayofweek, unit='D')
+    cal_data['Tuần_Bắt_Đầu'] = cal_data['Ngày'] - pd.to_timedelta(cal_data['Ngày'].dt.day_of_week, unit='D')
     cal_data['Thứ'] = cal_data['Ngày'].dt.day_name().map(VN_DAYS)
     cal_data['Ngày_str'] = cal_data['Ngày'].dt.date
 
@@ -7370,7 +7370,7 @@ if _auth_configured and not _skip_auth_for_local_dev:
         _login_col = st.columns([1, 1, 1])[1]
         with _login_col:
             st.button("Đăng nhập bằng Google", icon=":material/login:", type="primary",
-                       use_container_width=True, on_click=st.login)
+                       width="stretch", on_click=st.login)
         st.stop()
     if st.user.email != st.secrets["ALLOWED_EMAIL"]:
         st.error(f"Tài khoản **{st.user.email}** không có quyền truy cập ứng dụng này.")
@@ -9852,7 +9852,7 @@ with st.sidebar:
         if _badge_has_upd:
             _inject_relative_time_ticker()
         _peek_clicked = bool(_peek_pool(df)) and st.button(
-            "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", use_container_width=True)
+            "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", width="stretch")
 if _peek_clicked:
     # Mở dialog NGOÀI khối st.sidebar (dialog không nên dựng trong ngữ cảnh sidebar).
     st.session_state["peek_day"] = _pick_peek_day(df, exclude=st.session_state.get("peek_day"))
@@ -10635,7 +10635,7 @@ def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for
             _css += (f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
                      f"{css_for(_name, _cfg, _selected)} }}")
             with _cols[_i]:
-                if st.button(_label, key=_key, use_container_width=True):
+                if st.button(_label, key=_key, width="stretch"):
                     if not _selected:
                         save_setting(setting_name, _value_for(_name, _cfg))
                         st.rerun()
@@ -10677,14 +10677,14 @@ def _render_tuybien_giao_dien():
 
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
-        if st.button("Đặt lại mặc định", key="tbgd_reset_all", use_container_width=True):
+        if st.button("Đặt lại mặc định", key="tbgd_reset_all", width="stretch"):
             for _k, _v in [("accent_hex", "#4f4dc4"), ("bg_palette", "Bạc hà"), ("bg_style", "Lưới điểm"),
                            ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"),
                            ("body_font", "Inter")]:
                 save_setting(_k, _v)
             st.rerun()
     with _random_col:
-        if st.button("Ngẫu nhiên", icon=":material/casino:", key="tbgd_randomize", use_container_width=True):
+        if st.button("Ngẫu nhiên", icon=":material/casino:", key="tbgd_randomize", width="stretch"):
             for _k, _choices in [("accent_hex", list(ACCENT_PRESETS.values())),
                                   ("bg_palette", list(BG_PALETTES.keys())),
                                   ("bg_style", list(BG_PRESETS.keys())),
@@ -10929,7 +10929,7 @@ elif nav == "Báo cáo":
             # (xem docstring _period_elapsed_context, hàm dùng chung cho cả 3 nhánh Tuần/Tháng/Năm).
             elapsed_mask_w, lbl_prev_w, lbl_avg_w, _clip_note_w = _period_elapsed_context(
                 selected_week, _today_vn().strftime('%G-W%V'),
-                df['Thời gian bắt đầu'].dt.dayofweek + 1, _today_vn().isoweekday(), "Tuần")
+                df['Thời gian bắt đầu'].dt.day_of_week + 1, _today_vn().isoweekday(), "Tuần")
             prev_w, avg_w = _period_comparison(df, 'Tuần', selected_week, prev_week_key, elapsed_mask_w)
 
             if not df_w.empty:
@@ -11085,7 +11085,7 @@ elif nav == "Báo cáo":
             # ứng ở nhánh Tháng).
             elapsed_mask_y, lbl_prev_y, lbl_avg_y, _clip_note_y = _period_elapsed_context(
                 selected_year, str(_today_vn().year),
-                df['Thời gian bắt đầu'].dt.dayofyear, _today_vn().timetuple().tm_yday, "Năm")
+                df['Thời gian bắt đầu'].dt.day_of_year, _today_vn().timetuple().tm_yday, "Năm")
             prev_y, avg_y = _period_comparison(df, 'Năm', selected_year, prev_year_key, elapsed_mask_y)
 
             if not df_y.empty:
@@ -11100,7 +11100,7 @@ elif nav == "Báo cáo":
                 _busiest_month_hrs_y = _by_month_y.max() / 60
                 _streak_cur_y = _streak_stats(df)['current']
                 _is_current_year_y = (selected_year == str(_today_vn().year))
-                _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).dayofyear
+                _days_in_year_y = pd.Timestamp(int(selected_year), 12, 31).day_of_year
                 _elapsed_days_y = _today_vn().timetuple().tm_yday if _is_current_year_y else _days_in_year_y
 
                 _pbill_title_y, _pbill_sub_y = _pbill_narrative(
@@ -11537,7 +11537,7 @@ elif nav == "Tuỳ biến":
                         unsafe_allow_html=True)
                 with qc2:
                     _qclicked = st.button("Đồng bộ ngay", type="primary", key="tbtn_quick_sync",
-                                          disabled=not (_qf or _qr), use_container_width=True)
+                                          disabled=not (_qf or _qr), width="stretch")
             if _qclicked:
                 with st.spinner("Đang đồng bộ..."):
                     _msg, _has_err = _do_quick_sync()
@@ -11892,7 +11892,7 @@ elif nav == "Tuỳ biến":
                                             placeholder="— Chọn nhóm —")
                 with fc3:
                     st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                    if st.button("Lưu", type="primary", key="tbtn_save_mapping", use_container_width=True):
+                    if st.button("Lưu", type="primary", key="tbtn_save_mapping", width="stretch"):
                         if edit_cat:
                             nm = (mapping_df[mapping_df['Dự án'].astype(str) != edit_proj]
                                   if not mapping_df.empty else pd.DataFrame(columns=["Dự án", "Nhóm"]))

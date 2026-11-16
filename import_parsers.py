@@ -131,7 +131,7 @@ def _dayone_lines_to_blocks(lines):
 
 
 def _dayone_text_to_html(text):
-    """Chuyển trường "text" (markdown thô, ký tự đặc biệt đã được Day One tự escape bằng "\\") của
+    r"""Chuyển trường "text" (markdown thô, ký tự đặc biệt đã được Day One tự escape bằng "\") của
     1 entry Day One sang HTML gọn để nhét thẳng vào ô ghi chú Quill, GIỮ ĐÚNG đậm/nghiêng/list. CHỈ
     xử lý CHỮ -- ảnh/video/pdf đính kèm nhúng dạng "![](dayone-moment://...)" bị bỏ hẳn (đúng yêu
     cầu chỉ nhập nội dung chữ, không nhập ảnh/file đính kèm); vị trí/thời tiết nằm ở trường JSON
