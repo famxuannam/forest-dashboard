@@ -27,7 +27,7 @@ làm sao lưu tự động; hai bảng cũ `quick_notes`, `health_metrics` đã 
 | 1. Dọn cảnh báo, ghim phiên bản | Xong |
 | 2. Thay `st.components.v1.html` | Xong (`_inject_js()` dùng `st.iframe`) |
 | 3. An toàn dữ liệu | Xong (+ 8 test) |
-| 4. Test, CI, keepalive | Xong; hàm `keepalive()` đã tạo trên Supabase. **Chờ người dùng** thêm secret `SUPABASE_URL`, `SUPABASE_ANON_KEY` vào GitHub |
+| 4. Test, CI, keepalive | Test + CI xong. Keepalive **đã gỡ** theo quyết định của người dùng: không đặt secret nào trên GitHub; dựa vào việc dùng app đều đặn + thẻ lỗi/Restore khi bị tạm dừng |
 | 5. Bảo mật Supabase | Code/schema/docs xong. **Chờ người dùng** đổi `SUPABASE_KEY` sang khoá bí mật; sau đó mới áp migration bỏ policy anon (SQL ở cuối file này) |
 | 6. U1, U2, U3, O2, F1, F4 | Xong. Thêm: lịch chọn ngày tiếng Việt, Thứ Hai đầu tuần (bộ dịch cũ đã hỏng từ Streamlit 1.67) |
 | 6. O1, F2, F3 | Chưa làm (xem lý do trong mục Giai đoạn 6) |
@@ -156,7 +156,6 @@ bucket `sync-uploads` và gọi `keepalive()`.
      bị chặn; secret key bỏ qua RLS);
    - thay policy Storage bằng INSERT-only:
      `create policy "anon upload sync-uploads" on storage.objects for insert to anon with check (bucket_id = 'sync-uploads');`
-   - tạo `public.keepalive()` như Giai đoạn 4.
 3. Người dùng chạy Shortcut iOS một lần để xác nhận vẫn tải file lên được (nếu Shortcut dùng chế
    độ ghi đè `x-upsert` thì cần thêm quyền; tên file có timestamp nên thường không cần). Mở app,
    xác nhận tự đồng bộ nạp được file mới.

@@ -234,7 +234,7 @@ request; app chỉ cần quét bucket đó.
 App dùng khoá bí mật (`SUPABASE_KEY` = `sb_secret_…` hoặc `service_role`) → vai trò `service_role`
 bỏ qua RLS. Mọi bảng bật RLS và KHÔNG có policy cho `anon`/`authenticated`. Thêm bảng mới: chỉ cần
 `enable row level security`, không tạo policy cho anon như trước. Khoá anon chỉ dùng cho Shortcut
-(tải file lên bucket) và workflow keepalive (`rpc/keepalive`).
+(tải file lên bucket). Không đặt secret nào trên GitHub (repo công khai) -- mọi secret ở Streamlit Cloud.
 
 ## Nhập Nhật ký Day One (Tuỳ biến → Dữ liệu đầu vào → Dự phòng)
 

@@ -1,5 +1,5 @@
 -- Chạy 1 lần trong Supabase Dashboard -> SQL Editor -> New query -> Run.
--- Tạo toàn bộ bảng dữ liệu, RLS, hàm keepalive và bucket Storage của Forest Dashboard. App dùng
+-- Tạo toàn bộ bảng dữ liệu, RLS và bucket Storage của Forest Dashboard. App dùng
 -- khoá bí mật phía server; khoá anon chỉ được tải file lên bucket sync-uploads (xem đoạn RLS).
 
 -- Lưu ý: dùng "timestamp" (KHÔNG timezone), không phải "timestamptz". Dữ liệu xuất từ Forest
@@ -151,18 +151,6 @@ alter table kindle_book_map enable row level security;
 alter table deleted_kindle_highlights enable row level security;
 alter table gundam_overrides enable row level security;
 alter table book_overrides enable row level security;
-
--- Hàm "giữ thức" cho workflow .github/workflows/keepalive.yml: gói Free tự tạm dừng project sau
--- ~7 ngày ít hoạt động, workflow gọi POST /rest/v1/rpc/keepalive bằng khoá anon 2 lần/tuần. Chỉ
--- trả 1, không đọc bảng nào.
-create or replace function public.keepalive()
-returns integer
-language sql
-stable
-set search_path = ''
-as $$ select 1 $$;
-revoke execute on function public.keepalive() from public;
-grant execute on function public.keepalive() to anon, authenticated, service_role;
 
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket

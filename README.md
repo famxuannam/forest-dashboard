@@ -35,19 +35,19 @@ dụng đầy đủ.
 ## Lưu ý
 
 Bảo vệ 2 lớp: (1) đăng nhập Google qua mục `[auth]` trong secrets (chỉ `ALLOWED_EMAIL` vào được
-app); (2) app dùng khoá bí mật Supabase phía server, còn khoá anon/publishable (nằm trong Shortcut iOS
-và GitHub Actions) chỉ được tải file lên bucket `sync-uploads` và gọi `keepalive()`, không đọc được
-bảng nào (xem `supabase_schema.sql`). Dữ liệu bền vững trên Supabase qua các lần
+app); (2) app dùng khoá bí mật Supabase phía server, còn khoá anon/publishable (nằm trong Shortcut iOS)
+chỉ được tải file lên bucket `sync-uploads`, không đọc được bảng nào (xem `supabase_schema.sql`). Mọi
+secret chỉ nằm trong Streamlit Cloud, không đặt secret nào trên GitHub (repo công khai). Dữ liệu bền vững trên Supabase qua các lần
 khởi động lại/redeploy; mục Sao lưu trong app (Tuỳ biến → Quản lý hệ thống) vẫn nên dùng định
 kỳ như lớp an toàn thứ hai.
 
 ## Giữ Supabase không bị tạm dừng
 
-Gói Free của Supabase tự tạm dừng project sau khoảng 7 ngày ít hoạt động (chỉ khôi phục được trong
-90 ngày). Workflow `.github/workflows/keepalive.yml` gọi hàm `public.keepalive()` 2 lần/tuần. Cần
-thêm 2 secret ở GitHub (Settings → Secrets and variables → Actions): `SUPABASE_URL` và
-`SUPABASE_ANON_KEY` (khoá anon/publishable, không phải khoá bí mật). Workflow tự bật lại chính nó
-mỗi lần chạy vì GitHub tắt workflow theo lịch của repo công khai sau 60 ngày không có commit.
+Gói Free của Supabase tự tạm dừng project sau khoảng 7 ngày ít hoạt động; dùng app đều đặn (mỗi lần
+mở app là 1 lần truy cập) là đủ giữ project chạy. Không có tác vụ tự động nào giữ thức, vì cách đó cần
+đặt khoá Supabase lên GitHub. Nếu project đã bị tạm dừng: app hiện thẻ "Không kết nối được cơ sở dữ
+liệu" — mở Supabase Dashboard, bấm Restore (được trong 90 ngày kể từ lúc tạm dừng), đợi vài phút
+rồi bấm "Thử lại".
 
 ## Chạy local không đăng nhập
 
