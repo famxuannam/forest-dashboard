@@ -135,6 +135,47 @@ def _note_plain_text(html_content):
     return re.sub(r"\s+", " ", html_unescape(re.sub(r"<[^>]+>", " ", str(html_content or "")))).strip()
 
 
+def _note_html_to_markdown(html_content):
+    """Ghi chú Quill (HTML) -> Markdown gọn để lưu trữ ngoài app: đoạn, xuống dòng, **đậm**,
+    *nghiêng*, ~~gạch~~, link, danh sách (thụt lề theo ql-indent-N), heading. Thẻ khác bị bỏ, giữ
+    chữ. Không cố đạt độ chính xác tuyệt đối -- mục tiêu là đọc được bằng mọi trình soạn thảo."""
+    h = str(html_content or "")
+    h = re.sub(r"(?is)<a [^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", r"[\2](\1)", h)
+    h = re.sub(r"(?is)<(strong|b)>(.*?)</\1>", r"**\2**", h)
+    h = re.sub(r"(?is)<(em|i)>(.*?)</\1>", r"*\2*", h)
+    h = re.sub(r"(?is)<s>(.*?)</s>", r"~~\1~~", h)
+    h = re.sub(r"(?is)<h([1-6])[^>]*>(.*?)</h\1>", lambda m: "\n" + "#" * (int(m.group(1)) + 2) + " " + m.group(2) + "\n", h)
+
+    def _list(m):
+        ordered = m.group(1).lower() == "ol"
+        out, counters = [], {}
+        for li in re.finditer(r"(?is)<li([^>]*)>(.*?)</li>", m.group(2)):
+            lvl = int((re.search(r"ql-indent-(\d+)", li.group(1)) or [0, 0])[1])
+            counters[lvl] = counters.get(lvl, 0) + 1
+            for k in [k for k in counters if k > lvl]:
+                del counters[k]
+            bullet = f"{counters[lvl]}." if ordered else "-"
+            out.append("  " * lvl + f"{bullet} {li.group(2).strip()}")
+        return "\n" + "\n".join(out) + "\n"
+    h = re.sub(r"(?is)<(ul|ol)[^>]*>(.*?)</\1>", _list, h)
+    h = re.sub(r"(?i)<br\s*/?>", "\n", h)
+    h = re.sub(r"(?i)</p>", "\n\n", h)
+    h = html_unescape(re.sub(r"<[^>]+>", "", h)).replace("\xa0", " ")
+    return re.sub(r"\n{3,}", "\n\n", h).strip()
+
+
+def _notes_to_markdown(notes_df):
+    """Toàn bộ ghi chú -> 1 file Markdown, mỗi ngày 1 mục "## Thứ, dd/mm/yyyy", cũ trước mới sau."""
+    parts = ["# Nhật ký Forest Dashboard", ""]
+    if notes_df is not None and not notes_df.empty:
+        nd = notes_df.assign(_d=pd.to_datetime(notes_df["Ngày"], errors="coerce")).dropna(subset=["_d"]).sort_values("_d")
+        for d, html in zip(nd["_d"], nd["Ghi chú"]):
+            body = _note_html_to_markdown(html)
+            if body:
+                parts += [f"## {VN_DAYS.get(d.day_name(), '')}, {d:%d/%m/%Y}", "", body, ""]
+    return "\n".join(parts).rstrip() + "\n"
+
+
 def _snippet_around(txt, query, radius=60):
     """Đoạn trích văn bản thuần quanh từ khớp đầu tiên (dùng cho trang Tìm kiếm, cả ghi chú lẫn
     trích dẫn Kindle); không khớp hoặc không có query thì trả về 120 ký tự đầu."""
@@ -8906,7 +8947,7 @@ _MAIN_CSS = """
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
     .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card {
         background: var(--card) !important;
         border-color: var(--border) !important;
@@ -9398,7 +9439,7 @@ _MAIN_CSS = """
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
     .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
     .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
-    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card,
+    .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
     [class*="st-key-kqgroup_fav_"] {
         background: var(--card-bg-override) !important;
@@ -10657,6 +10698,56 @@ def render_day_report(df):
 
         sec_chapter("today-ch6", 6, "Ngày này năm trước")
         render_on_this_day(sel, df)
+
+
+def _render_data_health():
+    """Thẻ "Tình trạng dữ liệu" (Tuỳ biến -> Quản lý hệ thống): dữ liệu Forest mới tới đâu, lần đồng
+    bộ/sao lưu gần nhất, số dòng từng nguồn -- để sau 1 thời gian không mở app biết ngay có cần đồng
+    bộ hay sao lưu không. Chỉ đọc loader đã cache, không gọi thêm Supabase. Mốc cảnh báo: phiên mới
+    nhất cũ hơn 3 ngày, sao lưu cũ hơn 30 ngày hoặc chưa từng sao lưu."""
+    today = _today_vn()
+    settings = _cached_settings()
+
+    def _ago(d):
+        n = (today - d).days
+        return "hôm nay" if n <= 0 else "hôm qua" if n == 1 else f"{n} ngày trước"
+
+    rows = []  # (nhãn, giá trị, cảnh báo?)
+    db = load_db()
+    if db.empty:
+        rows.append(("Phiên Forest mới nhất", "chưa có dữ liệu", True))
+    else:
+        last = pd.to_datetime(db["Thời gian bắt đầu"]).max().date()
+        rows.append(("Phiên Forest mới nhất", f"{last:%d/%m/%Y} · {_ago(last)}", (today - last).days > 3))
+    _sync = settings.get("last_quick_sync_at")
+    rows.append(("Đồng bộ gần nhất",
+                 f"{pd.Timestamp(_sync):%d/%m/%Y %H:%M} · {_ago(pd.Timestamp(_sync).date())}" if _sync else "chưa đồng bộ lần nào",
+                 not _sync))
+    _bk = settings.get("last_backup_at")
+    _bk_old = (not _bk) or (today - pd.Timestamp(_bk).date()).days > 30
+    rows.append(("Sao lưu gần nhất",
+                 f"{pd.Timestamp(_bk):%d/%m/%Y} · {_ago(pd.Timestamp(_bk).date())}" if _bk else "chưa sao lưu lần nào",
+                 _bk_old))
+    counts = [("phiên", len(db)), ("ngày ghi chú", len(load_notes())), ("phần đọc/xem", len(load_reading_log())),
+              ("lịch hẹn", len(load_work_calendar())), ("trích dẫn Kindle", len(load_kindle_highlights())),
+              ("dự án đã phân loại", len(load_mapping()))]
+    rows.append(("Số dòng", " · ".join(f"<b>{n:,}</b> {lbl}".replace(",", ".") for lbl, n in counts), False))
+
+    def _row(lbl, val, warn):
+        dot = (f"<span style='display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;"
+               f"background:{'#e08a00' if warn else 'var(--accent)'};'></span>")
+        return (f"<div style='display:flex;gap:12px;justify-content:space-between;align-items:baseline;"
+                f"padding:7px 0;border-bottom:1px solid var(--divider);font-size:13.5px;flex-wrap:wrap;'>"
+                f"<span style='color:var(--text-2);'>{dot}{lbl}</span>"
+                f"<span style='color:var(--text);text-align:right;'>{val}</span></div>")
+
+    with st.container(border=True, key="tb_health_card"):
+        st.markdown(
+            "<div style='font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;'>Tình trạng dữ liệu</div>"
+            + "".join(_row(*r) for r in rows),
+            unsafe_allow_html=True)
+        if any(w for _, _, w in rows):
+            st.caption("Chấm cam: phiên mới nhất cũ hơn 3 ngày, chưa đồng bộ, hoặc sao lưu cũ hơn 30 ngày.")
 
 
 def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for,
@@ -11949,6 +12040,7 @@ elif nav == "Tuỳ biến":
                             save_mapping(nm[["Dự án", "Nhóm"]].reset_index(drop=True))
                             st.rerun()
         sec_chapter("tb-ch3", 3, "Quản lý hệ thống")
+        _render_data_health()
         # 3 thẻ rút gọn về ĐÚNG 1 nhãn + 1 nút (không còn help text/checkbox lộ ngay trên thẻ, theo
         # phản hồi thực tế) -- 2 thao tác phá huỷ dữ liệu (Khôi phục ghi đè toàn bộ, Làm mới xoá sạch
         # toàn bộ) chuyển hết phần xác nhận (upload/preview/checkbox/nút xác nhận cuối) vào popup
@@ -12084,6 +12176,12 @@ elif nav == "Tuỳ biến":
             "{ align-items: stretch !important; }"
             ".st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, "
             ".st-key-tb_account_card { height: 100%; }"
+            # Thẻ Sao lưu có 2 nút (thêm "Xuất nhật ký (.md)") nên cao hơn -- kéo cả chuỗi khung cột ->
+            # khối dọc -> wrapper của thẻ cao 100% để height:100% ở trên thật sự có tác dụng.
+            "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) > [data-testid=\"stColumn\"] "
+            "> [data-testid=\"stVerticalBlock\"] { height: 100%; }"
+            "[data-testid=\"stHorizontalBlock\"]:has([class*=\"st-key-tb_backup_card\"]) > [data-testid=\"stColumn\"] "
+            "> [data-testid=\"stVerticalBlock\"] > * { flex: 1 1 auto; }"
             # Nút phá huỷ dữ liệu (xoá sạch/ghi đè toàn bộ, giờ nằm trong popup st.dialog()) dùng màu
             # cảnh báo riêng (đỏ #ff3b30, cùng tông đỏ dùng cho delta âm/chỉ số bất thường trong app)
             # thay vì màu nút thường -- tín hiệu thị giác phân biệt mức độ nguy hiểm. key vẫn giữ
@@ -12142,6 +12240,11 @@ elif nav == "Tuỳ biến":
                                    f"forest_backup_{_today}.zip", "application/zip", key="tbtn_download_backup",
                                    disabled=db_now.empty,
                                    on_click=lambda: save_setting("last_backup_at", _today))
+                _notes_now = load_notes()
+                st.download_button("Xuất nhật ký (.md)", _notes_to_markdown(_notes_now).encode("utf-8"),
+                                   f"nhat_ky_{_today}.md", "text/markdown", key="tbtn_download_notes_md",
+                                   disabled=_notes_now.empty,
+                                   help="Toàn bộ ghi chú theo ngày dạng Markdown, đọc được bằng mọi trình soạn thảo.")
         with c2:
             with st.container(border=True, key="tb_restore_card"):
                 st.markdown(f"<div style='{_sysrow_label_css}'>Khôi phục</div>"

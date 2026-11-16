@@ -131,3 +131,22 @@ def test_select_all_retries_transient_errors():
     ns = make_ns(FlakySupabase())
     assert ns["_sb_select_all"](lambda: Q()) == [{"a": 1}]
     assert calls["n"] == 3
+
+
+def test_notes_markdown_export():
+    from ui_catalog import VN_DAYS
+    import re
+    from html import unescape as html_unescape
+    ns = {"pd": pd, "re": re, "html_unescape": html_unescape, "VN_DAYS": VN_DAYS}
+    load_functions(["_note_html_to_markdown", "_notes_to_markdown"], ns)
+    notes = pd.DataFrame([
+        {"Ngày": "2026-11-16", "Ghi chú": '<p>Hôm nay <strong>đậm</strong> và <em>nghiêng</em> &amp; '
+                                          '<a href="https://x.y">link</a></p><ol><li>một</li>'
+                                          '<li class="ql-indent-1">con</li><li>hai</li></ol>'},
+        {"Ngày": "2026-11-02", "Ghi chú": "<p>Dòng 1<br>Dòng 2</p>"},
+    ])
+    md = ns["_notes_to_markdown"](notes)
+    assert md.index("02/11/2026") < md.index("16/11/2026")
+    assert "## Thứ Hai, 02/11/2026" in md and "Dòng 1\nDòng 2" in md
+    assert "**đậm**" in md and "*nghiêng*" in md and "& [link](https://x.y)" in md
+    assert "1. một\n  1. con\n2. hai" in md
