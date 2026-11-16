@@ -294,6 +294,11 @@ def _readable_text(hexcode):
     return "#1d1d1f" if luminance > 0.6 else "#ffffff"
 
 
+def _load_settings_raw():
+    res = _get_supabase().table("settings").select("key,value").execute()
+    return {r["key"]: r["value"] for r in (res.data or [])}
+
+
 def load_settings():
     """Đọc bảng settings (key/value) -> dict. Trả {} nếu lỗi/chưa cấu hình Supabase/chưa tạo
     bảng -- tính năng optional, KHÔNG được làm crash app. Hàm này chạy Ở CẤP MODULE, rất sớm
@@ -301,15 +306,27 @@ def load_settings():
     giá trị trước khi _teal_shades() được gọi lần đầu (SESSION_BUCKETS) -- nên phải tự bọc lỗi
     ở đây, không được dựa vào cổng secrets đã chạy trước nó."""
     try:
-        res = _get_supabase().table("settings").select("key,value").execute()
-        return {r["key"]: r["value"] for r in (res.data or [])}
+        return _load_settings_raw()
     except Exception:
         return {}
 
 
 @st.cache_data
+def _cached_settings_strict():
+    # Ném lỗi ra ngoài (KHÔNG nuốt) để st.cache_data không ghi nhớ kết quả rỗng khi Supabase lỗi
+    # đúng lúc khởi động -- trước đây {} bị cache vô thời hạn, giao diện rơi về mặc định tới khi
+    # khởi động lại app.
+    return _load_settings_raw()
+
+
 def _cached_settings():
-    return load_settings()
+    try:
+        return _cached_settings_strict()
+    except Exception:
+        return {}
+
+
+_cached_settings.clear = _cached_settings_strict.clear
 
 
 def save_setting(key, value):
@@ -479,6 +496,19 @@ _SB_PAGE_SIZE = 1000  # PostgREST (nền tảng Supabase) mặc định chỉ tr
 # định; children theo đúng 1 parent_hash) không cần vì không bao giờ chạm ngưỡng.
 
 
+def _sb_retry(fn, attempts=3):
+    """Chạy fn() (1 lần .execute() Supabase), thử lại tối đa attempts lần, chờ 1s rồi 2s giữa các
+    lần -- chịu được lỗi mạng/5xx thoáng qua (vd Cloudflare 521 khi project vừa khởi động lại sau
+    tạm dừng). Hết lượt thử thì ném lại lỗi cuối cho nơi gọi xử lý."""
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(1 + i)
+
+
 def _sb_select_all(build_query):
     """Chạy 1 PostgREST query, tự phân trang qua .range() cho tới khi hết dữ liệu thay vì gọi
     thẳng .execute() (xem _SB_PAGE_SIZE). build_query là callable KHÔNG tham số, mỗi lần gọi trả
@@ -490,7 +520,7 @@ def _sb_select_all(build_query):
     all_data = []
     offset = 0
     while True:
-        page = build_query().range(offset, offset + _SB_PAGE_SIZE - 1).execute().data or []
+        page = _sb_retry(lambda: build_query().range(offset, offset + _SB_PAGE_SIZE - 1).execute()).data or []
         all_data.extend(page)
         if len(page) < _SB_PAGE_SIZE:
             break
@@ -549,6 +579,10 @@ def _load_simple_table(table, select, rename, cols):
     return pd.DataFrame(data).rename(columns=rename)[cols]
 
 def save_db(df):
+    """Ghi đè TOÀN BỘ bảng sessions (xoá sạch rồi chèn lại) -- CHỈ dùng khi Khôi phục từ bản sao
+    lưu. Luồng thường ngày không gọi hàm này: nạp CSV mới đi qua _merge_forest_into_db() (chỉ chèn
+    dòng mới), xoá phiên đi qua delete_sessions() (xoá đúng dòng) -- để lỗi mạng giữa chừng không
+    bao giờ làm mất dữ liệu đã có."""
     sb = _get_supabase()
     _sb_delete_all("sessions", "id")
     recs = [
@@ -562,21 +596,46 @@ def save_db(df):
     prep_analysis_data.clear()
 
 def _merge_forest_into_db(df_new):
-    """Cộng df_new (đã lọc phiên đã xoá) vào sessions hiện có, bỏ trùng theo khoá (Thời gian bắt
-    đầu, Thời gian kết thúc), ghi đè toàn bộ qua save_db(). Dùng chung cho cả luồng "Đồng bộ nhanh"
-    (sync_from_storage) và tải tay 1 file CSV Forest (tab "Tải lên từ Forest" ở Tuỳ biến) -- 2 nơi
-    khác nhau ở BƯỚC LỌC phiên đã xoá trước đó (mỗi nơi cần thời điểm/thông tin khác nhau cho UI
-    riêng), chỉ giống hệt nhau từ bước này trở đi. _fmt_ts ở CẢ 2 vế so sánh (không .astype(str)
-    thô) -- db cũ đã là chuỗi "YYYY-MM-DD HH:MM:SS" (không giây lẻ), df_new mới parse thường CÓ
-    giây lẻ, so thô sẽ luôn lệch nhau, làm trùng lặp không bị nhận ra. Trả về số phiên mới thêm."""
+    """Chèn các phiên trong df_new (đã lọc phiên đã xoá) CHƯA có trong sessions, theo khoá (Thời gian
+    bắt đầu, Thời gian kết thúc). CHỈ chèn thêm, không xoá/ghi đè dòng nào -- trước đây hàm này gọi
+    save_db() (xoá sạch bảng rồi chèn lại) ở MỌI lần đồng bộ, lỗi mạng giữa chừng có thể làm mất toàn
+    bộ phiên. Phiên đã có giữ nguyên bản cũ (như keep='first' trước đây). Dùng chung cho luồng "Đồng
+    bộ nhanh" (sync_from_storage) và tải tay 1 file CSV Forest ở Tuỳ biến. _fmt_ts ở CẢ 2 vế so sánh
+    (db cũ không có giây lẻ, df_new mới parse thường có). upsert(ignore_duplicates=True) là lớp an toàn
+    thứ 2 dựa trên ràng buộc unique (start_time, end_time) của bảng. Trả về số phiên mới thêm."""
     db = load_db()
-    before = len(db)
-    combined = pd.concat([db, df_new])
-    combined['Thời gian bắt đầu'] = combined['Thời gian bắt đầu'].map(_fmt_ts)
-    combined['Thời gian kết thúc'] = combined['Thời gian kết thúc'].map(_fmt_ts)
-    combined = combined.drop_duplicates(subset=['Thời gian bắt đầu', 'Thời gian kết thúc'], keep='first')
-    save_db(combined)
-    return len(combined) - before
+    existing = set(zip(db['Thời gian bắt đầu'].map(_fmt_ts), db['Thời gian kết thúc'].map(_fmt_ts)))
+    recs, seen = [], set()
+    for r in df_new.to_dict("records"):
+        key = (_fmt_ts(r["Thời gian bắt đầu"]), _fmt_ts(r["Thời gian kết thúc"]))
+        if key in existing or key in seen:
+            continue
+        seen.add(key)
+        recs.append({"start_time": key[0], "end_time": key[1],
+                     "project": str(r["Dự án"]), "duration_min": int(r["Thời lượng (Phút)"])})
+    sb = _get_supabase()
+    try:
+        for i in range(0, len(recs), 500):
+            sb.table("sessions").upsert(recs[i:i + 500], on_conflict="start_time,end_time",
+                                        ignore_duplicates=True).execute()
+    finally:
+        if recs:
+            load_db.clear()
+            prep_analysis_data.clear()
+    return len(recs)
+
+
+def delete_sessions(keys_df):
+    """Xoá ĐÚNG các phiên theo khoá (Thời gian bắt đầu, Thời gian kết thúc) -- nút "Xoá N phiên đã
+    chọn" ở Tuỳ biến. Nơi gọi tự add_deleted() trước để file Forest cũ không nạp lại phiên đã xoá."""
+    sb = _get_supabase()
+    try:
+        for r in keys_df[["Thời gian bắt đầu", "Thời gian kết thúc"]].to_dict("records"):
+            sb.table("sessions").delete().eq("start_time", _fmt_ts(r["Thời gian bắt đầu"])) \
+                .eq("end_time", _fmt_ts(r["Thời gian kết thúc"])).execute()
+    finally:
+        load_db.clear()
+        prep_analysis_data.clear()
 
 @st.cache_data
 def load_mapping():
@@ -584,13 +643,21 @@ def load_mapping():
                                {"project": "Dự án", "category": "Nhóm"}, ["Dự án", "Nhóm"])
 
 def save_mapping(df):
+    """Đặt bảng mapping đúng bằng df: upsert mọi dòng TRƯỚC, rồi mới xoá các Dự án không còn trong df
+    -- lỗi giữa chừng chỉ để lại vài dòng thừa, không bao giờ làm trống bảng phân loại."""
     sb = _get_supabase()
-    _sb_delete_all("mapping", "project")
-    if not df.empty:
-        recs = [{"project": str(r["Dự án"]), "category": str(r["Nhóm"])} for r in df.to_dict("records")]
-        sb.table("mapping").insert(recs).execute()
-    load_mapping.clear()
-    prep_analysis_data.clear()
+    recs = {str(r["Dự án"]): {"project": str(r["Dự án"]), "category": str(r["Nhóm"])}
+            for r in df.to_dict("records")} if not df.empty else {}
+    try:
+        if recs:
+            sb.table("mapping").upsert(list(recs.values()), on_conflict="project").execute()
+        current = [r["project"] for r in _sb_select_all(lambda: sb.table("mapping").select("project").order("project"))]
+        stale = [p for p in current if p not in recs]
+        for i in range(0, len(stale), 200):
+            sb.table("mapping").delete().in_("project", stale[i:i + 200]).execute()
+    finally:
+        load_mapping.clear()
+        prep_analysis_data.clear()
 
 @st.cache_data
 def load_deleted():
@@ -845,18 +912,35 @@ def load_reading_log():
     return df[cols + ["Cuốn sách"]].reset_index(drop=True)
 
 def save_reading_log_bulk(df):
-    """Ghi đè toàn bộ (dùng khi Khôi phục từ bản sao lưu, hoặc khi tải file Shortcut ở mục "Tải
-    lên từ Reminder") -- y hệt save_work_calendar_bulk: sinh uid tạm theo thứ tự dòng."""
+    """Thay thế toàn bộ (dùng khi Khôi phục, hoặc khi nạp file Shortcut Reminder) -- sinh uid tạm
+    theo thứ tự dòng, dạng "r<epoch>-<i>" (load_reading_log() sắp thứ tự trong ngày theo số CUỐI uid).
+    Chèn bộ MỚI trước, chèn xong mới xoá bộ cũ: lỗi giữa chừng thì gỡ phần mới đã chèn (best-effort)
+    và giữ nguyên bộ cũ, không bao giờ để bảng trống."""
     sb = _get_supabase()
-    _sb_delete_all("reading_log", "uid")
-    if not df.empty:
-        recs = [{"uid": f"restored-{i}", "completed_date": _fmt_ts(r["Ngày hoàn thành"]),
-                 "book": str(r["Sách (gốc)"]), "title": str(r["Tiêu đề phần"])}
-                for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()]
+    prefix = f"r{int(time.time())}-"
+    recs = [{"uid": f"{prefix}{i}", "completed_date": _fmt_ts(r["Ngày hoàn thành"]),
+             "book": str(r["Sách (gốc)"]), "title": str(r["Tiêu đề phần"])}
+            for i, r in enumerate(df.to_dict("records")) if str(r["Tiêu đề phần"]).strip()] if not df.empty else []
+    old_uids = [r["uid"] for r in _sb_select_all(lambda: sb.table("reading_log").select("uid").order("uid"))]
+    try:
         for i in range(0, len(recs), 500):
             sb.table("reading_log").insert(recs[i:i + 500]).execute()
-    load_reading_log.clear()
-    prep_analysis_data.clear()
+    except Exception:
+        new_uids = [r["uid"] for r in recs]
+        try:
+            for i in range(0, len(new_uids), 200):
+                sb.table("reading_log").delete().in_("uid", new_uids[i:i + 200]).execute()
+        except Exception:
+            pass
+        load_reading_log.clear()
+        prep_analysis_data.clear()
+        raise
+    try:
+        for i in range(0, len(old_uids), 200):
+            sb.table("reading_log").delete().in_("uid", old_uids[i:i + 200]).execute()
+    finally:
+        load_reading_log.clear()
+        prep_analysis_data.clear()
 
 
 # --- KINDLE: TRÍCH DẪN & GHI CHÚ (từ My Clippings.txt, xem parse_kindle_clippings) ---
@@ -9391,8 +9475,30 @@ _MAIN_CSS = """
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
 
-_auto_sync_on_open()
-df = prep_analysis_data()
+def _render_db_unavailable(err):
+    """Thẻ lỗi ngắn thay cho traceback khi không đọc được Supabase (project đang tạm dừng/khởi động
+    lại, lỗi mạng...). Lỗi Cloudflare trả về cả trang HTML -- chỉ giữ tiêu đề trang cho gọn. Nút
+    "Thử lại" chỉ cần st.rerun(): st.cache_data không ghi nhớ lời gọi bị lỗi nên loader tự đọc lại."""
+    msg = str(err)
+    m = re.search(r"<title>(.*?)</title>", msg, re.S)
+    if m:
+        msg = m.group(1).strip()
+    st.error("**Không kết nối được cơ sở dữ liệu.** Project Supabase có thể đang tạm dừng hoặc vừa "
+             "khởi động lại — thường chỉ cần đợi 1–2 phút rồi thử lại. Nếu lỗi kéo dài, mở Supabase "
+             "Dashboard kiểm tra trạng thái project (bấm Restore nếu đang Paused).",
+             icon=":material/cloud_off:")
+    with st.expander("Chi tiết lỗi"):
+        st.code(f"{type(err).__name__}: {msg[:600]}")
+    if st.button("Thử lại", icon=":material/refresh:", type="primary", key="db_retry_btn"):
+        st.rerun()
+
+
+try:
+    _auto_sync_on_open()
+    df = prep_analysis_data()
+except Exception as _db_err:
+    _render_db_unavailable(_db_err)
+    st.stop()
 _toast_today_milestones(df)
 
 # Thanh điều hướng chuyển từ 1 hàng ngang trên cùng sang sidebar trái cố định (xác nhận với
@@ -11917,45 +12023,52 @@ elif nav == "Tuỳ biến":
         @st.dialog("Khôi phục dữ liệu")
         def _tb_restore_dialog():
             res = st.file_uploader("Tải lên bản sao lưu (.zip)", type=["zip"], key="r_zip")
-            ok_zip = False
+            # Đọc + kiểm tra TOÀN BỘ file trong .zip thành DataFrame TRƯỚC khi ghi bất cứ gì -- file
+            # thiếu cột/hỏng bị phát hiện ngay ở bước xem trước, không còn kiểu đang ghi dở mới lỗi.
+            # dtype giữ đúng như trước: sessions/mapping đọc thường, còn lại dtype=str.
+            _spec = [  # (file, nhãn xem trước, đơn vị, cột bắt buộc, đọc dạng chuỗi?)
+                (DB_FILE, "Dữ liệu", "phiên", ["Thời gian bắt đầu", "Thời gian kết thúc", "Dự án", "Thời lượng (Phút)"], False),
+                (MAPPING_FILE, "Phân loại", "dự án", ["Dự án", "Nhóm"], False),
+                (DELETED_FILE, "Đã xoá", "phiên", ["Thời gian bắt đầu", "Thời gian kết thúc"], True),
+                (NOTES_FILE, "Ghi chú", "ngày", ["Ngày", "Ghi chú"], True),
+                (WORK_CALENDAR_FILE, "Lịch", "appointment", ["Thời gian bắt đầu", "Tiêu đề"], True),
+                (READING_LOG_FILE, "Đọc sách", "phần", ["Ngày hoàn thành", "Sách (gốc)", "Tiêu đề phần"], True),
+                (SETTINGS_FILE, "Cài đặt", "mục", ["key", "value"], True),
+                (KINDLE_HIGHLIGHTS_FILE, "Kindle", "trích dẫn/ghi chú", ["dedupe_hash", "Tên Kindle", "Loại", "Nội dung"], True),
+                (KINDLE_BOOK_MAP_FILE, "Kindle gán sách", "tên sách", ["Tên Kindle", "Nhãn"], True),
+                (DELETED_KINDLE_FILE, "Kindle đã xoá", "mục", [], True),
+                (GUNDAM_OVERRIDES_FILE, "Gundam gán tay", "ngày", ["Ngày", "Series"], True),
+                (BOOK_OVERRIDES_FILE, "Sách gán tay", "ngày", ["Ngày", "Sách"], True),
+            ]
+            frames, parts, problems = {}, [], []
             if res is not None:
                 try:
                     res.seek(0)
                     with zipfile.ZipFile(res) as _z:
                         names = set(_z.namelist())
-                        parts = []
-                        if DB_FILE in names:
-                            _pdb = pd.read_csv(io.BytesIO(_z.read(DB_FILE)))
-                            _dt = pd.to_datetime(_pdb.get('Thời gian bắt đầu'), errors='coerce')
-                            _rng = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
-                            parts.append(f"Dữ liệu **{len(_pdb)}** phiên{_rng}")
-                        if MAPPING_FILE in names:
-                            parts.append(f"Phân loại **{len(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))}** dự án")
-                        if DELETED_FILE in names:
-                            parts.append(f"Đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE))))}** phiên")
-                        if NOTES_FILE in names:
-                            parts.append(f"Ghi chú **{len(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE))))}** ngày")
-                        if WORK_CALENDAR_FILE in names:
-                            parts.append(f"Lịch **{len(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE))))}** appointment")
-                        if READING_LOG_FILE in names:
-                            parts.append(f"Đọc sách **{len(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE))))}** phần")
-                        if SETTINGS_FILE in names:
-                            parts.append(f"Cài đặt **{len(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE))))}** mục")
-                        if KINDLE_HIGHLIGHTS_FILE in names:
-                            parts.append(f"Kindle **{len(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE))))}** trích dẫn/ghi chú")
-                        if DELETED_KINDLE_FILE in names:
-                            parts.append(f"Kindle đã xoá **{len(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE))))}** mục")
-                        if GUNDAM_OVERRIDES_FILE in names:
-                            parts.append(f"Gundam gán tay **{len(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE))))}** ngày")
-                        if BOOK_OVERRIDES_FILE in names:
-                            parts.append(f"Sách gán tay **{len(pd.read_csv(io.BytesIO(_z.read(BOOK_OVERRIDES_FILE))))}** ngày")
-                    if parts:
-                        ok_zip = True
-                        st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
-                    else:
-                        st.caption("File .zip không chứa dữ liệu hợp lệ.")
+                        for _fn, _lbl, _unit, _req, _as_str in _spec:
+                            if _fn not in names:
+                                continue
+                            _df = pd.read_csv(io.BytesIO(_z.read(_fn)), dtype=str if _as_str else None)
+                            _miss = [c for c in _req if c not in _df.columns]
+                            if _miss:
+                                problems.append(f"`{_fn}` thiếu cột {', '.join(_miss)}")
+                                continue
+                            frames[_fn] = _df
+                            _extra = ""
+                            if _fn == DB_FILE:
+                                _dt = pd.to_datetime(_df['Thời gian bắt đầu'], errors='coerce')
+                                _extra = f" {_dt.min():%d/%m/%Y}–{_dt.max():%d/%m/%Y}" if _dt.notna().any() else ""
+                            parts.append(f"{_lbl} **{len(_df)}** {_unit}{_extra}")
                 except Exception:
-                    st.caption("Không đọc được file — cần đúng bản .zip xuất từ ứng dụng.")
+                    problems.append("Không đọc được file — cần đúng bản .zip xuất từ ứng dụng.")
+                if problems:
+                    st.error("Bản sao lưu không hợp lệ: " + "; ".join(problems) + ". Chưa ghi gì vào dữ liệu.")
+                elif parts:
+                    st.caption("Bản sao lưu gồm — " + " · ".join(parts) + ".")
+                else:
+                    st.caption("File .zip không chứa dữ liệu hợp lệ.")
+            ok_zip = bool(frames) and not problems
             confirm_restore = False
             if ok_zip:
                 st.warning("Khôi phục sẽ **ghi đè** toàn bộ dữ liệu hiện tại bằng nội dung bản sao lưu.")
@@ -11963,44 +12076,46 @@ elif nav == "Tuỳ biến":
                                                key="cb_restore_confirm")
             if st.button("Xác nhận Khôi phục", type="primary", disabled=not (ok_zip and confirm_restore),
                          key="tbtn_restore_confirm"):
-                res.seek(0)
-                with zipfile.ZipFile(res) as _z:
-                    names = set(_z.namelist())
-                    if DB_FILE in names: save_db(pd.read_csv(io.BytesIO(_z.read(DB_FILE))))
-                    if MAPPING_FILE in names: save_mapping(pd.read_csv(io.BytesIO(_z.read(MAPPING_FILE))))
-                    if DELETED_FILE in names:
-                        save_deleted(pd.read_csv(io.BytesIO(_z.read(DELETED_FILE)), dtype=str))
-                    if NOTES_FILE in names:
-                        save_notes_bulk(pd.read_csv(io.BytesIO(_z.read(NOTES_FILE)), dtype=str).fillna(""))
-                    if WORK_CALENDAR_FILE in names:
-                        save_work_calendar_bulk(pd.read_csv(io.BytesIO(_z.read(WORK_CALENDAR_FILE)), dtype=str))
-                    if READING_LOG_FILE in names:
-                        save_reading_log_bulk(pd.read_csv(io.BytesIO(_z.read(READING_LOG_FILE)), dtype=str))
-                    if SETTINGS_FILE in names:
-                        save_settings_bulk(pd.read_csv(io.BytesIO(_z.read(SETTINGS_FILE)), dtype=str))
-                    # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN, khác save_db()
-                    # kiểu xoá-sạch-rồi-chèn) -- Khôi phục cần đúng ngữ nghĩa "ghi đè toàn bộ" nên xoá
-                    # sạch 2 bảng trước, RỒI mới upsert nội dung từ file .zip vào, thay vì gọi thẳng.
-                    if KINDLE_BOOK_MAP_FILE in names or KINDLE_HIGHLIGHTS_FILE in names:
-                        _sb_delete_all("kindle_highlights", "dedupe_hash")
-                        _sb_delete_all("kindle_book_map", "kindle_title")
-                    if KINDLE_BOOK_MAP_FILE in names:
-                        save_kindle_book_map_upsert(pd.read_csv(io.BytesIO(_z.read(KINDLE_BOOK_MAP_FILE)), dtype=str))
-                    if KINDLE_HIGHLIGHTS_FILE in names:
-                        # save_kindle_highlights_RAW_bulk (KHÔNG phải _bulk thường) -- giữ nguyên
-                        # đúng dedupe_hash/parent_hash đã lưu, không tính lại từ nội dung (nội
-                        # dung có thể đã bị Sửa khác bản gốc lúc băm, xem docstring hàm đó).
-                        save_kindle_highlights_raw_bulk(pd.read_csv(io.BytesIO(_z.read(KINDLE_HIGHLIGHTS_FILE)), dtype=str))
-                    if DELETED_KINDLE_FILE in names:
-                        save_deleted_kindle(pd.read_csv(io.BytesIO(_z.read(DELETED_KINDLE_FILE)), dtype=str))
-                    if GUNDAM_OVERRIDES_FILE in names:
-                        save_gundam_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(GUNDAM_OVERRIDES_FILE)), dtype=str))
-                    if BOOK_OVERRIDES_FILE in names:
-                        save_book_overrides_bulk(pd.read_csv(io.BytesIO(_z.read(BOOK_OVERRIDES_FILE)), dtype=str))
+                f = frames
+                # kindle_book_map/kindle_highlights dùng save_*upsert() (CỘNG DỒN) -- Khôi phục cần
+                # ngữ nghĩa "ghi đè toàn bộ" nên xoá sạch 2 bảng trước rồi mới ghi nội dung từ .zip.
+                # save_kindle_highlights_RAW_bulk giữ nguyên dedupe_hash/parent_hash đã lưu.
+                _steps = [
+                    (DB_FILE, "phiên", lambda: save_db(f[DB_FILE])),
+                    (MAPPING_FILE, "phân loại", lambda: save_mapping(f[MAPPING_FILE])),
+                    (DELETED_FILE, "phiên đã xoá", lambda: save_deleted(f[DELETED_FILE])),
+                    (NOTES_FILE, "ghi chú", lambda: save_notes_bulk(f[NOTES_FILE].fillna(""))),
+                    (WORK_CALENDAR_FILE, "lịch", lambda: save_work_calendar_bulk(f[WORK_CALENDAR_FILE])),
+                    (READING_LOG_FILE, "đọc sách", lambda: save_reading_log_bulk(f[READING_LOG_FILE])),
+                    (SETTINGS_FILE, "cài đặt", lambda: save_settings_bulk(f[SETTINGS_FILE])),
+                    ("__kindle_reset__", "xoá Kindle cũ", lambda: (_sb_delete_all("kindle_highlights", "dedupe_hash"),
+                                                                   _sb_delete_all("kindle_book_map", "kindle_title"))),
+                    (KINDLE_BOOK_MAP_FILE, "Kindle gán sách", lambda: save_kindle_book_map_upsert(f[KINDLE_BOOK_MAP_FILE])),
+                    (KINDLE_HIGHLIGHTS_FILE, "Kindle", lambda: save_kindle_highlights_raw_bulk(f[KINDLE_HIGHLIGHTS_FILE])),
+                    (DELETED_KINDLE_FILE, "Kindle đã xoá", lambda: save_deleted_kindle(f[DELETED_KINDLE_FILE])),
+                    (GUNDAM_OVERRIDES_FILE, "Gundam gán tay", lambda: save_gundam_overrides_bulk(f[GUNDAM_OVERRIDES_FILE])),
+                    (BOOK_OVERRIDES_FILE, "sách gán tay", lambda: save_book_overrides_bulk(f[BOOK_OVERRIDES_FILE])),
+                ]
+                _has_kindle = KINDLE_BOOK_MAP_FILE in f or KINDLE_HIGHLIGHTS_FILE in f
+                _done, _failed = [], None
+                for _key, _lbl, _fn in _steps:
+                    if (_key == "__kindle_reset__" and not _has_kindle) or (_key != "__kindle_reset__" and _key not in f):
+                        continue
+                    try:
+                        _fn()
+                        _done.append(_lbl)
+                    except Exception as _e:
+                        _failed = (_lbl, _e)
+                        break
                 st.cache_data.clear()
-                st.success("Đã khôi phục hệ thống thành công.")
-                time.sleep(1)
-                st.rerun()
+                if _failed:
+                    st.error(f"Khôi phục dừng ở bước **{_failed[0]}**: {str(_failed[1])[:300]}. "
+                             f"Đã xong: {', '.join(_done) or 'chưa có bước nào'}. Dữ liệu có thể đang dở dang — "
+                             "hãy chạy lại Khôi phục với CÙNG file này.")
+                else:
+                    st.success("Đã khôi phục hệ thống thành công.")
+                    time.sleep(1)
+                    st.rerun()
 
         @st.dialog("Xoá toàn bộ dữ liệu")
         def _tb_wipe_dialog():
@@ -12155,7 +12270,7 @@ elif nav == "Tuỳ biến":
                 sel_rows = [_start + r for r in (list(ev.selection.rows) if ev and ev.selection else [])]
                 if sel_rows and st.button(f"Xoá {len(sel_rows)} phiên đã chọn", type="primary", key="tbtn_delete_selected"):
                     add_deleted(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
-                    save_db(db_base.drop(index=sel_rows).reset_index(drop=True))
+                    delete_sessions(db_base.loc[sel_rows, ['Thời gian bắt đầu', 'Thời gian kết thúc']])
                     st.rerun()
 
                 # Pagination DƯỚI bảng + căn giữa; dòng "Hiển thị phiên" ở dưới cùng, căn giữa.
