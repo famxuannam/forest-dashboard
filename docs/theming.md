@@ -2,14 +2,34 @@
 
 Đối tượng đọc: Claude Code cần thêm UI mới, sửa màu sắc, hoặc đụng vào khối CSS lớn trong `app.py`.
 
+## Theme Gundam: 1 lựa chọn quyết định tất cả
+
+Giao diện chỉ còn **1 setting** `theme` (bảng `settings`), chọn ở Tuỳ biến → sub-page "Giao diện"
+(`_render_tuybien_giao_dien()`). Danh sách theme là `GUNDAM_THEMES` trong `ui_catalog.py`, đặt
+tên theo tông màu Gundam (RX-78-2, Zaku II của Char, Nu, Unicorn, Strike Freedom, Kyrios, Barbatos,
+Aerial, Banshee Norn, Sinanju, Exia, Dynames). Key đầu tiên (`DEFAULT_THEME` = "RX-78-2") là mặc
+định; giá trị lạ/key cũ đã bỏ rơi về mặc định, không crash. 6 trục cũ (accent, bảng màu nền, hoạ tiết
+nền, kiểu thẻ, font, độ rộng nội dung) đã BỎ hẳn theo yêu cầu người dùng; các key setting cũ còn sót
+trong bảng `settings` bị bỏ qua. Độ rộng nội dung cố định 1500px.
+
+Mỗi theme khai báo: `mode` (`light`/`dark`), các màu `bg/card/chip/border/text..text-4/accent/
+on-accent/trim/trim2`, `chart` (8 màu biểu đồ), `font` (key của `BODY_FONTS`), `pattern` (key của
+`THEME_PATTERNS`), `cut`/`radius` (góc thẻ), `name`/`era`/`note` (hiển thị). Thêm theme mới: thêm 1
+entry đủ các khoá trên, kiểm tra tương phản (`text-3` trên `card` và `on-accent` trên `accent` ≥ 4.5:1),
+và tránh trùng tông với theme có sẵn (đã bỏ Wing Zero/Sazabi/Destiny vì quá giống theme khác).
+
 ## `IS_DARK` + `--token` CSS variables
 
-`IS_DARK` được suy ra 1 lần từ `st.context.theme.type` ngay khi module load — không tính lại giữa
-chừng trang. Một khối `--token` (`--bg`, `--card`, `--text`, `--text-2/3/4`, `--border`,
-`--divider`, `--accent`, `--accent-rgb`, `--accent-dark`) được bơm vào `:root{...}`, giá trị chọn
-theo `IS_DARK`. **Mọi UI mới nên dùng `var(--token)` thay vì mã màu cứng** — 1 mã hex mới thêm vào
-gần như chắc chắn là 1 bug dark-mode đang chờ xảy ra (đúng ở light mode, sai/không đọc được ở dark
-mode hoặc ngược lại).
+`IS_DARK = THEME["mode"] == "dark"`: tông sáng/tối **thuộc về theme**, không còn đọc
+`st.context.theme.type`/chế độ của trình duyệt. Token CSS dựng bằng `theme_tokens(THEME)` (1 giá
+trị/token, không còn cặp light/dark) rồi bơm vào `:root{...}`: `--bg`, `--card`, `--card-tl`,
+`--border`, `--divider`, `--divider-2`, `--divider-on-bg`, `--chip`, `--text`, `--text-2/3/4`,
+`--text-on-bg(-2)` (trùng `--text(-2)` vì thẻ và nền cùng tông), `--on-accent` (chữ trên nền
+accent — dùng thay cho `#fff` cứng, vì accent sáng như Banshee/Exia/Dynames cần chữ tối), `--trim`,
+`--trim2`, cùng `--accent`, `--accent-rgb`, `--accent-dark`. **Mọi UI mới nên dùng `var(--token)`
+thay vì mã màu cứng.**
+
+`.streamlit/config.toml` chỉ còn 1 bộ `[theme]` sáng (tông RX-78-2), không có `[theme.dark]`.
 
 ## Khối CSS chính là string thường — KHÔNG chuyển thành f-string
 
@@ -21,75 +41,48 @@ dùng `.format()`/nối chuỗi cho đúng đúng đoạn cần, không đổi k
 
 ## Màu accent: 1 giá trị, lan ra 3 cơ chế khác nhau
 
-`ACCENT` (chọn từ `ACCENT_PRESETS`, lưu bền trong bảng `settings`) không chỉ đổi màu qua CSS — nó
-lan ra 3 nơi bằng 3 cơ chế khác nhau, phải nhớ cả 3 khi thêm 1 UI element có màu accent:
+`ACCENT` (= `THEME["accent"]`) không chỉ đổi màu qua CSS — nó lan ra 3 nơi bằng 3 cơ chế khác nhau,
+phải nhớ cả 3 khi thêm 1 UI element có màu accent:
 
-1. **CSS** — qua `var(--accent)`, `var(--accent-rgb)`, `var(--accent-dark)` — tự động, không cần
-   làm gì thêm nếu UI mới style bằng CSS class có sẵn.
-2. **Biểu đồ Altair/Plotly** — CSS variable KHÔNG chạm tới được canvas biểu đồ. Dùng hằng số
-   Python `ACCENT_RGB`/`ACCENT_DARK` (hoặc giá trị hue suy ra từ accent, dùng để xoay toàn bộ dải
-   màu đơn sắc của biểu đồ nhiệt/lịch) truyền trực tiếp vào tham số màu của Plotly/Altair.
+1. **CSS** — qua `var(--accent)`, `var(--accent-rgb)`, `var(--accent-dark)`; chữ đặt trên nền accent
+   dùng `var(--on-accent)`.
+2. **Biểu đồ Altair/Plotly/ECharts** — CSS variable KHÔNG chạm tới được canvas biểu đồ. Dùng hằng số
+   Python `ACCENT`/`ACCENT_DARK`/`PLOT_TEXT` (hoặc hue suy ra từ accent cho dải nhiệt/lịch,
+   `_teal_shades()`; accent gần như không màu như Nu Gundam thì dải này lấy hue của `trim`). Màu
+   Nhóm/Dự án lấy từ `THEME["chart"]` qua `build_color_map()` (Dự án duy nhất của 1 Nhóm dùng đúng màu
+   Nhóm). Mọi `st.plotly_chart` đi qua `_theme_fig(fig)` để ép màu chữ trục/legend theo `PLOT_TEXT`
+   (theme "streamlit" của Plotly chỉ biết `textColor` tĩnh trong `config.toml`); 2 lịch Altair dùng
+   `.configure_axis(labelColor=PLOT_TEXT, ...)`. Chữ đặt trên thanh màu biểu đồ dùng
+   `_readable_text(color)`, không cố định `#fff` (dải `chart` có màu rất sáng).
 3. **Iframe ô ghi chú (Quill)** — chạy trong 1 `<iframe>` là 1 document HTML riêng biệt, CSS của
    trang chính (kể cả `:root` var) KHÔNG lan vào được. App tự tiêm 1 đoạn `<style>` riêng vào BÊN
    TRONG iframe đó (lặp lại theo interval để chống Streamlit dựng lại iframe làm mất style).
 
-## 6 trục cá nhân hoá (tab Tuỳ biến → sub-page "Giao diện")
+## Kiểu thẻ và hoạ tiết nền theo theme
 
-"Giao diện" là 1 sub-page riêng của tab Tuỳ biến (`TUYBIEN_SUBS`, query param `?tsub=`, xem
-`architecture-navigation.md`) -- KHÔNG còn là 1 chương trong chuỗi cuộn dọc "Tổng quan" như trước.
-Khác bố cục 2 cột của mockup gốc "Tuỳ Chỉnh Giao Diện.dc.html" -- xác nhận với người dùng đổi lại
-theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app (Báo cáo/Sách/Gundam): billboard mở đầu (đóng
-LUÔN vai trò "xem trước trực tiếp" -- chip hiển thị tên đang chọn của cả 6 trục, số to bên trái là
-"6" ("trục cá nhân hoá", số THẬT chứ không bịa số liệu giờ/phiên giả như bản mockup gốc, vì app
-thuần hồi cứu) + chip TOC nhảy neo xuống từng chương, rồi tới hàng 2 nút "Đặt lại mặc định"/"Ngẫu
-nhiên" (random hoá cả 6 setting cùng lúc), rồi 6 chương `sec_chapter()` bên dưới (mỗi chương 1 thẻ
-`st.container(border=True)` dựng qua helper dùng chung `_tb_axis_grid()`). Billboard KHÔNG mô
-phỏng token bằng state/JS riêng như bản `.dc.html` gốc, chỉ đọc thẳng `var(--token)`/`ACCENT`/
-`BG_PALETTE`... hiện hành vì toàn trang đã tự re-render đúng lựa chọn mới sau mỗi `st.rerun()`.
-Trục "Mật độ bố cục" (`CARD_DENSITY`) đã BỎ theo yêu cầu người dùng -- `--card-pad`/`--card-gap`
-giờ là 2 hằng số CSS cố định (`16px 18px`/`10px 0`, khớp đúng giá trị "Vừa" cũ) khai báo thẳng
-trong `_card_style_vars`, không còn setting/UI chọn lựa.
+- `theme_card_vars(THEME)` -> `--card-radius`, `--card-corner-shape`, `--card-border-w` (luôn `0px`:
+  thẻ không viền, tách lớp bằng nền + bóng nhẹ ở theme sáng / 1 đường viền trong mờ ở theme tối),
+  `--card-shadow`. Theme có `cut > 0` dùng góc VÁT kiểu giáp: `border-radius: <cut>px 3px` +
+  `corner-shape: bevel` (CSS mới, Chromium hỗ trợ; trình duyệt chưa hỗ trợ tự rơi về góc bo tròn).
+  **Không dùng `clip-path`** để vát góc: nó cắt mất tooltip `data-tip`/lịch nằm trong thẻ. Mọi rule
+  `border-radius: var(--card-radius)` phải đi kèm `corner-shape: var(--card-corner-shape)`.
+  `--card-bg-override`/`--card-backdrop`/`--card-border-image` là di sản bộ kiểu thẻ cũ, giờ cố định
+  `var(--card)`/`none`/`none`.
+- `THEME_PATTERNS[THEME["pattern"]]` -> `--bg-image`/`--bg-size` (panel line, lưới kỹ thuật, chấm,
+  lưới tam giác, hoa văn thoi), vẽ bằng `var(--divider-on-bg)`, chỉ áp cho nền trang `.stApp`.
+- Billboard (`--billboard-bg`) là 1 thẻ nền ĐẶC phớt accent (`color-mix(... var(--accent) 7%,
+  var(--card))`), không còn lớp kính mờ.
+- `_THEME_UNIT_TAG_HTML` (`.theme-unit`): nhãn "mã máy" (dải 3 màu accent/trim/trim2 + "RX-78-2 ·
+  UC 0079"), dùng ở billboard Hôm nay và nút theme cuối sidebar (link tới Tuỳ biến → Giao diện).
 
-Cạnh 2 trục accent/hoạ tiết nền đã có, có thêm 3 trục CSS-variable độc lập, kết hợp tự do với
-nhau và với accent:
-
-1. **Bảng màu nền** (`BG_PALETTES`, 20 lựa chọn xếp lưới 4x5, setting `bg_palette`) — bundle ĐỦ 7
-   token `(light, dark)` dùng để dựng `_TOK`: `bg`/`card`/`card-tl`/`border`/`divider`/`divider-2`/
-   `chip`. Bundle đủ 7 token cùng lúc (không cho đổi rời) để tránh nền mới "đọ màu" với viền/chip
-   cũ. `text`/`text-2`/`text-3`/`text-4` CHỦ Ý không nằm trong bundle này — giữ cố định, tách biệt
-   như accent. 10/20 bảng là "nền đậm cố định" (`BG_PALETTES_DARK_BG`, `bg` đậm ở CẢ 2 cột thay vì
-   chỉ đậm khi dark mode) — xem chú thích chi tiết 2 công thức HSL (nền nhạt/nền đậm) ngay trên
-   `BG_PALETTES` trong `ui_catalog.py`.
-2. **Kiểu thẻ** (`CARD_STYLES`, 21 lựa chọn -- 20 xếp lưới 4x5 + 1 kiểu bổ sung ở hàng cuối,
-   setting `card_style`) — 3 token CSS
-   `--card-radius`/`--card-border-w`/`--card-shadow` (6/21 kiểu dùng thêm 1 trong 3 token phụ
-   `bg_override`/`backdrop`/`border_image`, xem chú thích trên `CARD_STYLES` trong
-   `ui_catalog.py`), áp dụng chung lên MỌI bảng màu nền. Bất kỳ CSS mới nào vẽ 1
-   "thẻ nội dung" (nền `var(--card)` + viền `var(--border)` + bo góc + đổ bóng nhẹ) PHẢI dùng 3
-   token này thay vì hard-code `border-radius:10px`/`border:1px solid var(--border)`/
-   `box-shadow:0 1px 1px rgba(0,0,0,0.02)` — nếu không, thẻ đó sẽ "quên" đổi khi người dùng chọn
-   kiểu thẻ khác. KHÔNG áp cho radius/border có ngôn ngữ hình khác cố ý (badge `999px`/`6-9px`,
-   avatar tròn `50%`, input/button `7px`).
-3. **Độ rộng nội dung** (`CONTENT_WIDTHS`, 5 mức xếp 1 hàng, setting `content_width`) —
-   1100/1300/1500/1700/1900px (mặc định "Rộng" = 1500px), áp trực tiếp vào token `--content-max-w`
-   cho `max-width` của `.block-container` — đổi mức mới PHẢI đọc lại token này, không hardcode
-   `600px`/`850px`. Token `--content-half-w` đã bỏ từ khi NAV chuyển sang sidebar trái (2 nút nổi
-   "về đầu trang"/"Đồng bộ nhanh" giờ bám thẳng mép phải viewport, không còn định vị theo mép cột
-   nội dung).
-
-Cả 3 trục dùng lại đúng pattern fallback an toàn của `ACCENT`/`BG_STYLE` (giá trị lạ/preset cũ đã
-bỏ → rơi về mặc định đầu tiên, không crash) và đúng pattern UI nút-preview + `save_setting()` +
-`st.rerun()` đã có ở accent/hoạ tiết nền — không phát sinh cơ chế UI mới. Mọi `st.container(key=...,
-border=True)` mới thêm vào sub-page này (kể cả trục mới) PHẢI được liệt kê vào rule CSS nền/viền
-gộp chung của tab Tuỳ biến (xem bẫy `st.container(border=True)` đọc `config.toml` tĩnh bên dưới) —
-quên bước này khiến thẻ trong suốt khác hẳn 6 thẻ còn lại (bug thật đã gặp với thẻ "Độ rộng nội
-dung" lúc mới thêm).
+Mọi `st.container(key=..., border=True)` mới PHẢI được liệt kê vào rule CSS nền/viền gộp chung (xem
+bẫy `st.container(border=True)` đọc `config.toml` tĩnh bên dưới).
 
 **Bẫy chung: chrome/widget NATIVE của Streamlit đọc `.streamlit/config.toml` TĨNH, không đọc được
 `--token` runtime.** `config.toml` chỉ load 1 lần lúc server khởi động, không có cách nào đọc lại
 theo `settings` trong Supabase — mọi nơi Streamlit/BaseWeb tự vẽ theo `backgroundColor`/
-`secondaryBackgroundColor`/`primaryColor`/`textColor` của file đó sẽ "đứng yên" ở đúng tông "Giấy
-ấm"/accent mặc định gốc (dù không còn khớp `ACCENT_PRESETS`/`BG_PALETTES` hiện tại) trừ khi có 1
+`secondaryBackgroundColor`/`primaryColor`/`textColor` của file đó sẽ "đứng yên" ở đúng tông
+sáng RX-78-2 của file đó (dù đang dùng theme khác, kể cả theme tối) trừ khi có 1
 rule CSS `!important` ép lại bằng `var(--token)` tương ứng. Đã phát hiện + vá ở các nơi sau (agent
 sau thêm 1 `st.dialog`/`st.container(border=True)`/widget native mới PHẢI tự kiểm tra lại theo đúng
 cách này, không chỉ tin `background` chung là đủ):
@@ -138,6 +131,16 @@ cách này, không chỉ tin `background` chung là đủ):
   và `var(--text)`/`var(--chip)`/`var(--text-3)` (nút trang đang chọn) — icon mũi tên `‹`/`›` không
   cần rule riêng, tự ăn theo `color` của nút cha như icon Material khác.
 
+- **Khối "MÀU CHỮ/NỀN WIDGET NATIVE THEO THEME" (cuối `_MAIN_CSS`)** — vì `config.toml` chỉ có
+  bộ sáng, theme tối sẽ ra chữ tối trên nền tối ở mọi chữ/ô nhập Streamlit tự tô. Khối này ép
+  `color: var(--text)` cho `stMarkdownContainer`/`stWidgetLabel`/`stHeading`/... (KHÔNG
+  `!important`, để class riêng của app trên phần tử con vẫn thắng), chữ nút secondary/segmented,
+  nền + chữ ô nhập (`stSelectbox`/`stTextInput`/`stDateInputField`/`stNumberInput` — Streamlit
+  1.67 không còn `data-baseweb="select"` quanh ô chọn, chọn theo `data-testid`), danh sách thả xuống
+  `[role="listbox"]`. Nhãn trong nút (`button [data-testid="stMarkdownContainer"]`) phải `color:
+  inherit`, nếu không chữ nút đang chọn mất màu `--on-accent` (bug thật: Nu Gundam chữ đen trên nền
+  đen). Widget native mới: kiểm tra bằng ảnh chụp ở 1 theme tối (vd Exia) lẫn 1 theme sáng.
+
 **Giới hạn KHÔNG vá được bằng CSS:** `st.dataframe` (bảng "5. Dữ liệu làm việc hiện tại" ở Tuỳ
 biến, `db_view`) vẽ bằng canvas (glide-data-grid) nội bộ của Streamlit, không phải DOM/CSS thường
 — màu ô/hàng đọc thẳng từ theme resolution của Streamlit lúc vẽ pixel, `!important` CSS KHÔNG chạm
@@ -148,9 +151,9 @@ kiến trúc thật sự (mất tính năng chọn hàng native qua checkbox, ph
 không phải 1 rule CSS thêm vào như các mục trên. Chưa làm — cần hỏi người dùng trước vì đổi hẳn
 cách hiện thực, không phải fix nhỏ.
 
-## Font thân chữ: 1 trục chọn, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
+## Font thân chữ: theo theme, chỉ áp vai trò "thân/nhãn/nút", KHÔNG áp bảng số liệu/trích dẫn
 
-`BODY_FONT`/`BODY_FONT_NAME` (chọn từ `BODY_FONTS`, setting `body_font`, mặc định "Inter") lan ra
+`BODY_FONT`/`BODY_FONT_NAME` (= `THEME["font"]`, 1 key của `BODY_FONTS`; không còn setting riêng) lan ra
 đúng 2 nơi, không hơn — font bảng số liệu (`_TABLE_FONT_FACE`, IBM Plex Mono) và font trích dẫn
 (`_QUOTE_FONT_FACE`, Cormorant Garamond) CHỦ Ý đứng ngoài trục này, giữ cố định vì có vai trò nội
 dung riêng:

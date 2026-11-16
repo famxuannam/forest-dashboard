@@ -23,7 +23,7 @@ from streamlit_quill import st_quill
 from supabase import create_client
 from caldav import DAVClient
 from local_dev_data import LocalDevSupabase
-from ui_catalog import VN_DAYS, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
+from ui_catalog import VN_DAYS, VN_MONTHS_WORD, MAC_COLORS, GUNDAM_THEMES, DEFAULT_THEME, THEME_PATTERNS, BODY_FONTS, theme_tokens, theme_card_vars
 from import_parsers import parse_dayone_json, parse_forest_csv, parse_kindle_clippings, parse_reading_log_shortcut_csv
 
 _LOCAL_DEV_REQUESTED = os.getenv("FOREST_LOCAL_DEV", "").strip().lower() in {"1", "true", "yes"}
@@ -379,90 +379,58 @@ def save_setting(key, value):
         return False
 
 
-# Cờ dark mode -- đọc st.context.theme.type (Streamlit 1.58+, đã xác nhận có sẵn Ở CẤP MODULE,
-# TRƯỚC cả st.set_page_config(), vì được gửi kèm ngay trong request rerun từ trình duyệt, không
-# phải lấy lazy). Tự bọc lỗi vì cũng là tính năng optional (bản Streamlit cũ hơn không có
-# st.context.theme) -- lỗi/None -> coi là light, không crash app. Caveat CHÍNH THỨC của
-# Streamlit (github issue #11920): giá trị có thể sai/None ở LẦN LOAD ĐẦU TIÊN của session, và
-# trễ đúng 1 rerun khi người dùng đổi theme qua menu Settings ⋮ -- chấp nhận được (tự đúng lại
-# ngay rerun kế tiếp), không có cách nào khắc phục vì Streamlit không có API đổi theme runtime.
-try:
-    IS_DARK = st.context.theme.type == "dark"
-except Exception:
-    IS_DARK = False
+# Theme giao diện đang chọn (GUNDAM_THEMES, tab Tuỳ biến -> "Giao diện") -- 1 setting "theme" DUY
+# NHẤT quyết định tông sáng/tối, màu, kiểu thẻ, hoạ tiết nền, font thân chữ và dải màu biểu đồ (thay
+# 6 setting cũ accent_hex/bg_palette/bg_style/card_style/body_font/content_width -- các key cũ còn
+# sót trong bảng settings bị bỏ qua). Giá trị lạ/chưa từng chọn -> DEFAULT_THEME, không crash.
+# PHẢI tính ở cấp module, TRƯỚC _SESSION_COLORS = _teal_shades(5) và trước st.set_page_config().
+_theme_key = _cached_settings().get("theme", DEFAULT_THEME)
+if _theme_key not in GUNDAM_THEMES:
+    _theme_key = DEFAULT_THEME
+THEME_KEY = _theme_key
+THEME = GUNDAM_THEMES[THEME_KEY]
 
-# Kiểu nền trang đang chọn -- cùng khuôn fallback an toàn với ACCENT bên dưới (giá trị lạ/preset cũ
-# đã bỏ -- vd "Sương mai" trước khi đổi hẳn bộ hoạ tiết sang chủ đề hình học tối giản -- rơi về
-# "Lưới điểm" mặc định mới, không crash).
-_bg_style_name = _cached_settings().get("bg_style", "Lưới điểm")
-if _bg_style_name not in BG_PRESETS:
-    _bg_style_name = "Lưới điểm"
-BG_STYLE = _bg_style_name
-BG_IMAGE = BG_PRESETS[BG_STYLE]["image"]
-BG_SIZE = BG_PRESETS[BG_STYLE]["size"]
-BG_POSITION = BG_PRESETS[BG_STYLE].get("position", "0 0")
+# Tông sáng/tối thuộc về theme (Banshee/Sinanju/Exia/Dynames luôn tối, còn lại luôn sáng), KHÔNG
+# theo chế độ sáng/tối của trình duyệt nữa -- .streamlit/config.toml chỉ còn 1 bộ [theme] sáng, mọi
+# widget native lệch tông được ép lại bằng var(--token) trong khối CSS chính (xem theming.md).
+IS_DARK = THEME["mode"] == "dark"
 
-# Bảng màu nền đang chọn -- tính TRƯỚC PLOT_TEXT (ngay dưới), vì từ khi text/text-2/3/4 vào luôn
-# bundle Màu nền, PLOT_TEXT phải đọc đúng theo bảng đang chọn thay vì hằng số IS_DARK trần như
-# trước.
-_bg_palette_name = _cached_settings().get("bg_palette", "Bạc hà")
-if _bg_palette_name not in BG_PALETTES:
-    _bg_palette_name = "Bạc hà"
-BG_PALETTE = _bg_palette_name
+BG_IMAGE = THEME_PATTERNS[THEME["pattern"]]["image"]
+BG_SIZE = THEME_PATTERNS[THEME["pattern"]]["size"]
+BG_POSITION = "0 0"
 
-# Màu chữ trên biểu đồ Plotly (nhãn tổng, đường TB động, ngưỡng độ dài phiên...) -- khớp token
-# --text (xem _TOK), gom về 1 hằng để không lặp lại literal + IS_DARK ở nhiều nơi. Đọc từ ĐÚNG
-# bảng màu nền đang chọn (xem BG_PALETTE ở trên) -- không còn literal cố định, vì 3 bảng mới có
-# màu chữ riêng khác hẳn cặp #211c13/#f1ece0 gốc.
-PLOT_TEXT = BG_PALETTES[BG_PALETTE]["text"][1 if IS_DARK else 0]
+# Màu chữ trên biểu đồ Plotly/ECharts -- khớp token --text của theme.
+PLOT_TEXT = THEME["text"]
 
-# Accent (màu nhấn) đang chọn -- fallback "Chàm điện" mặc định nếu chưa từng chọn hoặc lỗi (kể cả
-# khi giá trị đã lưu là 1 màu ở bộ preset cũ đã bị thay -- không crash, chỉ lặng lẽ rơi về mặc định
-# mới). PHẢI tính TRƯỚC _SESSION_COLORS = _teal_shades(5) (dưới đây) vì đó
-# là câu lệnh cấp module chạy ngay khi import, sớm hơn cả st.set_page_config()/cổng kiểm tra
-# secrets Supabase.
-_accent_hex = _cached_settings().get("accent_hex", "#4f4dc4")
-if _accent_hex not in ACCENT_PRESETS.values():   # giá trị lạ (hỏng/ghi tay/preset cũ đã bỏ) -> fallback an toàn
-    _accent_hex = "#4f4dc4"
-ACCENT = _accent_hex
+ACCENT = THEME["accent"]
 ACCENT_RGB = _hex_rgb_str(ACCENT)
-# ACCENT_DARK = "accent tương phản trên nền tint accent nhạt". Ở dark mode, nền tint đó lại
-# TỐI hơn nền light -> cần chữ/icon SÁNG hơn accent gốc thay vì tối hơn, nên đổi hàm theo IS_DARK
-# (khác bản light-only trước đây luôn gọi _darken). Tên biến/tên CSS var --accent-dark giữ
-# nguyên -- mọi nơi đang dùng (chip.tw, guide alert, NUDGE_TONES "good") tự đúng cả 2 chế độ.
+# ACCENT_DARK = "accent tương phản trên nền tint accent nhạt": theme tối cần SÁNG hơn accent gốc,
+# theme sáng cần TỐI hơn.
 ACCENT_DARK = _brighten(ACCENT) if IS_DARK else _darken(ACCENT)
 TEAL_HUE = _hex_hue(ACCENT)  # giữ tên biến cũ -- mọi nơi đang dùng TEAL_HUE không cần sửa
-TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades() lý do
-# cần biến này thay vì hardcode 1 mức saturation cố định.
+TEAL_SAT = _hex_sat(ACCENT)  # saturation THẬT của accent -- xem docstring _teal_shades()
+# Nu Gundam có accent gần đen (saturation ~0): dải heatmap/lịch dựng theo hue accent sẽ ra toàn
+# xám, khó đọc -- dùng hue/sat của màu phụ "trim" (vàng fin funnel) cho riêng dải đó.
+if TEAL_SAT < 0.15:
+    TEAL_HUE = _hex_hue(THEME["trim"])
+    TEAL_SAT = _hex_sat(THEME["trim"])
 
-# "Hào quang nhấn" là mặc định mới (đợt đổi bộ Kiểu thẻ thứ 2, xác nhận với người dùng -- đổi hành
-# vi mặc định cho MỌI user, kể cả user chưa từng lưu setting) -- thay "Nổi mềm" cũ.
-_card_style_name = _cached_settings().get("card_style", "Hào quang nhấn")
-if _card_style_name not in CARD_STYLES:
-    _card_style_name = "Hào quang nhấn"
-CARD_STYLE = _card_style_name
-
-# "Inter" là mặc định mới (đợt đổi bộ Font thân chữ thứ 2, xác nhận với người dùng) -- thay
-# "Manrope" cũ. Manrope KHÔNG còn là lựa chọn trong BODY_FONTS (đã tách riêng làm font khung vỏ cố
-# định, xem _UI_FONT ở dưới) nên fallback không thể trỏ về "Manrope" nữa.
-_body_font_name = _cached_settings().get("body_font", "Inter")
-if _body_font_name not in BODY_FONTS:
-    _body_font_name = "Inter"
-BODY_FONT_NAME = _body_font_name
+BODY_FONT_NAME = THEME["font"]
 BODY_FONT = BODY_FONTS[BODY_FONT_NAME]["family"]
 
-_content_width_name = _cached_settings().get("content_width", "Rộng")
-if _content_width_name not in CONTENT_WIDTHS:
-    _content_width_name = "Rộng"
-CONTENT_WIDTH_NAME = _content_width_name
-CONTENT_WIDTH_PX = CONTENT_WIDTHS[CONTENT_WIDTH_NAME]
+# Nhãn mã máy của theme đang chọn (dải 3 màu accent/trim/trim2 + "RX-78-2 · UC 0079") -- điểm
+# nhấn "mecha" vừa phải ở billboard Hôm nay và sidebar (xem .theme-unit trong CSS chính).
+_THEME_UNIT_TAG_HTML = (
+    "<span class='theme-unit'><span class='theme-tri'><i></i><i></i><i></i></span>"
+    f"{html_escape(THEME_KEY)} · {THEME['era']}</span>")
 
-# Trang "Trích dẫn" (_render_kindle_quotes_tab(), nhóm theo cuốn) chia 2 cột khi "Độ rộng nội dung"
-# ở mức lớn (Rộng/Rất rộng, xem CONTENT_WIDTHS) -- câu trích dẫn kéo dài hết cỡ chiều ngang cột mới
-# rất khó theo dõi, xác nhận với người dùng chỉ cần chia cột khi thật sự rộng, không cần ở Hẹp/Vừa.
-# Chương "3. Trích dẫn & Ghi chú" ở Sách -> Tổng quan (_render_reading_quotes_teaser()) KHÔNG dùng
-# biến này -- chia 2 cột theo desktop/mobile (st.columns() tự co ở màn hẹp) thay vì theo cấu hình.
-QUOTES_WIDE = CONTENT_WIDTH_PX >= 1500
+
+# Độ rộng nội dung không còn là lựa chọn -- cố định 1500px (mức "Rộng" mặc định cũ).
+CONTENT_WIDTH_PX = 1500
+
+# Trang "Trích dẫn" (_render_kindle_quotes_tab(), nhóm theo cuốn) chia 2 cột vì nội dung đủ rộng
+# (1500px) -- trước đây phụ thuộc trục "Độ rộng nội dung" đã bỏ.
+QUOTES_WIDE = True
 
 
 def _teal_shades(n, l_lo=None, l_hi=None):
@@ -486,8 +454,8 @@ def _teal_shades(n, l_lo=None, l_hi=None):
 
 
 def build_color_map(cat_names, proj_to_cat=None):
-    """Gán màu cố định cho từng Nhóm. Ưu tiên bảng màu cơ sở (CHART_COLORS, CỐ ĐỊNH -- không đổi
-    theo accent đang chọn, để biểu đồ luôn dễ phân biệt dù accent là màu gì); nếu nhiều hơn số màu
+    """Gán màu cố định cho từng Nhóm. Ưu tiên dải màu "chart" của theme đang chọn (GUNDAM_THEMES -- đổi
+    theo theme, mỗi theme 8 màu đã chọn để phân biệt rõ trên nền thẻ của nó); nếu nhiều hơn số màu
     sẵn có thì sinh thêm màu phân biệt bằng góc vàng (golden angle) để không bao giờ bị trùng màu,
     vẫn ổn định theo tên.
 
@@ -498,7 +466,7 @@ def build_color_map(cat_names, proj_to_cat=None):
     Dự án con, đúng khuyến nghị "dùng shading thay vì đổi màu liên tục khi có nhiều series liên
     quan". Dự án không có Nhóm thật (Nhóm == chính tên Dự án, xem prep_analysis_data) coi như 1
     Nhóm độc lập 1 thành viên, giữ nguyên màu như mọi Nhóm khác, không shading."""
-    colors = list(CHART_COLORS)
+    colors = list(THEME["chart"])
     for k in range(len(cat_names) - len(colors)):
         h = (0.61 + (k + 1) * 0.6180339887) % 1.0  # rải đều sắc độ
         colors.append(_hsl_hex(h, 0.62, 0.55))
@@ -514,13 +482,20 @@ def build_color_map(cat_names, proj_to_cat=None):
         base = cmap.get(cat)
         if base is None:
             continue
-        hue = _hex_hue(base)
         projs = sorted(projs)
         n = len(projs)
-        l_lo, l_hi = (0.30, 0.68) if IS_DARK else (0.72, 0.32)  # nhạt->đậm (light) / tối->sáng (dark)
+        if n == 1:
+            # Dự án duy nhất của Nhóm: dùng đúng màu Nhóm (màu theme), không pha nhạt/tối.
+            cmap[projs[0]] = base
+            continue
+        hue = _hex_hue(base)
+        sat = max(_hex_sat(base), 0.35)
+        _r, _g, _b = (int(base.lstrip('#')[k:k + 2], 16) / 255 for k in (0, 2, 4))
+        base_l = (max(_r, _g, _b) + min(_r, _g, _b)) / 2
+        # Toả sắc độ quanh độ sáng màu Nhóm (±0.18, kẹp 0.25-0.82): dự án đầu đậm hơn, cuối nhạt hơn.
+        l_lo, l_hi = max(0.25, base_l - 0.18), min(0.82, base_l + 0.18)
         for i, proj in enumerate(projs):
-            l = l_lo if n == 1 else l_lo + (l_hi - l_lo) * i / (n - 1)
-            cmap[proj] = _hsl_hex(hue, 0.62, l)
+            cmap[proj] = _hsl_hex(hue, sat, l_lo + (l_hi - l_lo) * i / (n - 1))
     return cmap
 PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
@@ -1773,15 +1748,25 @@ def add_week_dividers(fig, dates):
     fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
     return fig
 
+def _theme_fig(fig):
+    """Ép màu chữ mặc định (nhãn trục, legend, chú thích) của 1 figure Plotly theo theme Gundam đang
+    chọn -- theme="streamlit" của st.plotly_chart chỉ biết textColor TĨNH trong config.toml (1 bộ
+    sáng), sẽ ra chữ tối trên nền tối ở theme tối. Chỉ đặt font chung + legend, không đè màu đã đặt
+    tường minh ở từng trace/annotation."""
+    fig.update_layout(font_color=PLOT_TEXT, legend_font_color=PLOT_TEXT)
+    fig.update_xaxes(tickfont_color=PLOT_TEXT, title_font_color=PLOT_TEXT)
+    fig.update_yaxes(tickfont_color=PLOT_TEXT, title_font_color=PLOT_TEXT)
+    return fig
+
+
 def format_plotly_fig(fig):
     fig.update_layout(
         dragmode=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        # KHÔNG đặt color tường minh ở đây -- theme="streamlit" (mặc định, mọi call site
-        # st.plotly_chart trong app) tự lấy đúng textColor từ config theme đang active
-        # ([theme]/[theme.dark]) cho phần chữ KHÔNG bị override tường minh ở nơi khác.
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif"),
+        # color = PLOT_TEXT (màu chữ của theme Gundam đang chọn) -- theme="streamlit" chỉ biết
+        # textColor TĨNH trong config.toml (1 bộ sáng), sẽ ra chữ tối trên nền tối ở theme tối.
+        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color=PLOT_TEXT),
         # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
         legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
         # r=28: chừa chỗ cho nhãn trục hoành CUỐI (vd '28/06') -> không bị tràn/cắt chữ ở
@@ -2628,10 +2613,10 @@ def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)", k
     fig = format_plotly_fig(fig)
     fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}/ngày<extra></extra>')
     if key_prefix is None:
-        st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+        st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
         return
     _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
-    _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+    _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
                             on_select="rerun", selection_mode="points",
                             key=f"{key_prefix}_sel_{_ver}")
     _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
@@ -4338,7 +4323,7 @@ def render_reading_calendar_grid(rl_detail_df, labels, book_forest_df=None):
         width=alt.Step(34), height=alt.Step(34),
         padding={"left": 52, "right": 12, "top": 5, "bottom": 5},
         background='transparent',
-    ).configure_view(strokeWidth=0)
+    ).configure_view(strokeWidth=0).configure_axis(labelColor=PLOT_TEXT, titleColor=PLOT_TEXT)
     st.altair_chart(chart, width='content')
 
 
@@ -4577,7 +4562,7 @@ def _render_reading_calendar_month(ns, rl_df, sessions_df, kh_df, empty_noun):
         # var(--text) (không phải var(--text-2) mờ như trước) -- xác nhận với người dùng: số ngày
         # cần rõ hẳn (đen ở light/trắng ở dark, giống mọi chữ chính khác trong app), không mờ như
         # nhãn phụ nữa.
-        _dn_color = "#fff" if is_today else ("var(--text)" if in_month else "transparent")
+        _dn_color = "var(--on-accent)" if is_today else ("var(--text)" if in_month else "transparent")
         _time_html = f"<span class='rlcal-time'>{_fmt_hours_short(d_min / 60)}</span>" if d_min > 0 else "<span></span>"
         _done_html = ""
         if d_done:
@@ -4736,7 +4721,7 @@ def _render_report_calendar_month(cur_y, cur_m, df_all, wc_df, rl_df, notes_df):
         is_today = in_month and (cur_y, cur_m, day_num) == (_today.year, _today.month, _today.day)
         _cell_border = "border:1.5px solid var(--accent);" if is_today else ""
         _dn_bg = "var(--accent)" if is_today else "transparent"
-        _dn_color = "#fff" if is_today else ("var(--text)" if in_month else "transparent")
+        _dn_color = "var(--on-accent)" if is_today else ("var(--text)" if in_month else "transparent")
         _time_html = f"<span class='rlcal-time'>{_fmt_hours_short(d_min / 60)}</span>" if d_min > 0 else "<span></span>"
         _top_html = ""
         if d_top:
@@ -4889,9 +4874,20 @@ def render_day_timeline(day_df):
         # Nội dung gộp thêm Nhóm + thời lượng thật (không chỉ khung giờ) vì đây là thứ người dùng
         # hay cần tra khi rê chuột qua từng phiên (không phải chỉ để phân biệt phiên nào là phiên nào).
         _tip = f"{proj} · {grp}\n{s:%H:%M}–{e:%H:%M} · {_fmt_hours_long(r['Thời lượng (Phút)'] / 60)}"
+        _col = COLOR_MAP.get(proj, "#8e8e93")
+        # Chữ nhãn theo độ sáng màu thanh (dải màu biểu đồ đổi theo theme, có màu rất sáng như trắng
+        # Exia/Dynames -- chữ trắng cố định sẽ không đọc được).
         bars_html += (f'<div class="dtl-bar rhythm-seg dtl-tip" data-tip="{html_escape(_tip)}" '
-                      f'style="left:{left:.3f}%;width:{width:.3f}%;background:{COLOR_MAP.get(proj, "#8e8e93")};">'
+                      f'style="left:{left:.3f}%;width:{width:.3f}%;background:{_col};color:{_readable_text(_col)};">'
                       f'{lab}</div>')
+
+    # Vạch "bây giờ" (màu trim của theme) -- chỉ khi đang xem đúng hôm nay (giờ Việt Nam).
+    now_html = ''
+    if day_df['Ngày'].iloc[0] == _today_vn():
+        _now = datetime.now(APP_TZ)
+        _now_pct = (_now.hour * 60 + _now.minute) / 1440 * 100
+        now_html = (f'<div class="dtl-now" style="left:{_now_pct:.3f}%;"></div>'
+                    f'<span class="dtl-now-lbl" style="left:{_now_pct:.3f}%;">{_now:%H:%M}</span>')
 
     ticks_html = ''.join(
         f'<span class="dtl-tk" style="left:{h/24*100:.3f}%;">{h}{"h" if h in (0, 24) else ""}</span>'
@@ -4911,7 +4907,7 @@ def render_day_timeline(day_df):
 /* margin 4px CỘNG gap flex 10px chung của khối cha = 14px -- đúng khoảng cách chuẩn giữa 2 thẻ
    nội dung trong app (xem chú thích "khoảng cách chuẩn 14px" ở rule [data-testid="stVerticalBlock"]).
    KHÔNG đặt 10px như trước: cộng dồn ra 20px, rộng gấp rưỡi mọi cặp thẻ khác trên cùng trang. */
-.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:12px 16px;margin:4px 0;}}
+.dtl-card{{background:var(--card);border:var(--card-border-w) solid var(--border);border-radius:var(--card-radius); corner-shape: var(--card-corner-shape);box-shadow:var(--card-shadow);padding:12px 16px;margin:4px 0;}}
 .dtl-strip{{position:relative;height:13px;margin-bottom:2px;}}
 .dtl-bl{{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);}}
 /* KHÔNG overflow:hidden ở đây nữa (khác bản trước) -- từng dùng để cắt góc vuông của .dtl-bar ở
@@ -4931,7 +4927,9 @@ def render_day_timeline(day_df):
    hiệu 1 class thì rule sau thắng, ĐÈ MẤT position:absolute của thanh phiên -> mọi thanh rơi về
    position:relative, xếp chồng dọc theo flow thay vì đặt đúng toạ độ giờ -- toàn bộ trục giờ vỡ.
    2 class luôn thắng theo độ đặc hiệu, không phụ thuộc thứ tự CSS trong trang. */
-.dtl-bar.rhythm-seg{{position:absolute;top:3px;height:20px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;color:#fff;font-size:10.5px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-bar.rhythm-seg{{position:absolute;top:3px;height:20px;min-width:1px;border-radius:4px;display:flex;align-items:center;justify-content:flex-start;padding:0 6px;font-size:10.5px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.18);}}
+.dtl-now{{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--trim);border-radius:1px;z-index:2;pointer-events:none;}}
+.dtl-now-lbl{{position:absolute;top:-17px;transform:translateX(-50%);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;color:var(--text-2);background:var(--card);padding:0 3px;pointer-events:none;}}
 .dtl-bar-lbl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;}}
 .dtl-axis{{position:relative;height:14px;margin-top:3px;}}
 .dtl-tk{{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--text-2);}}
@@ -4954,7 +4952,7 @@ def render_day_timeline(day_df):
 <div class="dtl-card">
 <span class="rl-book">Dòng thời gian trong ngày</span>
 <div class="dtl-strip">{label_html}</div>
-<div class="dtl-track">{line_html}{bars_html}</div>
+<div class="dtl-track">{line_html}{bars_html}{now_html}</div>
 <div class="dtl-axis">{ticks_html}</div>
 <div class="dtl-legend">{legend_html}</div>
 </div>
@@ -5917,7 +5915,7 @@ def render_calendar_grid(scope_df, full_df):
         # Vega tự vẽ nền riêng cho SVG (mặc định ăn theo màu nền trang, không phải trắng) -> để
         # trong suốt cho nền thẻ bọc ngoài (--card, đổi theo IS_DARK) lộ ra, tránh viền lệch tông.
         background='transparent',
-    ).configure_view(strokeWidth=0)
+    ).configure_view(strokeWidth=0).configure_axis(labelColor=PLOT_TEXT, titleColor=PLOT_TEXT)
     st.altair_chart(chart, width='content')
 
 
@@ -5935,7 +5933,7 @@ def render_year_month_bars(df_y):
     fig = go.Figure(go.Bar(x=[f"Th{m}" for m in range(1, 13)], y=list(hrs_by_month), marker_color=colors))
     fig = format_plotly_fig(fig)
     fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
 
 
 def render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y):
@@ -6330,7 +6328,7 @@ def render_eras(df):
     if not eras:
         st.caption("Chưa có dữ liệu.")
         return
-    st.plotly_chart(_eras_fig(eras), width='stretch', config=PLOTLY_CONFIG)
+    st.plotly_chart(_theme_fig(_eras_fig(eras)), width='stretch', config=PLOTLY_CONFIG)
     rows_html = ''
     for e in reversed(eras):
         n = (e["end"] - e["start"]).days + 1
@@ -6442,7 +6440,7 @@ def render_month_highlights(df_m, df, prev_month_key, elapsed_mask_m, prev_m):
 
 DTBL_CSS = """
 <style>
-.dtbl-wrap { overflow:auto; max-height:560px; border-radius:var(--card-radius); border:var(--card-border-w) solid var(--border); background:var(--card); box-shadow:var(--card-shadow); }
+.dtbl-wrap { overflow:auto; max-height:560px; border-radius:var(--card-radius); corner-shape: var(--card-corner-shape); border:var(--card-border-w) solid var(--border); background:var(--card); box-shadow:var(--card-shadow); }
 /* font-family PHẢI có !important -- CÙNG bug đã ghi ở rule sidebar/.kq-daily-src (xem _MAIN_CSS,
    khối ".stApp.stApp *:not(...)" gần đầu): rule đó áp BODY_FONT lên toàn app với độ đặc hiệu 2
    class, cao hơn 1 class ".dtbl" đơn thuần nên sẽ thắng dù đứng trước trong nguồn, nếu không có
@@ -6788,7 +6786,8 @@ def sec_chapter(anchor, num, title, lead=None, tight_top=False, badge=None):
     động ra khỏi CHÍNH văn bản tiêu đề, để tiêu đề luôn là 1 cụm cố định ngắn gọn, phần đổi theo dữ
     liệu hiện dưới dạng chip cạnh bên thay vì nối chuỗi vào title. Badge đứng NGAY SAU tiêu đề,
     trước kẻ ngang."""
-    _num_html = f"<span class='sec-ch-num'>{num}</span>" if num is not None else ""
+    _num_disp = f"{num:02d}" if isinstance(num, int) else num  # "01", "02"... kiểu số hiệu mono
+    _num_html = f"<span class='sec-ch-num'>{_num_disp}</span>" if num is not None else ""
     _badge_html = f"<span class='sec-ch-badge'>{badge}</span>" if badge else ""
     _lead = f"<p class='sec-ch-lead'>{lead}</p>" if lead else ""
     _cls = "sec-ch sec-ch-tight" if tight_top else "sec-ch"
@@ -6841,7 +6840,7 @@ def _pbill_narrative(curr_hrs, prev, active_days, elapsed_days, streak_cur, prev
 def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chips, key="bc_billboard"):
     """Billboard mở đầu 1 sub-tab kiểu chương dài (Báo cáo -> Tổng quan/Tuần/Tháng/Năm/Dự án, Sách
     -> Tổng quan/Chi tiết, Tuỳ biến): badge TRÒN bên trái (số to + nhãn kỳ) +
-    nội dung tự do ở giữa + mục lục chip xếp DỌC bên phải (cột thứ 3, ngăn cách bởi đường kẻ dọc).
+    nội dung tự do bên phải + mục lục chip xếp thành 1 hàng NGANG ở đáy billboard.
     Badge tròn dùng chung `.tbcircle-*` với billboard Hôm nay (`_render_today_billboard()`) -- xác
     nhận với người dùng đổi hẳn khỏi khuôn "tờ lịch xé" cũ (`.tbill-tab`/`.pbill-num`/`.pbill-label`
     /`.tbill-date`, đã bỏ) để MỌI billboard trong app đồng bộ 1 kiểu badge, không riêng Hôm nay.
@@ -6858,8 +6857,7 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
     (.pbill-kicker/.pbill-booktitle/.pbill-author) + hàng chip riêng (.pbill-chips) -- tham số hoá
     thẳng bằng HTML thay vì cố nhét đủ loại nội dung vào tham số text/subtitle cố định.
 
-    chips: rỗng -> chỉ 2 cột (badge | nội dung), không có cột mục lục thứ 3 (vd trang không đủ
-    chương để cần mục lục).
+    chips: rỗng -> không có hàng mục lục (vd trang không đủ chương để cần mục lục).
 
     key: PHẢI đổi khi 1 trang có >1 lời gọi hàm này CÓ THỂ CÙNG NẰM TRONG 1 LẦN CHẠY SCRIPT --
     bug thật đã gặp: st.tabs() render TOÀN BỘ nội dung mọi tab (kể cả tab không active, chỉ ẩn
@@ -6887,19 +6885,16 @@ def render_period_billboard(tab_label, big_num, big_label, meta, right_html, chi
         f"<div class='tbcircle-meta'>{meta}</div></div>")
     with st.container(key=key, border=True):
         with st.container(key=f"{key}_row"):
-            if chips:
-                c_left, c_right, c_toc = st.columns([1, 2, 1], vertical_alignment="center")
-            else:
-                c_left, c_right = st.columns([1, 2], vertical_alignment="center")
-                c_toc = None
+            c_left, c_right = st.columns([1, 2], vertical_alignment="center")
             with c_left:
                 st.markdown(_left_html, unsafe_allow_html=True)
             with c_right:
                 st.markdown(right_html, unsafe_allow_html=True)
-            if c_toc is not None:
-                with c_toc:
-                    _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
-                    st.markdown(f"<div class='tbill-toccol'>{_chips_html}</div>", unsafe_allow_html=True)
+        if chips:
+            # Mục lục: 1 hàng chip NGANG dưới badge|nội dung (đợt làm mới giao diện theo theme
+            # Gundam -- thay cột mục lục dọc thứ 3 cũ, nhường chiều ngang cho nội dung chính).
+            _chips_html = "".join(f"<a class='sec-toc-chip' href='#{a}'>{lbl}</a>" for a, lbl in chips)
+            st.markdown(f"<div class='tbill-toccol'>{_chips_html}</div>", unsafe_allow_html=True)
 
 
 # --- FRAGMENT: cô lập rerun cho từng mục biểu đồ có bộ điều khiển riêng ---
@@ -6941,7 +6936,7 @@ def frag_trend(scope_df, key_prefix, default_color):
             g['Ngày'] = pd.to_datetime(g['Ngày'])
         fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
         _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
-        _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+        _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
                                 on_select="rerun", selection_mode="points",
                                 key=f"{key_prefix}_sel_{_ver}")
         _proj_to_cat = (dft.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
@@ -7047,7 +7042,7 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
             g['Ngày'] = pd.to_datetime(g['Ngày'])
         fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
         _ver = st.session_state.get(f"{key}_sel_ver", 0)
-        _sel = st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG,
+        _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
                                 on_select="rerun", selection_mode="points",
                                 key=f"{key}_sel_{_ver}")
         _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
@@ -7107,7 +7102,7 @@ def render_project_week_trend(df_g, n_weeks=12):
     fig = go.Figure(go.Bar(x=labels, y=list(vals), marker_color=colors))
     fig = format_plotly_fig(fig)
     fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
-    st.plotly_chart(fig, width='stretch', config=PLOTLY_CONFIG)
+    st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
 
 
 def render_project_recent_sessions(df_g, days=30):
@@ -7331,15 +7326,10 @@ def _wordmark_html(layout="header"):
     Serif, Chromium desktop không tái hiện được vì khác engine xử lý half-leading), giữ phòng ngừa
     tiếp cho Source Serif 4 (cũng là serif có cap-height/overshoot rõ, cùng lớp rủi ro) thay vì bỏ
     workaround rồi phải tìm lại lỗi từ đầu nếu nó tái phát."""
-    # Wordmark nằm TRỰC TIẾP trên nền trang (var(--bg)), ngoài mọi card -- phải đọc theo
-    # text-on-bg/text-on-bg-2 (xem BG_PALETTES) chứ không phải text/text-2 thường (màu đó giờ dành
-    # riêng cho chữ BÊN TRONG card, tối trên mọi bảng màu kể cả Bầu trời sao/Rừng đêm nền đậm --
-    # dùng nhầm sẽ ra chữ tối trên nền đậm, không đọc được, đúng bug người dùng lo ngại). Lấy literal
-    # hex thẳng từ BG_PALETTES (không phải var(--text-on-bg)) vì layout="login" render TRƯỚC khối
-    # inject :root CSS var (xem cổng đăng nhập) -- BG_PALETTE (dict Python) đã có sẵn từ rất sớm ở
-    # cấp module nên literal luôn đúng bất kể gọi trước/sau khối :root.
-    _text = BG_PALETTES[BG_PALETTE]["text-on-bg"][1 if IS_DARK else 0]
-    _text2 = BG_PALETTES[BG_PALETTE]["text-on-bg-2"][1 if IS_DARK else 0]
+    # Wordmark nằm TRỰC TIẾP trên nền trang (var(--bg)). Lấy literal hex thẳng từ THEME (không phải
+    # var(--text)) vì layout="login" render TRƯỚC khối inject :root CSS var (xem cổng đăng nhập).
+    _text = THEME["text"]
+    _text2 = THEME["text-2"]
     if layout == "login":
         mark, forest_sz, dash_sz, gap_outer = 72, 46, 14, 22
         return (
@@ -7417,11 +7407,8 @@ if _auth_configured and not _skip_auth_for_local_dev:
         st.stop()
     if not st.user.is_logged_in:
         # Màn hình này render TRƯỚC khối inject :root CSS var (nằm sau cổng đăng nhập) -> không
-        # dùng var(--text-on-bg-2) được ở đây (chưa tồn tại trong DOM), phải tự chọn literal từ
-        # BG_PALETTES theo IS_DARK -- _wordmark_html() cũng tự lo việc này theo đúng cách (xem định
-        # nghĩa). Chữ này nằm trực tiếp trên nền trang (ngoài card) nên đọc text-on-bg-2, không phải
-        # text-2 (giờ dành riêng cho chữ bên trong card).
-        _login_txt2 = BG_PALETTES[BG_PALETTE]["text-on-bg-2"][1 if IS_DARK else 0]
+        # dùng var(--text-on-bg-2) được ở đây (chưa tồn tại trong DOM), lấy literal từ THEME.
+        _login_txt2 = THEME["text-2"]
         st.markdown(
             "<div style='max-width:420px;margin:12vh auto 24px;text-align:center;'>"
             f"<div style='margin-bottom:18px;'>{_wordmark_html('login')}</div>"
@@ -7589,50 +7576,32 @@ _QUOTE_FONT_FACE = "".join(
 )
 
 # Token ngữ nghĩa cho toàn bộ CSS/HTML tự viết trong app (khối CSS lớn bên dưới + các khối CSS
-# con + f-string HTML rải rác) -- (light, dark). Hệ "Sổ Tay": giấy ấm/ngà thay vì xám hệ thống
-# iOS -- không còn đối xứng với bảng systemGray của Apple như bản cũ, mỗi cặp light/dark ở đây
-# chọn tay theo đúng bản thiết kế "Sổ Tay" (xem design handoff).
-# 11 token bg/card/card-tl/border/chip/divider/divider-2/text/text-2/text-3/text-4 đến từ
-# BG_PALETTES[BG_PALETTE] (tab Tuỳ biến -> "4. Giao diện", bundle đủ 11 token cùng lúc để không
-# lệch tông) -- text/text-2/3/4 TRƯỚC ĐÂY cố định ngoài bundle, đã chuyển vào bundle (xem chú
-# thích BG_PALETTES) để 3 bảng đậm mới (Bầu trời sao/Rừng đêm) tự mang màu chữ sáng phù hợp.
-_TOK = dict(BG_PALETTES[BG_PALETTE])
-_root_vars = "".join(f"--{k}:{v[1] if IS_DARK else v[0]};" for k, v in _TOK.items())
-# --card-radius/--card-border-w/--card-shadow (kiểu thẻ, xem CARD_STYLES) -- trục độc lập với
-# bảng màu nền. Áp cho nhóm "thẻ nội dung chung" (.sec-card, .dtl-card, container chuẩn...).
-# --card-bg-override/--card-backdrop/--card-border-image: 3 token PHỤ cho 6/21 kiểu cần hơn 3
-# token gốc ("Viền nhấn"/"Viền chuyển sắc" dùng border_image, "Nền mờ nhẹ"/"Kính mờ"/"Nền chip"/
-# "Nền chuyển sắc" dùng bg_override, "Kính mờ" dùng thêm cả backdrop -- xem CARD_STYLES) -- mặc
-# định var(--card)/none/none, vô hại với 15 kiểu còn lại. Áp qua 1 rule gộp riêng ngay dưới đây
-# (xem "RULE GỘP KIỂU THẺ ĐẶC BIỆT"), không sửa từng rule card gốc.
-# --card-pad/--card-gap: KHÔNG còn là 1 trục cá nhân hoá (trục "Mật độ bố cục"/CARD_DENSITY đã bỏ
-# theo yêu cầu người dùng) -- 2 hằng số CỐ ĐỊNH khớp đúng giá trị "Vừa" cũ, giữ nguyên dạng token
-# CSS (thay vì viết literal rải khắp file) vì rất nhiều rule card gốc đã tham chiếu var(--card-pad)/
-# var(--card-gap) trực tiếp -- đổi ngược lại literal ở từng rule rủi ro sót hơn nhiều so với giữ 2
-# token với giá trị cố định. KHÔNG áp cho thẻ có padding tinh chỉnh riêng theo nội dung đặc thù
-# (.quotes-card, .dtl-track...).
+# con + f-string HTML rải rác) -- lấy từ theme đang chọn (theme_tokens(), xem GUNDAM_THEMES): bg/
+# card/card-tl/border/divider/divider-2/divider-on-bg/chip/text..text-4/text-on-bg/-2/on-accent/
+# trim/trim2. Mỗi theme chỉ có 1 tông nên token là 1 giá trị, không còn cặp (light, dark).
+_TOK = theme_tokens(THEME)
+_root_vars = "".join(f"--{k}:{v};" for k, v in _TOK.items())
+# Kiểu thẻ của theme (theme_card_vars()): --card-radius/--card-corner-shape (bevel = góc vát kiểu
+# giáp qua CSS corner-shape, trình duyệt chưa hỗ trợ tự rơi về bo tròn)/--card-border-w (0 -- thẻ
+# không viền, tách lớp bằng nền + bóng)/--card-shadow. --card-bg-override/--card-backdrop/
+# --card-border-image giữ giá trị trung tính (các kiểu thẻ đặc biệt cũ đã bỏ). --card-pad/--card-gap:
+# 2 hằng số cố định (nhiều rule card gốc tham chiếu trực tiếp).
+_card = theme_card_vars(THEME)
 _card_style_vars = (
-    f"--card-radius:{CARD_STYLES[CARD_STYLE]['radius']};"
-    f"--card-border-w:{CARD_STYLES[CARD_STYLE]['border_w']};"
-    f"--card-shadow:{CARD_STYLES[CARD_STYLE]['shadow']};"
-    f"--card-bg-override:{CARD_STYLES[CARD_STYLE].get('bg_override', 'var(--card)')};"
-    f"--card-backdrop:{CARD_STYLES[CARD_STYLE].get('backdrop', 'none')};"
-    f"--card-border-image:{CARD_STYLES[CARD_STYLE].get('border_image', 'none')};"
+    f"--card-radius:{_card['radius']};"
+    f"--card-corner-shape:{_card['corner_shape']};"
+    f"--card-border-w:{_card['border_w']};"
+    f"--card-shadow:{_card['shadow']};"
+    f"--card-bg-override:var(--card);"
+    f"--card-backdrop:none;"
+    f"--card-border-image:none;"
     f"--card-pad:16px 18px;"
     f"--card-gap:10px 0;"
 )
-# Billboard (render_period_billboard()/_render_today_billboard()) mặc định là 1 lớp "kính mờ"
-# BÁN TRONG SUỐT (nền rgba(--accent-rgb,0.10) + backdrop-filter blur, xem rule .st-key-*_billboard)
-# -- với 6 bảng màu nền "nhạt" thường, lớp kính đó hoà với var(--bg) SÁNG phía sau nên tự trông
-# sáng, đúng ý muốn. Với 10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG), var(--bg) phía sau ĐẬM
-# nên lớp kính bán trong suốt đó cũng tự trông đậm theo -- xác nhận với người dùng billboard vẫn
-# phải là 1 "thẻ" nền sáng/chữ tối như light theme bình thường, chỉ nền NGOÀI thẻ mới được đậm.
-# Nên 4 bảng này đổi hẳn sang nền ĐẶC (color-mix phớt accent lên var(--card), không xuyên thấu nền
-# trang phía sau nữa) + tắt backdrop-filter (vô nghĩa khi nền đã đặc).
-_billboard_bg_dark_forced = BG_PALETTE in BG_PALETTES_DARK_BG
-_billboard_bg = ("color-mix(in srgb, var(--accent) 6%, var(--card))" if _billboard_bg_dark_forced
-                  else "rgba(var(--accent-rgb),0.10)")
-_billboard_backdrop = "none" if _billboard_bg_dark_forced else "blur(16px) saturate(1.6)"
+# Billboard (render_period_billboard()/_render_today_billboard()): 1 thẻ nền ĐẶC phớt accent (không
+# còn lớp kính mờ bán trong suốt -- nền trang giờ có hoạ tiết panel/lưới nên kính mờ làm bẩn chữ).
+_billboard_bg = "color-mix(in srgb, var(--accent) 7%, var(--card))"
+_billboard_backdrop = "none"
 st.markdown(
     f"<style>{_BODY_FONT_FACE}{_UI_FONT_FACE}{_TABLE_FONT_FACE}{_QUOTE_FONT_FACE}:root{{--font-ui:{_UI_FONT_STACK};--accent:{ACCENT};--accent-rgb:{ACCENT_RGB};--accent-dark:{ACCENT_DARK};"
     f"--bg-image:{BG_IMAGE};--bg-size:{BG_SIZE};--bg-position:{BG_POSITION};"
@@ -7751,7 +7720,7 @@ _MAIN_CSS = """
        biểu đồ Plotly/Vega vì đây là HTML thuần, không tự có card qua rule [data-testid=
        "stPlotlyChart"]), mỗi hàng nhãn 150px + thanh fill co giãn + giá trị 60px canh phải. */
     .catbars-card {
-        background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
+        background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         padding: var(--card-pad); box-shadow: var(--card-shadow);
     }
     .catbars { display: flex; flex-direction: column; gap: 10px; }
@@ -7805,7 +7774,7 @@ _MAIN_CSS = """
     .glass-card {
         background: var(--card);
         border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius);
+        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         padding: 20px;
         box-shadow: var(--card-shadow);
     }
@@ -7887,7 +7856,7 @@ _MAIN_CSS = """
         margin: 0 auto !important;
         background: var(--card);
         border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius);
+        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         padding: 14px;
         box-shadow: var(--card-shadow);
     }
@@ -7914,10 +7883,11 @@ _MAIN_CSS = """
        (border-left của ô ĐẦU MỖI DÒNG mới cần bỏ, không chỉ ô đầu tiên -- xử lý qua nth-child dựa
        trên số ô mỗi dòng ở rule mobile bên dưới, còn desktop luôn đủ rộng cho 1 dòng). */
     .sp-herogrid { display: flex; flex-wrap: wrap; padding: 0 !important; overflow: hidden; margin-bottom: 14px; }
-    .sp-tile { flex: 1 1 0; min-width: 120px; padding: 10px 18px; border-left: 1px solid var(--divider); }
+    .sp-tile { flex: 1 1 0; min-width: 120px; padding: 14px 20px; border-left: 1px solid var(--divider); }
     .sp-tile:first-child { border-left: none; }
-    .sp-l { font-size: 11.5px; font-weight: 600; color: var(--text-2); margin-bottom: 3px; }
-    .sp-v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.18; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sp-l { font-size: 10.5px; font-weight: 700; color: var(--text-3); margin-bottom: 4px;
+        text-transform: uppercase; letter-spacing: 0.08em; }
+    .sp-v { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
     .sp-v span { font-size: 13px; font-weight: 600; color: var(--text-2); }
     .sp-d { font-size: 12px; font-weight: 500; margin-top: 3px; }
     /* Thẻ list: mỗi "section" = 1 tiêu đề nhỏ in hoa (border-top ĐẬM ngăn với section trước) +
@@ -8041,7 +8011,7 @@ _MAIN_CSS = """
        thuộc tính mới. */
     button[data-selected="true"] {
         background-color: var(--accent) !important;
-        color: #fff !important;
+        color: var(--on-accent) !important;
         border-color: var(--accent) !important;
         box-shadow: 0 2px 5px rgba(var(--accent-rgb),0.3) !important;
     }
@@ -8275,7 +8245,7 @@ _MAIN_CSS = """
        .quotes-card/.dtl-track không dùng --card-pad (xem theming.md). */
     .sb-widget {
         background: var(--card); border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius); box-shadow: var(--card-shadow);
+        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape); box-shadow: var(--card-shadow);
         padding: 10px 12px; margin-top: 10px;
     }
     /* "span.sb-widget-title-txt" tách riêng khỏi icon -- text-transform:uppercase áp trực tiếp
@@ -8291,11 +8261,20 @@ _MAIN_CSS = """
     /* Nút "Một ngày ngẫu nhiên" (sidebar, key=sb_peek_btn) -- trông như 1 khối .sb-widget nữa. */
     .st-key-sb_peek_btn button {
         background: var(--card); border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius); box-shadow: var(--card-shadow);
+        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape); box-shadow: var(--card-shadow);
         margin-top: 10px; padding: 8px 12px; min-height: 0;
     }
     .st-key-sb_peek_btn button:hover { border-color: var(--accent); }
     .st-key-sb_peek_btn button p { font-size: 12.5px; font-weight: 600; }
+    .sb-date { display: flex; align-items: center; gap: 12px; }
+    .sb-date-num { font-size: 30px; font-weight: 800; line-height: 1; color: var(--accent-dark);
+        font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .sb-date-dow { font-size: 13.5px; font-weight: 700; color: var(--text); }
+    .sb-date-meta { font-size: 11.5px; color: var(--text-2); line-height: 1.4; margin-top: 1px; }
+    .sb-theme-chip { display: flex; flex-direction: column; gap: 3px; margin-top: 12px; padding: 9px 12px;
+        border: 1px dashed var(--divider-2); border-radius: 6px; text-decoration: none !important; }
+    .sb-theme-chip:hover { border-color: var(--accent); }
+    .sb-theme-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .sb-stat-row {
         display: flex; justify-content: space-between; align-items: baseline;
         font-size: 12.5px; color: var(--text-2); padding: 2px 0;
@@ -8552,6 +8531,8 @@ _MAIN_CSS = """
     /* Chữ ngày (nhóm span day/"/"/month/"/"year trong [role="group"]): 13px/600 khớp mockup --
        mặc định Streamlit là 14px thường, trông nhạt hơn hẳn tông 13px/600 của nhãn/nút xung
        quanh. Cụm span này đã tự căn giữa trong pill qua justify-content:center của khung ngoài. */
+    div[data-testid="stDateInputField"] [role="group"] *,
+    div[data-testid="stDateInputField"] [role="spinbutton"] { color: var(--text) !important; }
     div[data-testid="stDateInputField"] [role="group"] {
         font-size: 13px !important;
         font-weight: 600 !important;
@@ -8575,7 +8556,7 @@ _MAIN_CSS = """
        trắng, khớp màu accent đang chọn thay vì màu tím TĨNH mặc định của Streamlit. */
     [data-testid="stDateInputCalendar"] div[data-selected="true"] {
         background: var(--accent) !important;
-        color: #fff !important;
+        color: var(--on-accent) !important;
     }
     /* Khung lịch bật lên -- dùng outline chứ không phải border: nội dung trắng bên trong popover
        có cùng kích thước với chính nó và vẽ đè lên trên, che mất border thường; outline không
@@ -8646,7 +8627,7 @@ _MAIN_CSS = """
         .sp-tile { flex: 1 1 45%; min-width: 45%; }
         .sp-tile:nth-child(2n+1) { border-left: none; }
         .sp-tile { padding: 14px 16px !important; }
-        .sp-v { font-size: 24px !important; }
+        .sp-v { font-size: 26px !important; }
         /* 2 thẻ list (.sp-lcols) xếp dọc trên mobile thay vì cạnh nhau -- màn hẹp không đủ chỗ
            cho 2 cột mà vẫn đọc được các dòng nhãn/giá trị. */
         .sp-lcols { flex-direction: column; gap: 10px; }
@@ -8715,7 +8696,7 @@ _MAIN_CSS = """
     /* ===== Container có viền (ghi chú ngày, nhật ký, ngày này năm trước) trông
        như glass-card ===== */
     .st-key-note_card, [class*="st-key-jcard"] {
-        border-radius: var(--card-radius) !important;
+        border-radius: var(--card-radius) !important; corner-shape: var(--card-corner-shape) !important;
         border-color: var(--border) !important;
         box-shadow: var(--card-shadow) !important;
         background: var(--card) !important;
@@ -8805,7 +8786,7 @@ _MAIN_CSS = """
     .fav-book-head { display: flex; align-items: baseline; justify-content: space-between;
         gap: 12px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 14px; }
     .fav-book-titles { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .fav-count-badge { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+    .fav-count-badge { font-size: 12px; font-weight: 700; color: var(--on-accent); background: var(--accent);
         border-radius: 20px; padding: 3px 11px; white-space: nowrap; }
     /* .fav-book-head nằm TRỰC TIẾP trên nền trang (var(--bg), KHÔNG có card riêng bao quanh chính
        nó -- chỉ các cụm trích dẫn bên dưới mới có card) -- .pbill-booktitle/.pbill-author mặc định
@@ -8823,7 +8804,7 @@ _MAIN_CSS = """
        Python), mobile st.columns() tự co về 1 cột -- không cần column-count riêng, nhưng CẦN 1
        rule khoảng cách riêng (key "kq_teaser_cols", xem @media max-width:640px phía trên) để đều
        khoảng cách giữa các thẻ khi 2 cột nhập 1. */
-    .quotes-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
+    .quotes-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         padding: 6px 18px; box-shadow: var(--card-shadow); }
     .quote-item { padding: 10px 0; border-bottom: 1px solid var(--divider); break-inside: avoid; }
     .quote-item:last-child { border-bottom: none; }
@@ -8851,9 +8832,10 @@ _MAIN_CSS = """
        (flex:1, lấp hết chỗ trống còn lại). Không còn kicker cuối hàng (đã bỏ -- trên mobile hàng
        này quá hẹp, kicker flex:none ép tiêu đề phải wrap nhiều dòng). */
     .sec-ch-row { display: flex; align-items: center; gap: 10px; }
-    .sec-ch-num { flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
-        color: var(--card); font-size: 13.5px; font-weight: 700; display: flex; align-items: center;
-        justify-content: center; }
+    .sec-ch-num { flex: none; min-width: 26px; height: 26px; box-sizing: border-box; padding: 0 7px;
+        border-radius: 4px; background: rgba(var(--accent-rgb),0.13); color: var(--accent-dark);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-size: 12.5px; font-weight: 600;
+        display: flex; align-items: center; justify-content: center; letter-spacing: 0.02em; }
     /* .sec-ch-title/.sec-ch-lead nằm TRỰC TIẾP trên var(--bg) (chương mở đầu 1
        trang cuộn dọc, không lồng trong .sec-card) nên PHẢI đọc var(--text-on-bg)/var(--text-on-
        bg-2), cùng lý do với .pbill-* ở trên -- .sec-ch-badge KHÔNG đổi vì có nền riêng var(--chip)
@@ -8865,7 +8847,7 @@ _MAIN_CSS = """
         background: var(--chip); border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
     .sec-ch-rule { flex: 1; height: 1px; background: var(--divider-2); min-width: 24px; }
     .sec-ch-lead { font-size: 14px; color: var(--text-on-bg-2); margin: 8px 0 0; max-width: 660px; line-height: 1.55; }
-    .sec-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
+    .sec-card { background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         box-shadow: var(--card-shadow); padding: var(--card-pad); margin: var(--card-gap);
         font-size: 14px; color: var(--text); line-height: 1.6; }
     .sec-card h4 { margin: 0 0 8px; font-size: 15.5px; color: var(--text); }
@@ -8881,7 +8863,7 @@ _MAIN_CSS = """
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] { margin: 14px 0 0 !important; }
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details {
         background: var(--card) !important; border: var(--card-border-w) solid var(--border) !important;
-        border-radius: var(--card-radius) !important; box-shadow: var(--card-shadow) !important; }
+        border-radius: var(--card-radius) !important; corner-shape: var(--card-corner-shape) !important; box-shadow: var(--card-shadow) !important; }
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] summary {
         padding: 12px 16px !important; border-bottom: none !important; }
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] summary p {
@@ -8945,14 +8927,12 @@ _MAIN_CSS = """
        viền var(--border) ở đây để nhóm thẻ này theo đúng 2 trục cá nhân hoá đó như mọi thẻ khác,
        không bị "đứng yên" lạc tông khi đổi bảng màu nền/kiểu thẻ. */
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
-    .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card {
         background: var(--card) !important;
         border-color: var(--border) !important;
         border-width: var(--card-border-w) !important;
-        border-radius: var(--card-radius) !important;
+        border-radius: var(--card-radius) !important; corner-shape: var(--card-corner-shape) !important;
         box-shadow: var(--card-shadow) !important;
     }
     .jdate .jyear { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; line-height: 1; }
@@ -9079,7 +9059,7 @@ _MAIN_CSS = """
        chuỗi con "kqrow_fav_" của rule cũ, phản hồi thực tế xác nhận trông rất tách rời/"trần".
        Đặt SAU rule margin-bottom:2px chung ở trên để thắng theo thứ tự (cùng độ đặc hiệu). */
     [class*="st-key-kqgroup_fav_"] {
-        background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius);
+        background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         box-shadow: var(--card-shadow); padding: var(--card-pad); margin-bottom: 10px !important;
     }
     [class*="st-key-kqgroup_fav_"]:last-child { margin-bottom: 0 !important; }
@@ -9192,13 +9172,13 @@ _MAIN_CSS = """
        đứng NGAY TRÊN badge tròn -- billboard Hôm nay không cần nhãn này (badge tự chứa tháng qua
        `.tbcircle-mon`, chỉ 3-4 ký tự viết vừa trong vòng tròn) vì tab_label các trang khác dài hơn
        hẳn, không thể nhét vừa bên trong badge. */
-    .tbcircle-tab { display: inline-block; background: var(--accent); color: #fff; font-size: 12.5px;
+    .tbcircle-tab { display: inline-block; background: var(--accent); color: var(--on-accent); font-size: 12.5px;
         font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; padding: 6px 15px;
         border-radius: 20px; margin-bottom: 12px; }
     /* Bản gọn ban đầu (72px/26px) đọc không rõ (phản hồi thực tế, xem ảnh chụp người dùng gửi) --
        nới lại giữa chừng (80px/29px, sau lên 96px/34px khi đổi sang bố cục 1 cột -- billboard có
        nhiều chỗ trống hơn hẳn, phóng to cho dễ nhìn hơn trên màn hình rộng). */
-    .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: #fff;
+    .tbcircle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         box-shadow: 0 6px 16px rgba(var(--accent-rgb),0.45); margin: 0 auto; }
     .tbcircle-num { font-size: 34px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
@@ -9214,16 +9194,17 @@ _MAIN_CSS = """
        hơn 2 cột còn lại (badge/nội dung được vertical_alignment="center" canh giữa, tự thấp hơn
        cột mục lục nếu có ≥4 chip) -- bug thật đã gặp (screenshot người dùng gửi), thiếu bước này
        khiến chip cuối gần như dính viền dưới billboard. */
-    .tbill-toccol { display: flex; flex-direction: column; gap: 3px; padding-bottom: 4px; }
+    .tbill-toccol { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding: 12px 0 2px;
+        border-top: 1px solid var(--divider); }
     /* Chip mục lục billboard rút gọn riêng (khác .sec-toc-chip mặc định dùng ở nơi khác) -- padding
        5px/12px -> 4px/10px, font 12.5px -> 11.5px, để cột mục lục chiếm ít chiều cao billboard hơn
        (phản hồi thực tế: mục lục chỉ là link neo, không cần to bằng nội dung chính). */
-    .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left;
-        padding: 4px 10px; font-size: 11.5px; }
+    .tbill-toccol .sec-toc-chip { box-sizing: border-box; padding: 5px 12px; font-size: 12px;
+        background: var(--card); border-color: var(--divider); }
     /* Điện thoại: cột mục lục dọc (6 chip ở Hôm nay) đẩy nội dung chính xuống dưới màn hình đầu
        tiên -- đổi thành 1 hàng chip cuộn ngang, chiều cao chỉ còn 1 dòng. */
     @media (max-width: 640px) {
-        .tbill-toccol { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 6px;
+        .tbill-toccol { flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 6px;
             scrollbar-width: none; -webkit-overflow-scrolling: touch; }
         .tbill-toccol::-webkit-scrollbar { display: none; }
         .tbill-toccol .sec-toc-chip { width: auto; flex: 0 0 auto; white-space: nowrap; }
@@ -9379,7 +9360,7 @@ _MAIN_CSS = """
     #app-scroll-top-btn {
         position: fixed; right: 22px; bottom: 22px; z-index: 99980;
         width: 44px; height: 44px; border-radius: 50%;
-        background: var(--accent); color: #fff; border: none;
+        background: var(--accent); color: var(--on-accent); border: none;
         display: flex; align-items: center; justify-content: center;
         box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
         cursor: pointer; opacity: 0; transform: translateY(12px) scale(0.9);
@@ -9407,7 +9388,7 @@ _MAIN_CSS = """
     #app-sync-fab-btn {
         position: fixed; right: 22px; bottom: 76px; z-index: 99979;
         width: 44px; height: 44px; border-radius: 50%;
-        background: var(--accent); color: #fff; border: none;
+        background: var(--accent); color: var(--on-accent); border: none;
         display: flex; align-items: center; justify-content: center;
         box-shadow: 0 4px 14px rgba(var(--accent-rgb),0.38);
         cursor: pointer; transition: opacity 0.2s ease;
@@ -9420,8 +9401,8 @@ _MAIN_CSS = """
         #app-sync-fab-btn { right: auto; left: 14px; bottom: 68px; width: 40px; height: 40px; }
     }
 
-    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- 6/21 kiểu ("Viền nhấn"/"Viền chuyển sắc"/"Nền mờ nhẹ"/"Kính
-       mờ"/"Nền chip"/"Nền chuyển sắc", xem CARD_STYLES, _card_style_vars) cần thêm background/
+    /* RULE GỘP KIỂU THẺ ĐẶC BIỆT -- di sản từ bộ 21 kiểu thẻ cũ (đã thay bằng theme Gundam; 3 token
+       dưới đây giờ luôn là var(--card)/none/none, xem _card_style_vars). Các kiểu cũ cần thêm background/
        backdrop-filter/border-image ngoài 3 token radius/border-w/shadow gốc, nhưng hàng chục khối
        thẻ rải khắp file (dtl-card/dtbl-wrap/catbars-card/glass-card/
        sec-card/quotes-card/nhóm st-key-tb_*_card/note_card/jcard, kqgroup_fav_...) mỗi
@@ -9437,8 +9418,6 @@ _MAIN_CSS = """
     .st-key-sb_peek_btn button,
     [class*="st-key-rl_series_override"] [data-testid="stExpander"] details,
     .st-key-tb_quick_sync_card, .st-key-tb_mapping_card,
-    .st-key-tbgd_accent_card, .st-key-tbgd_palette_card, .st-key-tbgd_pattern_card,
-    .st-key-tbgd_cardstyle_card, .st-key-tbgd_width_card, .st-key-tbgd_density_card, .st-key-tbgd_font_card,
     .st-key-tb_backup_card, .st-key-tb_restore_card, .st-key-tb_wipe_card, .st-key-tb_rawdata_card, .st-key-tb_health_card,
     .st-key-tb_account_card, .st-key-kq_daily_card, .st-key-note_card, [class*="st-key-jcard"],
     [class*="st-key-kqgroup_fav_"] {
@@ -9446,6 +9425,61 @@ _MAIN_CSS = """
         backdrop-filter: var(--card-backdrop) !important;
         border-image: var(--card-border-image) !important;
     }
+
+    /* Nhãn mã máy của theme (_THEME_UNIT_TAG_HTML): dải 3 màu nhỏ + mã máy mono viết hoa. */
+    .st-key-today_billboard .theme-unit { margin-bottom: 14px; }
+    .theme-unit { display: flex; align-items: center; gap: 9px; font-family: 'IBM Plex Mono', ui-monospace, monospace !important;
+        font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+    .theme-tri { display: inline-flex; gap: 3px; }
+    .theme-tri i { width: 8px; height: 8px; display: inline-block; background: var(--accent); }
+    .theme-tri i:nth-child(2) { background: var(--trim); }
+    .theme-tri i:nth-child(3) { background: var(--trim2); }
+
+    /* MÀU CHỮ/NỀN WIDGET NATIVE THEO THEME -- .streamlit/config.toml chỉ có 1 bộ [theme] sáng tĩnh
+       (xem GUNDAM_THEMES: tông sáng/tối thuộc về theme, không theo trình duyệt), nên với theme tối
+       (Banshee/Sinanju/Exia/Dynames) mọi chữ/ô nhập Streamlit tự tô theo textColor/
+       secondaryBackgroundColor tĩnh sẽ ra chữ tối trên nền tối. Ép lại bằng token; vô hại với theme
+       sáng (token cũng là màu của theme đó). Chữ kế thừa: KHÔNG !important để các class riêng của
+       app (vd .pbill-sub, .sec-ch-title) trên phần tử con vẫn thắng. */
+    .stApp, [data-testid="stDialog"] > div { color: var(--text); }
+    [data-testid="stMarkdownContainer"], [data-testid="stWidgetLabel"], [data-testid="stHeading"],
+    [data-testid="stText"], [data-testid="stExpander"] summary, [data-testid="stCheckbox"] label,
+    [data-testid="stRadio"] label, [data-testid="stToggle"] label, [data-testid="stAlertContainer"],
+    [data-testid="stTable"], [data-testid="stJson"] { color: var(--text); }
+    /* Nhãn bên trong nút (Streamlit bọc chữ nút bằng stMarkdownContainer) phải KẾ THỪA màu của nút
+       (vd var(--on-accent) ở nút đang chọn), không bị rule màu chữ chung ngay trên đè lại. */
+    button [data-testid="stMarkdownContainer"], a [data-testid="stMarkdownContainer"] { color: inherit; }
+    [data-testid="stCaptionContainer"], [data-testid="stWidgetLabel"] [data-testid="stCaptionContainer"] {
+        color: var(--text-2) !important;
+    }
+    [data-testid="stButtonGroup"] button:not([data-selected="true"]),
+    div[data-testid="stButton"] button[kind="secondary"],
+    div[data-testid="stDownloadButton"] button[kind="secondary"],
+    [data-testid="stPopover"] button { color: var(--text) !important; }
+    div[data-testid="stButton"] button[kind="secondary"]:disabled { color: var(--text-3) !important; }
+    [data-baseweb="select"] > div, [data-baseweb="input"], [data-baseweb="base-input"],
+    [data-baseweb="textarea"], [data-testid="stDateInputField"], [data-testid="stNumberInputContainer"] {
+        background-color: var(--card) !important; border-color: var(--border) !important;
+    }
+    [data-baseweb="select"] > div *, [data-baseweb="input"] input, [data-baseweb="base-input"] input,
+    [data-baseweb="textarea"] textarea, [data-testid="stDateInputField"] input,
+    [data-testid="stNumberInputContainer"] input,
+    [data-testid="stSelectbox"] input, [data-testid="stMultiSelect"] input, [data-testid="stTextInput"] input,
+    [data-testid="stTextArea"] textarea {
+        color: var(--text) !important; -webkit-text-fill-color: var(--text) !important;
+    }
+    [role="listbox"] { background-color: var(--card) !important; color: var(--text) !important; }
+    [role="listbox"] [role="option"] { color: var(--text) !important; }
+    [role="listbox"] [role="option"]:hover,
+    [role="listbox"] [role="option"][aria-selected="true"] { background-color: var(--chip) !important; }
+    [data-baseweb="popover"] [role="listbox"], [data-baseweb="popover"] ul, [data-baseweb="menu"],
+    [data-testid="stDateInputCalendar"], [data-baseweb="calendar"] {
+        background-color: var(--card) !important; color: var(--text) !important;
+    }
+    [data-baseweb="popover"] [role="option"] { color: var(--text) !important; }
+    [data-baseweb="popover"] [role="option"]:hover,
+    [data-baseweb="popover"] [role="option"][aria-selected="true"] { background-color: var(--chip) !important; }
+    [data-baseweb="calendar"] * { color: var(--text); }
     </style>
     """
 st.markdown(_MAIN_CSS.replace("'Manrope'", f"'{BODY_FONT}'"), unsafe_allow_html=True)
@@ -9706,13 +9740,12 @@ def _render_nav_group(items, group_key):
         _render_nav_segment(items, f"navseg_{group_key}_full_{slug}")
 
 def _sidebar_date_badge_html(df):
-    """Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
+    """Khối ngày hôm nay (số ngày + Thứ + "ngày hoạt động X/Y" + "Cập nhật gần nhất") --
     DỜI từ cột đầu billboard "Hôm nay" (`_render_today_billboard()`) sang sidebar (xác nhận với
     người dùng qua ảnh chụp): đây luôn là thông tin của NGÀY HÔM NAY thật (`_today_vn()`), KHÁC
     "sel" (ngày đang browse qua day_picker trên trang "Hôm nay", có thể là ngày quá khứ) -- hợp
     làm 1 khối LUÔN đúng ở mọi trang hơn là đứng trong billboard chỉ trang đó mới thấy. Tái dùng
-    NGUYÊN CSS `.tbcircle-*` đã có (dùng chung mọi billboard khác trong app), không tự chế khuôn
-    badge mới. Trả về (html, có_dòng_cập_nhật) -- caller chỉ gọi `_inject_relative_time_ticker()`
+    CSS `.sb-date*` (1 hàng ngang gọn). Trả về (html, có_dòng_cập_nhật) -- caller chỉ gọi `_inject_relative_time_ticker()`
     khi có dòng "Cập nhật gần nhất".
 
     Là khối ĐẦU TIÊN trong nhóm 4 khối đứng NGAY SAU nav (xem khối "with st.sidebar" cuối file)
@@ -9731,13 +9764,13 @@ def _sidebar_date_badge_html(df):
         _epoch_ms = int(_last_ts.tz_localize(APP_TZ).timestamp() * 1000)
         _upd_line = (f"Cập nhật gần nhất <b id='last-update-live' data-epoch='{_epoch_ms}' "
                      f"title='Cập nhật lúc {_abs_str}'>{format_relative(_last_dt)}</b>")
-    _mon_abbr = f"Th{today.month}"
+    # Bản GỌN (đợt làm mới theo theme Gundam): số ngày + Thứ/tháng trên 1 hàng ngang, thay vòng
+    # tròn 96px cũ -- sidebar ngắn lại, thông tin giữ nguyên.
     html = (
-        "<div class='sb-widget'><div class='tbcircle-wrap'>"
-        f"<div class='tbcircle'><div class='tbcircle-num'>{today.day}</div>"
-        f"<div class='tbcircle-mon'>{_mon_abbr}</div></div>"
-        f"<div class='tbcircle-dow'>{vn_dow}</div>"
-        f"<div class='tbcircle-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
+        "<div class='sb-widget sb-date'>"
+        f"<div class='sb-date-num'>{today.day:02d}</div>"
+        f"<div class='sb-date-txt'><div class='sb-date-dow'>{vn_dow} · Th{today.month}</div>"
+        f"<div class='sb-date-meta'>{_sub}" + (f"<br>{_upd_line}" if _upd_line else "") + "</div></div></div>"
     )
     return html, bool(_upd_line)
 
@@ -9942,6 +9975,11 @@ with st.sidebar:
             _inject_relative_time_ticker()
         _peek_clicked = bool(_peek_pool(df)) and st.button(
             "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", width="stretch")
+    # Theme đang dùng (mã máy + tên) -- link nhảy thẳng tới Tuỳ biến -> Giao diện để đổi theme.
+    st.markdown(
+        f"<a class='sb-theme-chip' target='_self' href='?nav={quote('Tuỳ biến')}&tsub={quote('Giao diện')}'>"
+        f"{_THEME_UNIT_TAG_HTML}<span class='sb-theme-name'>{html_escape(THEME['name'])}</span></a>",
+        unsafe_allow_html=True)
 if _peek_clicked:
     # Mở dialog NGOÀI khối st.sidebar (dialog không nên dựng trong ngữ cảnh sidebar).
     st.session_state["peek_day"] = _pick_peek_day(df, exclude=st.session_state.get("peek_day"))
@@ -10398,20 +10436,18 @@ def _shuffle_daily_quote():
 
 
 def _render_today_billboard(kq, hero_chips):
-    """Billboard đầu trang Hôm nay: gộp card "Trích dẫn hôm nay" + chip mục lục vào 1 khối, xếp
-    thành 2 cột (trích dẫn | mục lục dọc) ngăn cách bởi đường kẻ dọc -- khớp `Hôm nay.dc.html`
-    (đợt redesign Apple/macOS-inspired). Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt
+    """Billboard đầu trang Hôm nay: nhãn mã máy của theme (dải 3 màu + "RX-78-2 · UC 0079"), trích
+    dẫn hôm nay, rồi 1 hàng chip mục lục NGANG ở đáy (đợt làm mới theo theme Gundam -- thay bố cục 2
+    cột trích dẫn | mục lục dọc cũ). Badge tròn "Ngày đang xem" (số ngày + Thứ + "ngày hoạt
     động X/Y" + "Cập nhật gần nhất") KHÔNG còn ở đây -- dời sang sidebar
     (`_sidebar_date_badge_html()`, xem khối "with st.sidebar" ở đầu file) vì đó là thông tin luôn
     đúng cho NGÀY HÔM NAY thật (`_today_vn()`), không đổi theo ngày đang browse qua day_picker
     trên trang này -- hợp làm 1 khối LUÔN hiện ở mọi trang hơn là kẹt trong billboard chỉ trang
     này mới thấy (xác nhận với người dùng qua ảnh chụp mockup sidebar).
 
-    Cột phải "mục lục" (`hero_chips`) xếp DỌC (khác `.sec-toc` hàng-ngang-wrap dùng ở nơi khác) --
-    dùng class `.tbill-toccol` bọc ngoài, tái dùng nguyên `.sec-toc-chip` cho từng chip.
-
-    Không có trích dẫn (chưa import trích dẫn nào) thì chỉ còn mục lục, render thẳng không cần
-    st.columns (khác bản 2/3-cột trước đây, giờ ít nhất còn 1 cột nên không cần chia).
+    Mục lục (`hero_chips`) dùng class `.tbill-toccol` (hàng ngang) bọc ngoài, tái dùng nguyên
+    `.sec-toc-chip` cho từng chip. Không có trích dẫn (chưa import trích dẫn nào) thì chỉ còn nhãn
+    mã máy + mục lục.
 
     Nút ⭐ Yêu thích vẫn là widget Streamlit thật (không nhét được vào chuỗi HTML tĩnh) -- xem lý
     do chọn ký tự "★"/"☆" thay vì icon Material trong lịch sử đổi của hàm _render_daily_quote_card
@@ -10422,8 +10458,8 @@ def _render_today_billboard(kq, hero_chips):
     with st.container(key="today_billboard", border=True):
         if kq is not None:
             with st.container(key="tbill_daterow"):
-                c_quote, c_toc = st.columns([2, 1], vertical_alignment="center")
-                with c_quote:
+                st.markdown(_THEME_UNIT_TAG_HTML, unsafe_allow_html=True)
+                with st.container(key="tbill_quote"):
                     st.markdown(
                         "<div class='kq-daily-mark'>“</div>"
                         f"<div class='kq-daily-text'>{html_escape(str(kq['Nội dung']))}</div>",
@@ -10452,10 +10488,9 @@ def _render_today_billboard(kq, hero_chips):
                                          help="Bỏ Yêu thích" if _fav else "Yêu thích"):
                                 set_kindle_highlight_favorite(kq['dedupe_hash'], not _fav)
                                 st.rerun()
-                with c_toc:
-                    st.markdown(_toc_html, unsafe_allow_html=True)
         else:
-            st.markdown(_toc_html, unsafe_allow_html=True)
+            st.markdown(_THEME_UNIT_TAG_HTML, unsafe_allow_html=True)
+        st.markdown(_toc_html, unsafe_allow_html=True)
 
 
 def _comeback_info(df, sel):
@@ -10750,187 +10785,120 @@ def _render_data_health():
             st.caption("Chấm cam: phiên mới nhất cũ hơn 3 ngày, chưa đồng bộ, hoặc sao lưu cũ hơn 30 ngày.")
 
 
-def _tb_axis_grid(items, per_row, is_selected, setting_name, key_prefix, css_for,
-                   label_for=None, value_for=None):
-    """Lưới nút chọn 1 trục cá nhân hoá (sub-page "Giao diện") -- items: list [(name, cfg)].
-    is_selected(name, cfg) -> bool. css_for(name, cfg, selected) -> chuỗi thuộc tính CSS (không
-    kèm selector) áp cho nút preview của item đó. value_for(name, cfg) -> giá trị THẬT SỰ lưu vào
-    setting (mặc định chính tên item -- đúng cho palette/kiểu nền trang/kiểu thẻ/mật độ/font, vốn
-    lưu bằng tên; accent là NGOẠI LỆ DUY NHẤT lưu bằng mã hex nên truyền value_for=lambda n, h: h).
-    Bấm 1 item chưa chọn -> save_setting() + st.rerun(), đúng pattern nút-preview đã dùng cho
-    accent/bảng màu nền/kiểu nền trang/kiểu thẻ/font từ trước -- gộp lại thành 1 hàm dùng chung
-    cho cả 6 trục thay vì lặp lại y hệt 6 lần."""
-    _label_for = label_for or (lambda n: n)
-    _value_for = value_for or (lambda n, c: n)
-    _css = "<style>"
-    for _start in range(0, len(items), per_row):
-        _row = items[_start:_start + per_row]
-        _cols = st.columns(per_row)
-        for _i, (_name, _cfg) in enumerate(_row):
-            _idx = _start + _i
-            _key = f"{key_prefix}_{_idx}"
-            _selected = is_selected(_name, _cfg)
-            _label = f"✓ {_label_for(_name)}" if _selected else _label_for(_name)
-            _css += (f".st-key-{_key} div[data-testid=\"stButton\"] button[kind=\"secondary\"] {{ "
-                     f"{css_for(_name, _cfg, _selected)} }}")
-            with _cols[_i]:
-                if st.button(_label, key=_key, width="stretch"):
-                    if not _selected:
-                        save_setting(setting_name, _value_for(_name, _cfg))
-                        st.rerun()
-    _css += "</style>"
-    st.markdown(_css, unsafe_allow_html=True)
+# CSS lưới chọn theme (sub-page "Giao diện") -- string thường (không f-string, xem theming.md). Màu
+# của TỪNG thẻ xem trước đi bằng inline style lấy từ chính theme đó, không qua var(--token) (token
+# chỉ là theme đang dùng).
+_GTH_CSS = """
+<style>
+/* padding 20px: stMarkdownContainer của Streamlit có margin-bottom -16px nuốt bớt khoảng cách, cộng
+   gap 10px của khối cha -> còn ~14px giữa thẻ xem trước và nút Chọn (margin trên .gth-card bị nuốt
+   hẳn, không dùng được). */
+.gth-wrap { padding-bottom: 20px; }
+/* Nút Chọn cách thẻ hàng DƯỚI xa hơn (~24px) so với thẻ của chính nó (~14px) -> mỗi nút nhìn rõ là
+   thuộc thẻ phía trên. */
+[class*="st-key-tbgd_theme_"] { margin-bottom: 14px; }
+.gth-card { overflow: hidden; }
+.gth-prev { height: 96px; padding: 14px; box-sizing: border-box; display: flex; align-items: flex-end; }
+.gth-mini { width: 100%; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; }
+.gth-mini-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gth-num { font-size: 20px; font-weight: 700; line-height: 1; }
+.gth-tri { display: inline-flex; gap: 3px; }
+.gth-tri i { width: 8px; height: 8px; display: inline-block; }
+.gth-track { display: flex; height: 6px; gap: 2px; }
+.gth-meta { padding: 11px 14px 13px; display: flex; flex-direction: column; gap: 3px; }
+.gth-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.gth-badge { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 3px; font-weight: 500; }
+.gth-code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; }
+.gth-swatches { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.gth-sw { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--text-3); }
+.gth-sw i { width: 40px; height: 40px; display: block; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--divider); }
+</style>
+"""
+
+
+def _gth_preview_html(key, th, active):
+    """1 thẻ xem trước theme -- vẽ bằng màu của CHÍNH theme đó (nền + hoạ tiết, 1 thẻ mini có số
+    liệu mẫu cố định "1h45′" chỉ để minh hoạ cỡ chữ, dải 3 màu, thanh 2 màu biểu đồ đầu tiên)."""
+    _tok = theme_tokens(th)
+    _cv = theme_card_vars(th)
+    _pat = THEME_PATTERNS[th["pattern"]]
+    _img = _pat["image"].replace("var(--divider-on-bg)", _tok["divider-on-bg"])
+    _shape = f"border-radius:{_cv['radius']}; corner-shape:{_cv['corner_shape']};"
+    _ring = (f"box-shadow: 0 0 0 3px var(--accent), {_cv['shadow']};" if active
+             else f"box-shadow: {_cv['shadow']};" if th["mode"] == "light"
+             else f"box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);")
+    _mini_shadow = ("box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);" if th["mode"] == "dark"
+                    else f"box-shadow: 0 6px 18px -10px {_tok['divider-2']};")
+    _tone = "Tối" if th["mode"] == "dark" else "Sáng"
+    _a, _b = th["chart"][0], th["chart"][1]
+    return (
+        f"<div class='gth-wrap'><div class='gth-card' style='background:{th['card']}; color:{th['text']}; {_shape} {_ring}'>"
+        f"<div class='gth-prev' style='background-color:{th['bg']}; background-image:{_img}; "
+        f"background-size:{_pat['size']};'>"
+        f"<div class='gth-mini' style='background:{th['card']}; {_shape} {_mini_shadow}'>"
+        f"<div class='gth-mini-top'><span class='gth-num' style='color:{th['text']};'>1h45′</span>"
+        f"<span class='gth-tri'><i style='background:{th['accent']}'></i><i style='background:{th['trim']}'></i>"
+        f"<i style='background:{th['trim2']}'></i></span></div>"
+        f"<div class='gth-track'><span style='width:60%;background:{_a}'></span>"
+        f"<span style='width:40%;background:{_b}'></span></div></div></div>"
+        f"<div class='gth-meta'><div class='gth-name'><span>{html_escape(th['name'])}</span>"
+        f"<span class='gth-badge' style='background:{th['chip']}; color:{th['text-2']};'>{_tone}</span></div>"
+        f"<div class='gth-code' style='color:{th['text-3']};'>{html_escape(key)} · {th['era']}</div></div></div></div>")
 
 
 def _render_tuybien_giao_dien():
-    """Sub-page "Giao diện" của tab Tuỳ biến -- theo ĐÚNG khuôn chuẩn mọi sub-tab khác trong app
-    (Báo cáo/Sách/Gundam): billboard mở đầu (KHÔNG phải panel 2 cột riêng như bản mockup .dc.html
-    gốc -- xác nhận với người dùng đổi lại cho nhất quán) + chip TOC nhảy neo + chuỗi 6 chương
-    sec_chapter() bên dưới, mỗi chương 1 trục cá nhân hoá độc lập (trục "Mật độ bố cục" đã BỎ theo
-    yêu cầu người dùng -- xem chú thích --card-pad/--card-gap gần _card_style_vars). Billboard
-    ĐÓNG LUÔN VAI TRÒ "xem trước trực tiếp" -- không dựng panel/state giả lập riêng như bản
-    .dc.html gốc (component React, state độc lập với trang thật): ở đây toàn trang ĐÃ tự re-render
-    đúng token đang chọn mỗi lần bấm 1 lựa chọn (save_setting() + st.rerun()), nên billboard chỉ
-    cần đọc thẳng ACCENT/BG_PALETTE/... hiện hành -- SỐ THẬT (đếm 6 trục), không bịa số liệu
-    phiên/giờ giả như bản mockup gốc (app thuần hồi cứu, billboard mọi nơi khác trong app đều là
-    số liệu thật)."""
-    _accent_name = next((n for n, h in ACCENT_PRESETS.items() if h == ACCENT), "")
-    _chip_defs = [("Accent", _accent_name), ("Nền", BG_PALETTE), ("Hoạ tiết", BG_STYLE),
-                  ("Thẻ", CARD_STYLE), ("Độ rộng", CONTENT_WIDTH_NAME),
-                  ("Font", BODY_FONT_NAME)]
+    """Sub-page "Giao diện" của tab Tuỳ biến: chọn 1 theme Gundam (GUNDAM_THEMES) -- theme quyết
+    định toàn bộ màu, tông sáng/tối, kiểu thẻ, hoạ tiết nền, font và màu biểu đồ (yêu cầu người
+    dùng: bỏ 6 trục chọn rời). Billboard = theme đang dùng (tên, mô tả, bảng màu, thông số); bên dưới
+    là 1 lưới phẳng mọi theme (không chia nhóm theo series), mỗi thẻ vẽ bằng màu của chính theme đó
+    + nút chọn. Chọn -> save_setting("theme") + st.rerun() (toàn trang dựng lại theo theme mới)."""
+    st.markdown(_GTH_CSS, unsafe_allow_html=True)
+    _pat_label = THEME_PATTERNS[THEME["pattern"]]["label"]
+    _corner = f"vát {THEME['cut']}px" if THEME["cut"] else f"bo {THEME['radius']}px"
+    _spec = [("Mã", f"{THEME_KEY} · {THEME['era']}"), ("Tông", "Tối" if IS_DARK else "Sáng"),
+             ("Font", BODY_FONT_NAME), ("Hoạ tiết", _pat_label), ("Góc thẻ", _corner)]
     _chips_html = "".join(
         f"<span class='chip'><span class='ck'>{_k}</span><span class='cv'>{html_escape(str(_v))}</span></span>"
-        for _k, _v in _chip_defs)
+        for _k, _v in _spec)
+    _sw = [("Nền", THEME["bg"]), ("Thẻ", THEME["card"]), ("Chủ đạo", THEME["accent"]),
+           ("Phụ", THEME["trim"]), ("Điểm nhấn", THEME["trim2"])]
+    _sw_html = "".join(f"<span class='gth-sw'><i style='background:{_c}'></i>{_n}</span>" for _n, _c in _sw)
     _right_html = (
-        "<div class='pbill-title'>Xem trước trực tiếp</div>"
-        "<div class='pbill-sub'>Tổ hợp đang áp dụng — cập nhật ngay khi bạn đổi 1 lựa chọn "
-        "bất kỳ bên dưới.</div>"
-        f"<div class='pbill-chips'>{_chips_html}</div>")
+        f"<div class='pbill-title'>{html_escape(THEME['name'])}</div>"
+        f"<div class='pbill-sub'>{html_escape(THEME['note'])} Theme quyết định màu, tông sáng/tối, "
+        "kiểu thẻ, hoạ tiết nền, font và màu biểu đồ.</div>"
+        f"<div class='pbill-chips'>{_chips_html}</div>"
+        f"<div class='gth-swatches'>{_sw_html}</div>")
     render_period_billboard(
-        "Giao diện", "6", "trục cá nhân hoá", "Kết hợp tự do, không giới hạn",
-        _right_html,
-        [("tbgd-ch1", "1 · Màu accent"), ("tbgd-ch2", "2 · Bảng màu nền"),
-         ("tbgd-ch3", "3 · Kiểu nền trang"), ("tbgd-ch4", "4 · Kiểu thẻ"),
-         ("tbgd-ch5", "5 · Độ rộng nội dung"), ("tbgd-ch6", "6 · Font thân chữ")],
-        key="tbgd_billboard")
+        "Giao diện", str(len(GUNDAM_THEMES)), "theme Gundam", f"Đang dùng: {THEME_KEY}",
+        _right_html, [], key="tbgd_billboard")
 
     _reset_col, _random_col = st.columns(2)
     with _reset_col:
-        if st.button("Đặt lại mặc định", key="tbgd_reset_all", width="stretch"):
-            for _k, _v in [("accent_hex", "#4f4dc4"), ("bg_palette", "Bạc hà"), ("bg_style", "Lưới điểm"),
-                           ("card_style", "Hào quang nhấn"), ("content_width", "Rộng"),
-                           ("body_font", "Inter")]:
-                save_setting(_k, _v)
+        if st.button(f"Về mặc định ({DEFAULT_THEME})", key="tbgd_reset_all", width="stretch",
+                     disabled=THEME_KEY == DEFAULT_THEME):
+            save_setting("theme", DEFAULT_THEME)
             st.rerun()
     with _random_col:
         if st.button("Ngẫu nhiên", icon=":material/casino:", key="tbgd_randomize", width="stretch"):
-            for _k, _choices in [("accent_hex", list(ACCENT_PRESETS.values())),
-                                  ("bg_palette", list(BG_PALETTES.keys())),
-                                  ("bg_style", list(BG_PRESETS.keys())),
-                                  ("content_width", list(CONTENT_WIDTHS.keys())),
-                                  ("card_style", list(CARD_STYLES.keys())),
-                                  ("body_font", list(BODY_FONTS.keys()))]:
-                save_setting(_k, random.choice(_choices))
+            save_setting("theme", random.choice([k for k in GUNDAM_THEMES if k != THEME_KEY]))
             st.rerun()
 
-    sec_chapter("tbgd-ch1", 1, "Màu accent",
-                lead="Một màu duy nhất, lan toả khắp biểu đồ, nút bấm và điểm nhấn.", tight_top=True)
-    with st.container(border=True, key="tbgd_accent_card"):
-        def _accent_css(name, hexcode, selected):
-            _border = "var(--text)" if selected else "transparent"
-            _txt = _readable_text(hexcode)
-            return (f"background:{hexcode} !important; color:{_txt} !important; "
-                    f"border:2px solid {_border} !important; border-radius:10px !important; "
-                    f"width:100% !important; height:auto !important; min-height:48px !important; "
-                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(ACCENT_PRESETS.items()), 5, lambda n, h: h == ACCENT,
-                      "accent_hex", "accent_sw", _accent_css, value_for=lambda n, h: h)
-
-    sec_chapter("tbgd-ch2", 2, "Bảng màu nền",
-                lead="Bộ trọn gói nền, thẻ và viền — không lệch tông khi đổi.")
-    with st.container(border=True, key="tbgd_palette_card"):
-        def _pal_css(name, tok, selected):
-            _bg = tok["bg"][1] if IS_DARK else tok["bg"][0]
-            _card = tok["card"][1] if IS_DARK else tok["card"][0]
-            _border_c = tok["border"][1] if IS_DARK else tok["border"][0]
-            _text_c = tok["text-on-bg"][1] if IS_DARK else tok["text-on-bg"][0]
-            _ring = "var(--accent)" if selected else _border_c
-            # 10 bảng "nền đậm cố định" (BG_PALETTES_DARK_BG): swatch chỉ tô ĐẶC màu "bg" (bỏ nửa
-            # "card" của gradient chéo) -- bug thật đã phát hiện (không phải do đợt đổi màu này, có
-            # từ bộ preset trước): "bg" của 4 bảng này luôn ĐẬM còn "card" luôn SÁNG (ở light theme),
-            # trong khi "text-on-bg" là 1 màu SÁNG CỐ ĐỊNH duy nhất -- đọc được trên nửa "bg" đậm
-            # nhưng gần như vô hình trên nửa "card" sáng của gradient chéo, khiến nhãn tên bảng bị
-            # "cắt cụt" nhìn như chữ thiếu. 10 bảng "nền nhạt" còn lại giữ nguyên gradient chéo (cả 2
-            # nửa đều sáng, chữ tối luôn đọc được trên cả 2).
-            _bgimg = _bg if name in BG_PALETTES_DARK_BG else f"linear-gradient(135deg, {_bg} 50%, {_card} 50%)"
-            return (f"background: {_bgimg} !important; "
-                    f"color: {_text_c} !important; border:2px solid {_ring} !important; "
-                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
-                    f"min-height:56px !important; padding:8px 6px !important; font-weight:600 !important; "
-                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BG_PALETTES.items()), 5, lambda n, t: n == BG_PALETTE,
-                      "bg_palette", "bgpal_sw", _pal_css)
-
-    sec_chapter("tbgd-ch3", 3, "Kiểu nền trang",
-                lead="Hoạ tiết lặp phủ nhẹ lên nền trang, đứng sau mọi nội dung.")
-    with st.container(border=True, key="tbgd_pattern_card"):
-        def _bgpat_css(name, cfg, selected):
-            _border = "var(--accent)" if selected else "var(--border)"
-            _position = cfg.get("position", "0 0")
-            return (f"background-color: var(--card-tl) !important; "
-                    f"background-image: {cfg['image']} !important; background-size: {cfg['size']} !important; "
-                    f"background-position: {_position} !important; "
-                    f"color: var(--text) !important; border:2px solid {_border} !important; "
-                    f"border-radius:10px !important; width:100% !important; height:auto !important; "
-                    f"min-height:64px !important; padding:8px 6px !important; font-weight:600 !important; "
-                    f"font-size:12.5px !important; white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BG_PRESETS.items()), 5, lambda n, c: n == BG_STYLE,
-                      "bg_style", "bg_sw", _bgpat_css)
-
-    sec_chapter("tbgd-ch4", 4, "Kiểu thẻ", lead="Mỗi kiểu là một chất liệu bề mặt khác nhau.")
-    with st.container(border=True, key="tbgd_cardstyle_card"):
-        def _cs_css(name, cfg, selected):
-            _ring = "var(--accent)" if selected else "var(--border)"
-            return (f"background-color: var(--card) !important; color: var(--text) !important; "
-                    f"border:{cfg['border_w']} solid {_ring} !important; "
-                    f"border-radius:{cfg['radius']} !important; box-shadow:{cfg['shadow']} !important; "
-                    f"width:100% !important; height:auto !important; min-height:48px !important; "
-                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(CARD_STYLES.items()), 5, lambda n, c: n == CARD_STYLE,
-                      "card_style", "cardstyle_sw", _cs_css)
-
-    sec_chapter("tbgd-ch5", 5, "Độ rộng nội dung",
-                lead="Chiều ngang cột nội dung chính — hữu ích trên màn hình rộng (4K/5K).")
-    with st.container(border=True, key="tbgd_width_card"):
-        def _width_css(name, px, selected):
-            _bg = "color-mix(in srgb, var(--accent) 6%, var(--card))" if selected else "var(--card)"
-            _border = "var(--accent)" if selected else "var(--border)"
-            return (f"background:{_bg} !important; color: var(--text) !important; "
-                    f"border:1px solid {_border} !important; border-radius:var(--card-radius) !important; "
-                    f"width:100% !important; height:auto !important; min-height:52px !important; "
-                    f"padding:12px 10px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.3 !important;")
-        _tb_axis_grid(list(CONTENT_WIDTHS.items()), 5, lambda n, px: n == CONTENT_WIDTH_NAME,
-                      "content_width", "contentwidth_sw", _width_css,
-                      label_for=lambda n: f"{n} · {CONTENT_WIDTHS[n]}px")
-
-    sec_chapter("tbgd-ch6", 6, "Font thân chữ",
-                lead="Chỉ áp cho thân/nhãn/nút — bảng số liệu và trích dẫn giữ font riêng.")
-    with st.container(border=True, key="tbgd_font_card"):
-        def _bf_css(name, cfg, selected):
-            _ring = "var(--accent)" if selected else "var(--border)"
-            return (f"background-color: var(--card) !important; color: var(--text) !important; "
-                    f"border:var(--card-border-w) solid {_ring} !important; "
-                    f"border-radius:var(--card-radius) !important; "
-                    f"font-family:'{cfg['family']}',-apple-system,BlinkMacSystemFont,\"Segoe UI\","
-                    f"Roboto,Helvetica,Arial,sans-serif !important; "
-                    f"width:100% !important; height:auto !important; min-height:48px !important; "
-                    f"padding:8px 6px !important; font-weight:600 !important; font-size:13px !important; "
-                    f"white-space:normal !important; line-height:1.25 !important;")
-        _tb_axis_grid(list(BODY_FONTS.items()), 5, lambda n, c: n == BODY_FONT_NAME,
-                      "body_font", "bodyfont_sw", _bf_css)
+    sec_chapter("tbgd-ch1", None, "Chọn theme")
+    _items = list(GUNDAM_THEMES.items())
+    _per_row = 4
+    for _start in range(0, len(_items), _per_row):
+        _cols = st.columns(_per_row)
+        for _i, (_key, _th) in enumerate(_items[_start:_start + _per_row]):
+            _active = _key == THEME_KEY
+            with _cols[_i]:
+                st.markdown(_gth_preview_html(_key, _th, _active), unsafe_allow_html=True)
+                if st.button("Đang dùng" if _active else "Chọn", key=f"tbgd_theme_{_start + _i}",
+                             width="stretch", disabled=_active,
+                             icon=":material/check:" if _active else None):
+                    save_setting("theme", _key)
+                    st.rerun()
 
 
 # ==========================================
