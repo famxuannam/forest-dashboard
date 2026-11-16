@@ -6,8 +6,6 @@ import json
 import base64
 import time
 import zipfile
-import plotly.express as px
-import plotly.graph_objects as go
 import altair as alt
 import colorsys
 import hashlib
@@ -399,7 +397,7 @@ BG_IMAGE = THEME_PATTERNS[THEME["pattern"]]["image"]
 BG_SIZE = THEME_PATTERNS[THEME["pattern"]]["size"]
 BG_POSITION = "0 0"
 
-# Màu chữ trên biểu đồ Plotly/ECharts -- khớp token --text của theme.
+# Màu chữ trên biểu đồ ECharts/Altair -- khớp token --text của theme.
 PLOT_TEXT = THEME["text"]
 
 ACCENT = THEME["accent"]
@@ -497,7 +495,6 @@ def build_color_map(cat_names, proj_to_cat=None):
         for i, proj in enumerate(projs):
             cmap[proj] = _hsl_hex(hue, sat, l_lo + (l_hi - l_lo) * i / (n - 1))
     return cmap
-PLOTLY_CONFIG = {'scrollZoom': False, 'displayModeBar': False, 'responsive': True}
 
 # --- CÁC HÀM XỬ LÝ DỮ LIỆU (đọc/ghi qua Supabase) ---
 # save_* dùng ngữ nghĩa "ghi đè toàn bộ" (xoá hết rồi insert lại) để khớp hành vi các nơi gọi.
@@ -1671,117 +1668,218 @@ def prep_analysis_data():
         db = pd.concat([_other, _gundam_part, _book_part], ignore_index=True)
     return db
 
-def add_total_labels(fig, df, x_col, y_col):
-    totals = df.groupby(x_col)[y_col].sum().reset_index()
-    fig.add_trace(go.Scatter(
-        x=totals[x_col], y=totals[y_col], mode='text', text=totals[y_col].map(_fmt_hours_short),
-        textposition='top center', showlegend=False, hoverinfo='skip', textfont=dict(color=PLOT_TEXT, size=13)
-    ))
-    fig.update_layout(yaxis=dict(range=[0, totals[y_col].max() * 1.15]))
-    return fig
+# ===== Biểu đồ cột ECharts (st.echarts_chart) -- thay Plotly từ Streamlit 1.67 =====
+# Chunk JS Plotly của Streamlit ~4,7MB (~1,4MB gzip) chỉ để vẽ vài biểu đồ cột; ECharts (~1,2MB) đã
+# được tải sẵn cho "Khu rừng tháng này"/lịch nhiệt năm. Spec chỉ nhận JSON (không callback JS), nên
+# mọi chuỗi hiển thị (thời lượng đã định dạng, khoảng ngày...) gắn sẵn vào `name` của từng data item
+# và tooltip dùng template "<b>{a}</b><br>{b}" (a = tên series, b = name; ECharts tự escape giá trị).
+# Hàm *_spec trả dict thuần để kiểm tra bằng script mà không cần Streamlit (xem theming.md).
+
+def _ec_rgba(alpha):
+    return f"rgba({_hex_rgb_str(PLOT_TEXT)},{alpha})"
 
 
-def add_ma_overlay(fig, scope_df, window=7):
-    """Phủ đường trung bình động (theo ngày dương lịch, kể cả ngày trống) của
-    tổng giờ/ngày -> cắt nhiễu, cho thấy đang lên hay xuống."""
-    if scope_df.empty:
-        return fig
-    daily = scope_df.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
-    daily.index = pd.to_datetime(daily.index)
-    daily = daily.reindex(pd.date_range(daily.index.min(), daily.index.max()), fill_value=0.0)
-    ma = daily.rolling(window, min_periods=1).mean()
-    fig.add_trace(go.Scatter(
-        x=list(ma.index), y=list(ma.values), mode='lines',
-        line=dict(color=PLOT_TEXT, width=2.5, dash='dot'),
-        name=f'TB động {window} ngày'
-    ))
-    return fig
+def _ec_axis(axis_type, name=None, **extra):
+    """1 trục ECharts theo màu chữ theme (PLOT_TEXT): đường trục mờ, lưới ngang rất nhạt, không vạch
+    chia. `name` (nếu có) là tiêu đề trục -- trục x đặt giữa dưới, trục y đặt đầu trục (trên)."""
+    ax = {"type": axis_type,
+          "axisLabel": {"color": PLOT_TEXT, "hideOverlap": True},
+          "axisLine": {"lineStyle": {"color": _ec_rgba(0.35)}},
+          "axisTick": {"show": False},
+          "splitLine": {"lineStyle": {"color": _ec_rgba(0.10)}},
+          "nameTextStyle": {"color": PLOT_TEXT}}
+    if name:
+        ax["name"] = name
+    for k, v in extra.items():
+        ax[k] = {**ax[k], **v} if isinstance(v, dict) and isinstance(ax.get(k), dict) else v
+    return ax
 
 
-def add_record_marker(fig, scope_df):
-    """Đánh dấu 1 ngôi sao nhỏ phía trên cột của ngày nhiều giờ nhất TRONG KHOẢNG ĐANG XEM --
-    dùng lại đúng _top_days() (đã tính cho mục "Ngày nổi bật" ở Bảng số liệu), chỉ lấy TOP 1
-    (không phải top 3 như ở đó) để tránh rối mắt trên biểu đồ theo ngày. Nới trần trục hoành
-    18% (cùng hệ số add_total_labels) để ngôi sao không bị cắt ở mép trên canvas."""
-    top = _top_days(scope_df, 1)
-    if not top:
-        return fig
-    d, h = top[0]["date"], top[0]["hours"]
-    fig.add_annotation(
-        x=pd.Timestamp(d), y=h, yshift=16, text="★", showarrow=False,
-        font=dict(size=14, color=ACCENT_DARK),
-        hovertext=f"Nhiều giờ nhất trong khoảng này: {_fmt_hours_long(h)}", captureevents=True,
-    )
-    fig.update_yaxes(range=[0, h * 1.18])
-    return fig
+def _ec_spec(series, x_axis, y_axis, legend_names=None, x_title=None, y_title=None):
+    """Khung spec chung cho mọi biểu đồ cột: nền trong suốt, chữ PLOT_TEXT, tooltip theo item với
+    nền thẻ theme (đọc được cả theme tối), legend 1 hàng cuộn ngang phía trên (không xuống dòng che
+    biểu đồ ở màn hẹp). Tiêu đề trục y đặt đầu trục nên chừa đỉnh lưới lớn hơn khi có."""
+    top = (34 if legend_names else 8) + (22 if y_title else 0)
+    if y_title:
+        y_axis = {**y_axis, "name": y_title, "nameLocation": "end", "nameGap": 10,
+                  "nameTextStyle": {"color": PLOT_TEXT, "align": "left"}}
+    if x_title:
+        x_axis = {**x_axis, "name": x_title, "nameLocation": "middle", "nameGap": 28}
+    spec = {
+        "backgroundColor": "transparent",
+        "textStyle": {"color": PLOT_TEXT},
+        "tooltip": {"trigger": "item", "formatter": "<b>{a}</b><br>{b}", "confine": True,
+                    "backgroundColor": THEME["card"], "borderColor": _ec_rgba(0.18),
+                    "textStyle": {"color": PLOT_TEXT}},
+        "grid": {"left": 8, "right": 28, "top": top, "bottom": 34 if x_title else 8, "containLabel": True},
+        "xAxis": x_axis, "yAxis": y_axis, "series": series,
+    }
+    if legend_names:
+        spec["legend"] = {"type": "scroll", "top": 0, "left": 0, "data": legend_names,
+                          "textStyle": {"color": PLOT_TEXT}, "pageTextStyle": {"color": PLOT_TEXT},
+                          "pageIconColor": PLOT_TEXT, "pageIconInactiveColor": _ec_rgba(0.3)}
+    return spec
 
 
-def render_trend_fig(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
-    """Biểu đồ xu hướng dạng cột chồng theo thời gian.
-    grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
-    ma_df: nếu truyền (chỉ khi trục là ngày) -> phủ đường TB động 7 ngày + đánh dấu ngày kỷ lục.
-    cat_order: thứ tự hạng mục cho trục x (vd các thứ trong tuần)."""
-    co = {time_col: cat_order} if cat_order else None
-    fig = px.bar(grouped, x=time_col, y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP, category_orders=co)
-    if time_col == "Ngày":
-        fig = add_week_dividers(fig, grouped[time_col])
-        if ma_df is not None:
-            fig = add_ma_overlay(fig, ma_df, 7)
-            fig = add_record_marker(fig, ma_df)
+def _ec_stacked_bars(wide, x_vals, tip_of, selectable):
+    """1 series cột xếp chồng (stack "total") cho mỗi cột của `wide` (index khớp x_vals, cột = Nhóm/
+    Dự án, giá trị = giờ, ĐỦ mọi x kể cả 0 -- trục time/value xếp chồng theo VỊ TRÍ phần tử nên các
+    series phải thẳng hàng). Ô 0 giờ chỉ là cặp [x, 0] (không name) để spec nhẹ. selectable: bật
+    selectedMode "single" cho click -> điều hướng (_echarts_click_jump)."""
+    series = []
+    for i, col in enumerate(wide.columns):
+        data = []
+        for x, v in zip(x_vals, wide[col]):
+            v = round(float(v), 4)
+            data.append({"value": [x, v], "name": tip_of(x, v)} if v > 0 else [x, 0])
+        s = {"name": str(col), "type": "bar", "stack": "total", "data": data, "barMaxWidth": 48,
+             "itemStyle": {"color": COLOR_MAP.get(col, MAC_COLORS[i % len(MAC_COLORS)])}}
+        if selectable:
+            s["selectedMode"] = "single"
+        series.append(s)
+    return series
+
+
+def _wide_hours(grouped, time_col, color_col, x_vals):
+    """grouped dạng dài [time_col, color_col, 'Số giờ'] -> bảng rộng index = x_vals (đủ, thiếu điền 0),
+    cột = Nhóm/Dự án xếp theo tổng giờ giảm dần (nhiều nhất ở đáy chồng + đầu legend)."""
+    wide = grouped.pivot_table(index=time_col, columns=color_col, values='Số giờ', aggfunc='sum',
+                               fill_value=0.0).reindex(x_vals, fill_value=0.0)
+    return wide[wide.sum().sort_values(ascending=False).index]
+
+
+def _trend_spec(grouped, time_col, color_col, ma_df=None, cat_order=None, x_title=None):
+    """Spec cột chồng theo thời gian. grouped: đã group theo [time_col, color_col], có cột 'Số giờ'.
+    Trục "Ngày" là trục time (đủ mọi ngày dương lịch trong khoảng, ngày trống = 0), có đường nét đứt
+    giữa Chủ Nhật và Thứ Hai (ranh giới tuần, chỉ khi khoảng <= 120 ngày); ma_df (chỉ khi trục là ngày) -> phủ đường TB động 7
+    ngày + ★ trên cột ngày nhiều giờ nhất. Trục khác (Tuần/Tháng/Thứ) là trục category, có nhãn tổng
+    trên đỉnh cột. cat_order: thứ tự hạng mục trục x (vd các thứ trong tuần).
+    Trả (spec, tên các series cột) -- tên series để lọc click chỉ trên cột Nhóm/Dự án."""
+    is_day = time_col == "Ngày"
+    if is_day:
+        dates = pd.to_datetime(grouped[time_col]).dt.normalize()
+        days = pd.date_range(dates.min(), dates.max()) if not dates.empty else pd.DatetimeIndex([])
+        g = grouped.assign(**{time_col: dates})
+        wide = _wide_hours(g, time_col, color_col, days)
+        x_vals = [f"{d:%Y-%m-%d}" for d in days]
+        tip_of = lambda x, v: f"{x[8:10]}/{x[5:7]}/{x[:4]} · {_fmt_hours_long(v)}"
     else:
-        fig = add_total_labels(fig, grouped, time_col, 'Số giờ')
-    fig.update_layout(xaxis_title=x_title or time_col, yaxis_title="Số giờ")
-    return format_plotly_fig(fig)
+        cats = [c for c in cat_order if c in set(grouped[time_col])] if cat_order else sorted(grouped[time_col].unique())
+        wide = _wide_hours(grouped, time_col, color_col, cats)
+        x_vals = [str(c) for c in cats]
+        tip_of = lambda x, v: f"{x} · {_fmt_hours_long(v)}"
+    series = _ec_stacked_bars(wide, x_vals, tip_of, selectable=True)
+    bar_names = [s["name"] for s in series]
+    legend = list(bar_names)
+    totals = wide.sum(axis=1)
+    y_top = float(totals.max()) if len(totals) else 0.0
 
-def add_week_dividers(fig, dates):
-    """Kẻ đường nét đứt giữa Chủ Nhật và Thứ Hai (ranh giới tuần) cho biểu đồ theo ngày."""
-    s = pd.to_datetime(pd.Series(list(dates)), errors='coerce').dropna()
-    if s.empty:
-        return fig
-    dmin, dmax = s.min().normalize(), s.max().normalize()
-    first_mon = dmin + pd.Timedelta(days=(0 - dmin.day_of_week) % 7)  # Thứ Hai đầu tiên
-    _line_col = "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"
-    d = first_mon
-    while d <= dmax + pd.Timedelta(days=1):
-        fig.add_vline(x=(d - pd.Timedelta(hours=12)), line_width=1, line_dash="dash", line_color=_line_col)
-        d += pd.Timedelta(days=7)
-    fig.update_xaxes(tickformat="%d/%m")  # Việt hoá: ngày/tháng dạng số, bỏ tên tháng tiếng Anh
-    return fig
+    if is_day:
+        x_axis = _ec_axis("time", axisLabel={"formatter": "{dd}/{MM}"}, splitLine={"show": False})
+        if x_vals:
+            x_axis["min"] = f"{(days[0] - pd.Timedelta(hours=12)):%Y-%m-%d %H:%M:%S}"
+            x_axis["max"] = f"{(days[-1] + pd.Timedelta(hours=12)):%Y-%m-%d %H:%M:%S}"
+        if series and len(days) <= 120:
+            # Ranh giới tuần: 12h trưa Chủ Nhật = giữa cột CN và cột T2 (cột căn giữa tại 0h mỗi ngày).
+            # Chỉ khi xem <= 120 ngày: khoảng dài hơn (6 tháng/1 năm/Tất cả) hàng trăm đường nét đứt
+            # dày đặc thành 1 mảng xám che cột.
+            first_mon = days[0] + pd.Timedelta(days=(0 - days[0].day_of_week) % 7)
+            lines, d = [], first_mon
+            while d <= days[-1] + pd.Timedelta(days=1):
+                lines.append({"xAxis": f"{(d - pd.Timedelta(hours=12)):%Y-%m-%d %H:%M:%S}"})
+                d += pd.Timedelta(days=7)
+            series[0]["markLine"] = {
+                "silent": True, "symbol": ["none", "none"], "label": {"show": False}, "data": lines,
+                "lineStyle": {"type": "dashed", "width": 1,
+                              "color": "rgba(255,255,255,0.28)" if IS_DARK else "rgba(0,0,0,0.18)"}}
+        if ma_df is not None and not ma_df.empty and x_vals:
+            daily = ma_df.groupby('Ngày')['Thời lượng (Phút)'].sum() / 60
+            daily.index = pd.to_datetime(daily.index)
+            daily = daily.reindex(pd.date_range(daily.index.min(), daily.index.max()), fill_value=0.0)
+            ma = daily.rolling(7, min_periods=1).mean()
+            ma_name = "TB động 7 ngày"
+            series.append({
+                "name": ma_name, "type": "line", "showSymbol": False, "z": 5, "silent": True,
+                "data": [[f"{d:%Y-%m-%d}", round(float(v), 4)] for d, v in ma.items()],
+                "lineStyle": {"color": PLOT_TEXT, "width": 2.5, "type": "dotted"},
+                "itemStyle": {"color": PLOT_TEXT}})
+            legend.append(ma_name)
+            top = _top_days(ma_df, 1)
+            if top:
+                h = float(top[0]["hours"])
+                series.append({
+                    "name": "Kỷ lục", "type": "scatter", "z": 6, "symbolSize": 14,
+                    "itemStyle": {"color": "rgba(0,0,0,0)"},
+                    "label": {"show": True, "formatter": "★", "position": "top", "distance": 0,
+                              "color": ACCENT_DARK, "fontSize": 14},
+                    "tooltip": {"formatter": "{b}"},
+                    "data": [{"value": [f"{pd.Timestamp(top[0]['date']):%Y-%m-%d}", round(h, 4)],
+                              "name": f"Nhiều giờ nhất trong khoảng này: {_fmt_hours_long(h)}"}]})
+                y_top = max(y_top, h) * 1.18
+    else:
+        x_axis = _ec_axis("category", data=x_vals, axisLabel={"interval": "auto"}, splitLine={"show": False})
+        if series:
+            series.append({
+                "name": "Tổng", "type": "scatter", "silent": True, "symbolSize": 1, "z": 6,
+                "itemStyle": {"color": "rgba(0,0,0,0)"}, "tooltip": {"show": False},
+                "label": {"show": True, "formatter": "{b}", "position": "top", "distance": 4,
+                          "color": PLOT_TEXT, "fontSize": 13},
+                "data": [{"value": [x, round(float(t), 4)], "name": _fmt_hours_short(t)}
+                         for x, t in zip(x_vals, totals) if t > 0]})
+        y_top *= 1.15
+    y_axis = _ec_axis("value", axisLabel={"showMaxLabel": False})
+    if y_top > 0:
+        y_axis["max"] = round(y_top, 3)
+    spec = _ec_spec(series, x_axis, y_axis, legend_names=legend, x_title=x_title or time_col,
+                    y_title="Số giờ")
+    return spec, bar_names
 
-def _theme_fig(fig):
-    """Ép màu chữ mặc định (nhãn trục, legend, chú thích) của 1 figure Plotly theo theme Gundam đang
-    chọn -- theme="streamlit" của st.plotly_chart chỉ biết textColor TĨNH trong config.toml (1 bộ
-    sáng), sẽ ra chữ tối trên nền tối ở theme tối. Chỉ đặt font chung + legend, không đè màu đã đặt
-    tường minh ở từng trace/annotation."""
-    fig.update_layout(font_color=PLOT_TEXT, legend_font_color=PLOT_TEXT)
-    fig.update_xaxes(tickfont_color=PLOT_TEXT, title_font_color=PLOT_TEXT)
-    fig.update_yaxes(tickfont_color=PLOT_TEXT, title_font_color=PLOT_TEXT)
-    return fig
+
+def _single_bars_spec(labels, values, colors, tip_prefix, y_title="Số giờ"):
+    """Spec 1 dãy cột đơn (không chồng, không legend), màu theo TỪNG cột, bo 2 góc trên. Tooltip
+    "<nhãn tooltip> · <thời lượng>"; tip_prefix(label) cho chữ đầu tooltip (vd "Tuần 45")."""
+    data = [{"value": round(float(v), 4), "name": f"{tip_prefix(l)} · {_fmt_hours_long(v)}",
+             "itemStyle": {"color": c}} for l, v, c in zip(labels, values, colors)]
+    series = [{"name": y_title, "type": "bar", "data": data, "barMaxWidth": 56,
+               "itemStyle": {"borderRadius": [6, 6, 0, 0]}, "tooltip": {"formatter": "{b}"}}]
+    x_axis = _ec_axis("category", data=list(labels), axisLabel={"interval": 0}, splitLine={"show": False})
+    return _ec_spec(series, x_axis, _ec_axis("value"), y_title=y_title)
 
 
-def format_plotly_fig(fig):
-    fig.update_layout(
-        dragmode=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        # color = PLOT_TEXT (màu chữ của theme Gundam đang chọn) -- theme="streamlit" chỉ biết
-        # textColor TĨNH trong config.toml (1 bộ sáng), sẽ ra chữ tối trên nền tối ở theme tối.
-        font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color=PLOT_TEXT),
-        # Legend nằm ngang phía trên biểu đồ (giống app Xcode) -> không bị cắt khi co hẹp
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0, xanchor='left', title_text=''),
-        # r=28: chừa chỗ cho nhãn trục hoành CUỐI (vd '28/06') -> không bị tràn/cắt chữ ở
-        # mép phải canvas, vì nhãn căn giữa cột cuối nên phần nửa sau dễ vượt khỏi biên vẽ.
-        margin=dict(t=10, r=28),
-        xaxis=dict(automargin=True),
-    )
-    for tr in fig.data:
-        if tr.y is not None:
-            tr.customdata = [[_fmt_hours_long(v)] for v in tr.y]
-    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}<extra></extra>')
-    # Bo góc TRÊN cột (góc dưới phẳng ở trục); cliponaxis=False để bóng (CSS g.barlayer)
-    # không bị cắt ở đỉnh cột. Chỉ áp cho trace cột, line/scatter không ảnh hưởng.
-    fig.update_traces(marker_cornerradius=6, cliponaxis=False, selector=dict(type='bar'))
-    return fig
+def _echarts_click_jump(sel, bar_names, sel_ver_key, ccol, proj_to_cat=None):
+    """Xử lý click 1 cột trên biểu đồ Xu hướng/Theo khung giờ (tô theo Nhóm/Dự án, _trend_spec/
+    _hourly_spec) -- điều hướng sang "Báo cáo -> Dự án" đúng Nhóm/Dự án đã click, qua cờ
+    _bc_sub_jump/_grp_sel_jump (xem 2 nơi xử lý cờ này, tránh StreamlitAPIException vì widget đã
+    instantiate cùng lượt chạy). Chỉ series cột (bar_names) có selectedMode nên chỉ chúng sinh
+    selection; vẫn lọc theo tên để bỏ qua series phụ (TB động, Tổng, Tổng cộng, Kỷ lục).
+
+    sel_ver_key: session_state key giữ SỐ HẬU TỐ của key truyền vào st.echarts_chart() ở call
+    site (vd f"{key_prefix}_sel_{ver}") -- tăng lên 1 SAU KHI tiêu thụ click để lần render sau
+    dùng 1 key MỚI, selection rỗng -- selection state chỉ đọc (không xoá được qua session_state),
+    đổi key là cách duy nhất để click cũ không tự fire lại điều hướng khi quay lại biểu đồ đó."""
+    groups = (sel or {}).get("selection", {}).get("selected", []) if sel else []
+    clicked = next((g["series_name"] for g in groups
+                    if g.get("series_name") in bar_names and g.get("data_indices")), None)
+    if clicked is None:
+        return
+    _nhom = proj_to_cat.get(clicked) if proj_to_cat is not None else None
+    _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_nhom, clicked)
+    st.session_state[sel_ver_key] = st.session_state.get(sel_ver_key, 0) + 1
+    st.session_state["_bc_sub_jump"] = "Dự án"
+    st.session_state["_grp_sel_jump"] = (_kind, clicked)
+    st.rerun()
+
+
+def _render_click_chart(spec, bar_names, key_prefix, ccol, scope_df, alt, height=420):
+    """Vẽ 1 biểu đồ cột chồng có click -> điều hướng (Xu hướng, Theo khung giờ): key có hậu tố phiên
+    bản (xem _echarts_click_jump) và tiền tố "ecard_" để nhận style thẻ (CSS [class*="st-key-ecard_"])."""
+    _ver_key = f"{key_prefix}_sel_ver"
+    _sel = st.echarts_chart(spec, height=height, theme=None, on_select="rerun",
+                            key=f"ecard_{key_prefix}_sel_{st.session_state.get(_ver_key, 0)}", alt=alt)
+    _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
+                    if ccol == "Dự án" else None)
+    _echarts_click_jump(_sel, bar_names, _ver_key, ccol, _proj_to_cat)
+
 
 RANGE_OPTS = {"30 ngày": 30, "90 ngày": 90, "6 tháng": 182, "1 năm": 365, "Tất cả": None}
 
@@ -2600,56 +2698,61 @@ def _explode_session_hours(scope_df, key_col):
     return pd.DataFrame(out, columns=[key_col, 'Khung giờ', 'giờ'])
 
 
-def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)", key_prefix=None):
+def _hourly_spec(scope_df, color_col, x_title="Khung giờ (0h - 23h)"):
+    """Spec "Theo khung giờ": cột chồng trung bình giờ/ngày có hoạt động theo từng giờ 0-23 (mỗi
+    Nhóm/Dự án 1 series), đường cong "Tổng cộng", dải nền theo buổi (BUOI_BANDS, nhãn sát đáy dải
+    để không đụng legend phía trên). Trục x là trục SỐ (-0.7..23.7) để dải buổi đặt đúng ranh giới
+    nửa giờ và cột giờ 0/23 không bị khung cắt. Trả (spec, tên series cột) hoặc (None, []) nếu trống."""
     if scope_df.empty:
-        return
+        return None, []
     num_days = scope_df['Ngày'].nunique() or 1
     dist = _explode_session_hours(scope_df, color_col)
     if dist.empty:
-        return
+        return None, []
     dist['giờ'] = dist['giờ'] / num_days  # trung bình mỗi ngày có hoạt động
-
     hr_group = dist.groupby(['Khung giờ', color_col])['giờ'].sum().reset_index().rename(columns={'giờ': 'Số giờ'})
-    fig = px.bar(hr_group, x='Khung giờ', y='Số giờ', color=color_col, color_discrete_map=COLOR_MAP)
+    hours = list(range(24))
+    wide = _wide_hours(hr_group, 'Khung giờ', color_col, hours)
+    series = _ec_stacked_bars(wide, hours, lambda h, v: f"{h}h–{h + 1}h · {_fmt_hours_long(v)}/ngày",
+                              selectable=True)
+    bar_names = [s["name"] for s in series]
+    tot = wide.sum(axis=1)
 
-    tot = dist.groupby('Khung giờ')['giờ'].sum().reindex(range(24), fill_value=0.0)
-    fig.add_trace(go.Scatter(
-        x=list(tot.index), y=list(tot.values), mode='lines+markers',
-        line=dict(color=MAC_COLORS[0], width=2, shape='spline'),
-        marker=dict(size=5, color=MAC_COLORS[0]),
-        name='Tổng cộng'
-    ))
-
-    # Dải nền theo buổi để dễ đọc "sáng/chiều/tối/khuya".
-    # Chừa lề hai bên (PAD) để cột giờ 0 và giờ 23 không bị khung biểu đồ che.
     PAD = 0.7
     _last = len(BUOI_BANDS) - 1
+    areas = []
     for i, (name, x0, x1, col) in enumerate(BUOI_BANDS):
         lo = -PAD if i == 0 else x0 - 0.5
         hi = 23 + PAD if i == _last else x1 - 0.5
-        # annotation_position="bottom left" (không phải "top left") -- nhãn buổi đặt SÁT ĐÁY dải
-        # màu, tránh đụng độ với legend nằm NGAY TRÊN đỉnh biểu đồ (format_plotly_fig() đặt legend
-        # ở y=1.02, quá gần đỉnh vùng vẽ để còn chỗ cho nhãn "top" không bị đè/chen chúc).
-        fig.add_vrect(x0=lo, x1=hi, fillcolor=col, opacity=1, layer="below", line_width=0,
-                      annotation_text=name.strip(), annotation_position="bottom left",
-                      annotation=dict(font_size=11, font_color="#9a9aa0"))
-
+        areas.append([{"xAxis": lo, "name": name.strip(), "itemStyle": {"color": col}}, {"xAxis": hi}])
+    series.append({
+        "name": "Tổng cộng", "type": "line", "smooth": 0.4, "smoothMonotone": "x", "symbol": "circle",
+        "symbolSize": 6, "z": 5,
+        "lineStyle": {"color": MAC_COLORS[0], "width": 2}, "itemStyle": {"color": MAC_COLORS[0]},
+        "data": [{"value": [h, round(float(v), 4)], "name": f"{h}h–{h + 1}h · {_fmt_hours_long(v)}/ngày"}
+                 for h, v in tot.items()],
+        # Dải buổi gắn vào series này (z thấp hơn cột qua zlevel của markArea mặc định nằm dưới).
+        "markArea": {"silent": True, "data": areas,
+                     "label": {"position": "insideBottomLeft", "color": "#9a9aa0", "fontSize": 11}}})
     y_max = float(tot.max()) or 1.0
-    fig.update_layout(xaxis_title=x_title, yaxis_title="Trung bình giờ/ngày",
-                      yaxis=dict(range=[0, y_max * 1.28]),
-                      xaxis=dict(range=[-PAD, 23 + PAD], dtick=2))
-    fig = format_plotly_fig(fig)
-    fig.update_traces(hovertemplate='<b>%{data.name}</b><br>%{customdata[0]}/ngày<extra></extra>')
-    if key_prefix is None:
-        st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
+    # Trục bắt đầu ở -PAD nên vạch chia tự động rơi vào -0.7, 1.3...; customValues ghim nhãn đúng giờ chẵn.
+    x_axis = _ec_axis("value", min=-PAD, max=23 + PAD,
+                      axisLabel={"customValues": list(range(0, 24, 2))}, splitLine={"show": False})
+    y_axis = _ec_axis("value", max=round(y_max * 1.28, 3), axisLabel={"showMaxLabel": False})
+    spec = _ec_spec(series, x_axis, y_axis, legend_names=bar_names + ["Tổng cộng"], x_title=x_title,
+                    y_title="Trung bình giờ/ngày")
+    return spec, bar_names
+
+
+def render_hourly_chart(scope_df, color_col, x_title="Khung giờ (0h - 23h)", key_prefix=None):
+    spec, bar_names = _hourly_spec(scope_df, color_col, x_title)
+    if spec is None:
         return
-    _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
-    _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
-                            on_select="rerun", selection_mode="points",
-                            key=f"{key_prefix}_sel_{_ver}")
-    _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
-                    if color_col == "Dự án" else None)
-    _plotly_click_jump(fig, _sel, f"{key_prefix}_sel_ver", color_col, _proj_to_cat)
+    _alt = "Trung bình giờ tập trung mỗi ngày theo từng khung giờ"
+    if key_prefix is None:
+        st.echarts_chart(spec, height=420, theme=None, key="ecard_hourly", alt=_alt)
+        return
+    _render_click_chart(spec, bar_names, key_prefix, color_col, scope_df, _alt)
 
 
 def _streak_stats(streak_df):
@@ -3143,7 +3246,7 @@ def _entity_link_html(name, kind, label=None):
     đến (preset selectbox grp_sel / rl_detail_*) đã dựng ở phần đầu trang "Báo cáo"/"Sách"/"Gundam"
     -- xem query param kind/grp/book/series. target=_self buộc reload toàn trang (giống
     .jdate-link) -> luôn vào session MỚI, không dính gotcha "widget đã instantiate" (chỉ click
-    biểu đồ trong-phiên mới cần né gotcha đó, xem render_trend_fig/render_hourly_chart).
+    biểu đồ trong-phiên mới cần né gotcha đó, xem _trend_spec/_hourly_spec).
     kind: "cat" (Nhóm) | "proj" (Dự án) | "book" (Sách) | "gundam" (series Gundam)."""
     _label = label if label is not None else html_escape(str(name))
     _n = quote(str(name))
@@ -3178,33 +3281,6 @@ def _proj_link_kind(nhom, ten):
     if nhom == GUNDAM_TAG:
         return "gundam"
     return "proj"
-
-
-def _plotly_click_jump(fig, sel, sel_ver_key, ccol, proj_to_cat=None):
-    """Xử lý click 1 cột trên biểu đồ Xu hướng/Theo khung giờ (tô theo Nhóm/Dự án,
-    render_trend_fig/render_hourly_chart) -- điều hướng sang "Báo cáo -> Dự án" đúng Nhóm/Dự án
-    đã click, qua cờ _bc_sub_jump/_grp_sel_jump (xem 2 nơi xử lý cờ này, tránh
-    StreamlitAPIException vì widget đã instantiate cùng lượt chạy). Lọc chỉ nhận click trên
-    trace kiểu 'bar' (px.bar tạo đúng 1 trace/giá trị color_col, fig.data[i].name = tên Nhóm/Dự
-    án) -- loại trace phụ cùng fig (đường TB động 7 ngày, nhãn "Tổng", chấm "Tổng cộng" giờ
-    theo khung giờ) không mang nghĩa Nhóm/Dự án, click vào đó phải bỏ qua.
-
-    sel_ver_key: session_state key giữ SỐ HẬU TỐ của key truyền vào st.plotly_chart() ở call
-    site (vd f"{key_prefix}_sel_{ver}") -- tăng lên 1 SAU KHI tiêu thụ click để lần render sau
-    dùng 1 key MỚI, selection rỗng -- Streamlit không cho "xoá" selection cũ qua session_state
-    (chỉ đọc), đổi key là cách duy nhất để tránh click cũ tự fire lại điều hướng khi quay lại
-    đúng biểu đồ đó."""
-    _pts = sel["selection"]["points"] if sel else []
-    _bar_pts = [p for p in _pts if fig.data[p["curve_number"]].type == "bar"]
-    if not _bar_pts:
-        return
-    _clicked = fig.data[_bar_pts[0]["curve_number"]].name
-    _nhom = proj_to_cat.get(_clicked) if proj_to_cat is not None else None
-    _kind = "cat" if ccol == "Nhóm" else _proj_link_kind(_nhom, _clicked)
-    st.session_state[sel_ver_key] = st.session_state.get(sel_ver_key, 0) + 1
-    st.session_state["_bc_sub_jump"] = "Dự án"
-    st.session_state["_grp_sel_jump"] = (_kind, _clicked)
-    st.rerun()
 
 
 def _day_link_html(d, label=None):
@@ -5958,10 +6034,10 @@ def render_year_month_bars(df_y):
     max_hrs = hrs_by_month.max() or 1.0
     shades = _teal_shades(6)
     colors = [shades[min(int(h / max_hrs * 5), 5)] if h > 0 else "rgba(0,0,0,0)" for h in hrs_by_month]
-    fig = go.Figure(go.Bar(x=[f"Th{m}" for m in range(1, 13)], y=list(hrs_by_month), marker_color=colors))
-    fig = format_plotly_fig(fig)
-    fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
-    st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
+    labels = [f"Th{m}" for m in range(1, 13)]
+    spec = _single_bars_spec(labels, list(hrs_by_month), colors, lambda l: f"Tháng {l[2:]}")
+    st.echarts_chart(spec, height=360, theme=None, key="ecard_year_months",
+                     alt="Số giờ tập trung từng tháng trong năm")
 
 
 def render_year_category_bars(df_y, df, prev_year_key, elapsed_mask_y):
@@ -6312,40 +6388,50 @@ def _compute_eras(df, today=None):
     return sorted(out, key=lambda e: e["start"])
 
 
-def _eras_fig(eras):
-    """Biểu đồ dải ngang 1 hàng: mỗi era/break 1 thanh (go.Bar ngang với base = ngày bắt đầu, độ dài
-    tính bằng ms trên trục ngày). Dùng Plotly thay vì ECharts vì ECharts không có series `custom`
-    (renderItem là hàm JS, spec chỉ nhận JSON); stacked bar ECharts không dựng được khoảng trống
-    ở đầu/giữa trục thời gian. Màu era theo COLOR_MAP[nhóm], break là xám nhạt từ PLOT_TEXT; nhãn
-    chữ trong thanh chỉ khi thanh >= 14% tổng chiều dài."""
-    t0, t1 = pd.Timestamp(eras[0]["start"]), pd.Timestamp(eras[-1]["end"]) + pd.Timedelta(days=1)
-    total_ms = max((t1 - t0).total_seconds() * 1000, 1)
-    fig = go.Figure()
-    tips = []
-    for e in eras:
-        a, b = pd.Timestamp(e["start"]), pd.Timestamp(e["end"]) + pd.Timedelta(days=1)
-        ms = (b - a).total_seconds() * 1000
-        col = f"rgba({_hex_rgb_str(PLOT_TEXT)},0.16)" if e["kind"] == "break" else COLOR_MAP.get(e["nhom"], PLOT_TEXT)
+def _eras_spec(eras):
+    """Spec dải ngang 1 hàng: mỗi era/break 1 đoạn trên trục thời gian. ECharts không có series
+    `custom` (renderItem là hàm JS) nên dựng bằng cột ngang XẾP CHỒNG: đoạn đầu là 1 series đệm
+    trong suốt dài từ mốc 0 tới đầu khoảng (bị cắt ở min trục), mỗi đoạn sau dài đúng số ms của
+    era/break, khe hở giữa 2 đoạn (nếu có) là thêm 1 đệm trong suốt. ECharts KHÔNG xếp chồng trên
+    trục kiểu "time", nên cột nằm trên 1 trục SỐ ẩn (ms) và nhãn tháng do 1 trục time thứ 2 cùng
+    min/max (không series nào) vẽ. Mốc là ms UTC của ngày (không múi giờ) + useUTC để nhãn tháng
+    không lệch theo múi giờ trình duyệt. Màu era
+    theo COLOR_MAP[nhóm], break là xám nhạt từ PLOT_TEXT; nhãn chữ trong thanh chỉ khi thanh >= 14%
+    tổng chiều dài."""
+    to_ms = lambda d: int(pd.Timestamp(d).value // 1_000_000)
+    day_ms = 86_400_000
+    t0, t1 = to_ms(eras[0]["start"]), to_ms(eras[-1]["end"]) + day_ms
+    total_ms = max(t1 - t0, 1)
+    spacer = {"type": "bar", "stack": "eras", "silent": True, "tooltip": {"show": False},
+              "itemStyle": {"color": "rgba(0,0,0,0)"}}
+    series = [{**spacer, "name": "_pad0", "data": [t0]}]
+    cursor = t0
+    for i, e in enumerate(eras):
+        a, b = max(to_ms(e["start"]), cursor), to_ms(e["end"]) + day_ms
+        if a > cursor:
+            series.append({**spacer, "name": f"_pad{i + 1}", "data": [a - cursor]})
+        if b <= a:
+            continue
+        col = _ec_rgba(0.16) if e["kind"] == "break" else COLOR_MAP.get(e["nhom"], PLOT_TEXT)
         txt_col = PLOT_TEXT if e["kind"] == "break" else _readable_text(col)
-        tips.append(f"<b>{e['label']}</b><br>{e['start']:%d/%m/%Y} – {e['end']:%d/%m/%Y}"
-                    + (f"<br>{_fmt_hours_short(e['hours'])}" if e["kind"] == "era" else ""))
-        fig.add_trace(go.Bar(
-            x=[ms], y=[0], base=[a], orientation='h', name=e["label"], showlegend=False,
-            marker=dict(color=col), text=[e["label"] if ms / total_ms >= 0.14 else ""],
-            textposition='inside', insidetextanchor='middle', textfont=dict(color=txt_col, size=12)))
-    fig = format_plotly_fig(fig)
-    # format_plotly_fig() gắn customdata/hovertemplate theo "giờ" của trục y -- không áp dụng ở đây.
-    for tr, tip in zip(fig.data, tips):
-        tr.customdata = [[tip]]
-        tr.hovertemplate = '%{customdata[0]}<extra></extra>'
-    # b=56: CSS [data-testid="stPlotlyChart"] có padding 14px + overflow hidden nên vùng thấy được nhỏ
-    # hơn svg ~30px ở đáy -- chừa đáy lớn để nhãn trục x không bị cắt (xem ảnh chụp mobile/dark).
-    fig.update_layout(barmode='overlay', height=190, margin=dict(t=8, b=56, l=8, r=12),
-                      yaxis=dict(visible=False, range=[-0.5, 0.5]),
-                      xaxis=dict(type='date', range=[t0, t1], showgrid=False, automargin=True,
-                                 showticklabels=True, tickformat="%m/%Y", tickfont=dict(color=PLOT_TEXT)))
-    fig.update_traces(marker_cornerradius=4, selector=dict(type='bar'))
-    return fig
+        name = (f"{e['start']:%d/%m/%Y} – {e['end']:%d/%m/%Y}"
+                + (f" · {_fmt_hours_short(e['hours'])}" if e["kind"] == "era" else ""))
+        series.append({
+            "name": e["label"], "type": "bar", "stack": "eras", "barWidth": "70%",
+            "itemStyle": {"color": col, "borderRadius": 4},
+            "label": {"show": (b - a) / total_ms >= 0.14, "formatter": "{a}", "position": "inside",
+                      "color": txt_col, "fontSize": 12},
+            "data": [{"value": b - a, "name": name}]})
+        cursor = b
+    x_axes = [{"type": "value", "min": t0, "max": t1, "show": False},
+              # minInterval ~1 tháng: nhãn chỉ "MM/YYYY" nên vạch theo ngày sẽ lặp cùng 1 nhãn.
+              _ec_axis("time", min=t0, max=t1, minInterval=28 * day_ms, position="bottom",
+                       axisLabel={"formatter": "{MM}/{yyyy}"}, splitLine={"show": False})]
+    y_axis = {"type": "category", "data": [""], "show": False}
+    spec = _ec_spec(series, x_axes, y_axis)
+    spec["useUTC"] = True
+    spec["grid"] = {**spec["grid"], "top": 8, "bottom": 8}
+    return spec
 
 
 def render_eras(df):
@@ -6356,7 +6442,8 @@ def render_eras(df):
     if not eras:
         st.caption("Chưa có dữ liệu.")
         return
-    st.plotly_chart(_theme_fig(_eras_fig(eras)), width='stretch', config=PLOTLY_CONFIG)
+    st.echarts_chart(_eras_spec(eras), height=150, theme=None, key="ecard_eras",
+                     alt="Các giai đoạn tập trung và khoảng nghỉ theo thời gian")
     rows_html = ''
     for e in reversed(eras):
         n = (e["end"] - e["start"]).days + 1
@@ -6962,14 +7049,9 @@ def frag_trend(scope_df, key_prefix, default_color):
         g['Số giờ'] = g['Thời lượng (Phút)'] / 60
         if tcol == "Ngày":
             g['Ngày'] = pd.to_datetime(g['Ngày'])
-        fig = render_trend_fig(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
-        _ver = st.session_state.get(f"{key_prefix}_sel_ver", 0)
-        _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
-                                on_select="rerun", selection_mode="points",
-                                key=f"{key_prefix}_sel_{_ver}")
-        _proj_to_cat = (dft.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
-                        if ccol == "Dự án" else None)
-        _plotly_click_jump(fig, _sel, f"{key_prefix}_sel_ver", ccol, _proj_to_cat)
+        spec, bar_names = _trend_spec(g, tcol, ccol, ma_df=dft if tcol == "Ngày" else None)
+        _render_click_chart(spec, bar_names, key_prefix, ccol, dft,
+                            f"Số giờ tập trung theo {tcol.lower()}, chia theo {ccol.lower()}")
 
 
 @st.fragment
@@ -7058,7 +7140,7 @@ def frag_category_bars(scope_df, key, default_color):
 @st.fragment
 def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_order=None):
     """Mục Xu hướng theo thời gian trong một kỳ (tháng -> theo Ngày; tuần -> theo
-    Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (render_trend_fig). Bọc trong
+    Thứ) — bộ chọn Phân loại riêng. MA chỉ áp khi gộp theo Ngày (_trend_spec). Bọc trong
     container "chartopt_..." (xem docstring frag_calendar) để thu hẹp khoảng cách dọc xuống biểu đồ
     ngay dưới."""
     with st.container(key=f"chartopt_{key}"):
@@ -7068,14 +7150,9 @@ def frag_period_trend(scope_df, key, default_color, group_col, x_title, cat_orde
         g['Số giờ'] = g['Thời lượng (Phút)'] / 60
         if group_col == 'Ngày':
             g['Ngày'] = pd.to_datetime(g['Ngày'])
-        fig = render_trend_fig(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
-        _ver = st.session_state.get(f"{key}_sel_ver", 0)
-        _sel = st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG,
-                                on_select="rerun", selection_mode="points",
-                                key=f"{key}_sel_{_ver}")
-        _proj_to_cat = (scope_df.dropna(subset=['Dự án']).groupby('Dự án')['Nhóm'].first()
-                        if ccol == "Dự án" else None)
-        _plotly_click_jump(fig, _sel, f"{key}_sel_ver", ccol, _proj_to_cat)
+        spec, bar_names = _trend_spec(g, group_col, ccol, ma_df=scope_df, cat_order=cat_order, x_title=x_title)
+        _render_click_chart(spec, bar_names, key, ccol, scope_df,
+                            f"Số giờ tập trung theo {x_title.lower()}, chia theo {ccol.lower()}")
 
 
 @st.fragment
@@ -7127,10 +7204,9 @@ def render_project_week_trend(df_g, n_weeks=12):
     _light, _mid, _dark = _teal_shades(3)
     colors = [_dark if w == best_week else _mid for w in recent_weeks]
     labels = [f"T{w.split('-W')[1]}" for w in recent_weeks]
-    fig = go.Figure(go.Bar(x=labels, y=list(vals), marker_color=colors))
-    fig = format_plotly_fig(fig)
-    fig.update_layout(showlegend=False, yaxis=dict(title="Số giờ"))
-    st.plotly_chart(_theme_fig(fig), width='stretch', config=PLOTLY_CONFIG)
+    spec = _single_bars_spec(labels, list(vals), colors, lambda l: f"Tuần {l[1:]}")
+    st.echarts_chart(spec, height=360, theme=None, key="ecard_project_weeks",
+                     alt=f"Số giờ tập trung {len(labels)} tuần gần nhất")
 
 
 def render_project_recent_sessions(df_g, days=30):
@@ -7667,7 +7743,7 @@ _MAIN_CSS = """
        dùng chọn ở Tuỳ biến -> "4. Giao diện" (xem BG_PRESETS, lưu setting "bg_style"), truyền
        vào qua 2 biến CSS --bg-image/--bg-size (khối :root phía trên) thay vì literal cố định như
        trước, để đổi qua lại không cần sửa code. CHỈ áp cho .stApp (nền trang) -- KHÔNG được lan
-       vào .glass-card/[stPlotlyChart]/[stVegaLiteChart]/.dtbl-wrap, các khối đó phải giữ mặt phẳng
+       vào .glass-card/[ecard_]/[stVegaLiteChart]/.dtbl-wrap, các khối đó phải giữ mặt phẳng
        var(--card) không hoạ tiết để biểu đồ/bảng luôn dễ đọc, cá tính chỉ nằm ở phần lề trang
        xung quanh. */
     .stApp {
@@ -7745,8 +7821,8 @@ _MAIN_CSS = """
 
     /* Mục "Nhóm & dự án" dạng thanh ngang xếp hạng (frag_category_bars) -- thay biểu đồ tròn
        cũ, style theo mockup Forest Dashboard.dc.html: thẻ padding 16px 18px (khác 14px của thẻ
-       biểu đồ Plotly/Vega vì đây là HTML thuần, không tự có card qua rule [data-testid=
-       "stPlotlyChart"]), mỗi hàng nhãn 150px + thanh fill co giãn + giá trị 60px canh phải. */
+       biểu đồ ECharts/Vega vì đây là HTML thuần, không tự có card qua rule
+       [class*="st-key-ecard_"]), mỗi hàng nhãn 150px + thanh fill co giãn + giá trị 60px canh phải. */
     .catbars-card {
         background: var(--card); border: var(--card-border-w) solid var(--border); border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
         padding: var(--card-pad); box-shadow: var(--card-shadow);
@@ -7877,7 +7953,17 @@ _MAIN_CSS = """
         border-color: var(--accent) !important;
     }
 
-    [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {
+    /* Biểu đồ cột ECharts (key "ecard_..." -- xem _ec_spec/_render_click_chart): thẻ đặt lên CHÍNH
+       stElementContainer mang class st-key-ecard_*, KHÔNG ép display:flex như Vega -- ECharts tự đo
+       bề rộng phần tử cha để vẽ canvas. */
+    [data-testid="stElementContainer"][class*="st-key-ecard_"] {
+        background: var(--card);
+        border: var(--card-border-w) solid var(--border);
+        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape);
+        padding: 14px;
+        box-shadow: var(--card-shadow);
+    }
+    [data-testid="stVegaLiteChart"] {
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
@@ -7895,10 +7981,6 @@ _MAIN_CSS = """
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"],
     [data-testid="stElementContainer"]:has([data-testid="stVegaLiteChart"]) [data-testid="stFullScreenFrame"] > div { width: 100% !important; }
 
-    /* Đổ bóng CẢ KHỐI cho cột: áp lên cả group (không từng path) -> trong một cột các segment
-       kề nhau hợp thành khối đặc nên chỉ ra bóng viền ngoài, không lem bên trong. Cần
-       cliponaxis=False (đặt ở figure) để bóng đỉnh cột không bị clip. */
-    [data-testid="stPlotlyChart"] g.barlayer { filter: drop-shadow(0 2.5px 2.5px rgba(0,0,0,0.30)); }
 
     [data-testid="stMetric"] { display: none; }
 
@@ -8688,7 +8770,8 @@ _MAIN_CSS = """
         .sp-lcols > .sp-listcard { flex: none !important; }
 
         /* Biểu đồ: bớt đệm để rộng hơn */
-        [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] { padding: 6px !important; }
+        [data-testid="stElementContainer"][class*="st-key-ecard_"],
+        [data-testid="stVegaLiteChart"] { padding: 6px !important; }
         /* Lịch/heatmap (Vega) rộng -> cho cuộn ngang trong thẻ thay vì tràn */
         [data-testid="stVegaLiteChart"] { overflow-x: auto !important; justify-content: flex-start !important; }
 
@@ -9642,7 +9725,7 @@ BAOCAO_SUB_ICONS_MD = {"Tổng quan": ":material/dashboard:", "Năm": ":material
                         "Tháng": ":material/calendar_month:", "Tuần": ":material/view_week:",
                         "Dự án": ":material/folder:"}
 
-# Click biểu đồ Xu hướng/Theo khung giờ (render_trend_fig/render_hourly_chart) nhảy sang sub-tab
+# Click biểu đồ Xu hướng/Theo khung giờ (_trend_spec/_hourly_spec) nhảy sang sub-tab
 # "Dự án" qua cờ chờ xử lý này -- KHÔNG set trực tiếp st.session_state["bc_sub_picker"] tại chỗ
 # bấm, vì widget segmented_control (key="bc_sub_picker", render trong sidebar bên dưới) đã
 # instantiate rồi trong CÙNG lượt chạy đó (đúng gotcha StreamlitAPIException đã vá ở khối xử lý
@@ -10950,19 +11033,19 @@ def _render_tuybien_giao_dien():
             st.rerun()
 
     sec_chapter("tbgd-ch1", None, "Chọn theme")
-    _items = list(GUNDAM_THEMES.items())
-    _per_row = 4
-    for _start in range(0, len(_items), _per_row):
-        _cols = st.columns(_per_row)
-        for _i, (_key, _th) in enumerate(_items[_start:_start + _per_row]):
-            _active = _key == THEME_KEY
-            with _cols[_i]:
-                st.markdown(_gth_preview_html(_key, _th, _active), unsafe_allow_html=True)
-                if st.button("Đang dùng" if _active else "Chọn", key=f"tbgd_theme_{_start + _i}",
-                             width="stretch", disabled=_active,
-                             icon=":material/check:" if _active else None):
-                    save_setting("theme", _key)
-                    st.rerun()
+    # st.grid (Streamlit 1.67): tối đa 4 cột, tự rút còn 3/2 cột khi mỗi ô hẹp hơn 150px (điện thoại
+    # ra 2 cột) thay vì st.columns(4) lặp từng hàng -- vốn dồn hẳn về 1 cột dưới ~640px (12 thẻ xếp dọc).
+    # Mỗi theme 1 grid.cell() gom thẻ xem trước + nút Chọn thành 1 ô.
+    _theme_grid = st.grid(4, min_column_width=150, key="tbgd_theme_grid")
+    for _i, (_key, _th) in enumerate(GUNDAM_THEMES.items()):
+        _active = _key == THEME_KEY
+        with _theme_grid.cell():
+            st.markdown(_gth_preview_html(_key, _th, _active), unsafe_allow_html=True)
+            if st.button("Đang dùng" if _active else "Chọn", key=f"tbgd_theme_{_i}",
+                         width="stretch", disabled=_active,
+                         icon=":material/check:" if _active else None):
+                save_setting("theme", _key)
+                st.rerun()
 
 
 # ==========================================
@@ -11377,7 +11460,7 @@ elif nav == "Báo cáo":
 
             # Đặt sẵn grp_sel từ deep-link (?grp=&kind=) HOẶC từ 1 cú nhảy trong-phiên
             # (_grp_sel_jump -- dùng bởi click biểu đồ Xu hướng/Theo khung giờ, xem
-            # render_trend_fig/render_hourly_chart). PHẢI đặt TRƯỚC st.selectbox(key="grp_sel")
+            # _trend_spec/_hourly_spec). PHẢI đặt TRƯỚC st.selectbox(key="grp_sel")
             # ngay dưới, nếu không sẽ StreamlitAPIException vì widget đã instantiate trong lượt
             # chạy này -- đúng gotcha đã gặp và vá ở _bc_sub_jump (gần đầu dispatch), copy y hệt cơ
             # chế đó. frag_trend(df_g, "trend_grp", "Dự án") gọi bên dưới

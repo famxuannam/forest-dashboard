@@ -13,7 +13,7 @@ dụng đầy đủ.
 
 - **Streamlit** — giao diện + server, gói gọn trong một file `app.py`.
 - **Supabase** (Postgres) — nơi lưu trữ duy nhất, không còn chế độ CSV cục bộ.
-- **pandas** cho xử lý dữ liệu; **Plotly** + **Altair** cho biểu đồ.
+- **pandas** cho xử lý dữ liệu; **ECharts** (`st.echarts_chart`) + **Altair** cho biểu đồ.
 - **streamlit-quill** cho ô ghi chú; **Authlib** cho đăng nhập Google (tuỳ chọn); **caldav**
   cho đồng bộ lịch Work và đọc tiến độ Reminders (tuỳ chọn).
 

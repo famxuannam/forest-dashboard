@@ -13,6 +13,12 @@ python3 -m pytest -q tests
   `tests/_extract.py` (parse AST, chỉ exec đúng các `def` cần), vì `app.py` không import được.
 - `tests/test_app_smoke.py` — chạy `app.py` thật với `FOREST_LOCAL_DEV=1` qua `streamlit.testing.v1.AppTest`,
   từng trang/sub-trang, khẳng định không có exception. Thêm trang/sub mới vào `NAV` thì thêm vào `PAGES`.
+- `tests/test_auth_gate.py` — cổng đăng nhập Google: giả lập `st.user` bằng `AppTest.user` và `[auth]`
+  bằng `at.secrets` (Streamlit 1.67), KHÔNG bật `FOREST_LOCAL_DEV` (cờ đó bỏ qua đăng nhập): chưa đăng
+  nhập, sai email, thiếu `ALLOWED_EMAIL`, đúng email (qua cổng, dừng ở "Chưa cấu hình Supabase").
+- `tests/test_chart_specs.py` — các hàm `*_spec` của biểu đồ ECharts (nạp qua `tests/_extract.py`):
+  JSON thuần, series cột xếp chồng thẳng hàng, ranh giới tuần/kỷ lục/dải giai đoạn đúng chỗ. Test này
+  không thay được việc nhìn biểu đồ thật trên trình duyệt (Bước 2).
 
 CI (`.github/workflows/ci.yml`) chạy đúng các bước này trên mỗi PR. Test tự động KHÔNG thay được kiểm
 tra JS/CSS trên trình duyệt (phím tắt, nút nổi, layout) — với thay đổi giao diện vẫn làm Bước 1–2.

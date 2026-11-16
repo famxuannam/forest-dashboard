@@ -1,6 +1,5 @@
 streamlit>=1.67,<1.68
 pandas>=3.0,<3.2
-plotly>=6.9,<6.10
 altair>=6.3,<6.4
 streamlit-quill>=0.0.3,<0.1
 supabase>=2.34,<2.35
