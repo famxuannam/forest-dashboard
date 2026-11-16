@@ -10,7 +10,9 @@ tên theo tông màu Gundam (RX-78-2, Zaku II của Char, Nu, Unicorn, Strike Fr
 Aerial, Banshee Norn, Sinanju, Exia, Dynames). Key đầu tiên (`DEFAULT_THEME` = "RX-78-2") là mặc
 định; giá trị lạ/key cũ đã bỏ rơi về mặc định, không crash. 6 trục cũ (accent, bảng màu nền, hoạ tiết
 nền, kiểu thẻ, font, độ rộng nội dung) đã BỎ hẳn theo yêu cầu người dùng; các key setting cũ còn sót
-trong bảng `settings` bị bỏ qua. Độ rộng nội dung cố định 1500px.
+trong bảng `settings` bị bỏ qua. Độ rộng nội dung cố định 1500px. Lưới thẻ chọn theme là `st.grid(4,
+min_column_width=150)` (Streamlit 1.67, mỗi theme 1 `grid.cell()` gồm thẻ xem trước + nút Chọn): 4 cột
+trên máy tính, tự rút còn 2 cột trên điện thoại (`st.columns` cũ dồn về 1 cột).
 
 Mỗi theme khai báo: `mode` (`light`/`dark`), các màu `bg/card/chip/border/text..text-4/accent/
 on-accent/trim/trim2`, `chart` (8 màu biểu đồ), `font` (key của `BODY_FONTS`), `pattern` (key của
@@ -46,12 +48,12 @@ phải nhớ cả 3 khi thêm 1 UI element có màu accent:
 
 1. **CSS** — qua `var(--accent)`, `var(--accent-rgb)`, `var(--accent-dark)`; chữ đặt trên nền accent
    dùng `var(--on-accent)`.
-2. **Biểu đồ Altair/Plotly/ECharts** — CSS variable KHÔNG chạm tới được canvas biểu đồ. Dùng hằng số
+2. **Biểu đồ Altair/ECharts** — CSS variable KHÔNG chạm tới được canvas biểu đồ. Dùng hằng số
    Python `ACCENT`/`ACCENT_DARK`/`PLOT_TEXT` (hoặc hue suy ra từ accent cho dải nhiệt/lịch,
    `_teal_shades()`; accent gần như không màu như Nu Gundam thì dải này lấy hue của `trim`). Màu
    Nhóm/Dự án lấy từ `THEME["chart"]` qua `build_color_map()` (Dự án duy nhất của 1 Nhóm dùng đúng màu
-   Nhóm). Mọi `st.plotly_chart` đi qua `_theme_fig(fig)` để ép màu chữ trục/legend theo `PLOT_TEXT`
-   (theme "streamlit" của Plotly chỉ biết `textColor` tĩnh trong `config.toml`); 2 lịch Altair dùng
+   Nhóm). Mọi biểu đồ ECharts dùng `theme=None` và tự đặt màu chữ trục/legend/tooltip = `PLOT_TEXT`
+   (theme "streamlit" chỉ biết `textColor` tĩnh trong `config.toml`); 2 lịch Altair dùng
    `.configure_axis(labelColor=PLOT_TEXT, ...)`. Chữ đặt trên thanh màu biểu đồ dùng
    `_readable_text(color)`, không cố định `#fff` (dải `chart` có màu rất sáng).
 3. **Iframe ô ghi chú (Quill)** — chạy trong 1 `<iframe>` là 1 document HTML riêng biệt, CSS của
@@ -175,20 +177,32 @@ base64. `_body_font_b64(file_prefix)` (tên cũ) giờ chỉ trả tên file c�
 Fonts dùng chung range này cho mọi font sans phổ biến) vào `static/fonts/` theo đúng quy ước tên
 `<file_prefix>-<subset>.woff2`.
 
-## Biểu đồ ECharts (`st.echarts_chart`, Streamlit >= 1.64)
+## Biểu đồ ECharts (`st.echarts_chart`, Streamlit >= 1.67)
 
-Dùng cho biểu đồ cần hình dạng riêng (cây trong "Khu rừng tháng này", calendar heatmap năm). Giống
-Plotly, CSS variable KHÔNG chạm vào canvas, nên:
+MỌI biểu đồ dạng canvas của app (trừ 2 lịch Altair) là ECharts -- app không còn Plotly (gỡ ở 11/2026:
+chunk JS Plotly của Streamlit ~4,7MB/~1,4MB gzip, ECharts ~1,2MB và đã được tải cho các biểu đồ khác).
+CSS variable KHÔNG chạm vào canvas, nên:
 
 - `theme=None`, tự đặt `backgroundColor: "transparent"`, `textStyle.color` và màu chữ trục/legend/
   visualMap = `PLOT_TEXT`; màu series từ `COLOR_MAP` / `_teal_shades()`; ô trống/nền nhạt dựng từ
   `PLOT_TEXT` qua `_hex_rgb_str()` (`rgba(...,0.07)`). Truyền `alt="..."` mô tả tiếng Việt.
 - `spec` chỉ nhận JSON: **không** callback JS (`formatter` dạng hàm, `renderItem`), nên không có series
-  `custom`, map/geo hay 3D. Tooltip dùng formatter chuỗi `"{b}"` và gắn sẵn chuỗi hiển thị vào `name` của
-  từng data item. Không có sự kiện click/selection nên không điều hướng được từ biểu đồ.
+  `custom`, map/geo hay 3D. Tooltip dùng formatter chuỗi (`"{b}"`, `"<b>{a}</b><br>{b}"`) và gắn sẵn
+  chuỗi hiển thị (thời lượng đã định dạng...) vào `name` của từng data item; ECharts tự escape giá trị.
+- Biểu đồ cột (Xu hướng, Theo khung giờ, Theo tháng, Xu hướng tuần của Dự án, Theo giai đoạn) dựng
+  bằng các helper chung `_ec_axis`/`_ec_spec`/`_ec_stacked_bars` cạnh `_trend_spec`. Key bắt đầu bằng
+  `ecard_` -> CSS `[data-testid="stElementContainer"][class*="st-key-ecard_"]` vẽ thẻ (nền/viền/bo/bóng
+  theo theme); biểu đồ nằm sẵn trong `st.container(border=True)` thì KHÔNG dùng tiền tố này.
+- Cột chồng trên trục `time`/`value`: ECharts xếp chồng theo VỊ TRÍ phần tử (chỉ trục category mới
+  theo giá trị x), nên mọi series phải đủ mọi x, thiếu điền 0 (`_wide_hours`). Trục `time` không xếp
+  chồng được -- dải giai đoạn dùng trục số ẩn + trục time chỉ để vẽ nhãn (`_eras_spec`).
+- Click -> điều hướng (Xu hướng/Theo khung giờ, Streamlit 1.67 `on_select`): series cột có
+  `selectedMode: "single"`, `_render_click_chart` đọc `selection.selected[*].series_name` rồi
+  `_echarts_click_jump` nhảy sang Báo cáo -> Dự án; key có hậu tố phiên bản để xoá selection sau khi dùng.
 - Scatter mặc định `opacity` 0.8 -- đặt `itemStyle.opacity: 1` nếu màu phải khớp đúng màu ở chỗ khác.
-- Dựng spec trong hàm riêng trả dict (`_forest_spec`, `_year_heatmap_spec`) để kiểm tra bằng script
-  thuần mà không cần Streamlit. Danh sách biểu đồ: xem "Biểu đồ mới ở Báo cáo" ở `ui-components.md`.
+- Dựng spec trong hàm riêng trả dict (`_forest_spec`, `_year_heatmap_spec`, `_trend_spec`,
+  `_hourly_spec`, `_single_bars_spec`, `_eras_spec`) để kiểm tra bằng script thuần mà không cần
+  Streamlit (xem `tests/test_chart_specs.py`). Danh sách biểu đồ: xem "Biểu đồ mới ở Báo cáo" ở `ui-components.md`.
 
 ## Bẫy: `st.metric` bị ẩn toàn cục bằng CSS
 

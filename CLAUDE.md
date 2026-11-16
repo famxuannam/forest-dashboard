@@ -14,7 +14,7 @@ streamlit run app.py
 
 `SUPABASE_URL` và `SUPABASE_KEY` là secrets bắt buộc; xem `.streamlit/secrets.toml.example`. Để chạy local không cần secrets, dùng `FOREST_LOCAL_DEV=1 streamlit run app.py --server.address localhost`. Cờ này dùng dữ liệu mẫu trong bộ nhớ, bỏ qua Google OAuth và bị chặn nếu server không bind vào loopback.
 
-Không có build step hay linter. Test: `pip install -r requirements-dev.txt && python3 -m pytest -q tests` (parser, tầng ghi dữ liệu, và chạy thử mọi trang bằng `AppTest` với dữ liệu mẫu); CI chạy bộ này trên mỗi PR (`.github/workflows/ci.yml`). Xem `docs/testing.md` khi cần kiểm tra UI/logic mà không kết nối dịch vụ thật.
+Không có build step hay linter. Test: `pip install -r requirements-dev.txt && python3 -m pytest -q tests` (parser, tầng ghi dữ liệu, spec biểu đồ ECharts, cổng đăng nhập, và chạy thử mọi trang bằng `AppTest` với dữ liệu mẫu); CI chạy bộ này trên mỗi PR (`.github/workflows/ci.yml`). Xem `docs/testing.md` khi cần kiểm tra UI/logic mà không kết nối dịch vụ thật.
 
 ## Kiến trúc và ràng buộc
 

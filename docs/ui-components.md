@@ -120,11 +120,11 @@ hàng ngày cuối tháng gần sát viền đáy card.
   `render_eras(df)`: `_compute_eras(df, today)` (`@st.cache_data`) chia lịch sử thành "mùa" (Nhóm nhiều
   giờ nhất từng tháng, gộp tháng liền cùng Nhóm) và "khoảng nghỉ" (`ERA_BREAK_DAYS` = 21 ngày, kể cả
   khoảng nghỉ kéo tới hôm nay); tháng đơn lẻ mà Nhóm dẫn đầu < `ERA_NOISE_SHARE` (40%) giờ tháng đó bị
-  nhập vào mùa trước (cùng đoạn hoạt động, không nhập qua khoảng nghỉ). Hiển thị: dải ngang Plotly 1
-  hàng (`_eras_fig`; dùng Plotly vì ECharts không có series `custom`, và `format_plotly_fig` gắn
-  customdata theo trục y nên được ghi đè lại sau đó) + bảng `.dtbl` mới nhất lên đầu. Plotly bọc trong
-  `[data-testid="stPlotlyChart"]` có padding 14px + `overflow:hidden`, cắt ~30px đáy svg -- nên fig này
-  chừa `margin b=56` để nhãn trục x không bị cắt.
+  nhập vào mùa trước (cùng đoạn hoạt động, không nhập qua khoảng nghỉ). Hiển thị: dải ngang ECharts 1
+  hàng (`_eras_spec`, key `ecard_eras`) + bảng `.dtbl` mới nhất lên đầu. ECharts không có series
+  `custom` nên dải là cột ngang XẾP CHỒNG (đệm trong suốt ở đầu và ở khe hở) trên 1 trục số ẩn (ms);
+  ECharts không xếp chồng trên trục `time`, nên nhãn "MM/YYYY" do 1 trục time thứ 2 cùng min/max vẽ
+  (`useUTC`, `minInterval` ~1 tháng).
 
 ## Huy hiệu ghi nhận sau, "Phát hiện" và "Ôn hôm nay" (Giai đoạn 4)
 
