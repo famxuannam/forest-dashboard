@@ -23,7 +23,7 @@ from streamlit_quill import st_quill
 from supabase import create_client
 from caldav import DAVClient
 from local_dev_data import LocalDevSupabase
-from ui_catalog import VN_DAYS, VN_MONTHS, VN_DAYS_ABBR, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
+from ui_catalog import VN_DAYS, VN_MONTHS_WORD, MAC_COLORS, CHART_COLORS, ACCENT_PRESETS, BG_PRESETS, BG_PALETTES, BG_PALETTES_DARK_BG, CARD_STYLES, CONTENT_WIDTHS, BODY_FONTS
 from import_parsers import parse_dayone_json, parse_forest_csv, parse_kindle_clippings, parse_reading_log_shortcut_csv
 
 _LOCAL_DEV_REQUESTED = os.getenv("FOREST_LOCAL_DEV", "").strip().lower() in {"1", "true", "yes"}
@@ -1960,116 +1960,30 @@ def _inject_relative_time_ticker():
 
 
 def _inject_date_picker_locale():
-    """Dịch tháng/thứ trong popup lịch của MỌI st.date_input trên trang sang tiếng Việt bằng JS
-    phía trình duyệt -- component BaseWeb bên trong Streamlit không có prop locale lộ ra qua API
-    Python (`format=` của st.date_input chỉ đổi định dạng Ô NHẬP TAY, không đụng tới popup lịch),
-    nên phải dịch text SAU KHI mount. Popup mount dạng portal ở <body> của trang cha (ngoài mọi
-    iframe component, xem comment CSS `[data-baseweb="calendar"]`), không phải trong DOM con của
-    component này -- giống hệt cách _inject_relative_time_ticker() ở trên phải quẫy sang
-    window.parent.document để chạm được DOM thật.
+    """Lịch bật lên của MỌI st.date_input hiện tiếng Việt và bắt đầu tuần từ THỨ HAI.
 
-    Dùng MutationObserver theo dõi window.parent.document.body: mỗi khi popup lịch mở/đổi tháng
-    (React re-render lại text bên trong), duyệt lại toàn bộ text node trong `[data-baseweb=
-    "calendar"]` rồi thay theo 2 bảng tra VN_MONTHS/VN_DAYS_ABBR (khớp đúng chuỗi, không đoán mò
-    bằng regex tách từ -- an toàn hơn khi BaseWeb đổi định dạng header giữa các bản Streamlit).
-    Chỉ cần gọi 1 lần cho cả trang (không phải 1 lần mỗi date_input) vì observer theo dõi chung
-    toàn bộ <body>.
+    Từ Streamlit 1.67, st.date_input là React Aria DatePicker (lịch portal mang
+    data-testid="stDateInputCalendar"). Tên tháng/thứ và ngày đầu tuần lấy từ ngôn ngữ trình duyệt
+    (navigator.language, React Aria lắng nghe sự kiện "languagechange"); st.date_input không có tham
+    số locale nào. Bản cũ dịch từng text node và tự xếp lại lưới ngày của lịch BaseWeb
+    ([data-baseweb="calendar"]) -- markup đó không còn tồn tại nên bản cũ không còn tác dụng, lịch
+    hiện tiếng Anh, bắt đầu Chủ Nhật với trình duyệt tiếng Anh.
 
-    CÙNG observer đó còn xếp lại lưới ngày để THỨ HAI đứng đầu tuần (mặc định là Chủ Nhật). Đây
-    KHÔNG phải thứ chỉnh được từ Python: lưới do date-fns dựng bên trong bundle Streamlit, đầu tuần
-    lấy từ `locale.options.weekStartsOn` của locale suy ra từ ngôn ngữ TRÌNH DUYỆT (xem chunk
-    `useIntlLocale.*.js`) -- `st.date_input` không có tham số nào chạm tới, và bản thân date-fns
-    nằm trong module scope nên không gọi `setDefaultOptions()` từ ngoài được.
-
-    Cách xếp lại (an toàn vì chỉ DI CHUYỂN đúng các node ô ngày có sẵn, không tự vẽ lại ngày nên
-    không thể sai ngày/mất handler click):
-    - Lưới luôn là các `[role="row"]` × 7 `[role="gridcell"]`; ô ngày của tháng khác để TRỐNG
-      (div rỗng) nên tập ô "có chữ" chính là ngày 1..N của tháng đang xem, đúng thứ tự.
-    - Thứ THẬT của ngày 1 đọc từ `aria-label` (BaseWeb luôn ghi tiếng Anh "... Sat, August 1..." --
-      translateNode ở trên CHỈ đổi text node, không đụng thuộc tính, nên nguồn này luôn đáng tin
-      dù giao diện đã dịch sang tiếng Việt).
-    - Vị trí mong muốn của ngày 1 = (thứ + 6) % 7; nếu đã đúng thì thoát ngay -> hàm idempotent,
-      observer chạy lại bao nhiêu lần cũng không lặp vô hạn (lần 2 trở đi không sinh mutation).
-    - Số hàng tính lại theo offset mới (tháng bắt đầu Chủ Nhật cần thêm 1 hàng), tự thêm/bớt hàng.
-    Hàng tiêu đề thứ cũng xoay 1 nấc (đưa ô Chủ Nhật xuống cuối) cho khớp lưới."""
-    _months_js = json.dumps(VN_MONTHS, ensure_ascii=False)
-    _days_js = json.dumps(VN_DAYS_ABBR, ensure_ascii=False)
+    Cách mới: báo navigator.language = "vi-VN" cho trang cha rồi phát "languagechange" -- React Aria
+    tự dựng lại lịch với "Tháng 11", "T2…CN", Thứ Hai đầu tuần (dữ liệu tuần theo vùng VN). Đã đối
+    chiếu toàn bộ nội dung 10 trang giữa trình duyệt en-US và vi-VN: không khác gì ngoài lịch (biểu đồ
+    và số liệu do Python định dạng sẵn). Chỉ chạy 1 lần mỗi trang (cờ trên window cha)."""
     js = (
         "<script>\n"
         "(function(){\n"
-        f"  const MONTHS = {_months_js};\n"
-        f"  const DAYS = {_days_js};\n"
-        "  const MONTH_RE = new RegExp('\\\\b(' + Object.keys(MONTHS).join('|') + ')\\\\b', 'g');\n"
-        "  const WD = {Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6};\n"
-        "  const SUN_LBL = ['Su','Sun','CN'];\n"
-        "  function translateNode(node){\n"
-        "    for (const child of node.childNodes){\n"
-        "      if (child.nodeType === 3){\n"
-        "        const t = child.textContent;\n"
-        "        const trimmed = t.trim();\n"
-        "        if (DAYS[trimmed]){\n"
-        "          child.textContent = t.replace(trimmed, DAYS[trimmed]);\n"
-        "        } else if (MONTH_RE.test(trimmed)){\n"
-        "          MONTH_RE.lastIndex = 0;\n"
-        "          child.textContent = t.replace(MONTH_RE, m => MONTHS[m]);\n"
-        "        }\n"
-        "      } else if (child.nodeType === 1){\n"
-        "        translateNode(child);\n"
-        "      }\n"
-        "    }\n"
-        "  }\n"
-        "  function mondayFirst(cal){\n"
-        "    const rows = [...cal.querySelectorAll('[role=\"row\"]')];\n"
-        "    if (!rows.length) return;\n"
-        "    const cells = [];\n"
-        "    rows.forEach(r => { for (const c of r.children) cells.push(c); });\n"
-        "    const real = cells.filter(c => (c.textContent || '').trim() !== '');\n"
-        "    const blank = cells.find(c => (c.textContent || '').trim() === '');\n"
-        "    if (!real.length || !blank) return;\n"
-        "    const m = (real[0].getAttribute('aria-label') || '').match(/\\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\\b/);\n"
-        "    if (!m) return;\n"
-        "    const want = (WD[m[1]] + 6) % 7;\n"
-        "    if (cells.indexOf(real[0]) === want) return;\n"
-        "    const nRows = Math.ceil((want + real.length) / 7);\n"
-        "    const seq = [];\n"
-        "    for (let i = 0; i < want; i++) seq.push(blank.cloneNode(false));\n"
-        "    for (const c of real) seq.push(c);\n"
-        "    while (seq.length < nRows * 7) seq.push(blank.cloneNode(false));\n"
-        "    while (rows.length < nRows){\n"
-        "      const r = rows[0].cloneNode(false);\n"
-        "      rows[0].parentNode.appendChild(r);\n"
-        "      rows.push(r);\n"
-        "    }\n"
-        "    for (let i = 0; i < nRows; i++) rows[i].replaceChildren(...seq.slice(i * 7, i * 7 + 7));\n"
-        "    for (let i = nRows; i < rows.length; i++) rows[i].remove();\n"
-        "  }\n"
-        "  function mondayFirstHeader(cal){\n"
-        "    const hdrs = cal.querySelectorAll('[role=\"presentation\"]');\n"
-        "    for (const h of hdrs){\n"
-        "      const kids = [...h.children];\n"
-        "      if (kids.length !== 7) continue;\n"
-        "      if (kids.some(k => k.getAttribute('role') === 'gridcell')) continue;\n"
-        "      if (!kids.every(k => { const t = (k.textContent || '').trim(); return t.length > 0 && t.length <= 3; })) continue;\n"
-        "      if (SUN_LBL.includes((kids[0].textContent || '').trim())) h.appendChild(kids[0]);\n"
-        "      return;\n"
-        "    }\n"
-        "  }\n"
-        "  let busy = false;\n"
-        "  function run(){\n"
-        "    if (busy) return;\n"
-        "    busy = true;\n"
-        "    try {\n"
-        "      const cals = window.parent.document.querySelectorAll('[data-baseweb=\"calendar\"]');\n"
-        "      cals.forEach(function(cal){\n"
-        "        translateNode(cal);\n"
-        "        mondayFirstHeader(cal);\n"
-        "        mondayFirst(cal);\n"
-        "      });\n"
-        "    } finally { busy = false; }\n"
-        "  }\n"
-        "  run();\n"
-        "  const obs = new MutationObserver(run);\n"
-        "  obs.observe(window.parent.document.body, {childList: true, subtree: true, characterData: true});\n"
+        "  const w = window.parent;\n"
+        "  if (w.__forestViLocale) return;\n"
+        "  try {\n"
+        "    Object.defineProperty(w.navigator, 'language', {get: () => 'vi-VN', configurable: true});\n"
+        "    Object.defineProperty(w.navigator, 'languages', {get: () => ['vi-VN', 'vi'], configurable: true});\n"
+        "  } catch (e) { return; }\n"
+        "  w.__forestViLocale = true;\n"
+        "  w.dispatchEvent(new Event('languagechange'));\n"
         "})();\n"
         "</script>"
     )
@@ -3106,8 +3020,11 @@ def _render_insights_card(df, wc, rl, notes):
 
 
 def _toast_today_milestones(df):
-    """Toast 1 lần mỗi session nếu có huy hiệu ghi nhận ĐÚNG hôm nay (thường ngay sau khi tự đồng bộ,
-    xem _auto_sync_on_open()). Cờ đặt ngay lần kiểm tra đầu để không tính lại mỗi lần rerun."""
+    """Toast huy hiệu ghi nhận ĐÚNG hôm nay (thường ngay sau khi tự đồng bộ, xem _auto_sync_on_open())
+    -- MỖI huy hiệu chỉ báo 1 LẦN. Trước đây chỉ chặn lặp theo session, mà mọi link target=_self mở
+    session mới nên toast hiện lại ở gần như mỗi lần chuyển trang trong ngày, che mục lục/ô chọn
+    ngày. Nay nhớ các huy hiệu đã báo trong setting "milestones_toasted" (JSON list "ngày|tên", chỉ
+    giữ của hôm nay nên không phình). Cờ session vẫn giữ để không tính lại mỗi lần rerun."""
     if st.session_state.get("_milestone_toasted"):
         return
     st.session_state["_milestone_toasted"] = True
@@ -3115,8 +3032,19 @@ def _toast_today_milestones(df):
         return
     today = _today_vn()
     titles = [m["title"] for m in _compute_alltime_records(df)["milestones"] if m["date"] == today]
-    if titles:
-        st.toast("Huy hiệu mới: " + " · ".join(titles), icon=":material/military_tech:")
+    if not titles:
+        return
+    try:
+        seen = set(json.loads(_cached_settings().get("milestones_toasted") or "[]"))
+    except (ValueError, TypeError):
+        seen = set()
+    keys = {f"{today}|{t}": t for t in titles}
+    new = [t for k, t in keys.items() if k not in seen]
+    if not new:
+        return
+    st.toast("Huy hiệu mới: " + " · ".join(new), icon=":material/military_tech:")
+    save_setting("milestones_toasted", json.dumps(
+        sorted(k for k in seen | set(keys) if k.startswith(str(today))), ensure_ascii=False))
 
 
 def _mi(name, size=13):
@@ -8555,10 +8483,8 @@ _MAIN_CSS = """
        [data-baseweb="calendar"]/"popover"), nên vẫn phải chọn TOÀN CỤC như trước, không scope
        theo .st-key-... được -- áp dụng cho MỌI date_input trong app. */
     /* Khuôn "viên thuốc" kiểu Apple theo mockup `Hôm nay.dc.html` (cao 34px, bo 9px, đệm ngang
-       14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt) -- kèm icon lịch nhỏ đứng
-       TRƯỚC ngày. Icon vẽ bằng ::before với ligature Material Symbols Rounded (font Streamlit đã
-       tự nạp sẵn cho icon `:material/x:` của chính nó, xem quy ước _mi() ở ui-components.md) --
-       không chèn được phần tử thật vào trong widget native nên đây là cách duy nhất. */
+       14px, nền var(--card) đặc chứ không phải card-tl bán trong suốt). Icon lịch dùng nút native
+       của Streamlit ở cuối ô. */
     div[data-testid="stDateInputField"] {
         background: var(--card) !important;
         border: 1px solid var(--border) !important;
@@ -8573,16 +8499,8 @@ _MAIN_CSS = """
         justify-content: center !important;
         gap: 8px !important;
     }
-    div[data-testid="stDateInputField"]::before {
-        content: 'calendar_today';
-        font-family: 'Material Symbols Rounded';
-        font-size: 15px;
-        line-height: 1;
-        color: var(--text-3);
-        flex-shrink: 0;
-        -webkit-font-feature-settings: 'liga';
-        font-feature-settings: 'liga';
-    }
+    /* (Đã bỏ icon lịch vẽ bằng ::before: từ Streamlit 1.67 ô ngày tự có nút lịch "Choose date" ở
+       cuối, 2 icon cùng lúc làm chữ ngày bị chèn ép, cắt còn "16 / 11 / 2…" ở ô 170px.) */
     /* Chữ ngày (nhóm span day/"/"/month/"/"year trong [role="group"]): 13px/600 khớp mockup --
        mặc định Streamlit là 14px thường, trông nhạt hơn hẳn tông 13px/600 của nhãn/nút xung
        quanh. Cụm span này đã tự căn giữa trong pill qua justify-content:center của khung ngoài. */
@@ -9254,6 +9172,15 @@ _MAIN_CSS = """
        (phản hồi thực tế: mục lục chỉ là link neo, không cần to bằng nội dung chính). */
     .tbill-toccol .sec-toc-chip { width: 100%; box-sizing: border-box; text-align: left;
         padding: 4px 10px; font-size: 11.5px; }
+    /* Điện thoại: cột mục lục dọc (6 chip ở Hôm nay) đẩy nội dung chính xuống dưới màn hình đầu
+       tiên -- đổi thành 1 hàng chip cuộn ngang, chiều cao chỉ còn 1 dòng. */
+    @media (max-width: 640px) {
+        .tbill-toccol { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 6px;
+            scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .tbill-toccol::-webkit-scrollbar { display: none; }
+        .tbill-toccol .sec-toc-chip { width: auto; flex: 0 0 auto; white-space: nowrap; }
+        [data-testid="stColumn"]:has(.tbill-toccol) { border-left: none !important; padding-left: 0 !important; }
+    }
     /* Nút ⭐ đặt cạnh tên sách (hàng cuối, xem docstring _render_today_billboard()) -- nền chip
        phớt accent LUÔN CÓ (kể cả chưa Yêu thích) để nút có 1 "điểm neo" hình khối rõ ràng, không
        còn là icon trôi nổi giữa nền thẻ như bản đặt ở góc trên phải trước đó. Label nút là ký tự
