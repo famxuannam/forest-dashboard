@@ -20,6 +20,18 @@ Quy tắc chung cho mọi giai đoạn:
 Bối cảnh đã xác nhận với người dùng: làm tất cả nhóm A–D; đăng nhập Google **đang bật**; **không**
 làm sao lưu tự động; hai bảng cũ `quick_notes`, `health_metrics` đã được xoá khỏi Supabase.
 
+## Trạng thái (16/11/2026)
+
+| Giai đoạn | Trạng thái |
+|---|---|
+| 1. Dọn cảnh báo, ghim phiên bản | Xong |
+| 2. Thay `st.components.v1.html` | Xong (`_inject_js()` dùng `st.iframe`) |
+| 3. An toàn dữ liệu | Xong (+ 8 test) |
+| 4. Test, CI, keepalive | Xong; hàm `keepalive()` đã tạo trên Supabase. **Chờ người dùng** thêm secret `SUPABASE_URL`, `SUPABASE_ANON_KEY` vào GitHub |
+| 5. Bảo mật Supabase | Code/schema/docs xong. **Chờ người dùng** đổi `SUPABASE_KEY` sang khoá bí mật; sau đó mới áp migration bỏ policy anon (SQL ở cuối file này) |
+| 6. U1, U2, U3, O2, F1, F4 | Xong. Thêm: lịch chọn ngày tiếng Việt, Thứ Hai đầu tuần (bộ dịch cũ đã hỏng từ Streamlit 1.67) |
+| 6. O1, F2, F3 | Chưa làm (xem lý do trong mục Giai đoạn 6) |
+
 ---
 
 ## Giai đoạn 1 — Dọn cảnh báo và ghim phiên bản (rủi ro thấp)
@@ -175,3 +187,34 @@ Tính năng (giữ đúng tinh thần hồi cứu):
 - F2. So sánh hai kỳ bất kỳ (tuần/tháng) đặt cạnh nhau.
 - F3. Trang tổng kết năm dạng một màn hình, xuất được thành ảnh.
 - F4. Xuất toàn bộ nhật ký ra Markdown để lưu trữ ngoài app.
+
+### Ghi chú sau khi làm
+
+- O1 (điều hướng không tải lại trang) chưa làm: Streamlit không có API để JS đổi trang mà không mở
+  session mới; cách khả thi duy nhất là JS điền vào 1 widget ẩn để kích hoạt rerun, dễ vỡ khi
+  Streamlit đổi markup. Sau O2, mỗi lần tải lại chỉ còn ~210KB thay vì ~690KB nên lợi ích còn lại nhỏ.
+- F2 (so sánh 2 kỳ) và F3 (tổng kết năm dạng 1 màn hình) là tính năng giao diện mới, cần người dùng
+  chọn bố cục/nội dung trước khi làm.
+
+## Migration Giai đoạn 5 (chỉ chạy SAU KHI app đã chạy được với khoá bí mật)
+
+```sql
+drop policy if exists "anon full access" on sessions;
+drop policy if exists "anon full access" on mapping;
+drop policy if exists "anon full access" on deleted_sessions;
+drop policy if exists "anon full access" on notes;
+drop policy if exists "anon full access" on work_calendar;
+drop policy if exists "anon full access" on reading_log;
+drop policy if exists "anon full access" on settings;
+drop policy if exists "anon full access" on kindle_highlights;
+drop policy if exists "anon full access" on kindle_book_map;
+drop policy if exists "anon full access" on deleted_kindle_highlights;
+drop policy if exists "anon full access" on gundam_overrides;
+drop policy if exists "anon full access" on book_overrides;
+drop policy if exists "anon full access sync-uploads" on storage.objects;
+create policy "anon upload sync-uploads" on storage.objects for insert to anon
+  with check (bucket_id = 'sync-uploads');
+```
+
+Hoàn tác (nếu Shortcut/app lỗi): tạo lại các policy `"anon full access" ... for all using (true)
+with check (true)` như trong `supabase_schema.sql` ở commit `fcc8975`.
