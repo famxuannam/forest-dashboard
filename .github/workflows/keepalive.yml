@@ -1,0 +1,47 @@
+name: Supabase keepalive
+
+# Supabase gói Free tự tạm dừng project sau ~7 ngày ít hoạt động. Workflow này gọi hàm
+# public.keepalive() (chỉ trả 1, xem supabase_schema.sql) 2 lần/tuần để project luôn chạy.
+# Cần 2 secret trong repo: Settings -> Secrets and variables -> Actions:
+#   SUPABASE_URL      = Project URL (https://<ref>.supabase.co)
+#   SUPABASE_ANON_KEY = khoá anon/publishable (KHÔNG dùng khoá bí mật ở đây)
+on:
+  schedule:
+    - cron: "17 2 * * 1,4"   # 09:17 giờ Việt Nam, Thứ Hai và Thứ Năm
+  workflow_dispatch:
+
+permissions:
+  actions: write   # để tự bật lại workflow, xem bước cuối
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gọi keepalive()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Chưa cấu hình secret SUPABASE_URL / SUPABASE_ANON_KEY cho repo."
+            exit 1
+          fi
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/out -w "%{http_code}" -X POST "$SUPABASE_URL/rest/v1/rpc/keepalive" \
+              -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "Content-Type: application/json" -d '{}') || code=000
+            echo "Lần $i: HTTP $code $(head -c 200 /tmp/out 2>/dev/null)"
+            [ "$code" = "200" ] && exit 0
+            sleep 30
+          done
+          echo "::error::Không gọi được keepalive(). Project có thể đã bị tạm dừng: mở Supabase Dashboard và bấm Restore."
+          exit 1
+      - name: Tự bật lại workflow
+        # Repo công khai: GitHub tự tắt workflow theo lịch sau 60 ngày không có commit. Bật lại mỗi
+        # lần chạy để đếm lại từ đầu, không phụ thuộc việc có commit hay không.
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable keepalive.yml --repo "$GITHUB_REPOSITORY"

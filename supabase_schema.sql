@@ -163,6 +163,18 @@ create policy "anon full access" on deleted_kindle_highlights for all using (tru
 create policy "anon full access" on gundam_overrides for all using (true) with check (true);
 create policy "anon full access" on book_overrides for all using (true) with check (true);
 
+-- Hàm "giữ thức" cho workflow .github/workflows/keepalive.yml: gói Free tự tạm dừng project sau
+-- ~7 ngày ít hoạt động, workflow gọi POST /rest/v1/rpc/keepalive bằng khoá anon 2 lần/tuần. Chỉ
+-- trả 1, không đọc bảng nào.
+create or replace function public.keepalive()
+returns integer
+language sql
+stable
+set search_path = ''
+as $$ select 1 $$;
+revoke execute on function public.keepalive() from public;
+grant execute on function public.keepalive() to anon, authenticated, service_role;
+
 -- Bucket Storage cho tab "Đồng bộ nhanh" (mục 1. Dữ liệu đầu vào, tab Tuỳ biến) -- nơi Shortcut
 -- iOS tải file Forest CSV + Reminder backup lên qua HTTP request (share sheet), app quét bucket
 -- này để nạp dữ liệu thay vì đọc trực tiếp iCloud Drive (server chạy từ xa, không có filesystem

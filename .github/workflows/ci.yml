@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Khớp phiên bản Python Streamlit Community Cloud đang chạy app.
+          python-version: "3.14"
+          cache: pip
+      - name: Cài thư viện
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Kiểm tra cú pháp, không cho phép cảnh báo khi biên dịch
+        run: python -W error -c "import ast, pathlib; [compile(pathlib.Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['app.py', 'import_parsers.py', 'ui_catalog.py', 'local_dev_data.py']]"
+      - name: Test
+        run: python -m pytest -q tests
