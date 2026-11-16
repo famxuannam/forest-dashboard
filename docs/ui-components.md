@@ -191,7 +191,7 @@ Bố cục billboard (đợt làm mới theo theme Gundam): badge tròn | nội 
 chip NGANG (`.tbill-toccol`) ở đáy billboard, không còn cột mục lục dọc thứ 3. Billboard Hôm nay
 (`_render_today_billboard()`): nhãn mã máy theme (`_THEME_UNIT_TAG_HTML`) -> trích dẫn full width ->
 hàng mục lục. Sidebar: khối ngày hôm nay là 1 hàng gọn (`.sb-date*`, không còn vòng tròn 96px), cuối
-sidebar có nút theme (`.sb-theme-chip`) dẫn tới Tuỳ biến → Giao diện. Dòng thời gian trong ngày
+sidebar: mọi khối nằm trong 1 cột `.sb-stack` (gap đều 10px, cùng kiểu `.sb-widget`), khối "Giao diện" (`a.sb-widget.sb-theme`) dẫn tới Tuỳ biến → Giao diện, nút "Một ngày ngẫu nhiên" đứng cuối, CSS ép cùng kiểu thẻ (không viền, căn trái) và bù margin -16px của markdown để khoảng cách vẫn đúng 10px. Dòng thời gian trong ngày
 (`render_day_timeline()`) có vạch "bây giờ" (`.dtl-now`, màu `--trim`) khi đang xem đúng hôm nay.
 
 ## Style riêng 1 khu vực bằng tiền tố `key=` chung, không cần bọc container
