@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import os
 import io
@@ -35,6 +34,15 @@ except Exception:
 _IS_LOOPBACK_SERVER = _LOCAL_DEV_ADDRESS in {"localhost", "127.0.0.1", "::1"}
 # Local dev dùng dữ liệu mẫu trong bộ nhớ, tuyệt đối không cần/không đọc Supabase secrets.
 _USE_FAKE_DATA = _LOCAL_DEV_REQUESTED and _IS_LOOPBACK_SERVER
+
+def _inject_js(html):
+    """Tiêm 1 đoạn <script> thao tác trên window.parent.document (phím tắt, nút nổi, locale lịch...).
+    Thay cho components.html(..., height=0) -- API đó bị Streamlit gỡ sau 2026-06-01. st.iframe vẫn
+    cho script truy cập same-origin vào trang cha và chạy lại khi nội dung đổi (đã thử: hành vi rerun
+    giống hệt components.html). st.iframe không nhận height=0 nên dùng 1px; alt="js-injector" là dấu
+    để CSS trong _MAIN_CSS ẩn hẳn khung chứa khỏi layout (xem rule ẩn phần tử tiêm JS)."""
+    st.iframe(html, height=1, alt="js-injector")
+
 
 # Thanh công cụ cho ô soạn ghi chú (Quill): đậm/nghiêng/gạch chân, màu chữ & nền,
 # danh sách + thụt lề, liên kết, xoá định dạng. (Không bật chèn ảnh để tránh phình notes.csv.)
@@ -110,7 +118,7 @@ def style_quill():
         "setInterval(applyQuillCss, 400);\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _note_is_empty(html):
@@ -1457,7 +1465,7 @@ def _render_nav_sync_fab():
     _has_pending_forest_sync() vẫn trả True, cờ session này đảm bảo không hiện lại ngay trong lúc
     người dùng còn đang xem thông báo lỗi để tự xử lý (đổi Shortcut/tải tay), rồi tự hết tác dụng
     khi qua session khác. Truyền lại điều kiện gộp này vào JS mỗi lần rerun để ẩn hẳn phần tử
-    (không chỉ ẩn 1 lần, vì components.html tạo iframe MỚI mỗi rerun nhưng nút vẫn sống trong
+    (không chỉ ẩn 1 lần, vì iframe _inject_js() có thể tạo iframe MỚI mỗi rerun nhưng nút vẫn sống trong
     document cha nên phải tự set lại display mỗi lần theo đúng state hiện tại)."""
     _fab_hidden = (st.session_state.get("_sync_fab_hidden", False)
                    or not _has_pending_forest_sync())
@@ -1474,7 +1482,7 @@ def _render_nav_sync_fab():
             st.rerun()
 
     _hide_js = "true" if _fab_hidden else "false"
-    components.html(
+    _inject_js(
         "<script>\n"
         "(function(){\n"
         "  const w = window.parent;\n"
@@ -1502,8 +1510,7 @@ def _render_nav_sync_fab():
         "  btn.style.display = HIDE ? 'none' : 'flex';\n"
         "  if (!HIDE) btn.classList.remove('syncing');\n"
         "})();\n"
-        "</script>",
-        height=0)
+        "</script>")
 
 
 @st.cache_data
@@ -1865,7 +1872,7 @@ def _inject_relative_time_ticker():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_date_picker_locale():
@@ -1982,7 +1989,7 @@ def _inject_date_picker_locale():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 # --- CÁC HÀM RENDER UI GLASSMORPHISM ---
@@ -7663,7 +7670,7 @@ _MAIN_CSS = """
     [data-testid="stMarkdownContainer"]:has(> .dtbl-wrap) {
         margin-bottom: 0 !important;
     }
-    /* Phần tử tiêm JS thuần (components.html(height=0): _inject_keyboard_shortcuts()/
+    /* Phần tử tiêm JS thuần (_inject_js() -> st.iframe 1px, alt="js-injector": _inject_keyboard_shortcuts()/
        _inject_scroll_to_top_button()/_render_nav_sync_fab(), chạy TRƯỚC dispatch if nav==... nên
        có mặt ở MỌI trang) không có nội dung hiển thị -- iframe cao 0px, khối <style> ẩn 1 nút, và
        wrapper của chính nút đã display:none đó -- nhưng vẫn là flex item bình thường nên vẫn ăn
@@ -7673,6 +7680,7 @@ _MAIN_CSS = """
        khỏi flex layout (không chỉ ẩn hiển thị như margin:0) -- script trong iframe/srcdoc vẫn tự
        chạy bình thường dù ẩn, không ảnh hưởng phím tắt/nút nổi/khoá lịch tiếng Việt. */
     [data-testid="stElementContainer"][height="0px"],
+    [data-testid="stElementContainer"]:has(iframe[title="js-injector"]),
     [data-testid="stElementContainer"]:has(> .stMarkdown style:only-child),
     [data-testid="stLayoutWrapper"]:has(> .st-key-nav_sync_fab) {
         display: none !important;
@@ -9885,7 +9893,7 @@ def _inject_keyboard_shortcuts():
     (Đã bỏ Shift+1..5, f/r/l, [ / ] -- xác nhận qua rà soát thực tế là ít dùng, không đáng độ
     phức tạp JS phải duy trì để hỗ trợ chúng.)
 
-    QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của components.html
+    QUAN TRỌNG -- không dùng window.parent.location để điều hướng: iframe của _inject_js()
     chỉ có sandbox "allow-scripts allow-same-origin ..." (đã xác nhận trực tiếp qua source
     IFrameUtil.*.js của gói streamlit đang cài), KHÔNG có "allow-top-navigation" -- gán
     location.search từ trong iframe này bị trình duyệt chặn thẳng (SecurityError), bất kể có
@@ -9902,7 +9910,7 @@ def _inject_keyboard_shortcuts():
     thay vì giữ nguyên trang, sai hoàn toàn ý đồ của phím số khi người dùng gọi nó lúc đã đứng sẵn
     ở trang đích.
 
-    components.html() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
+    iframe _inject_js() tạo 1 iframe MỚI mỗi lần rerun, nhưng listener gắn vào
     window.parent.document (document của trang chính, không phải của iframe) nên vẫn tồn tại
     xuyên suốt qua các iframe cũ bị Streamlit xoá đi -- phải tự canh cờ
     window.parent.__appShortcutsInstalled để không gắn trùng listener sau mỗi lần rerun."""
@@ -10092,7 +10100,7 @@ def _inject_keyboard_shortcuts():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_reading_calendar_tap_tip():
@@ -10108,7 +10116,7 @@ def _inject_reading_calendar_tap_tip():
     đã đúng ý từ trước) không đổi -- chỉ can thiệp trên thiết bị không có hover thật.
 
     Cùng khuôn `_inject_keyboard_shortcuts()`: gắn 1 listener duy nhất vào `window.parent.document`
-    (không phải document của iframe components.html, vốn bị Streamlit dựng lại mỗi rerun), tự canh
+    (không phải document của iframe _inject_js(), vốn bị Streamlit dựng lại mỗi rerun), tự canh
     cờ cài đặt để không gắn trùng qua nhiều lần rerun."""
     js = (
         "<script>\n"
@@ -10137,7 +10145,7 @@ def _inject_reading_calendar_tap_tip():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 def _inject_note_editor_shortcuts():
@@ -10200,7 +10208,7 @@ def _inject_note_editor_shortcuts():
         "setInterval(bindNoteShortcuts, 400);\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 _inject_keyboard_shortcuts()
 _inject_reading_calendar_tap_tip()
@@ -10210,9 +10218,9 @@ def _inject_scroll_to_top_button():
     """Nút tròn nổi "về đầu trang" (góc dưới-phải trên desktop, bám mép cột nội dung 1700px thay
     vì mép trình duyệt; góc dưới-trái trên mobile để tránh huy hiệu Streamlit -- xem CSS
     `#app-scroll-top-btn`) -- ẩn tới khi cuộn xuống quá 1 ngưỡng mới hiện, bấm cuộn mượt về đầu.
-    Tạo bằng JS (components.html) y hệt bảng phím tắt ở
+    Tạo bằng JS (_inject_js()) y hệt bảng phím tắt ở
     _inject_keyboard_shortcuts(): gắn thẳng vào window.parent.document để nút không bị Streamlit
-    xoá/tạo lại mỗi lần rerun (iframe của components.html có bị dựng lại cũng không sao, nút đã
+    xoá/tạo lại mỗi lần rerun (iframe của _inject_js() có bị dựng lại cũng không sao, nút đã
     sống sẵn trong document cha) -- canh cờ w.__scrollTopBtnInstalled để không tạo trùng nút sau
     mỗi rerun.
 
@@ -10251,7 +10259,7 @@ def _inject_scroll_to_top_button():
         "})();\n"
         "</script>"
     )
-    components.html(js, height=0)
+    _inject_js(js)
 
 
 _inject_scroll_to_top_button()
