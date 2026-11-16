@@ -7223,7 +7223,7 @@ def render_project_rhythm(df_g):
 # không phụ thuộc var(--text)/var(--accent).
 @st.cache_resource
 def _logo_font_b64():
-    with open(os.path.join("assets", "fonts", "SourceSerif4-Medium-latin.woff2"), "rb") as f:
+    with open(os.path.join("static", "fonts", "SourceSerif4-Medium-latin.woff2"), "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 _LOGO_FONT_FACE = (
@@ -7408,7 +7408,7 @@ if not _has_supabase_secrets and not _USE_FAKE_DATA:
 
 # Font thân/nhãn/nút/điều hướng toàn app -- hệ "Sổ Tay" đổi từ system sans sang font thật tự host
 # (không dùng <link> Google Fonts -- app không tải font qua mạng ở bất kỳ đâu khác lúc CHẠY THẬT;
-# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi nhúng thẳng vào assets/
+# lúc PHÁT TRIỂN có tải file .woff2 gốc 1 lần từ Google Fonts CDN về rồi lưu vào static/
 # fonts/, không phải app tự fetch mỗi lần chạy), người dùng tự chọn 1 trong 5 (BODY_FONTS, tab Tuỳ
 # biến -> sub-page "Giao diện", mặc định Inter -- xem chú thích ở khai báo BODY_FONTS). Biến trục
 # (variable font, wght 200-800 trong 1 file) thay vì nhiều file tĩnh theo từng font-weight -- đỡ
@@ -7420,22 +7420,33 @@ if not _has_supabase_secrets and not _USE_FAKE_DATA:
 # tiếng Anh) vì font này hiển thị toàn bộ nhãn/nút tiếng Việt có dấu của app -- đã xác minh cả 5
 # font đều có subset "vietnamese" trước khi chọn. CHỈ tải/nhúng ĐÚNG 1 font đang chọn (không nhúng
 # sẵn cả 5) để không đội payload trang lên vô ích.
+def _font_src(fname):
+    """Giá trị `src:` của 1 @font-face cho file static/fonts/<fname>. Mặc định trỏ URL file tĩnh
+    (`server.enableStaticServing`, xem .streamlit/config.toml) -- trình duyệt tự cache theo ETag nên
+    chỉ tải font 1 lần, thay vì nhận lại ~0,5MB base64 nhúng trong CSS ở MỖI session mới (mọi link
+    nội bộ target=_self mở session mới). URL TƯƠNG ĐỐI "app/static/…" (không có "/" đầu): trên
+    Streamlit Cloud app chạy dưới đường dẫn con (/~/+/), đường dẫn tuyệt đối sẽ trỏ sai chỗ. Nếu
+    static serving bị tắt thì quay về nhúng base64 như trước."""
+    if st.get_option("server.enableStaticServing"):
+        return f"url('app/static/fonts/{fname}') format('woff2')"
+    return f"url(data:font/woff2;base64,{_font_b64_file(fname)}) format('woff2')"
+
+
 @st.cache_resource
+def _font_b64_file(fname):
+    with open(os.path.join("static", "fonts", fname), "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
 def _body_font_b64(file_prefix, weights=None):
-    """weights=None (font biến trục) -> đọc `<file_prefix>-<subset>.woff2`, trả {subset: b64}.
-    weights=(400,600,800,...) (font tĩnh nhiều mức đậm, xem "Be Vietnam Pro") -> đọc
-    `<file_prefix>-<weight>-<subset>.woff2`, trả {(weight,subset): b64}."""
-    out = {}
+    """Tên file font theo subset (giữ tên hàm cũ để ít đụng chỗ gọi): weights=None (font biến trục)
+    -> {subset: "<file_prefix>-<subset>.woff2"}; weights=(400,600,...) (font tĩnh nhiều mức đậm, xem
+    "Be Vietnam Pro") -> {(weight, subset): "<file_prefix>-<weight>-<subset>.woff2"}. Giá trị đưa vào
+    _font_src() để ra `src:` của @font-face."""
+    subsets = ("latin", "latin-ext", "vietnamese")
     if weights:
-        for w in weights:
-            for name in ("latin", "latin-ext", "vietnamese"):
-                with open(os.path.join("assets", "fonts", f"{file_prefix}-{w}-{name}.woff2"), "rb") as f:
-                    out[(w, name)] = base64.b64encode(f.read()).decode()
-    else:
-        for name in ("latin", "latin-ext", "vietnamese"):
-            with open(os.path.join("assets", "fonts", f"{file_prefix}-{name}.woff2"), "rb") as f:
-                out[name] = base64.b64encode(f.read()).decode()
-    return out
+        return {(w, n): f"{file_prefix}-{w}-{n}.woff2" for w in weights for n in subsets}
+    return {n: f"{file_prefix}-{n}.woff2" for n in subsets}
 
 _BODY_FONT_RANGES = {
     "latin": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
@@ -7447,7 +7458,7 @@ _body_font_b64_cache = _body_font_b64(BODY_FONTS[BODY_FONT_NAME]["file_prefix"],
 if _body_font_weights:
     _BODY_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{BODY_FONT}'; font-style:normal; font-weight:{_w}; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_body_font_b64_cache[(_w, _name)]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_body_font_b64_cache[(_w, _name)])}; "
         f"unicode-range:{_ranges}; }}"
         for _w in _body_font_weights
         for _name, _ranges in _BODY_FONT_RANGES.items()
@@ -7455,7 +7466,7 @@ if _body_font_weights:
 else:
     _BODY_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{BODY_FONT}'; font-style:normal; font-weight:200 800; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_body_font_b64_cache[_name]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_body_font_b64_cache[_name])}; "
         f"unicode-range:{_ranges}; }}"
         for _name, _ranges in _BODY_FONT_RANGES.items()
     )
@@ -7465,7 +7476,7 @@ else:
 # NỘI DUNG). Dùng Manrope (font mặc định gốc của app, TỪ KHI đổi bộ BODY_FONTS lần 2 không còn là
 # lựa chọn trong đó -- xem chú thích BODY_FONTS ở ui_catalog.py) -- đọc thẳng file_prefix hằng
 # "Manrope-Variable" thay vì tra `BODY_FONTS[_UI_FONT]["file_prefix"]` như trước (sẽ KeyError vì
-# "Manrope" không còn là key trong dict đó nữa). File Manrope-Variable-*.woff2 trong assets/fonts/
+# "Manrope" không còn là key trong dict đó nữa). File Manrope-Variable-*.woff2 trong static/fonts/
 # vẫn giữ nguyên, chỉ không còn hiện trong danh sách 8 lựa chọn Font thân chữ. Phải tự nhúng RIÊNG
 # ở đây vì _BODY_FONT_FACE trên chỉ nhúng ĐÚNG font đang chọn -- nếu người dùng chọn font khác thì
 # Manrope không có @font-face nào, khung vỏ sẽ lặng lẽ rơi về font hệ thống thay vì Manrope (đúng
@@ -7480,7 +7491,7 @@ else:
     _ui_font_b64 = _body_font_b64(_UI_FONT_FILE_PREFIX)
     _UI_FONT_FACE = "".join(
         f"@font-face {{ font-family:'{_UI_FONT}'; font-style:normal; font-weight:200 800; "
-        f"font-display:swap; src:url(data:font/woff2;base64,{_ui_font_b64[_name]}) format('woff2'); "
+        f"font-display:swap; src:{_font_src(_ui_font_b64[_name])}; "
         f"unicode-range:{_ranges}; }}"
         for _name, _ranges in _BODY_FONT_RANGES.items()
     )
@@ -7497,14 +7508,10 @@ _UI_FONT_STACK = f"'{_UI_FONT}', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 # (latin + vietnamese, bỏ latin-ext/cyrillic/hy lạp -- DTBL chỉ có số + nhãn tiếng Việt ngắn,
 # không cần phủ ký tự mở rộng như Manrope). Payload nhỏ (~56KB/8 file) vì mono chỉ cần tập ký tự
 # hẹp (số + chữ cái, không kern/ligature phức tạp).
-@st.cache_resource
 def _table_font_b64():
-    out = {}
-    for weight_name in ("Regular", "Medium", "SemiBold", "Bold"):
-        for subset in ("latin", "vietnamese"):
-            with open(os.path.join("assets", "fonts", f"IBMPlexMono-{weight_name}-{subset}.woff2"), "rb") as f:
-                out[(weight_name, subset)] = base64.b64encode(f.read()).decode()
-    return out
+    """Tên file IBM Plex Mono theo (độ đậm, subset) -- đưa vào _font_src()."""
+    return {(w, n): f"IBMPlexMono-{w}-{n}.woff2"
+            for w in ("Regular", "Medium", "SemiBold", "Bold") for n in ("latin", "vietnamese")}
 
 _TABLE_FONT_WEIGHTS = {"Regular": 400, "Medium": 500, "SemiBold": 600, "Bold": 700}
 _TABLE_FONT_RANGES = {
@@ -7515,7 +7522,7 @@ _table_font_b64_cache = _table_font_b64()
 _TABLE_FONT_FACE = "".join(
     "@font-face { font-family:'IBM Plex Mono'; font-style:normal; "
     f"font-weight:{_w_num}; font-display:swap; "
-    f"src:url(data:font/woff2;base64,{_table_font_b64_cache[(_w_name, _subset)]}) format('woff2'); "
+    f"src:{_font_src(_table_font_b64_cache[(_w_name, _subset)])}; "
     f"unicode-range:{_ranges}; }}"
     for _w_name, _w_num in _TABLE_FONT_WEIGHTS.items()
     for _subset, _ranges in _TABLE_FONT_RANGES.items()
@@ -7535,7 +7542,7 @@ _TABLE_FONT_FACE = "".join(
 _quote_font_b64_cache = _body_font_b64("Newsreader-Variable")
 _QUOTE_FONT_FACE = "".join(
     "@font-face { font-family:'Newsreader Quote'; font-style:normal; font-weight:200 800; "
-    f"font-display:swap; src:url(data:font/woff2;base64,{_quote_font_b64_cache[_name]}) format('woff2'); "
+    f"font-display:swap; src:{_font_src(_quote_font_b64_cache[_name])}; "
     f"unicode-range:{_ranges}; }}"
     for _name, _ranges in _BODY_FONT_RANGES.items()
 )

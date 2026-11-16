@@ -163,10 +163,13 @@ dung riêng:
 2. **Iframe Quill (`style_quill()`)** — cùng `.replace('Manrope', ...)` trên `QUILL_CSS` trước khi
    tiêm vào iframe, giống hệt cách `ACCENT`/màu dark-mode literal đã làm ở đó.
 
-`_body_font_b64(file_prefix)` CHỈ tải/nhúng base64 đúng 1 font đang chọn (không nhúng sẵn cả 3) để
-không đội payload trang — thêm 1 font mới vào `BODY_FONTS` cần: tải 3 file `.woff2` subset
+Font phục vụ dạng file tĩnh: `_font_src(fname)` trả `url('app/static/fonts/<fname>')` (cần
+`server.enableStaticServing = true` trong `.streamlit/config.toml`; URL TƯƠNG ĐỐI vì Streamlit Cloud
+chạy app dưới đường dẫn con), trình duyệt cache theo ETag thay vì nhận lại base64 ở mỗi session mới.
+Tắt static serving thì tự quay về nhúng base64. Chỉ font logo (`_LOGO_FONT_FACE`, nhỏ) vẫn nhúng
+base64. `_body_font_b64(file_prefix)` (tên cũ) giờ chỉ trả tên file của đúng 1 font đang chọn — thêm 1 font mới vào `BODY_FONTS` cần: tải 3 file `.woff2` subset
 (latin/latin-ext/vietnamese, cùng bộ `unicode-range` trong `_BODY_FONT_RANGES` — đã xác minh Google
-Fonts dùng chung range này cho mọi font sans phổ biến) vào `assets/fonts/` theo đúng quy ước tên
+Fonts dùng chung range này cho mọi font sans phổ biến) vào `static/fonts/` theo đúng quy ước tên
 `<file_prefix>-<subset>.woff2`.
 
 ## Biểu đồ ECharts (`st.echarts_chart`, Streamlit >= 1.64)

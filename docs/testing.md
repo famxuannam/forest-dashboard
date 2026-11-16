@@ -44,7 +44,7 @@ session) bằng 1 client giả trong bộ nhớ, hỗ trợ đúng các method t
 Nếu tính năng đang sửa dùng CalDAV, monkeypatch thêm `_get_caldav_client()`.
 
 Chạy `streamlit run <scratch>.py` từ **thư mục gốc repo** (không phải từ thư mục scratch khác) —
-`app.py` load asset bằng đường dẫn tương đối (`assets/...`), chạy sai cwd sẽ crash ngay khi vẽ logo,
+`app.py` load asset bằng đường dẫn tương đối (`static/fonts/...`), chạy sai cwd sẽ crash ngay khi vẽ logo,
 che mất lỗi thật đang muốn tìm.
 
 ## Bước 2: chạy + lái bằng Playwright
