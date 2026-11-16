@@ -8274,10 +8274,11 @@ _MAIN_CSS = """
        chính, không tự chế viền/bo góc cố định riêng. padding/margin GIỮ nguyên tự chỉnh riêng
        (không dùng --card-pad/--card-gap) vì sidebar hẹp hơn hẳn cột nội dung chính -- cùng lý do
        .quotes-card/.dtl-track không dùng --card-pad (xem theming.md). */
+    .sb-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
     .sb-widget {
-        background: var(--card); border: var(--card-border-w) solid var(--border);
+        display: block; background: var(--card); border: var(--card-border-w) solid var(--border);
         border-radius: var(--card-radius); corner-shape: var(--card-corner-shape); box-shadow: var(--card-shadow);
-        padding: 10px 12px; margin-top: 10px;
+        padding: 12px 14px; margin: 0;
     }
     /* "span.sb-widget-title-txt" tách riêng khỏi icon -- text-transform:uppercase áp trực tiếp
        lên .sb-widget-title (bọc cả icon _mi()) sẽ HOA HOÁ luôn ligature-name bên trong span icon
@@ -8289,23 +8290,37 @@ _MAIN_CSS = """
         display: flex; align-items: center; gap: 5px; margin-bottom: 7px;
     }
     .sb-widget-title-txt { text-transform: uppercase; letter-spacing: .02em; }
-    /* Nút "Một ngày ngẫu nhiên" (sidebar, key=sb_peek_btn) -- trông như 1 khối .sb-widget nữa. */
-    .st-key-sb_peek_btn button {
-        background: var(--card); border: var(--card-border-w) solid var(--border);
-        border-radius: var(--card-radius); corner-shape: var(--card-corner-shape); box-shadow: var(--card-shadow);
-        margin-top: 10px; padding: 8px 12px; min-height: 0;
+    /* Nút "Một ngày ngẫu nhiên" (sidebar, key=sb_peek_btn) -- trông ĐÚNG như 1 khối .sb-widget nữa:
+       cùng nền/bo góc/bóng, KHÔNG viền (rule nút secondary chung có !important nên phải ép lại ở độ
+       đặc hiệu cao hơn), nội dung căn trái như tiêu đề các khối khác. margin-top 16px: markdown
+       .sb-stack phía trên có margin-bottom -16px của Streamlit nên nút bị kéo đè lên thẻ cuối 6px --
+       đã đo bằng Playwright, 16px cho khoảng cách thẻ cuối -> nút đúng 10px như gap trong .sb-stack. */
+    [data-testid="stSidebar"] .st-key-sb_peek_btn { margin-top: 16px; }
+    [data-testid="stSidebar"] .st-key-sb_peek_btn div[data-testid="stButton"] button[kind="secondary"] {
+        background: var(--card) !important; border: none !important;
+        border-radius: var(--card-radius) !important; corner-shape: var(--card-corner-shape) !important;
+        box-shadow: var(--card-shadow) !important; padding: 11px 14px !important; min-height: 0 !important;
+        justify-content: flex-start !important; color: var(--text) !important;
     }
-    .st-key-sb_peek_btn button:hover { border-color: var(--accent); }
-    .st-key-sb_peek_btn button p { font-size: 12.5px; font-weight: 600; }
+    [data-testid="stSidebar"] .st-key-sb_peek_btn div[data-testid="stButton"] button[kind="secondary"] > div { justify-content: flex-start !important; gap: 8px !important; }
+    [data-testid="stSidebar"] .st-key-sb_peek_btn div[data-testid="stButton"] button[kind="secondary"]:hover {
+        box-shadow: var(--card-shadow), inset 0 0 0 1px rgba(var(--accent-rgb),0.45) !important;
+    }
+    [data-testid="stSidebar"] .st-key-sb_peek_btn div[data-testid="stButton"] button[kind="secondary"] span[data-testid="stIconMaterial"] {
+        color: var(--accent-dark) !important; font-size: 17px !important;
+    }
+    [data-testid="stSidebar"] .st-key-sb_peek_btn div[data-testid="stButton"] button[kind="secondary"] p { font-size: 12.5px !important; font-weight: 600 !important; }
     .sb-date { display: flex; align-items: center; gap: 12px; }
     .sb-date-num { font-size: 30px; font-weight: 800; line-height: 1; color: var(--accent-dark);
         font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
     .sb-date-dow { font-size: 13.5px; font-weight: 700; color: var(--text); }
     .sb-date-meta { font-size: 11.5px; color: var(--text-2); line-height: 1.4; margin-top: 1px; }
-    .sb-theme-chip { display: flex; flex-direction: column; gap: 3px; margin-top: 12px; padding: 9px 12px;
-        border: 1px dashed var(--divider-2); border-radius: 6px; text-decoration: none !important; }
-    .sb-theme-chip:hover { border-color: var(--accent); }
-    .sb-theme-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    a.sb-theme { text-decoration: none !important; color: var(--text) !important; }
+    a.sb-theme:hover { box-shadow: var(--card-shadow), inset 0 0 0 1px rgba(var(--accent-rgb),0.45); }
+    .sb-theme .sb-widget-title { margin-bottom: 6px; }
+    .sb-theme-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-3); }
+    .sb-theme-tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .sb-theme-tx b { font-size: 12.5px; font-weight: 700; color: var(--text); }
     .sb-stat-row {
         display: flex; justify-content: space-between; align-items: baseline;
         font-size: 12.5px; color: var(--text-2); padding: 2px 0;
@@ -9983,16 +9998,21 @@ with st.sidebar:
     _render_nav_group(_NAV_GROUP_A, "a")
     st.markdown('<div class="sidebar-nav-divider"></div>', unsafe_allow_html=True)
     _render_nav_group(_NAV_GROUP_B, "b")
+    # Thứ -> Số liệu hôm nay -> Sách đang đọc gần nhất -> Gundam đang xem gần nhất, đứng
+    # NGAY SAU nav trong luồng thường (KHÔNG còn ép căn đáy bằng margin-top:auto/min-height
+    # 100vh -- bỏ theo phản hồi thực tế trên điện thoại, xem chú thích CSS `.sb-widget` phía
+    # trên: 100vh không trừ được thanh công cụ trình duyệt di động, tạo khoảng trống giữa nav
+    # và nhóm này, buộc phải cuộn thêm dù nội dung đủ ngắn để không cần cuộn). "Kỷ lục" đã bỏ
+    # hẳn (không cần nữa, xác nhận với người dùng), thay bằng 2 khối "đang đọc/đang xem gần
+    # nhất" mới.
+    # Mọi khối sidebar (Thứ/Hôm nay/Đang đọc/Đang xem/Giao diện) nằm trong 1 cột .sb-stack DUY NHẤT
+    # (gap đều 10px, cùng 1 kiểu thẻ .sb-widget) -- nút "Một ngày ngẫu nhiên" là widget Streamlit
+    # riêng nên đứng cuối, CSS kéo khoảng cách về đúng 10px (xem .st-key-sb_peek_btn).
+    _stack_html = ""
+    _badge_has_upd = False
     if not df.empty:
-        # Thứ -> Số liệu hôm nay -> Sách đang đọc gần nhất -> Gundam đang xem gần nhất, đứng
-        # NGAY SAU nav trong luồng thường (KHÔNG còn ép căn đáy bằng margin-top:auto/min-height
-        # 100vh -- bỏ theo phản hồi thực tế trên điện thoại, xem chú thích CSS `.sb-widget` phía
-        # trên: 100vh không trừ được thanh công cụ trình duyệt di động, tạo khoảng trống giữa nav
-        # và nhóm này, buộc phải cuộn thêm dù nội dung đủ ngắn để không cần cuộn). "Kỷ lục" đã bỏ
-        # hẳn (không cần nữa, xác nhận với người dùng), thay bằng 2 khối "đang đọc/đang xem gần
-        # nhất" mới.
         _badge_html, _badge_has_upd = _sidebar_date_badge_html(df)
-        _bottom_html = (
+        _stack_html = (
             _badge_html
             + _sidebar_today_stats_html(df)
             + _sidebar_recent_activity_html(df, BOOKS_GROUP,
@@ -10001,16 +10021,18 @@ with st.sidebar:
             + _sidebar_recent_activity_html(df, GUNDAM_TAG, _is_gundam_list,
                                              "shield", "Đang xem", "tập đã xem", "gundam")
         )
-        st.markdown(_bottom_html, unsafe_allow_html=True)
-        if _badge_has_upd:
-            _inject_relative_time_ticker()
+    # Theme đang dùng (mã máy + tên) -- cả thẻ là link tới Tuỳ biến -> Giao diện để đổi theme.
+    _stack_html += (
+        f"<a class='sb-widget sb-theme' target='_self' href='?nav={quote('Tuỳ biến')}&tsub={quote('Giao diện')}'>"
+        f"<span class='sb-widget-title'>{_mi('palette', 12)}<span class='sb-widget-title-txt'>Giao diện</span></span>"
+        f"<span class='sb-theme-row'><span class='sb-theme-tx'><b>{html_escape(THEME['name'])}</b>"
+        f"{_THEME_UNIT_TAG_HTML}</span>{_mi('chevron_right', 16)}</span></a>")
+    st.markdown(f"<div class='sb-stack'>{_stack_html}</div>", unsafe_allow_html=True)
+    if _badge_has_upd:
+        _inject_relative_time_ticker()
+    if not df.empty:
         _peek_clicked = bool(_peek_pool(df)) and st.button(
             "Một ngày ngẫu nhiên", icon=":material/casino:", key="sb_peek_btn", width="stretch")
-    # Theme đang dùng (mã máy + tên) -- link nhảy thẳng tới Tuỳ biến -> Giao diện để đổi theme.
-    st.markdown(
-        f"<a class='sb-theme-chip' target='_self' href='?nav={quote('Tuỳ biến')}&tsub={quote('Giao diện')}'>"
-        f"{_THEME_UNIT_TAG_HTML}<span class='sb-theme-name'>{html_escape(THEME['name'])}</span></a>",
-        unsafe_allow_html=True)
 if _peek_clicked:
     # Mở dialog NGOÀI khối st.sidebar (dialog không nên dựng trong ngữ cảnh sidebar).
     st.session_state["peek_day"] = _pick_peek_day(df, exclude=st.session_state.get("peek_day"))
